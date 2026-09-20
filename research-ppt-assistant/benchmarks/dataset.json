@@ -1,0 +1,440 @@
+{
+  "schema_version": "1.0.0",
+  "name": "RPA stability benchmark",
+  "thresholds": {
+    "top_1_valid_rate_min": 0.4,
+    "top_k_valid_rate_min": 0.5,
+    "contract_failure_rate_max": 0,
+    "preflight_failure_rate_max": 0.2,
+    "single_slide_p95_ms_max": 50
+  },
+  "cases": [
+    {
+      "id": "historical-duplicate-page-id",
+      "tags": ["historical_bug", "renderer_guard"],
+      "acceptable_categories": ["dual_figure", "method_overview", "architecture"],
+      "query": {
+        "text_chars": 80,
+        "title_chars": 14,
+        "image_count": 2,
+        "content_roles": ["headline", "primary_visual", "secondary_visual", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Two failure branches",
+        "title_chars": 20,
+        "category_hint": "dual_figure",
+        "text_chars": 80,
+        "image_count": 2,
+        "visuals": [
+          { "visual_id": "VIS-A", "visual_type": "dense_plot", "asset_uri": "figures/a.png" },
+          { "visual_id": "VIS-B", "visual_type": "dense_plot", "asset_uri": "figures/b.png" }
+        ]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "renderer_version": "5.4.4",
+        "platform": "win32",
+        "project_path": "F:/benchmark/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_result.slide", "slides/01_result.jsx"],
+        "live_watch_requested": false
+      },
+      "rendered_slide": {
+        "category": "dual_figure",
+        "title_font_pt": 30,
+        "title_line_count": 2,
+        "body_font_pts": [14],
+        "content_occupancy": 0.42,
+        "largest_empty_band": 0.22
+      },
+      "expect": { "preflight_failure": true, "render_qa_failure": true }
+    },
+    {
+      "id": "multilingual-title",
+      "tags": ["multilingual_title", "unicode"],
+      "acceptable_categories": ["summary", "discussion", "section", "qa"],
+      "query": {
+        "text_chars": 48,
+        "title_chars": 28,
+        "content_roles": ["headline", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "跨语言学习 / Multilingual",
+        "title_chars": 21,
+        "category_hint": "summary",
+        "text_chars": 48,
+        "content_roles": ["headline", "takeaway"]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "win32",
+        "project_path": "F:/benchmark/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_multilingual.slide"]
+      },
+      "rendered_slide": {
+        "category": "summary",
+        "title_font_pt": 40,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.7,
+        "largest_empty_band": 0.08
+      }
+    },
+    {
+      "id": "scientific-dense-figure",
+      "tags": ["scientific_figure", "embedded_text"],
+      "acceptable_categories": ["single_figure", "figure_text", "case", "failure", "background"],
+      "query": {
+        "text_chars": 45,
+        "title_chars": 16,
+        "image_count": 1,
+        "visuals": [{ "visual_type": "multi_panel_figure", "panel_count": 4, "has_embedded_text": true }],
+        "content_roles": ["headline", "primary_visual", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Four response regimes",
+        "title_chars": 21,
+        "category_hint": "single_figure",
+        "text_chars": 45,
+        "image_count": 1,
+        "visuals": [{ "visual_id": "VIS-DENSE", "visual_type": "multi_panel_figure", "panel_count": 4, "has_embedded_text": true, "asset_uri": "figures/dense.png" }]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_dense_figure.slide"]
+      },
+      "rendered_slide": {
+        "category": "single_figure",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.72,
+        "largest_empty_band": 0.08,
+        "visuals": [{ "visual_type": "multi_panel_figure", "panel_count": 4, "has_embedded_text": true, "display_width_norm": 0.72, "rendered_embedded_text_px": 18 }]
+      }
+    },
+    {
+      "id": "paper-table",
+      "tags": ["paper_table", "structured_data"],
+      "acceptable_categories": ["table", "experiment", "ablation", "baseline", "table_chart"],
+      "query": {
+        "text_chars": 60,
+        "title_chars": 21,
+        "table_count": 1,
+        "content_roles": ["headline", "table", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Ablation contribution",
+        "title_chars": 21,
+        "category_hint": "table",
+        "text_chars": 60,
+        "table_count": 1,
+        "content_roles": ["headline", "table", "takeaway"]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_table.slide"]
+      },
+      "rendered_slide": {
+        "category": "table",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [18],
+        "content_occupancy": 0.76,
+        "largest_empty_band": 0.07
+      }
+    },
+    {
+      "id": "ten-step-process",
+      "tags": ["10_plus_steps", "auto_split", "historical_bug"],
+      "acceptable_categories": ["workflow", "method_overview"],
+      "query": {
+        "text_chars": 70,
+        "title_chars": 12,
+        "process_step_count": 10,
+        "content_roles": ["headline", "process", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Ten-step workflow",
+        "title_chars": 17,
+        "category_hint": "workflow",
+        "text_chars": 70,
+        "process_step_count": 10,
+        "process_steps": [
+          { "id": "step-01", "text": "Collect" },
+          { "id": "step-02", "text": "Clean" },
+          { "id": "step-03", "text": "Align" },
+          { "id": "step-04", "text": "Encode" },
+          { "id": "step-05", "text": "Fuse" },
+          { "id": "step-06", "text": "Train" },
+          { "id": "step-07", "text": "Tune" },
+          { "id": "step-08", "text": "Evaluate" },
+          { "id": "step-09", "text": "Audit" },
+          { "id": "step-10", "text": "Release" }
+        ]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "win32",
+        "project_path": "F:/benchmark/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_workflow_a.slide", "slides/02_workflow_b.slide"]
+      },
+      "rendered_slide": {
+        "category": "workflow",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.75,
+        "largest_empty_band": 0.08
+      },
+      "expect": { "auto_split": true }
+    },
+    {
+      "id": "complex-timeline",
+      "tags": ["complex_timeline", "structural_content"],
+      "acceptable_categories": ["timeline", "workflow", "method_overview"],
+      "query": {
+        "text_chars": 90,
+        "title_chars": 15,
+        "content_roles": ["headline", "timeline", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Six project milestones",
+        "title_chars": 22,
+        "category_hint": "timeline",
+        "text_chars": 90,
+        "timeline_events": [
+          { "id": "t1", "text": "Question" },
+          { "id": "t2", "text": "Pilot" },
+          { "id": "t3", "text": "Dataset" },
+          { "id": "t4", "text": "Model" },
+          { "id": "t5", "text": "Validation" },
+          { "id": "t6", "text": "Release" }
+        ]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_timeline.slide"]
+      },
+      "rendered_slide": {
+        "category": "timeline",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [18],
+        "content_occupancy": 0.74,
+        "largest_empty_band": 0.08
+      }
+    },
+    {
+      "id": "mixed-chinese-english",
+      "tags": ["mixed_language", "scientific_figure"],
+      "acceptable_categories": ["figure_text", "single_figure", "case", "background"],
+      "query": {
+        "text_chars": 85,
+        "title_chars": 23,
+        "image_count": 1,
+        "content_roles": ["headline", "body_text", "primary_visual", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "鲁棒性 / Robustness shift",
+        "title_chars": 23,
+        "category_hint": "figure_text",
+        "text_chars": 85,
+        "image_count": 1,
+        "visuals": [{ "visual_id": "VIS-MIXED", "visual_type": "simple_plot", "asset_uri": "figures/mixed.png" }]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "win32",
+        "project_path": "F:/benchmark/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_mixed.slide"]
+      },
+      "rendered_slide": {
+        "category": "figure_text",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.72,
+        "largest_empty_band": 0.08
+      }
+    },
+    {
+      "id": "formula-heavy-theory",
+      "tags": ["formula", "theory"],
+      "acceptable_categories": ["theory", "algorithm", "background", "method_overview"],
+      "query": {
+        "text_chars": 165,
+        "title_chars": 16,
+        "content_roles": ["headline", "body_text", "takeaway"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Three-term objective",
+        "title_chars": 20,
+        "category_hint": "theory",
+        "text_chars": 165,
+        "claims": ["L = L_task + λL_align + βL_reg"]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_formula.slide"]
+      },
+      "rendered_slide": {
+        "category": "theory",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.7,
+        "largest_empty_band": 0.09
+      }
+    },
+    {
+      "id": "code-and-algorithm",
+      "tags": ["code", "algorithm"],
+      "acceptable_categories": ["algorithm", "method_overview", "theory", "workflow"],
+      "query": {
+        "text_chars": 85,
+        "title_chars": 20,
+        "process_step_count": 4,
+        "content_roles": ["headline", "process", "body_text"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Four-stage inference",
+        "title_chars": 20,
+        "category_hint": "algorithm",
+        "text_chars": 85,
+        "process_step_count": 4,
+        "process_steps": [
+          { "id": "code-1", "text": "Tokenize" },
+          { "id": "code-2", "text": "Encode" },
+          { "id": "code-3", "text": "Decode" },
+          { "id": "code-4", "text": "Verify" }
+        ]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_algorithm.slide"]
+      },
+      "rendered_slide": {
+        "category": "algorithm",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [18],
+        "content_occupancy": 0.76,
+        "largest_empty_band": 0.07
+      }
+    },
+    {
+      "id": "high-image-density",
+      "tags": ["high_image_density", "scientific_figure"],
+      "acceptable_categories": ["four_panel", "qualitative", "dataset"],
+      "query": {
+        "text_chars": 45,
+        "title_chars": 14,
+        "image_count": 4,
+        "visuals": [
+          { "visual_type": "dense_plot", "has_embedded_text": true },
+          { "visual_type": "dense_plot", "has_embedded_text": true },
+          { "visual_type": "microscopy" },
+          { "visual_type": "microscopy" }
+        ],
+        "content_roles": ["headline", "primary_visual", "secondary_visual"],
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "Four complementary views",
+        "title_chars": 24,
+        "category_hint": "four_panel",
+        "text_chars": 45,
+        "image_count": 4,
+        "visuals": [
+          { "visual_id": "VIS-1", "visual_type": "dense_plot", "asset_uri": "figures/1.png" },
+          { "visual_id": "VIS-2", "visual_type": "dense_plot", "asset_uri": "figures/2.png" },
+          { "visual_id": "VIS-3", "visual_type": "microscopy", "asset_uri": "figures/3.png" },
+          { "visual_id": "VIS-4", "visual_type": "microscopy", "asset_uri": "figures/4.png" }
+        ]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "win32",
+        "project_path": "F:/benchmark/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_four_panel.slide"]
+      },
+      "rendered_slide": {
+        "category": "four_panel",
+        "title_font_pt": 38,
+        "title_line_count": 1,
+        "body_font_pts": [18],
+        "content_occupancy": 0.78,
+        "largest_empty_band": 0.06,
+        "visuals": [
+          { "visual_type": "dense_plot", "has_embedded_text": true, "display_width_norm": 0.2, "rendered_embedded_text_px": 8 },
+          { "visual_type": "dense_plot", "has_embedded_text": true, "display_width_norm": 0.2, "rendered_embedded_text_px": 8 }
+        ]
+      },
+      "expect": { "render_qa_failure": true }
+    },
+    {
+      "id": "low-content-density",
+      "tags": ["low_content_density", "intentional_whitespace"],
+      "acceptable_categories": ["section", "cover", "qa", "summary", "discussion"],
+      "query": {
+        "text_chars": 12,
+        "title_chars": 10,
+        "content_roles": ["headline"],
+        "density_preference": "spacious",
+        "k": 5
+      },
+      "slide_brief": {
+        "title": "One question remains",
+        "title_chars": 20,
+        "category_hint": "section",
+        "text_chars": 12,
+        "content_roles": ["headline"]
+      },
+      "renderer_inputs": {
+        "requested_renderer": "slidep",
+        "platform": "linux",
+        "project_path": "/workspace/deck",
+        "project_exists": true,
+        "source_files": ["slides/01_section.slide"]
+      },
+      "rendered_slide": {
+        "category": "section",
+        "title_font_pt": 40,
+        "title_line_count": 1,
+        "body_font_pts": [20],
+        "content_occupancy": 0.35,
+        "largest_empty_band": 0.28,
+        "intentional_whitespace": true
+      }
+    }
+  ]
+}

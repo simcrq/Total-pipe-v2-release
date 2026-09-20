@@ -1,0 +1,7 @@
+{
+  "profile_id": "tencent-pptx",
+  "profile_version": "1.4.0",
+  "extends": "default",
+  "rules": {},
+  "legacy_rules": {}
+}

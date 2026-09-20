@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://total-pipe.local/schemas/story-plan.schema.json",
+  "title": "Evidence-grounded research presentation story plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["planner", "core_question", "main_message", "story", "ending"],
+  "properties": {
+    "planner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "model", "reasoning_effort", "selected_by_user"],
+      "properties": {
+        "mode": {"const": "subagent"},
+        "model": {"type": "string", "minLength": 1},
+        "reasoning_effort": {"enum": ["high", "xhigh", "max", "ultra"]},
+        "selected_by_user": {"const": true}
+      }
+    },
+    "core_question": {"type": "string", "minLength": 1},
+    "main_message": {"type": "string", "minLength": 1},
+    "story": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "answer", "evidence", "next"],
+        "properties": {
+          "question": {"type": "string", "minLength": 1},
+          "answer": {"type": "string", "minLength": 1},
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^EV[0-9]{4}$"}
+          },
+          "next": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "ending": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["takeaway", "limitation"],
+      "properties": {
+        "takeaway": {"type": "string", "minLength": 1},
+        "limitation": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

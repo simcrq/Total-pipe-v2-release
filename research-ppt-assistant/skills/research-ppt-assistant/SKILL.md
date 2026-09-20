@@ -1,0 +1,85 @@
+---
+name: research-ppt-assistant
+description: Plan research presentations and choose or validate scientific slide layouts using the bundled offline layout library. Use for lab meetings, journal clubs, proposals, progress reports, defenses, paper presentations, content-to-slot mapping, pre-render layout QA, or telemetry-driven post-render visual quality checks. Do not use as a substitute for the final PPTX renderer.
+---
+
+# Research PPT Assistant
+
+Use the bundled MCP tools to turn research content into a readable slide specification, then audit the rendered result. The plugin plans and validates; a separate presentation renderer creates or edits the PPTX.
+
+MCP calls default to `detail_level: "compact"`. Treat `structuredContent` as the canonical machine-readable result; the text block is only a concise status summary. Request `standard` when downstream work needs the normal page fields and `full` only for development or contract auditing.
+
+## Choose the workflow
+
+- When raw evidence or a PaperWorkflow v4 object is available, call `normalize_content` first. Require a valid Source → Citation → Evidence chain and structured Slide Briefs before planning; preserve upstream `EV####`, `S####`, `E###`, line ranges, and end-exclusive character ranges.
+- Treat normalized Citations as provenance locations. Do not claim that upstream numbered bibliography markers were resolved unless the caller supplies that mapping explicitly.
+- For a complete presentation, call `create_deck_plan` with the presentation type, audience, purpose, normalized slide briefs, and viewing mode. The planner selects layouts, binds real content to exact slots, validates the contract, and may replan or split structural overload; the normalizer itself must never select a layout or assign a slot. Require `pipeline_status: "plan_complete"`, then evaluate the separate planning `status` before continuing.
+- For one slide, call `search_layouts` with title/body character counts, media counts, and per-material aspect ratio, panel count, embedded-text density, caption size, and scientific-visual metadata. Keep the default 10% visual safety margin. For multiple crops of one source, submit separate `composite_figure_region` instances sharing `source_visual_id` and carrying distinct `region_id` values. Add a category only when the slide's narrative job is explicit; a two-region composite must not be forced into a four-case layout.
+- Call `get_layout` to obtain effective font floors, per-slot character/line limits, reflow rules, and exact normalized/PowerPoint coordinates.
+- Before rendering, call `validate_slide` or `validate_deck_plan` while iterating. These checks are structural capacity/contract checks, including whether a scientific visual's declared type, panel count, and embedded text can fit the slot's normalized width; `VISUAL_SLOT_CAPACITY_EXCEEDED` requires a wider layout or split. They do not judge the renderer's actual display size. For the stage gate, call `run_preflight` with both `renderer_inputs` and `deck_plan`; require `pipeline_status: "preflight_complete"` and resolve structural or renderer-input errors.
+- For scientific raster figures with full-figure or panel-level intent, call `run_visual_fit_preflight` after Slot Binding and before Figure Placement. Pass the real source region, Visual Intent, explicit Visual Container Contract, and the inner `allocated_visual_bbox` after padding/caption/decorative insets. A failed candidate must not reach the renderer: route `needs_replan` to Planner and `needs_region_resolution` to Region Resolver, then preflight the new candidate. The preflight reports contract incompatibility but must never choose a semantic crop itself.
+- When two or more visuals have a declared semantic relation, call `run_group_fit_preflight` after their individual candidate boxes are known and before Figure Placement. Declare `visual_group.semantic_relation/relation_strength` separately from the explicit `layout_relation`; semantic equality must never imply equal-size geometry automatically. Keep the v0.4.5 candidate as `baseline_candidate`. Respect Shadow mode, never relax a hard relation, preserve group membership/semantic level/reading order, permit only the returned limited geometry relaxations, and accept a new candidate only when the deterministic comparison does not introduce a higher-priority issue. If the result falls back, render the baseline unchanged.
+- After Visual Fit passes, call `run_figure_placement` to obtain deterministic renderer input, then call it again with actual effective renderer geometry to close the QA loop. Treat source regions as `source_normalized_0_1`, or explicitly declare `source_pixels`; never mix the two. Pass real source dimensions, `allocated_visual_bbox`, and region candidates. Require `pipeline_status: "figure_placement_complete"`; the pre-render call remains incomplete by design, and the post-render call must not pass when requested/effective facts, panel visibility, or label visibility are missing.
+- Treat each page as the shared contract `{ slot_specs: [], slot_assignments: {} }`: `slot_specs` describes layout slots, while `slot_assignments[slot_id]` contains a structured `{ type, ... }` content object. A `type: "reference"` assignment with non-empty citation/evidence IDs is valid traceability content and must be resolved through the returned content model before rendering. Use `type: "guidance"` for planner-only generic guidance; do not turn guidance into research evidence. Unknown explicit slot IDs, missing required assignments, and incompatible assignment types are blockers.
+- Inspect each page's binding `status`, `violations`, `adaptation_log`, and `replan_context`. Accept deterministic trimming only for supporting prose, context, captions, or optional examples. Never silently drop structural items, primary claims/evidence, mandatory citations, or `must_keep` content.
+- `validate_renderer_inputs` remains available for focused iteration. For the final pre-render gate, include its complete project path and page-source list in `run_preflight`. Treat duplicate page IDs, `.jsx` page sources, and invalid Windows paths as blockers. Read `requested_renderer` and `effective_renderer` separately; the current tencent-pptx compatibility path reports `effective_renderer: "slidep"` and `compatibility_mode: true`.
+- After artifact-tool rendering, call `assemble_render_telemetry` with the unmodified `openai.presentation.layout/v4` output and a production Visual Manifest 0.4.7 before Visual QA. Give every scientific image a deck-unique, page-number-independent `visual_key`; prefer a renderer metadata field and use alt `rpa:<visual_key> | ...` only as the exact compatibility fallback. Require manifest/producer/deck versions, actual source dimensions, explicit container `shape_name`, SHA-256 or an explicit asset registry, and fit/crop/whitespace policies. Never match by image order, caption, aid, byte length, z-order, or nearest geometry. P0 automatically verifies only `full_figure` and deterministic `preprocessed_fixed_region`; fixed regions require parent hash/ROI/dimensions plus derived hash and `fixed_region + contain`. Declare sibling groups with expected count, continuous indexes, reading order, independent-container/asset policies, and any shared baseline. Read the final `status` as `pass / fail / manual_review_required / blocked`; `readiness_status=ready` does not override `status=fail`.
+- Only after assembly `status: "pass"` call `evaluate_visual_quality` for automatic release. Pass the selected slide's `design_context` and a render artifact reference so the v0.6 Visual Observer can compare rendered hierarchy, balance, whitespace, focus, and decoration variety with planning intent. Read `production_status`, `design_status`, and `repair_status` independently; design success never overrides production failure. Apply only the returned fixed `repair_plan.action`, pass its lineage into the next evaluation, re-render at most twice, and escalate when instructed or exhausted. For Evidence `manual_review_required`, complete and record human review; for `fail`, repair the proven intent/render mismatch; for `blocked`, supply the missing protocol fact. Use canonical Render Telemetry 1.4, preserving separate `container_bbox`, `allocated_bbox`, and `display_bbox`, per-image `renderer_reported/profile_derived` provenance, verified asset/crop lineage, group facts, measured `rendered_embedded_text_px`, and explicit `visual_parent_id/relation`. Never copy allocation geometry into display geometry or fabricate missing facts. Mark global bars as `quality_role: background` and title separators with `relation.type: title_rule`; only unbound decorations inside the actual content region are orphan candidates. A raster-text fact explicitly marked not measured enters manual review without promoting the deck to warning; a failed measurement remains blocking. For an existing deck, pass `baseline_telemetry` and keep parent, sibling, reading-order, shared-container, and layout relations unless an explicit redesign disables preservation. `validate_rendered_deck` must return `pipeline_status: "render_qa_complete"`; treat `status`/`overall_status` as the release gate.
+- When validating this plugin or a modified layout library, call `audit_layout_library` first and require `status: "valid"`; any schema, geometry, reading-order, theme, or preview issue blocks release.
+- For regression or release qualification, call `run_benchmark`. Require `status: "passed"`, `determinism.passed: true`, every returned threshold check to pass, and `performance.single_slide_p95_ms < 50`. Use `detail_level: "full"` only when individual failing cases must be diagnosed.
+
+Read [references/readability-contract.md](references/readability-contract.md) when preparing renderer telemetry or interpreting post-render QA.
+Read [references/visual-quality-contract.md](references/visual-quality-contract.md) when producing canonical element telemetry, assigning `quality_role`, interpreting metrics versus rules, or diagnosing `not_evaluable` checks.
+Read [references/relation-fit-contract.md](references/relation-fit-contract.md) when a page contains related sibling visuals, Group Fit reports a conflict, or Shadow/fallback/arbitration telemetry must be interpreted.
+Read [references/slidep-compatibility.md](references/slidep-compatibility.md) whenever slidep or tencent-pptx is the chosen renderer.
+
+## Viewing mode and typography
+
+Use `projector` by default for group meetings, journal clubs, defenses, and paper presentations. Use `desktop` only for screen-sharing or asynchronous review, and `handout` for print-oriented output.
+
+Do not shrink content below the returned font floors. Reflow in this order:
+
+1. Collapse unused optional slots.
+2. Expand the neighboring high-priority content.
+3. Shorten audience-facing copy.
+4. Choose a better layout.
+5. Crop a dense figure to the evidence needed for this slide.
+6. Split the slide.
+
+Keep one-line titles on one line. Treat a font-floor warning as a layout problem, not an invitation to reduce type further.
+
+## Content analysis
+
+Use `importance` as an ascending priority, honor `must_keep`, and keep `content_role` within `primary_claim`, `primary_evidence`, `supporting_evidence`, `caption`, `context`, or `optional_visual`. Do not silently drop structural content. Review every normalization decision in `adaptation_log` and block planning when reference violations make the content model invalid.
+
+Count audience-facing body text separately from the title. Prefer `text_chars_by_role` or `slot_metrics` when the content is known; total character count alone cannot predict narrow-slot wrapping. Pass `process_step_count` for workflows.
+
+For each visual, distinguish `photo`, `schematic`, `simple_plot`, `dense_plot`, `multi_panel_figure`, `table_screenshot`, `microscopy`, or `visual_evidence`. Include `panel_count` and `has_embedded_text`. A rasterized scientific plot remains an image for slot capacity, while its `visual_type` describes readability; do not misclassify it as a native chart merely to satisfy the validator.
+
+Prefer these semantic roles when applicable: `headline`, `body_text`, `primary_visual`, `secondary_visual`, `data_visual`, `table`, `process`, `timeline`, `takeaway`, `question`, `caption`, and `metadata`.
+
+## Selection and deck planning
+
+- Map the highest-value evidence to the highest-priority visual or table slot.
+- Prefer assertion-style titles for evidence, discussion, and conclusion pages.
+- Let `create_deck_plan` compile `SlideDesignIR` and select Visual Treatment/Decoration internally. Preserve the returned `visual_treatment`, `decoration_profile`, and `aesthetic_score` for the renderer; do not make a second free-form design choice outside RPA.
+- Read `production_status` and `design_status` independently. Design QA may request review for repetition, cardification, hierarchy, focus, whitespace, balance, or rhythm, but it never overrides an Evidence, Capacity, Geometry, or Renderer hard failure.
+- Avoid adjacent repetition and excessive card-grid styling. Preserve a coherent theme while varying slide silhouette.
+- Treat retrieval scores as structural ranking signals only. Do not infer rendered typography, figure readability, whitespace quality, or balance from Planner/Layout Retrieval output.
+- A dense multi-panel figure normally needs a dominant visual slot. Layout retrieval may reject a slot that is structurally narrower than the declared minimum; the final pass/warning/fail decision still comes from `evaluate_visual_quality` after rendering.
+- When binding returns `needs_replan`, reject the current layout and choose a different legal candidate. Never retry a layout in `rejected_layout_ids`. If structural content exceeds every single-page candidate, split only when `allow_auto_split` is true and preserve original item order across child slides.
+- Do not fill intentional whitespace mechanically, but correct empty bands or undersized content groups that do not support focus.
+
+## Rendering boundary and QA
+
+Keep OCR and source extraction upstream. Accept PaperWorkflow output as an in-memory object only; do not invoke its Python/PDF handlers or read its artifact paths on behalf of the normalizer.
+
+Pass selected layout IDs and `pptx_in` coordinates to the renderer. Keep text, charts, tables, and shapes editable where possible. After export, collect actual slide/render dimensions, source `layout_id/category`, and per-element `bbox`, `render_bbox_px`, `z_index`, `opacity`, `quality_role`, text overflow/font/local-contrast facts, image source/display/allocation dimensions, scientific visual identity/type/panel facts, measured embedded-text pixels, overlay fills, solid colors, and theme-token usage. Renderer adapters report facts only; they must not decide whether a page is too empty, unbalanced, unreadable, or low contrast. For cover text intersecting an image, require either measured local contrast or an actual opaque surface between the image and text layers; unknown facts are release-blocking `not_evaluable`, not pass.
+
+For slidep, create exactly one `XX_slug.slide` source per page. Never emit a same-stem `.jsx` copy. On Windows pass a drive-letter path such as `F:/project`, not an MSYS path such as `/f/project`. For slidep 5.4.4 on Windows, do not rely on the live watcher: edit in batches, stop/start to trigger the initial scan, and verify the output slide count and logs after compilation.
+
+Run `evaluate_visual_quality` on canonical telemetry and `validate_rendered_deck` for deck aggregation. Correct `TEXT_VISUAL_OVERFLOW`, `ELEMENT_OUT_OF_BOUNDS`, `THEME_USAGE_VIOLATION`, `UNPROTECTED_TEXT_OVER_IMAGE`, `FONT_FLOOR_VIOLATION`, `TITLE_WRAPPED`, `DENSE_FIGURE_TOO_SMALL`, and `EMBEDDED_TEXT_TOO_SMALL` before delivery. Treat `TEXT_IMAGE_PROTECTION_NOT_EVALUABLE` as a request for real renderer facts or a protective text surface. Inspect whitespace, balance, and contrast warnings at full-slide size. A complex or unknown background must keep contrast `not_evaluable`; do not replace it with an average theme color. Do not substitute one generic completion flag for `plan_complete`, `preflight_complete`, and `render_qa_complete`.
+
+## Completion criteria
+
+A complete result includes a valid traceable content model when evidence is supplied, the narrative arc, one layout ID plus selected treatment/decoration per slide, slot-level mapping, viewing profile, `plan_complete`, combined structural `preflight_complete`, Evidence Closure `status: pass` (or a signed manual-review disposition), and post-render `render_qa_complete` status. Plugin-release validation additionally requires a valid layout audit and a passing deterministic benchmark, including all canonical Visual QA foundation probes. The 0.4.7 Render Evidence contract remains release-gated until a real Deck Builder produces the manifest, unmodified renderer telemetry is consumed, the final PPTX is rendered, and target slides receive human sign-off. Do not invent research findings or numerical results to fill empty slots.

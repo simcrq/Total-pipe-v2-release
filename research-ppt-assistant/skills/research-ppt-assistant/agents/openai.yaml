@@ -1,0 +1,5 @@
+interface:
+  display_name: "Research PPT Assistant"
+  short_description: "为科研汇报规划版式，并检查字号、留白和论文图可读性"
+  brand_color: "#2563EB"
+  default_prompt: "使用 $research-ppt-assistant 为我的科研汇报规划结构、选择版式，并在渲染前后检查小字、空旷和科研图可读性。"

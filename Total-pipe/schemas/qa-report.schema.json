@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://total-pipe.local/schemas/qa-report.schema.json",
+  "title": "Unified QA Report v2",
+  "type": "object",
+  "required": ["schema_version", "artifact_sha256", "ir_sha256", "status", "counts", "checks", "items"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "artifact_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "ir_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["PASS", "REVIEW", "FAIL"]},
+    "counts": {
+      "type": "object",
+      "required": ["FAIL", "WARNING", "REVIEW", "INFO"],
+      "properties": {
+        "FAIL": {"type": "integer", "minimum": 0},
+        "WARNING": {"type": "integer", "minimum": 0},
+        "REVIEW": {"type": "integer", "minimum": 0},
+        "INFO": {"type": "integer", "minimum": 0}
+      }
+    },
+    "checks": {"type": "object"},
+    "layout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule", "severity", "slide", "shape", "message", "source", "confidence", "diagnosis"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+          "rule": {"type": "string"},
+          "severity": {"enum": ["FAIL", "WARNING", "REVIEW", "INFO"]},
+          "slide": {"type": ["integer", "null"], "minimum": 1},
+          "shape": {"type": ["string", "null"]},
+          "message": {"type": "string"},
+          "source": {"type": "object"},
+          "confidence": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+          "diagnosis": {"enum": ["content_capacity", "scientific_review", "infra_or_measurement_review", "compatibility", "design", "backend", "layout_or_contract"]}
+        }
+      }
+    }
+  }
+}

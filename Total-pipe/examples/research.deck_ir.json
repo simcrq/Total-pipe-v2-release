@@ -1,0 +1,55 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "compiler-regression",
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "bold_font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "evidence",
+      "semantic": {
+        "title": "Evidence and the proposed mechanism",
+        "purpose": "Separate observation from interpretation",
+        "takeaway": "The control constrains an explanation but does not establish the full mechanism.",
+        "evidence_refs": ["fixture:control", "fixture:measurement"],
+        "caveats": ["Synthetic regression fixture; no scientific result is asserted."],
+        "speaker_notes": "This synthetic input tests compilation without making scientific claims."
+      },
+      "composition": {
+        "archetype": "evidence-hypothesis",
+        "blocks": [
+          {"id": "measurement", "component": "direct-evidence", "text": "A measured response changes under the control condition."},
+          {"id": "interpretation", "component": "hypothesis", "text": "A proposed pathway may explain the response. Additional measurements are needed."}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "limits",
+      "semantic": {
+        "title": "Limitations under different operating conditions and a longer title",
+        "purpose": "Test longer content without a new adapter",
+        "takeaway": "Material scope, boundary conditions and measurement uncertainty constrain the conclusion.",
+        "evidence_refs": ["fixture:limits"],
+        "caveats": [],
+        "speaker_notes": "Synthetic fixture, not a paper summary."
+      },
+      "composition": {
+        "archetype": "three-limitations",
+        "blocks": [
+          {"id": "scope", "component": "limitation", "label": "Scope", "text": "Measurements cover one material family. Transfer to other materials remains untested."},
+          {"id": "boundary", "component": "limitation", "label": "Boundary", "text": "The thermal environment may change the observed response."},
+          {"id": "uncertainty", "component": "limitation", "label": "Uncertainty", "text": "Independent calibration is required before interpreting a small change."}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "grammar": {
+    "background": ["none", "subtle_grid", "soft_field", "split_surface", "edge_accent", "quiet_gradient"],
+    "section_marker": ["none", "eyebrow", "index", "vertical_rule", "corner_label"],
+    "figure_treatment": ["open", "hairline_frame", "soft_surface", "annotated", "edge_label", "caption_rail"],
+    "emphasis": ["typography_only", "underline", "tint", "number_marker", "callout", "micro_badge"],
+    "container": ["none", "open_group", "rule_group", "soft_panel", "card"],
+    "divider": ["none", "hairline", "indexed_rule", "segmented_rule", "axis_rule"]
+  },
+  "default_budget": {
+    "background_motifs_max": 1,
+    "accent_elements_max": 3,
+    "decorative_area_ratio_max": 0.12,
+    "allow_visual_overlap": false,
+    "allow_evidence_overlap": false
+  },
+  "profiles": [
+    { "id": "open_figure", "compatible_treatments": ["figure_led"], "background": "none", "section_marker": "eyebrow", "figure_treatment": "open", "emphasis": "typography_only", "container": "none", "divider": "none" },
+    { "id": "caption_rail", "compatible_treatments": ["figure_led"], "background": "edge_accent", "section_marker": "none", "figure_treatment": "caption_rail", "emphasis": "underline", "container": "open_group", "divider": "hairline" },
+    { "id": "minimal_rule", "compatible_treatments": ["editorial_open", "summary_synthesis"], "background": "none", "section_marker": "vertical_rule", "figure_treatment": "open", "emphasis": "typography_only", "container": "none", "divider": "hairline" },
+    { "id": "soft_field", "compatible_treatments": ["editorial_open"], "background": "soft_field", "section_marker": "corner_label", "figure_treatment": "open", "emphasis": "tint", "container": "open_group", "divider": "none" },
+    { "id": "distributed_list_panel", "compatible_treatments": ["structured_text"], "background": "none", "section_marker": "none", "figure_treatment": "open", "emphasis": "micro_badge", "container": "soft_panel", "divider": "none", "text_flow_mode": "distributed_arrow_list", "bullet_glyph": "➢", "vertical_distribution": "space_between" },
+    { "id": "open_technical", "compatible_treatments": ["technical_annotation"], "background": "subtle_grid", "section_marker": "index", "figure_treatment": "annotated", "emphasis": "number_marker", "container": "none", "divider": "indexed_rule" },
+    { "id": "indexed_technical", "compatible_treatments": ["technical_annotation"], "background": "none", "section_marker": "index", "figure_treatment": "edge_label", "emphasis": "number_marker", "container": "rule_group", "divider": "indexed_rule" },
+    { "id": "comparison_axis", "compatible_treatments": ["comparison_structured"], "background": "none", "section_marker": "eyebrow", "figure_treatment": "open", "emphasis": "underline", "container": "rule_group", "divider": "axis_rule" },
+    { "id": "comparison_divider", "compatible_treatments": ["comparison_structured"], "background": "split_surface", "section_marker": "none", "figure_treatment": "hairline_frame", "emphasis": "tint", "container": "open_group", "divider": "segmented_rule" },
+    { "id": "metric_signal", "compatible_treatments": ["metric_focus"], "background": "none", "section_marker": "eyebrow", "figure_treatment": "open", "emphasis": "number_marker", "container": "open_group", "divider": "axis_rule" },
+    { "id": "metric_rule", "compatible_treatments": ["metric_focus"], "background": "edge_accent", "section_marker": "index", "figure_treatment": "open", "emphasis": "typography_only", "container": "rule_group", "divider": "hairline" },
+    { "id": "diagram_flow", "compatible_treatments": ["mechanism_diagram"], "background": "none", "section_marker": "index", "figure_treatment": "annotated", "emphasis": "number_marker", "container": "open_group", "divider": "axis_rule" },
+    { "id": "diagram_grid", "compatible_treatments": ["mechanism_diagram"], "background": "subtle_grid", "section_marker": "corner_label", "figure_treatment": "edge_label", "emphasis": "micro_badge", "container": "rule_group", "divider": "indexed_rule" },
+    { "id": "audit_rail", "compatible_treatments": ["evidence_audit"], "background": "none", "section_marker": "vertical_rule", "figure_treatment": "hairline_frame", "emphasis": "micro_badge", "container": "soft_panel", "divider": "segmented_rule" },
+    { "id": "audit_rules", "compatible_treatments": ["evidence_audit"], "background": "edge_accent", "section_marker": "index", "figure_treatment": "edge_label", "emphasis": "callout", "container": "rule_group", "divider": "indexed_rule" },
+    { "id": "synthesis_closure", "compatible_treatments": ["summary_synthesis"], "background": "quiet_gradient", "section_marker": "eyebrow", "figure_treatment": "open", "emphasis": "typography_only", "container": "open_group", "divider": "hairline" }
+  ]
+}

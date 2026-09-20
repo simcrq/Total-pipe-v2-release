@@ -1,0 +1,3 @@
+- insert:
+    - id: paperworkflow-tools
+      name: paperworkflow-dsh-plugin

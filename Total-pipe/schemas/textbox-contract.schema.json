@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://total-pipe.local/schemas/textbox-contract.schema.json",
+  "title": "TextBoxContract v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "font_family", "font_file", "font_size", "font_weight", "line_height",
+    "wrap", "autofit", "inset", "vertical_anchor", "max_lines",
+    "overflow_policy", "font_floor"
+  ],
+  "properties": {
+    "font_family": {"type": "string", "minLength": 1},
+    "font_file": {"type": "string", "minLength": 1},
+    "font_size": {"type": "number", "exclusiveMinimum": 0},
+    "font_weight": {"type": "integer", "minimum": 100, "maximum": 900},
+    "line_height": {"type": "number", "exclusiveMinimum": 0},
+    "wrap": {"const": false},
+    "autofit": {"const": "none"},
+    "inset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right", "top", "bottom"],
+      "properties": {
+        "left": {"type": "number", "minimum": 0},
+        "right": {"type": "number", "minimum": 0},
+        "top": {"type": "number", "minimum": 0},
+        "bottom": {"type": "number", "minimum": 0}
+      }
+    },
+    "vertical_anchor": {"enum": ["top", "middle", "bottom"]},
+    "max_lines": {"type": "integer", "minimum": 1},
+    "overflow_policy": {"const": "wrap_shrink_variant_split"},
+    "font_floor": {"type": "number", "exclusiveMinimum": 0}
+  }
+}

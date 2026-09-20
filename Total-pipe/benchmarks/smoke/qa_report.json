@@ -1,0 +1,20 @@
+{
+  "schema_version": "2.0",
+  "artifact_sha256": "b303944e1b3a6e9f8eb8b026f103db96f61e9d12678cb299134427c829a16968",
+  "ir_sha256": "50d996f8fdd78d50dfc655a3e3eb49d956a86d3e425f588e7fae7d5499e47402",
+  "status": "PASS",
+  "counts": {
+    "FAIL": 0,
+    "WARNING": 0,
+    "REVIEW": 0,
+    "INFO": 0
+  },
+  "checks": {
+    "structural": true,
+    "native": true,
+    "renderer": "powerpoint",
+    "visual_review": true
+  },
+  "items": [],
+  "layout_sha256": "03acfaa52969f26110a2469229b1be70eb9070ca2deb0c617eed8867219fef37"
+}

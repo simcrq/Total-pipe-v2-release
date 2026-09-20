@@ -1,0 +1,46 @@
+{
+  "version": "2.1.0",
+  "score_range": [
+    0,
+    100
+  ],
+  "required_inputs": [
+    "text_chars",
+    "image_count",
+    "table_count"
+  ],
+  "optional_inputs": [
+    "title_chars",
+    "process_step_count",
+    "visual_aspect_ratio",
+    "content_roles",
+    "viewing_mode",
+    "density_preference",
+    "slot_metrics",
+    "visuals",
+    "weights",
+    "k"
+  ],
+  "weights": {
+    "text_fit": 0.14,
+    "image_fit": 0.14,
+    "table_fit": 0.11,
+    "visual_area_fit": 0.08,
+    "aspect_ratio_fit": 0.06,
+    "role_fit": 0.06,
+    "density_prior": 0.04,
+    "genericity_prior": 0.05,
+    "silhouette_fit": 0.08,
+    "typography_fit": 0.18,
+    "visual_complexity_fit": 0.14,
+    "occupancy_fit": 0.1
+  },
+  "hard_penalties": {
+    "image_capacity_shortage": "x0.52 per missing slot",
+    "table_capacity_shortage": "x0.45 per missing slot",
+    "text_overflow": "max(0.22, max_text_chars/text_chars)",
+    "typography_floor_risk": "x0.60 when typography_fit < 0.45",
+    "dense_visual_too_small": "x0.68 when visual_complexity_fit < 0.55"
+  },
+  "notes_zh": "先计算容量、内容轮廓、字号、科研图复杂度与页面占用率等12项软匹配，再应用槽位不足、字号下限和密集图过小的硬惩罚。Top-K按最终分数降序。"
+}

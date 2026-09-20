@@ -1,0 +1,53 @@
+# ============================================================
+# Total-pipe 工具链聚合仓库
+# 纳管：pwf2rpa / skills(pptx-telemetry,total-pipe-deck) / Team编排
+# ============================================================
+
+# --- 运行产物与测试数据（非工具链代码，不入仓） ---
+Test1/
+Test2/
+Test3/
+Test4/
+Test5/
+# --- 第三方/上游工程（体积巨大，含 venv） ---
+paperworkflow/
+
+# --- 迁移临时区：确认无误后可 rm -rf ---
+.trash_20260907/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- Node ---
+node_modules/
+
+# --- 渲染器/编辑器中间产物 ---
+.slidep/
+~$*.pptx
+*.tmp
+
+# --- WorkBuddy 会话记忆（非源码） ---
+.workbuddy/
+
+# --- 二进制与Office临时文件 ---
+*.7z
+*.zip
+*.pyc
+# 无代码引用的残留素材（例如 pwf2rpa/空白幻灯片.pptx）
+*.pptx
+*.inspect.ndjson
+benchmarks/*/native.pdf
+benchmarks/*/native.json
+benchmarks/*/state.json
+benchmarks/*/layout.json
+benchmarks/*/deck_ir.json
+benchmarks/*/derived/
+tmp/
+
+# --- 系统 ---
+.DS_Store
+Thumbs.db

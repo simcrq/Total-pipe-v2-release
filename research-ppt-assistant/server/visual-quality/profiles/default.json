@@ -1,0 +1,239 @@
+{
+  "profile_id": "default",
+  "profile_version": "1.4.0",
+  "extends": null,
+  "rules": {
+    "text_overflow": {
+      "enabled": true,
+      "metric": "text_overflow_count",
+      "operator": "count",
+      "warning": null,
+      "fail": 0,
+      "warning_code": null,
+      "fail_code": "TEXT_VISUAL_OVERFLOW",
+      "reason": "One or more text elements report renderer overflow.",
+      "recommended_action": "reflow_or_split"
+    },
+    "element_out_of_bounds": {
+      "enabled": true,
+      "metric": "out_of_bounds_count",
+      "operator": "count",
+      "warning": null,
+      "fail": 0,
+      "warning_code": null,
+      "fail_code": "ELEMENT_OUT_OF_BOUNDS",
+      "reason": "One or more rendered content elements extend beyond the slide bounds.",
+      "recommended_action": "correct_geometry"
+    },
+    "element_area_ratio": {
+      "enabled": true,
+      "metric": "element_area_ratio",
+      "operator": "minimum",
+      "warning": 0.35,
+      "fail": 0.18,
+      "warning_code": "EXCESSIVE_WHITESPACE",
+      "fail_code": "EXCESSIVE_WHITESPACE",
+      "reason": "The union of meaningful content occupies too little of the slide.",
+      "recommended_action": "review_content_distribution"
+    },
+    "largest_horizontal_gap": {
+      "enabled": true,
+      "metric": "largest_horizontal_gap_ratio",
+      "operator": "maximum",
+      "warning": 0.3,
+      "fail": 0.45,
+      "warning_code": "LARGE_HORIZONTAL_VOID",
+      "fail_code": "LARGE_HORIZONTAL_VOID",
+      "reason": "The slide contains a large horizontal whitespace band.",
+      "recommended_action": "review_content_distribution"
+    },
+    "largest_vertical_gap": {
+      "enabled": true,
+      "metric": "largest_vertical_gap_ratio",
+      "operator": "maximum",
+      "warning": 0.3,
+      "fail": 0.45,
+      "warning_code": "LARGE_VERTICAL_VOID",
+      "fail_code": "LARGE_VERTICAL_VOID",
+      "reason": "The slide contains a large vertical whitespace band.",
+      "recommended_action": "review_content_distribution"
+    },
+    "visual_center": {
+      "enabled": true,
+      "metric": "visual_center_offset",
+      "operator": "maximum",
+      "warning": 0.12,
+      "fail": 0.22,
+      "warning_code": "VISUAL_CENTER_SHIFTED",
+      "fail_code": "VISUAL_CENTER_SHIFTED",
+      "reason": "The content visual center is substantially displaced from slide center.",
+      "recommended_action": "rebalance_content"
+    },
+    "theme_usage": {
+      "enabled": true,
+      "metric": "theme_usage_violation_count",
+      "operator": "count",
+      "warning": null,
+      "fail": 0,
+      "warning_code": null,
+      "fail_code": "THEME_USAGE_VIOLATION",
+      "reason": "A theme token is used in a forbidden or non-allowed role.",
+      "recommended_action": "use_allowed_theme_token"
+    },
+    "solid_text_contrast": {
+      "enabled": true,
+      "metric": "minimum_text_contrast_ratio",
+      "operator": "minimum",
+      "warning": 4.5,
+      "fail": 3,
+      "warning_code": "TEXT_CONTRAST_LOW",
+      "fail_code": "TEXT_CONTRAST_LOW",
+      "not_evaluable_code": "CONTRAST_NOT_EVALUABLE",
+      "reason": "Rendered text has insufficient contrast against its solid background.",
+      "recommended_action": "increase_text_contrast"
+    },
+    "cover_text_over_image": {
+      "enabled": true,
+      "metric": "text_image_occlusion",
+      "operator": "text_image_protection",
+      "warning": null,
+      "fail": 0,
+      "warning_code": null,
+      "fail_code": "UNPROTECTED_TEXT_OVER_IMAGE",
+      "not_evaluable_code": "TEXT_IMAGE_PROTECTION_NOT_EVALUABLE",
+      "reason": "Cover text intersects an underlying image without sufficient measured local contrast or an opaque overlay surface.",
+      "recommended_action": "add_opaque_text_surface_or_measure_local_contrast",
+      "criteria": {
+        "local_contrast_min": 4.5,
+        "overlay_coverage_min": 0.95,
+        "overlay_opacity_min": 0.85
+      }
+    }
+  },
+  "visual_fit_rules": {
+    "scientific_figure": {
+      "visual_types": [
+        "scientific_figure",
+        "dense_plot",
+        "multi_panel_figure",
+        "table_screenshot"
+      ],
+      "aspect_mismatch_warning": 1.6,
+      "aspect_mismatch_fail": 2,
+      "minimum_axis_fill_warning": 0.5,
+      "minimum_axis_fill_fail": 0.35,
+      "gap_symmetry_tolerance": 0.05
+    },
+    "ungoverned_visual_types": {
+      "minimum_area_fill_warning": 0.4,
+      "aspect_mismatch_warning": 2.2
+    }
+  },
+  "relation_fit_rules": {
+    "group_fit": {
+      "minimum_child_fill_warning": 0.55,
+      "minimum_child_fill_fail": 0.45,
+      "fit_equity_warning": 0.68,
+      "fit_equity_fail": 0.55,
+      "group_fill_variance_warning": 0.04
+    },
+    "arbitration": {
+      "minimum_gain": 0.08,
+      "maximum_visual_weight_deviation": 0.75,
+      "max_relation_replan_attempts": 1,
+      "template_gap_ratio": 0.02
+    },
+    "credits": {
+      "maximum_regression_ratio": 1.1
+    }
+  },
+  "legacy_rules": {
+    "low_density_categories": [
+      "cover",
+      "section",
+      "qa"
+    ],
+    "viewing_modes": {
+      "projector": {
+        "title_minimum": 35,
+        "body_warning": 18,
+        "body_fail": 16,
+        "subheading_minimum": 24,
+        "caption_minimum": 16,
+        "content_footprint_warning_min": 0.68,
+        "content_footprint_warning_max": 0.9,
+        "largest_empty_band_warning": 0.12,
+        "embedded_text_warning_px": 14
+      },
+      "desktop": {
+        "title_minimum": 35,
+        "body_warning": 16,
+        "body_fail": 16,
+        "subheading_minimum": 24,
+        "caption_minimum": 16,
+        "content_footprint_warning_min": 0.62,
+        "content_footprint_warning_max": 0.9,
+        "largest_empty_band_warning": 0.15,
+        "embedded_text_warning_px": 12
+      },
+      "handout": {
+        "title_minimum": 35,
+        "body_warning": 16,
+        "body_fail": 16,
+        "subheading_minimum": 24,
+        "caption_minimum": 16,
+        "content_footprint_warning_min": 0.6,
+        "content_footprint_warning_max": 0.92,
+        "largest_empty_band_warning": 0.16,
+        "embedded_text_warning_px": 11
+      }
+    },
+    "low_density_content_footprint_warning_min": 0.4,
+    "low_density_largest_empty_band_warning": 0.22,
+    "center_axis_warning_x": 0.18,
+    "center_axis_warning_y": 0.16,
+    "visual_types": {
+      "photo": {
+        "minimum_width": 0.25,
+        "dense": false
+      },
+      "schematic": {
+        "minimum_width": 0.36,
+        "dense": false
+      },
+      "simple_plot": {
+        "minimum_width": 0.36,
+        "dense": false
+      },
+      "dense_plot": {
+        "minimum_width": 0.5,
+        "dense": true
+      },
+      "multi_panel_figure": {
+        "minimum_width": 0.55,
+        "dense": true
+      },
+      "table_screenshot": {
+        "minimum_width": 0.55,
+        "dense": true
+      },
+      "microscopy": {
+        "minimum_width": 0.36,
+        "dense": false
+      },
+      "visual_evidence": {
+        "minimum_width": 0.34,
+        "dense": false
+      }
+    },
+    "multi_panel_width_add_4": 0.03,
+    "multi_panel_width_add_6": 0.07,
+    "embedded_visual_evidence_width": 0.44,
+    "severe_visual_width_ratio": 0.72,
+    "severe_embedded_text_ratio": 0.75,
+    "dense_panel_count": 4,
+    "dense_visual_split_count": 2,
+    "dense_visual_split_width": 0.44,
+    "max_letterbox_ratio": 0.35
+  }
+}

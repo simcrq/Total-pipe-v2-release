@@ -1,0 +1,8 @@
+research-meeting-layout-library
+version: 2.0.0-tech-delivery
+schema: layout-schema-v2
+delivery_date: 2026-08-19
+layout_count: 320
+category_count: 40
+aspect_ratio: 16:9
+slide_size_inches: 13.333 x 7.5

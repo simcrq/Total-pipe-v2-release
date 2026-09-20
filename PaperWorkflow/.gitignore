@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+logs/
+temp_markdowns/
+*.egg-info
+rpa-pipe/
+# Virtual environments
+.venv
+MinerU调用.md
+config.yaml
+Gemini.md
+工作流简介.md
+
+Merged_Summaries.md

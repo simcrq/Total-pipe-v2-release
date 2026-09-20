@@ -1,0 +1,39 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "distributed-arrow-list-reference",
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "bold_font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "parallel-findings",
+      "semantic": {
+        "title": "Parallel findings need readable vertical rhythm",
+        "purpose": "Reference the distributed arrow-list treatment",
+        "takeaway": "Keep each claim intact and use spacing to expose the argument structure.",
+        "evidence_refs": ["layout-reference"],
+        "caveats": [],
+        "speaker_notes": "Synthetic layout reference; no scientific claim is asserted."
+      },
+      "composition": {
+        "archetype": "three-conclusions",
+        "blocks": [
+          {
+            "id": "findings",
+            "component": "body",
+            "label": "Key findings",
+            "text_flow": "auto",
+            "text": "The first finding defines the operating regime and the boundary under which the conclusion holds.\nThe second finding connects the measured response to the proposed mechanism and its evidence.\nThe third finding states the remaining uncertainty and the next discriminating experiment."
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

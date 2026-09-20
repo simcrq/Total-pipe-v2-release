@@ -1,0 +1,13 @@
+{
+  "baseline_sha256": "9e616d5ebfa52ef2c99a21937c58951a3547463659925f81b9a53f9e88c35df0",
+  "source": "pg_ldw_grayscale_journal_club_v13.pptx",
+  "slide_count": 9,
+  "shapes": 139,
+  "pictures": 8,
+  "text_bodies": 105,
+  "runtime_seconds": null,
+  "mcp_calls": null,
+  "qa_false_positive_rate": null,
+  "historical_metrics_status": "not_recorded",
+  "repair_amplification_factor": null
+}

@@ -1,0 +1,29 @@
+{
+  "name": "total-pipe",
+  "version": "1.0.0+codex.20260919074058",
+  "description": "Evidence-grounded research presentation workflow with a canonical Deck IR, deterministic compiler, unified QA, and PowerPoint validation.",
+  "author": {
+    "name": "Total-pipe"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Total-pipe",
+    "shortDescription": "Turn research papers into evidence-grounded PPTX decks.",
+    "longDescription": "Orchestrates PaperWorkflow, a user-selected Story Planner, pwf2rpa, Research PPT Assistant, Deck Compiler v2, unified structural QA, and PowerPoint native validation.",
+    "developerName": "Total-pipe",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Analysis",
+      "Planning",
+      "Write"
+    ],
+    "brandColor": "#2563EB",
+    "defaultPrompt": [
+      "Turn this research paper into a presentation deck.",
+      "Run the Total-pipe workflow for this paper.",
+      "Compile and validate this deck with PowerPoint."
+    ]
+  }
+}

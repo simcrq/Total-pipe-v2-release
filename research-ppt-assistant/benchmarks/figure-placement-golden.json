@@ -1,0 +1,131 @@
+{
+  "fixture_version": "figure-placement/1.0",
+  "source_deck": "../../meta_assembly_deck/rendered/meta_assembly_paper_blue.pptx",
+  "source_deck_sha256": "a2b10b2afc520025a587643fcc08f5720d2fe3b343ae48eed1e6c837d8998af7",
+  "fixtures": [
+    {
+      "fixture_id": "P5-renderer-override",
+      "source_file": "../../meta_assembly_deck/rendered/meta_assembly_paper_blue.pptx#slide=5",
+      "source_file_hash": "a2b10b2afc520025a587643fcc08f5720d2fe3b343ae48eed1e6c837d8998af7",
+      "asset_sha256": "eaf9ac0b496edbdc406f430ac916db4d7217534bb5c4bde5a4e53d08feebcf26",
+      "slide_goal": "Trace the PBG–TIR mechanism without allowing the renderer to shrink the final image geometry.",
+      "figure_id": "mech-input-img",
+      "visual_intent": { "selection": { "strategy": "full_figure", "target": "panel_f" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "cover", "allow_cover": true } },
+      "expected_region": "full_figure",
+      "expected_roi": { "x": 0, "y": 0, "width": 1, "height": 1 },
+      "roi_tolerance": 0.01,
+      "slot_bbox": { "x": 3.467, "y": 1.5, "width": 9.066, "height": 0.737 },
+      "allocated_visual_bbox": { "x": 3.467, "y": 1.5, "width": 2, "height": 0.737 },
+      "minimum_display_size": { "width": 1.5, "height": 0.6 },
+      "minimum_effective_resolution": { "width_px": 180, "height_px": 90 },
+      "minimum_embedded_text_px": null,
+      "expected_panel_visibility": ["panel_f"],
+      "expected_label_visibility": ["f"],
+      "renderer": "custom-ooxml",
+      "renderer_must_not_override_placement": true,
+      "missing_telemetry_must_not_pass": true,
+      "input": {
+        "trace_id": "slide_05_mech_input",
+        "visual": {
+          "id": "mech-input-img",
+          "source_width_px": 392,
+          "source_height_px": 426,
+          "visual_intent": { "selection": { "strategy": "full_figure", "target": "panel_f" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "cover", "allow_cover": true } }
+        },
+        "allocated_visual_bbox": { "x": 3.467, "y": 1.5, "width": 2, "height": 0.737 },
+        "slide": { "width": 13.333, "height": 7.5, "render_width_px": 1920, "render_height_px": 1080 },
+        "policy": { "allow_crop": true, "max_letterbox_ratio": 0.8, "minimum_effective_resolution": { "width_px": 180, "height_px": 90 } },
+        "renderer_result": {
+          "effective_placement": { "x": 4.128, "y": 1.5, "width": 0.678, "height": 0.737 },
+          "effective_source_region": { "x": 0, "y": 0, "width": 1, "height": 1 },
+          "render_bbox_px": { "x": 594, "y": 216, "width": 98, "height": 106 }
+        }
+      },
+      "expected": { "status": "fail", "codes": ["RENDERER_PLACEMENT_OVERRIDE", "RENDERER_SOURCE_REGION_OVERRIDE", "IMAGE_EFFECTIVE_RESOLUTION_LOW"] }
+    },
+    {
+      "fixture_id": "P7-semantic-region",
+      "source_file": "../../meta_assembly_deck/rendered/meta_assembly_paper_blue.pptx#slide=7",
+      "source_file_hash": "a2b10b2afc520025a587643fcc08f5720d2fe3b343ae48eed1e6c837d8998af7",
+      "asset_sha256": "18723f20fa928d8fcbb3894544c86ae54e5d10758732d7ab048271f4d843b903",
+      "slide_goal": "Show panel d as the evidence for macroscopic collaborative colouration.",
+      "figure_id": "macro-img",
+      "visual_intent": { "selection": { "strategy": "panel", "target": "panel_d" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "contain" } },
+      "expected_region": "panel_d",
+      "expected_roi": { "x": 0, "y": 0.51, "width": 1, "height": 0.49 },
+      "roi_tolerance": 0.02,
+      "slot_bbox": { "x": 0.733, "y": 1.5, "width": 7.733, "height": 4.875 },
+      "allocated_visual_bbox": { "x": 0.733, "y": 1.5, "width": 7.733, "height": 4.875 },
+      "minimum_display_size": { "width": 6, "height": 2 },
+      "minimum_effective_resolution": { "width_px": 900, "height_px": 260 },
+      "minimum_embedded_text_px": null,
+      "expected_panel_visibility": ["panel_d"],
+      "expected_label_visibility": ["d"],
+      "renderer": "custom-ooxml",
+      "renderer_must_not_override_placement": true,
+      "missing_telemetry_must_not_pass": true,
+      "input": {
+        "trace_id": "slide_07_fig_04",
+        "visual": {
+          "id": "macro-img",
+          "source_width_px": 1451,
+          "source_height_px": 868,
+          "visual_intent": { "selection": { "strategy": "panel", "target": "panel_d" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "contain" } },
+          "region_candidates": [{ "region_id": "panel_d", "aliases": ["d"], "roi": { "x": 0, "y": 0.51, "width": 1, "height": 0.49 }, "confidence": 0.96 }]
+        },
+        "allocated_visual_bbox": { "x": 0.733, "y": 1.5, "width": 7.733, "height": 4.875 },
+        "slide": { "width": 13.333, "height": 7.5, "render_width_px": 1920, "render_height_px": 1080 },
+        "policy": { "max_letterbox_ratio": 0.8, "minimum_effective_resolution": { "width_px": 900, "height_px": 260 } },
+        "expectations": { "excluded_region_ids": ["panel_a", "panel_b", "panel_c"], "expected_label_ids": ["d"] },
+        "renderer_result": {
+          "effective_placement": { "x": 0.733, "y": 1.625, "width": 7.733, "height": 4.626 },
+          "effective_source_region": { "x": 0, "y": 0, "width": 1, "height": 1 },
+          "render_bbox_px": { "x": 106, "y": 234, "width": 1114, "height": 666 },
+          "visible_region_ids": ["panel_a", "panel_b", "panel_c", "panel_d"],
+          "visible_label_ids": ["a", "b", "c", "d"]
+        }
+      },
+      "expected": { "status": "fail", "codes": ["RENDERER_PLACEMENT_OVERRIDE", "RENDERER_SOURCE_REGION_OVERRIDE", "IMAGE_FOCUS_LOST"] }
+    },
+    {
+      "fixture_id": "P11-aspect-ratio-letterbox",
+      "source_file": "../../meta_assembly_deck/rendered/meta_assembly_paper_blue.pptx#slide=11",
+      "source_file_hash": "a2b10b2afc520025a587643fcc08f5720d2fe3b343ae48eed1e6c837d8998af7",
+      "asset_sha256": "1b473059b750d1d09ce4a7d2c16df435f1b389f62ed7c5810efc7597d6603a17",
+      "slide_goal": "Keep the full R2R workflow figure legible in a portrait summary slot.",
+      "figure_id": "summary-img",
+      "visual_intent": { "selection": { "strategy": "full_figure" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "contain" } },
+      "expected_region": "full_figure",
+      "expected_roi": { "x": 0, "y": 0, "width": 1, "height": 1 },
+      "roi_tolerance": 0.01,
+      "slot_bbox": { "x": 8.013, "y": 3.525, "width": 2.16, "height": 2.85 },
+      "allocated_visual_bbox": { "x": 8.013, "y": 3.525, "width": 2.16, "height": 2.85 },
+      "minimum_display_size": { "width": 2, "height": 1.5 },
+      "minimum_effective_resolution": { "width_px": 280, "height_px": 180 },
+      "minimum_embedded_text_px": null,
+      "expected_panel_visibility": ["full_figure"],
+      "expected_label_visibility": [],
+      "renderer": "custom-ooxml",
+      "renderer_must_not_override_placement": true,
+      "missing_telemetry_must_not_pass": true,
+      "input": {
+        "trace_id": "slide_11_summary_img",
+        "visual": {
+          "id": "summary-img",
+          "source_width_px": 1054,
+          "source_height_px": 751,
+          "visual_intent": { "selection": { "strategy": "full_figure" }, "crop": { "preserve_labels": true }, "placement": { "preferred_fit": "contain" } }
+        },
+        "allocated_visual_bbox": { "x": 8.013, "y": 3.525, "width": 2.16, "height": 2.85 },
+        "slide": { "width": 13.333, "height": 7.5, "render_width_px": 1920, "render_height_px": 1080 },
+        "policy": { "max_letterbox_ratio": 0.35, "minimum_effective_resolution": { "width_px": 280, "height_px": 180 } },
+        "renderer_result": {
+          "effective_placement": { "x": 8.013, "y": 4.18, "width": 2.16, "height": 1.539 },
+          "effective_source_region": { "x": 0, "y": 0, "width": 1, "height": 1 },
+          "render_bbox_px": { "x": 1154, "y": 602, "width": 311, "height": 222 }
+        }
+      },
+      "expected": { "status": "fail", "codes": ["IMAGE_UNDERFILLED_SLOT"], "recommended_action": "reconsider_visual_placement" }
+    }
+  ]
+}

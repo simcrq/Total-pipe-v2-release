@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pwf2rpa": {
+      "command": "/Users/simcr/.workbuddy/binaries/python/envs/default/bin/python",
+      "args": [
+        "./pwf2rpa/integrations/mcp/server.py"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "PATH"
+      ],
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 120
+    }
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research Meeting Layout",
+  "type": "object",
+  "required": [
+    "id",
+    "category",
+    "slots",
+    "preferred_visual_aspect_ratio",
+    "max_text_chars",
+    "min_visual_area",
+    "content_roles",
+    "content_profile"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "category_zh": {
+      "type": "string"
+    },
+    "variant_index": {
+      "type": "integer"
+    },
+    "family": {
+      "type": "string"
+    },
+    "density": {
+      "enum": [
+        "低",
+        "中",
+        "高"
+      ]
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "box"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label_zh": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "box": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ],
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "w": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "h": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          "pptx_in": {
+            "type": "object"
+          },
+          "font_pt_hint": {
+            "type": "number"
+          },
+          "min_font_pt": {
+            "type": "number"
+          },
+          "absolute_min_font_pt": {
+            "type": "number"
+          },
+          "max_lines": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_chars_at_min_font": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_chars_at_absolute_min": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "collapse_when_empty": {
+            "type": "boolean"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "overlay": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "preferred_visual_aspect_ratio": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0.1,
+      "maximum": 20
+    },
+    "max_text_chars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "min_visual_area": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "content_roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "content_profile": {
+      "type": "object",
+      "properties": {
+        "image_capacity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "table_capacity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visual_slot_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text_slot_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "figure_area_capacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "table_area_capacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "media_area_capacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "chart_capacity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visual_area_capacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dominant_visual_slot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

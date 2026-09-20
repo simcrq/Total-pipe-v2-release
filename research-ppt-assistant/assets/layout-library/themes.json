@@ -1,0 +1,210 @@
+{
+  "meta": {
+    "theme_count": 16,
+    "token_contract_version": "1.0.0",
+    "token_usage_constraints": {
+      "bg": { "allowed_usage": ["background"], "forbidden_usage": ["body_text", "title_text"] },
+      "panel": { "allowed_usage": ["fill", "chart_area", "table_fill"], "forbidden_usage": ["body_text"] },
+      "text": { "allowed_usage": ["title_text", "body_text", "caption_text", "meta_text"], "forbidden_usage": ["background", "fill"] },
+      "muted": { "allowed_usage": ["body_text", "caption_text", "meta_text", "stroke"], "forbidden_usage": ["background"] },
+      "accent1": { "allowed_usage": ["fill", "stroke", "chart_series", "icon", "title_text", "callout_text"], "forbidden_usage": ["body_text"] },
+      "accent2": { "allowed_usage": ["fill", "stroke", "chart_series", "icon", "title_text", "callout_text"], "forbidden_usage": ["body_text"] },
+      "accent3": { "allowed_usage": ["fill", "stroke", "chart_series", "icon", "title_text", "callout_text"], "forbidden_usage": ["body_text"] },
+      "border": { "allowed_usage": ["stroke", "divider", "table_border"], "forbidden_usage": ["body_text", "title_text"] }
+    }
+  },
+  "themes": [
+    {
+      "id": "paper_blue",
+      "name_zh": "论文蓝",
+      "bg": "#F8FAFC",
+      "panel": "#FFFFFF",
+      "text": "#0F172A",
+      "muted": "#64748B",
+      "accent1": "#2563EB",
+      "accent2": "#0EA5E9",
+      "accent3": "#14B8A6",
+      "border": "#CBD5E1"
+    },
+    {
+      "id": "graphite",
+      "name_zh": "石墨灰",
+      "bg": "#F5F5F4",
+      "panel": "#FFFFFF",
+      "text": "#1C1917",
+      "muted": "#78716C",
+      "accent1": "#44403C",
+      "accent2": "#78716C",
+      "accent3": "#A8A29E",
+      "border": "#D6D3D1"
+    },
+    {
+      "id": "navy_cyan",
+      "name_zh": "深海蓝青",
+      "bg": "#061826",
+      "panel": "#0B2537",
+      "text": "#F8FAFC",
+      "muted": "#A9C4D2",
+      "accent1": "#38BDF8",
+      "accent2": "#22D3EE",
+      "accent3": "#2DD4BF",
+      "border": "#1E4255"
+    },
+    {
+      "id": "forest",
+      "name_zh": "科研绿",
+      "bg": "#F7FBF8",
+      "panel": "#FFFFFF",
+      "text": "#102A21",
+      "muted": "#5B746B",
+      "accent1": "#15803D",
+      "accent2": "#059669",
+      "accent3": "#65A30D",
+      "border": "#CDE2D5"
+    },
+    {
+      "id": "violet",
+      "name_zh": "计算紫",
+      "bg": "#FAF8FF",
+      "panel": "#FFFFFF",
+      "text": "#25143B",
+      "muted": "#76658A",
+      "accent1": "#7C3AED",
+      "accent2": "#A855F7",
+      "accent3": "#EC4899",
+      "border": "#DED4EC"
+    },
+    {
+      "id": "warm",
+      "name_zh": "暖白橙",
+      "bg": "#FFFBF5",
+      "panel": "#FFFFFF",
+      "text": "#2A211A",
+      "muted": "#806F61",
+      "accent1": "#EA580C",
+      "accent2": "#F59E0B",
+      "accent3": "#D97706",
+      "border": "#E9DDCF"
+    },
+    {
+      "id": "teal",
+      "name_zh": "医学青",
+      "bg": "#F4FBFB",
+      "panel": "#FFFFFF",
+      "text": "#123436",
+      "muted": "#5B7D7F",
+      "accent1": "#0F766E",
+      "accent2": "#0891B2",
+      "accent3": "#14B8A6",
+      "border": "#CBE1E1"
+    },
+    {
+      "id": "burgundy",
+      "name_zh": "学术酒红",
+      "bg": "#FCF8F9",
+      "panel": "#FFFFFF",
+      "text": "#32151B",
+      "muted": "#84646B",
+      "accent1": "#9F1239",
+      "accent2": "#BE123C",
+      "accent3": "#E11D48",
+      "border": "#E7D1D7"
+    },
+    {
+      "id": "sand",
+      "name_zh": "米白棕",
+      "bg": "#FBF8F0",
+      "panel": "#FFFDF8",
+      "text": "#312A20",
+      "muted": "#7C7160",
+      "accent1": "#92400E",
+      "accent2": "#B45309",
+      "accent3": "#CA8A04",
+      "border": "#E5D9C5"
+    },
+    {
+      "id": "mono_dark",
+      "name_zh": "纯黑实验室",
+      "bg": "#0B0D10",
+      "panel": "#171A1F",
+      "text": "#F5F7FA",
+      "muted": "#A4ACB8",
+      "accent1": "#E5E7EB",
+      "accent2": "#94A3B8",
+      "accent3": "#60A5FA",
+      "border": "#2A3038"
+    },
+    {
+      "id": "sky",
+      "name_zh": "天空蓝",
+      "bg": "#F3F9FF",
+      "panel": "#FFFFFF",
+      "text": "#14283D",
+      "muted": "#688096",
+      "accent1": "#0284C7",
+      "accent2": "#0EA5E9",
+      "accent3": "#6366F1",
+      "border": "#CFE3F3"
+    },
+    {
+      "id": "mint",
+      "name_zh": "薄荷绿",
+      "bg": "#F3FCF8",
+      "panel": "#FFFFFF",
+      "text": "#17352A",
+      "muted": "#678074",
+      "accent1": "#10B981",
+      "accent2": "#14B8A6",
+      "accent3": "#06B6D4",
+      "border": "#CDE8DD"
+    },
+    {
+      "id": "indigo",
+      "name_zh": "靛蓝",
+      "bg": "#F7F8FF",
+      "panel": "#FFFFFF",
+      "text": "#1E2143",
+      "muted": "#74789A",
+      "accent1": "#4F46E5",
+      "accent2": "#6366F1",
+      "accent3": "#8B5CF6",
+      "border": "#D8DAEF"
+    },
+    {
+      "id": "rose",
+      "name_zh": "柔和玫红",
+      "bg": "#FFF7FA",
+      "panel": "#FFFFFF",
+      "text": "#3A1A26",
+      "muted": "#8A6875",
+      "accent1": "#DB2777",
+      "accent2": "#E11D48",
+      "accent3": "#F97316",
+      "border": "#F0D4DF"
+    },
+    {
+      "id": "slate",
+      "name_zh": "冷灰蓝",
+      "bg": "#F6F8FA",
+      "panel": "#FFFFFF",
+      "text": "#18222E",
+      "muted": "#6B7785",
+      "accent1": "#334155",
+      "accent2": "#475569",
+      "accent3": "#0EA5E9",
+      "border": "#D7DEE5"
+    },
+    {
+      "id": "white_minimal",
+      "name_zh": "极简白",
+      "bg": "#FFFFFF",
+      "panel": "#FFFFFF",
+      "text": "#111827",
+      "muted": "#6B7280",
+      "accent1": "#111827",
+      "accent2": "#4B5563",
+      "accent3": "#2563EB",
+      "border": "#E5E7EB"
+    }
+  ]
+}

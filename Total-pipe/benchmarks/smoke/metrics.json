@@ -1,0 +1,18 @@
+{
+  "elapsed_seconds": 1.66,
+  "rerenders": 1,
+  "canonical_truth_count": 1,
+  "new_adapter_count": 0,
+  "slide_count": 2,
+  "layout_llm_fallback_count": 0,
+  "qa_counts": {
+    "FAIL": 0,
+    "WARNING": 0,
+    "REVIEW": 0,
+    "INFO": 0
+  },
+  "false_positive_rate": null,
+  "repair_amplification_factor": null,
+  "native_validated": true,
+  "powerpoint_visual_reviewed": true
+}

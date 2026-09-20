@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "treatments": [
+    {
+      "id": "figure_led",
+      "compatible_roles": ["opening_context", "background_context", "mechanism_explanation", "method_explanation", "results_evidence", "results_comparison", "summary_synthesis"],
+      "preferred_layout_families": ["single_figure", "figure_text", "dual_figure", "case", "theory", "summary", "cover"],
+      "container_policy": "minimal",
+      "annotation_level": "low",
+      "decoration_profiles": ["open_figure", "caption_rail"]
+    },
+    {
+      "id": "editorial_open",
+      "compatible_roles": ["opening_context", "narrative_navigation", "research_question", "background_context", "literature_gap", "discussion", "planning", "summary_synthesis"],
+      "preferred_layout_families": ["cover", "section", "question", "background", "gap", "discussion", "decision", "summary", "qa"],
+      "container_policy": "none",
+      "annotation_level": "low",
+      "decoration_profiles": ["minimal_rule", "soft_field"]
+    },
+    {
+      "id": "structured_text",
+      "compatible_roles": ["narrative_navigation", "research_question", "background_context", "literature_gap", "mechanism_explanation", "method_explanation", "workflow_explanation", "evidence_audit", "discussion", "planning", "summary_synthesis"],
+      "preferred_layout_families": ["section", "question", "background", "gap", "theory", "method_overview", "workflow", "discussion", "limitations", "next_steps", "summary", "qa"],
+      "container_policy": "minimal",
+      "annotation_level": "low",
+      "decoration_profiles": ["distributed_list_panel"],
+      "text_flow_mode": "distributed_arrow_list",
+      "model_guidance": "Use for 3–5 parallel prose points that need one readable container: keep each point intact, distribute rows evenly, and prefix every row with the outlined ➢ arrowhead. Do not convert a single paragraph, equations, tables, captions, or references into bullets."
+    },
+    {
+      "id": "technical_annotation",
+      "compatible_roles": ["mechanism_explanation", "method_explanation", "workflow_explanation", "results_evidence", "results_comparison"],
+      "preferred_layout_families": ["theory", "architecture", "algorithm", "workflow", "figure_text", "case", "single_figure"],
+      "container_policy": "minimal",
+      "annotation_level": "medium_high",
+      "decoration_profiles": ["open_technical", "indexed_technical"]
+    },
+    {
+      "id": "comparison_structured",
+      "compatible_roles": ["literature_gap", "results_evidence", "results_comparison", "evidence_audit"],
+      "preferred_layout_families": ["dual_figure", "triple_figure", "four_panel", "chart_compare", "baseline", "ablation", "table_chart", "qualitative"],
+      "container_policy": "structured",
+      "annotation_level": "medium",
+      "decoration_profiles": ["comparison_axis", "comparison_divider"]
+    },
+    {
+      "id": "metric_focus",
+      "compatible_roles": ["results_evidence", "results_comparison", "metric_summary", "summary_synthesis"],
+      "preferred_layout_families": ["metrics", "chart_takeaway", "chart_compare", "table_chart", "weekly", "summary"],
+      "container_policy": "minimal",
+      "annotation_level": "low",
+      "decoration_profiles": ["metric_signal", "metric_rule"]
+    },
+    {
+      "id": "mechanism_diagram",
+      "compatible_roles": ["mechanism_explanation", "method_explanation", "workflow_explanation"],
+      "preferred_layout_families": ["theory", "method_overview", "workflow", "architecture", "algorithm"],
+      "container_policy": "structured",
+      "annotation_level": "high",
+      "decoration_profiles": ["diagram_flow", "diagram_grid"]
+    },
+    {
+      "id": "evidence_audit",
+      "compatible_roles": ["literature_gap", "evidence_audit", "reference_material"],
+      "preferred_layout_families": ["limitations", "failure", "error", "qa", "references", "appendix", "table"],
+      "container_policy": "audit_only",
+      "annotation_level": "medium",
+      "decoration_profiles": ["audit_rail", "audit_rules"]
+    },
+    {
+      "id": "summary_synthesis",
+      "compatible_roles": ["discussion", "planning", "summary_synthesis"],
+      "preferred_layout_families": ["summary", "discussion", "next_steps", "decision", "qa"],
+      "container_policy": "minimal",
+      "annotation_level": "low",
+      "decoration_profiles": ["synthesis_closure", "minimal_rule"]
+    }
+  ]
+}

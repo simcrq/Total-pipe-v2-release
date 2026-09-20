@@ -1,0 +1,3 @@
+Pillow>=10
+lxml>=5
+pdfplumber>=0.11

@@ -1,0 +1,25 @@
+{
+  "name": "research-ppt-assistant",
+  "version": "0.6.3-rc1",
+  "private": true,
+  "type": "module",
+  "description": "Offline MCP and CLI assistant for research-presentation planning, renderer preflight, and telemetry-driven visual quality evaluation.",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "research-ppt": "./server/cli.mjs"
+  },
+  "scripts": {
+    "audit:layouts": "node ./scripts/audit-layouts.mjs",
+    "benchmark": "node ./scripts/run-benchmark.mjs",
+    "benchmark:ci": "node ./scripts/run-benchmark.mjs --iterations 10",
+    "benchmark:figures": "node ./scripts/run-figure-placement-golden.mjs",
+    "check": "node ./scripts/check-node-version.mjs && node ./scripts/check-version.mjs && node ./scripts/audit-layouts.mjs && node ./scripts/run-benchmark.mjs --iterations 10 && node ./scripts/run-figure-placement-golden.mjs && node ./scripts/check-coverage.mjs",
+    "check:node": "node ./scripts/check-node-version.mjs",
+    "check:version": "node ./scripts/check-version.mjs",
+    "mcp": "node ./server/mcp-server.mjs",
+    "test": "node ./scripts/check-node-version.mjs && node --test",
+    "test:coverage": "node ./scripts/check-node-version.mjs && node ./scripts/check-coverage.mjs"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-ppt-assistant.local/schemas/slide-design-ir.schema.json",
+  "title": "SlideDesignIR v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "semantic_role",
+    "message",
+    "hierarchy",
+    "text_flow",
+    "composition_intent",
+    "design_intent",
+    "visual_priority",
+    "whitespace",
+    "container_policy",
+    "annotation_level",
+    "allowed_transformations"
+  ],
+  "properties": {
+    "presentation_intent": {
+      "type": "object",
+      "required": ["objective", "emphasis", "required_on_screen", "speaker_notes", "appendix"],
+      "properties": {
+        "objective": { "type": "string", "minLength": 1 },
+        "emphasis": { "enum": ["low", "medium", "high"] },
+        "required_on_screen": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "speaker_notes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "appendix": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "schema_version": { "const": "1.0.0" },
+    "semantic_role": {
+      "enum": [
+        "opening_context",
+        "narrative_navigation",
+        "research_question",
+        "background_context",
+        "literature_gap",
+        "mechanism_explanation",
+        "method_explanation",
+        "workflow_explanation",
+        "results_evidence",
+        "results_comparison",
+        "metric_summary",
+        "evidence_audit",
+        "discussion",
+        "planning",
+        "summary_synthesis",
+        "reference_material"
+      ]
+    },
+    "message": {
+      "type": "object",
+      "required": ["primary", "secondary", "evidence_status"],
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "array", "items": { "type": "string" }, "maxItems": 8 },
+        "evidence_status": { "enum": ["supported", "partial", "missing", "not_applicable"] }
+      },
+      "additionalProperties": false
+    },
+    "hierarchy": {
+      "type": "object",
+      "required": ["primary", "secondary", "tertiary", "takeaway"],
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "string" },
+        "tertiary": { "type": "string" },
+        "takeaway": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "text_flow": {
+      "type": "object",
+      "required": ["mode", "source", "bullet_glyph", "item_count", "distribution", "container_style"],
+      "properties": {
+        "mode": {"enum": ["plain", "distributed_arrow_list"]},
+        "source": {"enum": ["default", "auto", "explicit", "fallback"]},
+        "bullet_glyph": {"type": "string", "maxLength": 1},
+        "item_count": {"type": "integer", "minimum": 0, "maximum": 6},
+        "distribution": {"enum": ["top", "space_between"]},
+        "container_style": {"enum": ["none", "soft_panel"]}
+      },
+      "additionalProperties": false
+    },
+    "composition_intent": {
+      "type": "object",
+      "required": ["family", "visual_dominance", "text_density", "whitespace", "reading_pattern"],
+      "properties": {
+        "family": { "enum": ["balanced", "asymmetric", "comparison", "editorial_open", "metric", "process", "audit", "synthesis"] },
+        "visual_dominance": { "enum": ["none", "low", "medium", "high"] },
+        "text_density": { "enum": ["low", "medium", "high"] },
+        "whitespace": { "enum": ["low", "medium", "medium_high", "high"] },
+        "reading_pattern": { "enum": ["text_then_visual", "visual_then_explanation", "left_to_right", "top_to_bottom", "scan_then_detail", "single_focus"] }
+      },
+      "additionalProperties": false
+    },
+    "design_intent": {
+      "type": "object",
+      "required": ["tone", "energy", "accent_strength", "treatment_preferences"],
+      "properties": {
+        "tone": { "enum": ["scientific", "scientific_modern", "technical", "editorial"] },
+        "energy": { "enum": ["quiet", "analytical", "comparative", "decisive"] },
+        "accent_strength": { "enum": ["low", "medium", "high"] },
+        "treatment_preferences": {
+          "type": "array",
+          "items": {
+            "enum": ["figure_led", "editorial_open", "structured_text", "technical_annotation", "comparison_structured", "metric_focus", "mechanism_diagram", "evidence_audit", "summary_synthesis"]
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "visual_priority": { "enum": ["none", "supporting", "coequal", "dominant"] },
+    "whitespace": { "enum": ["low", "medium", "medium_high", "high"] },
+    "container_policy": { "enum": ["none", "minimal", "structured", "audit_only"] },
+    "annotation_level": { "enum": ["none", "low", "medium", "medium_high", "high"] },
+    "allowed_transformations": {
+      "type": "object",
+      "required": ["preserve_visual_aspect", "citation_required", "allow_split", "allow_semantic_crop"],
+      "properties": {
+        "preserve_visual_aspect": { "type": "boolean" },
+        "citation_required": { "type": "boolean" },
+        "allow_split": { "type": "boolean" },
+        "allow_semantic_crop": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
