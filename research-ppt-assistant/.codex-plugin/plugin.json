@@ -1,6 +1,6 @@
 {
   "name": "research-ppt-assistant",
-  "version": "0.6.3-rc1+codex.20260919074058",
+  "version": "0.6.3-rc1+codex.20260920125419",
   "description": "Render-grounded research-presentation QA with deterministic design observation, bounded repair, Evidence Closure, and fail-closed production gates.",
   "author": {
     "name": "PPTcreator"

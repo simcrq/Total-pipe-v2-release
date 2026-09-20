@@ -1,6 +1,6 @@
 {
   "name": "total-pipe",
-  "version": "1.0.0+codex.20260919074058",
+  "version": "1.0.0+codex.20260920125419",
   "description": "Evidence-grounded research presentation workflow with a canonical Deck IR, deterministic compiler, unified QA, and PowerPoint validation.",
   "author": {
     "name": "Total-pipe"
