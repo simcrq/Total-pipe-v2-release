@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
-
+from typing import Any
 
 INPUT_ROOT_LABEL = "INput"
 DEFAULT_RESEARCH_GOAL = "系统提取论文的制备流程、物理图像、关键结果和局限性"
@@ -23,7 +23,9 @@ def _clean_inline(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip())
 
 
-def index_input_pdfs(input_root: Path) -> list[dict[str, Any]]:
+def index_input_pdfs(
+    input_root: Path, *, root_label: str = INPUT_ROOT_LABEL
+) -> list[dict[str, Any]]:
     """Recursively index PDFs while exposing paths relative to the input root."""
 
     root = input_root.expanduser().resolve()
@@ -46,7 +48,8 @@ def index_input_pdfs(input_root: Path) -> list[dict[str, Any]]:
         {
             "selection_id": f"P{index:03d}",
             "relative_path": relative_path,
-            "project_relative_path": f"{INPUT_ROOT_LABEL}/{relative_path}",
+            "source_path": str(resolved),
+            "project_relative_path": f"{root_label}/{relative_path}",
             "folder": (
                 Path(relative_path).parent.as_posix()
                 if Path(relative_path).parent.as_posix() != "."
@@ -59,30 +62,34 @@ def index_input_pdfs(input_root: Path) -> list[dict[str, Any]]:
     ]
 
 
-def resolve_pdf_selection(input_root: Path, selected_pdf: str) -> tuple[Path, str]:
+def resolve_pdf_selection(
+    input_root: Path,
+    selected_pdf: str,
+    *,
+    root_label: str = INPUT_ROOT_LABEL,
+) -> tuple[Path, str]:
     """Resolve one input-root-relative PDF selection without allowing traversal."""
 
     if not isinstance(selected_pdf, str) or not selected_pdf.strip():
         raise ValueError("selected_pdf must be a non-empty relative path")
     normalized = selected_pdf.strip().replace("\\", "/")
-    if normalized.casefold().startswith((INPUT_ROOT_LABEL + "/").casefold()):
-        normalized = normalized[len(INPUT_ROOT_LABEL) + 1 :]
+    label_prefix = root_label.rstrip("/") + "/"
+    if normalized.casefold().startswith(label_prefix.casefold()):
+        normalized = normalized[len(label_prefix) :]
     relative = Path(normalized)
     if relative.is_absolute() or ":" in normalized:
-        raise ValueError("selected_pdf must be relative to INput")
+        raise ValueError("selected_pdf must be relative to source_dir")
 
     root = input_root.expanduser().resolve()
     candidate = (root / relative).resolve()
     try:
         resolved_relative = candidate.relative_to(root)
     except ValueError as error:
-        raise ValueError("selected_pdf must stay inside INput") from error
+        raise ValueError("selected_pdf must stay inside INput/source_dir") from error
     if candidate.suffix.casefold() != ".pdf":
         raise ValueError("selected_pdf must point to a PDF")
     if not candidate.is_file():
-        raise FileNotFoundError(
-            "PDF not found in INput: " + resolved_relative.as_posix()
-        )
+        raise FileNotFoundError("PDF not found in source_dir: " + resolved_relative.as_posix())
     return candidate, resolved_relative.as_posix()
 
 
@@ -102,6 +109,7 @@ def normalize_focus_questions(
 def build_workflow_prompt(
     relative_pdf_path: str,
     *,
+    source_display_path: str | None = None,
     research_goal: str | None = None,
     focus_questions: Iterable[str] | None = None,
     additional_context: str | None = None,
@@ -110,7 +118,7 @@ def build_workflow_prompt(
 
     goal = _clean_inline(research_goal or DEFAULT_RESEARCH_GOAL)
     questions = normalize_focus_questions(focus_questions)
-    project_relative_path = f"{INPUT_ROOT_LABEL}/{relative_pdf_path}"
+    project_relative_path = source_display_path or f"{INPUT_ROOT_LABEL}/{relative_pdf_path}"
     lines = [
         "请调用 paperworkflow_literature_workflow 处理：",
         project_relative_path,
@@ -121,9 +129,7 @@ def build_workflow_prompt(
     if additional_context and _clean_inline(additional_context):
         lines.extend(["", "补充背景：", _clean_inline(additional_context)])
     lines.extend(["", "重点回答："])
-    lines.extend(
-        f"{index}. {question}" for index, question in enumerate(questions, start=1)
-    )
+    lines.extend(f"{index}. {question}" for index, question in enumerate(questions, start=1))
     lines.extend(
         [
             "",
@@ -162,15 +168,17 @@ def build_prompt_builder_result(
     research_goal: str | None = None,
     focus_questions: Iterable[str] | None = None,
     additional_context: str | None = None,
+    root_label: str = INPUT_ROOT_LABEL,
 ) -> dict[str, Any]:
     """Return either a relative PDF selection index or a generated prompt."""
 
-    pdf_index = index_input_pdfs(input_root)
+    root = input_root.expanduser().resolve()
+    pdf_index = index_input_pdfs(root, root_label=root_label)
     if selected_pdf is None or not selected_pdf.strip():
         return {
             "mode": "selection_required",
-            "input_root": INPUT_ROOT_LABEL,
-            "path_policy": "All indexed paths are relative to INput.",
+            "input_root": str(root),
+            "path_policy": "Selections are relative to source_dir; resolved source_path is included for MCP calls.",
             "pdf_count": len(pdf_index),
             "pdf_index": pdf_index,
             "next_action": (
@@ -181,28 +189,30 @@ def build_prompt_builder_result(
 
     selection = selected_pdf.strip()
     matched_entry = next(
-        (
-            item
-            for item in pdf_index
-            if item["selection_id"].casefold() == selection.casefold()
-        ),
+        (item for item in pdf_index if item["selection_id"].casefold() == selection.casefold()),
         None,
     )
     if matched_entry is not None:
         selection = matched_entry["relative_path"]
 
-    _, relative_path = resolve_pdf_selection(input_root, selection)
+    selected_path, relative_path = resolve_pdf_selection(root, selection, root_label=root_label)
     return {
         "mode": "prompt_ready",
-        "input_root": INPUT_ROOT_LABEL,
+        "input_root": str(root),
         "selected_pdf": {
             "relative_path": relative_path,
-            "project_relative_path": f"{INPUT_ROOT_LABEL}/{relative_path}",
+            "source_path": str(selected_path),
+            "project_relative_path": f"{root_label}/{relative_path}",
         },
         "research_goal": _clean_inline(research_goal or DEFAULT_RESEARCH_GOAL),
         "focus_questions": normalize_focus_questions(focus_questions),
         "prompt": build_workflow_prompt(
             relative_path,
+            source_display_path=(
+                f"{INPUT_ROOT_LABEL}/{relative_path}"
+                if root_label == INPUT_ROOT_LABEL
+                else str(selected_path)
+            ),
             research_goal=research_goal,
             focus_questions=focus_questions,
             additional_context=additional_context,

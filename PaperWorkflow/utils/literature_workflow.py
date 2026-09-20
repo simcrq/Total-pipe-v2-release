@@ -13,11 +13,15 @@ import os
 import re
 import tempfile
 from collections import Counter
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from .artifact_bundle import stage_markdown_bundle, write_bundle_manifest
+from .evidence_graph import build_document_graph, search_graph
+from .paper_tools import source_fingerprint
 from .workflow_audits import (
     audit_quantities_enhanced,
     audit_retrieval_enhanced,
@@ -26,10 +30,6 @@ from .workflow_audits import (
     build_evidence_registry,
     synthesis_gate,
 )
-
-from .evidence_graph import build_document_graph, search_graph
-from .paper_tools import source_fingerprint
-
 
 WORKFLOW_SCHEMA_VERSION = 4
 
@@ -80,7 +80,9 @@ DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", re.IGNORECASE)
 ARXIV_RE = re.compile(r"\b(?:arXiv\s*:\s*)?\d{4}\.\d{4,5}(?:v\d+)?\b", re.IGNORECASE)
 URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)")
-FIGURE_CAPTION_RE = re.compile(r"(?im)^\s*(?:figure|fig\.?|图)\s*[\dA-Z一二三四五六七八九十]+[.:\s]")
+FIGURE_CAPTION_RE = re.compile(
+    r"(?im)^\s*(?:figure|fig\.?|图)\s*[\dA-Z一二三四五六七八九十]+[.:\s]"
+)
 TABLE_CAPTION_RE = re.compile(r"(?im)^\s*(?:table|表)\s*[\dA-Z一二三四五六七八九十]+[.:\s]")
 MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"(?m)^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$")
 CITATION_RE = re.compile(r"\[(?:\d+(?:\s*[-,]\s*\d+)*)\]")
@@ -114,7 +116,6 @@ SUPPLEMENT_TOKENS = (
     "si_",
     "-si",
     "补充",
-
     "附录",
 )
 QUERY_INTENT_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -200,6 +201,24 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _portable_ingestion_details(ingestion: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Strip runtime filesystem locations before persisting a publishable bundle."""
+
+    if not ingestion:
+        return None
+    portable: dict[str, Any] = {}
+    for key, value in ingestion.items():
+        normalized = key.casefold()
+        if any(
+            token in normalized for token in ("path", "directory", "dir", "root", "source")
+        ):
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            portable[key] = value
+    portable["markdown_path"] = "paper.md"
+    return portable
+
+
 def _normalise_inline(value: str) -> str:
     value = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", value)
     value = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
@@ -222,7 +241,11 @@ def _dedupe(values: Iterable[str]) -> list[str]:
 def _language_profile(markdown: str) -> str:
     cjk_count = len(re.findall(r"[\u3400-\u9fff]", markdown))
     latin_count = len(re.findall(r"[A-Za-z]", markdown))
-    if cjk_count and latin_count and min(cjk_count, latin_count) / max(cjk_count, latin_count) >= 0.12:
+    if (
+        cjk_count
+        and latin_count
+        and min(cjk_count, latin_count) / max(cjk_count, latin_count) >= 0.12
+    ):
         return "mixed"
     if cjk_count > latin_count * 0.15:
         return "zh-dominant"
@@ -250,8 +273,7 @@ def extract_metadata(markdown: str, source_path: Path) -> dict[str, Any]:
 
     dois = _dedupe(match.group(0).rstrip(".,;:)]}") for match in DOI_RE.finditer(markdown))
     arxiv_ids = _dedupe(
-        re.sub(r"(?i)^arXiv\s*:\s*", "", match.group(0))
-        for match in ARXIV_RE.finditer(markdown)
+        re.sub(r"(?i)^arXiv\s*:\s*", "", match.group(0)) for match in ARXIV_RE.finditer(markdown)
     )
     urls = _dedupe(match.group(0).rstrip(".,;:)]}") for match in URL_RE.finditer(markdown))
     headings = [_normalise_inline(match.group(2)) for match in heading_matches]
@@ -379,14 +401,18 @@ def audit_extraction(markdown: str, chunk_count: int) -> dict[str, Any]:
             }
         )
 
-    missing_core = [name for name in ("abstract", "methods", "results", "conclusion") if not coverage[name]]
+    missing_core = [
+        name for name in ("abstract", "methods", "results", "conclusion") if not coverage[name]
+    ]
     if len(missing_core) >= 3:
         score -= 10
         warnings.append(
             {
                 "code": "core_sections_missing",
                 "severity": "low",
-                "message": "Several common paper sections were not identified: " + ", ".join(missing_core) + ".",
+                "message": "Several common paper sections were not identified: "
+                + ", ".join(missing_core)
+                + ".",
             }
         )
 
@@ -473,9 +499,13 @@ def discover_related_documents(
     source_path: Path,
     project_root: Path,
     limit: int = 50,
+    exclude_roots: Iterable[Path] = (),
 ) -> list[dict[str, Any]]:
     """Return only filename-linked supplements or close sibling documents."""
 
+    source_path = source_path.expanduser().resolve()
+    project_root = project_root.expanduser().resolve()
+    excluded = [path.expanduser().resolve() for path in exclude_roots]
     parent = source_path.parent
     source_stem = _normalise_document_stem(source_path.stem)
     results: list[dict[str, Any]] = []
@@ -485,6 +515,8 @@ def discover_related_documents(
         if candidate.suffix.lower() not in {".pdf", ".md"}:
             continue
         resolved = candidate.resolve()
+        if any(resolved == root or root in resolved.parents for root in excluded):
+            continue
         try:
             resolved.relative_to(project_root)
         except ValueError:
@@ -510,7 +542,7 @@ def discover_related_documents(
         role = "supplementary_candidate" if has_supplement_token else "related_candidate"
         results.append(
             {
-                "path": str(resolved),
+                "path": resolved.relative_to(parent).as_posix(),
                 "type": candidate.suffix.lower().lstrip("."),
                 "role": role,
                 "size_bytes": candidate.stat().st_size,
@@ -629,18 +661,28 @@ def _evidence_report_v4(workflow: dict[str, Any]) -> str:
         "|---|---|---|",
     ]
     for item in synthesis["gates"]:
-        lines.append(f"| {_escape_table(item['gate'])} | {item['status']} | {_escape_table(item['message'])} |")
+        lines.append(
+            f"| {_escape_table(item['gate'])} | {item['status']} | {_escape_table(item['message'])} |"
+        )
 
-    lines.extend([
-        "",
-        "## Quality dimensions",
-        "",
-        "| Dimension | Score | Readiness |",
-        "|---|---:|---|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Quality dimensions",
+            "",
+            "| Dimension | Score | Readiness |",
+            "|---|---:|---|",
+        ]
+    )
     for name in (
-        "extraction", "structure", "reading_order", "semantic_structure",
-        "chunk_coherence", "retrieval", "quantities", "dependencies",
+        "extraction",
+        "structure",
+        "reading_order",
+        "semantic_structure",
+        "chunk_coherence",
+        "retrieval",
+        "quantities",
+        "dependencies",
     ):
         item = dimensions[name]
         lines.append(f"| {name} | {item['score']} | {item['readiness']} |")
@@ -650,17 +692,21 @@ def _evidence_report_v4(workflow: dict[str, Any]) -> str:
     for name in ("extraction", "structure", "retrieval", "quantities", "dependencies"):
         for warning in dimensions[name].get("warnings", []):
             warning_count += 1
-            lines.append(f"- [{name}/{warning['severity']}] {warning['code']}: {warning['message']}")
+            lines.append(
+                f"- [{name}/{warning['severity']}] {warning['code']}: {warning['message']}"
+            )
     if not warning_count:
         lines.append("- No quality warnings.")
 
-    lines.extend([
-        "",
-        "## Semantic outline",
-        "",
-        "| Chunk | Raw heading | Semantic owner | Kind | Lines | Figure parent(s) |",
-        "|---|---|---|---|---:|---|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Semantic outline",
+            "",
+            "| Chunk | Raw heading | Semantic owner | Kind | Lines | Figure parent(s) |",
+            "|---|---|---|---|---:|---|",
+        ]
+    )
     for section in workflow["outline"]["sections"]:
         lines.append(
             f"| {section['chunk_id']} | {_escape_table(section['raw_heading'])} | "
@@ -676,37 +722,45 @@ def _evidence_report_v4(workflow: dict[str, Any]) -> str:
         alias = ""
         if group.get("canonical_query_id") != group["query_id"]:
             alias = f"; canonical: {group['canonical_query_id']}"
-        lines.extend([
-            f"### {group['label']} ({group['query_id']})",
-            "",
-            f"- Intent: {group.get('intent', 'general')}{alias}",
-            f"- Status: **{group.get('retrieval_status', 'unknown')}**",
-            f"- Evidence: {ids}",
-        ])
+        lines.extend(
+            [
+                f"### {group['label']} ({group['query_id']})",
+                "",
+                f"- Intent: {group.get('intent', 'general')}{alias}",
+                f"- Status: **{group.get('retrieval_status', 'unknown')}**",
+                f"- Evidence: {ids}",
+            ]
+        )
         if coverage.get("facet_count"):
-            lines.append(f"- Coverage: {coverage['coverage_ratio']:.1%}; missing: {', '.join(coverage['missing_facets']) or '(none)'}")
+            lines.append(
+                f"- Coverage: {coverage['coverage_ratio']:.1%}; missing: {', '.join(coverage['missing_facets']) or '(none)'}"
+            )
         lines.append("")
 
-    lines.extend([
-        "## Evidence Registry",
-        "",
-        "Evidence text appears only here; queries above reference these stable IDs.",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Evidence Registry",
+            "",
+            "Evidence text appears only here; queries above reference these stable IDs.",
+            "",
+        ]
+    )
     if not workflow["evidence_registry"]:
         lines.append("- No evidence spans were registered.")
     for item in workflow["evidence_registry"]:
         text = re.sub(r"\s+", " ", item["text"]).strip()
-        lines.extend([
-            f"### {item['evidence_id']} · {item['span_id']} · {item['chunk_id']}",
-            "",
-            f"- Source lines: {item['source_lines']['start']}-{item['source_lines']['end']}",
-            f"- Source chars: {item['source_chars']['start']}-{item['source_chars']['end']}",
-            f"- Modality / support: {item['modality']} / {item['support_type']}",
-            f"- Used by: {', '.join(item['query_ids'])}",
-            f"- Text: {text}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {item['evidence_id']} · {item['span_id']} · {item['chunk_id']}",
+                "",
+                f"- Source lines: {item['source_lines']['start']}-{item['source_lines']['end']}",
+                f"- Source chars: {item['source_chars']['start']}-{item['source_chars']['end']}",
+                f"- Modality / support: {item['modality']} / {item['support_type']}",
+                f"- Used by: {', '.join(item['query_ids'])}",
+                f"- Text: {text}",
+                "",
+            ]
+        )
 
     lines.extend(["## Referenced source dependencies", ""])
     dependencies = workflow["source_dependencies"]["dependencies"]
@@ -718,16 +772,17 @@ def _evidence_report_v4(workflow: dict[str, Any]) -> str:
             f"{item['reference_count']} reference(s); examples: "
             + ", ".join(item["reference_examples"][:4])
         )
-    lines.extend([
-        "",
-        "## Claim ledger contract",
-        "",
-        "Use EV#### plus S####/E###, raw line range and character offsets for every major claim and number.",
-        "Treat supplementary-dependent mechanism claims as partial until the referenced files are available.",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Claim ledger contract",
+            "",
+            "Use EV#### plus S####/E###, raw line range and character offsets for every major claim and number.",
+            "Treat supplementary-dependent mechanism claims as partial until the referenced files are available.",
+            "",
+        ]
+    )
     return "\n".join(lines)
-
 
 
 def build_literature_workflow(
@@ -744,27 +799,40 @@ def build_literature_workflow(
 ) -> dict[str, Any]:
     """Build and persist one end-to-end literature hand-off package."""
 
-    markdown_path = markdown_path.expanduser().resolve()
+    original_markdown_path = markdown_path.expanduser().resolve()
     source_path = source_path.expanduser().resolve()
     project_root = project_root.expanduser().resolve()
     output_dir = output_dir.expanduser().resolve()
+    bundle = stage_markdown_bundle(original_markdown_path, output_dir)
+    markdown_path = Path(bundle["markdown_path"])
+    portable_ingestion = _portable_ingestion_details(ingestion)
     markdown = markdown_path.read_text(encoding="utf-8")
     graph = build_document_graph(markdown, max_chars=chunk_chars)
     manifest = dict(graph)
     if source_path.suffix.lower() == ".pdf":
-        manifest["pdf_path"] = str(source_path)
+        manifest["pdf_path"] = source_path.name
         try:
             manifest["source_id"] = source_fingerprint(source_path)
         except FileNotFoundError:
             manifest["source_id"] = None
-    manifest["markdown_path"] = str(markdown_path)
+    manifest["markdown_path"] = "paper.md"
     outline = [
         {
             key: chunk[key]
             for key in (
-                "chunk_id", "heading", "raw_heading", "semantic_heading",
-                "heading_kind", "empty_node", "level", "part", "line_start",
-                "line_end", "modalities", "figure_parents", "semantic_owner_type",
+                "chunk_id",
+                "heading",
+                "raw_heading",
+                "semantic_heading",
+                "heading_kind",
+                "empty_node",
+                "level",
+                "part",
+                "line_start",
+                "line_end",
+                "modalities",
+                "figure_parents",
+                "semantic_owner_type",
             )
         }
         for chunk in graph["chunks"]
@@ -773,7 +841,11 @@ def build_literature_workflow(
     extraction_audit = audit_extraction(markdown, len(outline))
     structure_audit = audit_structure_enhanced(markdown, extraction_audit, manifest)
     quantity_audit = audit_quantities(markdown)
-    related_documents = discover_related_documents(source_path, project_root)
+    related_documents = discover_related_documents(
+        source_path,
+        project_root,
+        exclude_roots=(output_dir,),
+    )
     dependency_audit = audit_source_dependencies(markdown, related_documents)
 
     query_specs = build_evidence_queries(custom_queries, include_defaults=include_default_queries)
@@ -829,7 +901,7 @@ def build_literature_workflow(
     workflow_id = hashlib.sha256(
         json.dumps(run_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()[:16]
-    generated_at = datetime.now(timezone.utc).isoformat()
+    generated_at = datetime.now(UTC).isoformat()
 
     document_manifest_path = output_dir / "document.manifest.json"
     workflow_manifest_path = output_dir / "workflow.json"
@@ -839,7 +911,8 @@ def build_literature_workflow(
         {
             "stage": "ingestion",
             "status": "completed" if source_path.suffix.lower() == ".pdf" else "skipped",
-            "details": ingestion or {"reason": "Markdown input; OCR was not required."},
+            "details": portable_ingestion
+            or {"reason": "Markdown input; OCR was not required."},
         },
         {"stage": "metadata", "status": "completed"},
         {"stage": "extraction_quality_audit", "status": "completed"},
@@ -859,7 +932,12 @@ def build_literature_workflow(
             "query_count": len(evidence),
             "readiness": retrieval_audit["readiness"],
         },
-        {"stage": "artifact_export", "status": "completed"},
+        {
+            "stage": "artifact_export",
+            "status": "completed",
+            "bundle_dir": ".",
+            "asset_count": bundle["asset_count"],
+        },
     ]
 
     workflow: dict[str, Any] = {
@@ -867,13 +945,14 @@ def build_literature_workflow(
         "workflow_id": workflow_id,
         "generated_at": generated_at,
         "source": {
-            "input_path": str(source_path),
+            "input_path": source_path.name,
             "input_type": source_path.suffix.lower().lstrip("."),
-            "markdown_path": str(markdown_path),
+            "markdown_path": "paper.md",
+            "original_markdown_name": original_markdown_path.name,
             "source_fingerprint": source_fingerprint(source_path),
             "source_sha256": source_sha256,
             "markdown_sha256": markdown_sha256,
-            "mineru": ingestion,
+            "mineru": portable_ingestion,
         },
         "stages": stages,
         "metadata": metadata,
@@ -901,16 +980,30 @@ def build_literature_workflow(
         "related_documents": related_documents,
         "claim_ledger_contract": synthesis_contract(),
         "artifacts": {
-            "artifact_dir": str(output_dir),
-            "workflow_manifest_path": str(workflow_manifest_path),
-            "document_manifest_path": str(document_manifest_path),
-            "evidence_report_path": str(evidence_report_path),
+            "artifact_dir": ".",
+            "total_pipe_bundle_dir": ".",
+            "workflow_manifest_path": "workflow.json",
+            "document_manifest_path": "document.manifest.json",
+            "evidence_report_path": "evidence.md",
+            "primary_markdown_path": "paper.md",
+            "bundle_manifest_path": "bundle.manifest.json",
+            "figure_asset_count": bundle["asset_count"],
+            "figure_asset_paths": bundle["asset_paths"],
+            "asset_roots": bundle["asset_roots"],
+            "bundle_relative_paths": {
+                "workflow": "workflow.json",
+                "document_manifest": "document.manifest.json",
+                "evidence": "evidence.md",
+                "markdown": "paper.md",
+                "bundle_manifest": "bundle.manifest.json",
+                "figure_assets": bundle["asset_paths"],
+            },
         },
         "handoff": {
-            "primary_markdown_path": str(markdown_path),
-            "preferred_context_path": str(evidence_report_path),
-            "provenance_path": str(workflow_manifest_path),
-            "line_addressable_manifest_path": str(document_manifest_path),
+            "primary_markdown_path": "paper.md",
+            "preferred_context_path": "evidence.md",
+            "provenance_path": "workflow.json",
+            "line_addressable_manifest_path": "document.manifest.json",
             "needs_human_review": synthesis_audit["readiness"] != "ready",
             "instruction": (
                 "Downstream plugins should read the evidence package first, use the primary "
@@ -932,4 +1025,5 @@ def build_literature_workflow(
     _atomic_write_json(document_manifest_path, manifest)
     _atomic_write_text(evidence_report_path, _evidence_report_v4(workflow))
     _atomic_write_json(workflow_manifest_path, workflow)
+    write_bundle_manifest(output_dir, workflow_id=workflow_id, generated_at=generated_at)
     return workflow

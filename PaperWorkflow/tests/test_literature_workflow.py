@@ -6,9 +6,9 @@ from pathlib import Path
 from utils.literature_workflow import (
     audit_extraction,
     audit_quantities,
-    discover_related_documents,
     build_evidence_queries,
     build_literature_workflow,
+    discover_related_documents,
     extract_metadata,
 )
 from utils.paper_tools import search_markdown
@@ -20,13 +20,19 @@ class LiteratureWorkflowTests(unittest.TestCase):
             root = Path(temporary)
             source = root / "paper.md"
             supplement = root / "paper-supplement.pdf"
+            images = root / "images"
+            images.mkdir()
+            (images / "figure-1.png").write_bytes(b"png-data")
+            (root / "cover.svg").write_text("<svg/>", encoding="utf-8")
             output = root / "output"
             source.write_text(
                 "# A traceable paper\n"
                 "DOI: 10.1234/example.1\n\n"
                 "# Abstract\nWe test a Raman spectroscopy workflow.\n\n"
                 "# Methods\nThe sample was measured by Raman spectroscopy at 300 K.\n\n"
-                "# Results\nThe Raman peak shifted by 4 cm-1 and the result was reproducible.\n\n"
+                f"# Results\n![Cover]({(root / 'cover.svg').resolve()})\n"
+                "![Raman result](images/figure-1.png)\n"
+                "The Raman peak shifted by 4 cm-1 and the result was reproducible.\n\n"
                 "# Conclusion\nThe measurement supports the proposed mechanism.\n",
                 encoding="utf-8",
             )
@@ -47,14 +53,44 @@ class LiteratureWorkflowTests(unittest.TestCase):
             self.assertEqual(result["metadata"]["dois"], ["10.1234/example.1"])
             self.assertEqual(result["evidence"][0]["results"][0]["heading"], "Methods")
             self.assertEqual(result["related_documents"][0]["role"], "supplementary_candidate")
-            self.assertTrue(Path(result["artifacts"]["workflow_manifest_path"]).is_file())
+            self.assertTrue(
+                (output / result["artifacts"]["workflow_manifest_path"]).is_file()
+            )
             self.assertIn("retrieval", result["quality_dimensions"])
             self.assertIn("synthesis_readiness", result)
             self.assertTrue(result["evidence_registry"])
-            self.assertIn("support_span_exposure", {item["gate"] for item in result["synthesis_readiness"]["gates"]})
+            self.assertIn(
+                "support_span_exposure",
+                {item["gate"] for item in result["synthesis_readiness"]["gates"]},
+            )
             self.assertIn("required_claim_fields", result["claim_ledger_contract"])
-            self.assertTrue(Path(result["artifacts"]["document_manifest_path"]).is_file())
-            self.assertTrue(Path(result["artifacts"]["evidence_report_path"]).is_file())
+            self.assertTrue(
+                (output / result["artifacts"]["document_manifest_path"]).is_file()
+            )
+            self.assertTrue((output / result["artifacts"]["evidence_report_path"]).is_file())
+            self.assertEqual(result["source"]["markdown_path"], "paper.md")
+            self.assertTrue((output / "images" / "figure-1.png").is_file())
+            self.assertTrue((output / "cover.svg").is_file())
+            bundle_manifest = json.loads(
+                (output / "bundle.manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(bundle_manifest["contract"], "total-pipe.paperworkflow-v4")
+            self.assertEqual(bundle_manifest["entrypoint"], "workflow.json")
+            self.assertIn(
+                "figure_asset",
+                {item["role"] for item in bundle_manifest["files"]},
+            )
+            for publishable in (
+                output / "workflow.json",
+                output / "document.manifest.json",
+                output / "evidence.md",
+                output / "bundle.manifest.json",
+                output / "paper.md",
+            ):
+                self.assertNotIn(
+                    str(root.resolve()),
+                    publishable.read_text(encoding="utf-8"),
+                )
             persisted = json.loads((output / "workflow.json").read_text(encoding="utf-8"))
             self.assertEqual(persisted["workflow_id"], result["workflow_id"])
             self.assertIn("line ranges", persisted["handoff"]["instruction"])
@@ -80,14 +116,15 @@ class LiteratureWorkflowTests(unittest.TestCase):
         self.assertEqual(queries[-1]["query_id"], "custom-01")
         self.assertEqual(queries[-1]["query"], "coercive field")
 
-
     def test_chinese_sample_question_is_expanded_and_ranks_methods(self):
         markdown = (
             "# Methods\n"
             "PS nanoparticles were synthesized by emulsion polymerization, then printed and cured.\n\n"
             "# Data availability\nAll performance data are available in the paper."
         )
-        query = build_evidence_queries(["样品如何制备？样品制备方法、合成流程"], include_defaults=False)[0]
+        query = build_evidence_queries(
+            ["样品如何制备？样品制备方法、合成流程"], include_defaults=False
+        )[0]
         results = search_markdown(
             markdown,
             query["expanded_query"],
@@ -102,7 +139,9 @@ class LiteratureWorkflowTests(unittest.TestCase):
             "# Results\nThe device achieves high stability and 98 percent yield.\n\n"
             "# Data availability\nAll performance data and results are available."
         )
-        query = build_evidence_queries(["Key results and performance data"], include_defaults=False)[0]
+        query = build_evidence_queries(
+            ["Key results and performance data"], include_defaults=False
+        )[0]
         results = search_markdown(
             markdown,
             query["expanded_query"],

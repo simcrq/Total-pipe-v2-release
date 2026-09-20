@@ -9,34 +9,31 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 # The project root is derived from this file's own location
 # (integrations/deepseek-harness -> project root) and can be overridden with
 # PAPERWORKFLOW_ROOT when the plugin is installed from a different checkout.
 PROJECT_ROOT = Path(
-    os.environ.get("PAPERWORKFLOW_ROOT")
-    or Path(__file__).resolve().parent.parent.parent
+    os.environ.get("PAPERWORKFLOW_ROOT") or Path(__file__).resolve().parent.parent.parent
 ).resolve()
 INPUT_ROOT = PROJECT_ROOT / "INput"
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.agent_tools import get_document_outline, retrieve_evidence
-from utils.literature_workflow import build_literature_workflow
-from utils.literature_prompt import build_prompt_builder_result
-from utils.paper_tools import source_fingerprint
+from utils.agent_tools import get_document_outline, retrieve_evidence  # noqa: E402
+from utils.literature_prompt import build_prompt_builder_result  # noqa: E402
+from utils.literature_workflow import build_literature_workflow  # noqa: E402
+from utils.paper_tools import source_fingerprint  # noqa: E402
 
 
-def safe_project_path(value: Any, suffix: str) -> Path:
+def resolve_local_file(value: Any, suffix: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("path must be a non-empty string")
     candidate = Path(value).expanduser()
-    if not candidate.is_absolute():
-        candidate = PROJECT_ROOT / candidate
-    path = candidate.resolve()
-    try:
-        path.relative_to(PROJECT_ROOT)
-    except ValueError as error:
-        raise ValueError("path must stay inside the PaperWorkflow directory") from error
+    candidates = (
+        [candidate]
+        if candidate.is_absolute()
+        else [Path.cwd() / candidate, PROJECT_ROOT / candidate, INPUT_ROOT / candidate]
+    )
+    path = next((item.resolve() for item in candidates if item.exists()), candidates[0].resolve())
     if path.suffix.lower() != suffix:
         raise ValueError("path must point to a " + suffix + " file")
     if not path.is_file():
@@ -45,24 +42,23 @@ def safe_project_path(value: Any, suffix: str) -> Path:
 
 
 def safe_markdown_path(value: Any) -> Path:
-    return safe_project_path(value, ".md")
+    return resolve_local_file(value, ".md")
 
 
 def safe_pdf_path(value: Any) -> Path:
-    return safe_project_path(value, ".pdf")
+    return resolve_local_file(value, ".pdf")
 
 
 def safe_source_path(value: Any) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("source_path must be a non-empty string")
     candidate = Path(value).expanduser()
-    if not candidate.is_absolute():
-        candidate = PROJECT_ROOT / candidate
-    path = candidate.resolve()
-    try:
-        path.relative_to(PROJECT_ROOT)
-    except ValueError as error:
-        raise ValueError("source_path must stay inside the PaperWorkflow directory") from error
+    candidates = (
+        [candidate]
+        if candidate.is_absolute()
+        else [Path.cwd() / candidate, PROJECT_ROOT / candidate, INPUT_ROOT / candidate]
+    )
+    path = next((item.resolve() for item in candidates if item.exists()), candidates[0].resolve())
     if path.suffix.lower() not in {".pdf", ".md"}:
         raise ValueError("source_path must point to a .pdf or .md file")
     if not path.is_file():
@@ -70,17 +66,13 @@ def safe_source_path(value: Any) -> Path:
     return path
 
 
-def safe_project_directory(value: Any) -> Path:
+def resolve_output_directory(value: Any) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("output_dir must be a non-empty string when provided")
     candidate = Path(value).expanduser()
     if not candidate.is_absolute():
         candidate = PROJECT_ROOT / candidate
     path = candidate.resolve()
-    try:
-        path.relative_to(PROJECT_ROOT)
-    except ValueError as error:
-        raise ValueError("output_dir must stay inside the PaperWorkflow directory") from error
     if path.exists() and not path.is_dir():
         raise ValueError("output_dir must point to a directory")
     return path
@@ -107,43 +99,16 @@ def workflow_config() -> dict[str, Any]:
 
 
 def cache_root_for(pdf_path: Path, config: dict[str, Any]) -> Path:
-    temp_dir = Path(config.get("paths", {}).get("temp_dir", PROJECT_ROOT / "temp_markdowns")).expanduser()
+    temp_dir = Path(
+        config.get("paths", {}).get("temp_dir", PROJECT_ROOT / "temp_markdowns")
+    ).expanduser()
     if not temp_dir.is_absolute():
         temp_dir = PROJECT_ROOT / temp_dir
     stat = pdf_path.stat()
     cache_key = hashlib.sha256(
-        f"{pdf_path}\0{stat.st_size}\0{stat.st_mtime_ns}".encode("utf-8")
+        f"{pdf_path}\0{stat.st_size}\0{stat.st_mtime_ns}".encode()
     ).hexdigest()[:16]
     return temp_dir.resolve() / cache_key
-
-
-def markdown_roots(cache_root: Path, pdf_path: Path, config: dict[str, Any]) -> list[Path]:
-    temp_dir = Path(config.get("paths", {}).get("temp_dir", PROJECT_ROOT / "temp_markdowns")).expanduser()
-    if not temp_dir.is_absolute():
-        temp_dir = PROJECT_ROOT / temp_dir
-    return [cache_root, temp_dir.resolve() / pdf_path.stem]
-
-
-def find_markdown(cache_root: Path, pdf_path: Path, config: dict[str, Any]) -> Path | None:
-    file_stem = pdf_path.stem
-    for root in markdown_roots(cache_root, pdf_path, config):
-        candidates = [
-            root / (file_stem + ".md"),
-            root / "full.md",
-            root / "auto" / (file_stem + ".md"),
-            root / "hybrid_auto" / (file_stem + ".md"),
-        ]
-        for candidate in candidates:
-            if candidate.is_file():
-                return candidate.resolve()
-        if root.is_dir():
-            exact = sorted(root.rglob(file_stem + ".md"))
-            if exact:
-                return exact[0].resolve()
-            any_markdown = sorted(root.rglob("*.md"))
-            if any_markdown:
-                return any_markdown[0].resolve()
-    return None
 
 
 def process_pdf(value: Any) -> dict[str, Any]:
@@ -157,18 +122,17 @@ def process_pdf(value: Any) -> dict[str, Any]:
         ) from error
 
     requested_cache_root = cache_root_for(pdf_path, config)
-    before = find_markdown(requested_cache_root, pdf_path, config)
     processor = PDFProcessor(config)
-    markdown = processor.convert_to_markdown(str(pdf_path))
-    after = find_markdown(requested_cache_root, pdf_path, config)
+    conversion = processor.convert_to_markdown_result(str(pdf_path))
+    after = Path(conversion["markdown_path"])
     return {
         "source": str(pdf_path),
         "mineru_mode": processor.mode,
-        "cache_dir": str(after.parent if after is not None else requested_cache_root),
+        "cache_dir": conversion["cache_dir"],
         "requested_cache_dir": str(requested_cache_root),
-        "cache_hit": before is not None,
-        "markdown_path": str(after) if after is not None else None,
-        "char_count": len(markdown),
+        "cache_hit": conversion["cache_hit"],
+        "markdown_path": str(after),
+        "char_count": len(conversion["content"]),
         "message": "MinerU PDF-to-Markdown/OCR completed; no LLM summary was requested.",
     }
 
@@ -214,12 +178,12 @@ def literature_workflow(payload: dict[str, Any]) -> dict[str, Any]:
     if output_value is None:
         output_dir = PROJECT_ROOT / "output" / "workflows" / source_fingerprint(source_path)
     else:
-        output_dir = safe_project_directory(output_value)
+        output_dir = resolve_output_directory(output_value)
 
-    return build_literature_workflow(
+    workflow = build_literature_workflow(
         markdown_path=markdown_path,
         source_path=source_path,
-        project_root=PROJECT_ROOT,
+        project_root=source_path.parent,
         output_dir=output_dir,
         custom_queries=queries,
         include_default_queries=include_defaults,
@@ -227,6 +191,11 @@ def literature_workflow(payload: dict[str, Any]) -> dict[str, Any]:
         chunk_chars=chunk_chars,
         ingestion=ingestion,
     )
+    workflow["runtime_artifacts"] = {
+        "bundle_dir": str(output_dir.resolve()),
+        "workflow_path": str((output_dir / "workflow.json").resolve()),
+    }
+    return workflow
 
 
 def prompt_builder(payload: dict[str, Any]) -> dict[str, Any]:
@@ -260,12 +229,24 @@ def prompt_builder(payload: dict[str, Any]) -> dict[str, Any]:
         if len(additional_context) > 6000:
             raise ValueError("additional_context must be at most 6000 characters")
 
+    source_dir = payload.get("source_dir")
+    if source_dir is None:
+        source_root = INPUT_ROOT
+        root_label = "INput"
+    else:
+        candidate = Path(str(source_dir)).expanduser()
+        source_root = (candidate if candidate.is_absolute() else PROJECT_ROOT / candidate).resolve()
+        if not source_root.is_dir():
+            raise FileNotFoundError("source_dir not found: " + str(source_root))
+        root_label = str(source_root)
+
     return build_prompt_builder_result(
-        INPUT_ROOT,
+        source_root,
         selected_pdf=selected_pdf,
         research_goal=research_goal,
         focus_questions=focus_questions,
         additional_context=additional_context,
+        root_label=root_label,
     )
 
 

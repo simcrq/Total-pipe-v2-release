@@ -1,17 +1,42 @@
 # PaperWorkflow
 
-PaperWorkflow 是一个面向科研文献的本地批处理接入层：把 PDF 解析成可检索的 Markdown，按任务 ID 选择略读/精读模板，调用 OpenAI-compatible 模型生成报告，并将证据区块 manifest 与报告一起落盘。
+PaperWorkflow 是 Total-pipe 的论文接入层：把任意本地 PDF 或 Markdown 整理成 schema v4 的证据包，并把 OCR Markdown、图片资产、`workflow.json`、`document.manifest.json`、`evidence.md` 与校验清单自动放进同一个 bundle 目录。`workflow.json` 可直接交给 `Total-pipe/pwf2rpa`。
 
 它不替代通用 Agent：PaperWorkflow 负责确定性的文件解析、缓存、批量执行和证据定位；Agent 负责决定读什么、比较什么、何时调用工具。当前 WSL2 部署已经提供 DeepSeek Harness 原生 bundle 插件。
 
 完整的 WSL 使用、安装、更新和排错流程见：[DeepSeek-Harness 对接与使用](DeepSeek-Harness对接与使用.md)。
 
-## WSL2 快速开始
+## MCP 快速开始
+
+启动标准 stdio MCP server：
+
+~~~bash
+python3 PaperWorkflow/mcp_server.py
+~~~
+
+MCP 客户端配置示例：
+
+~~~json
+{
+  "mcpServers": {
+    "paperworkflow": {
+      "command": "python3",
+      "args": ["PaperWorkflow/mcp_server.py"]
+    }
+  }
+}
+~~~
+
+`paperworkflow_literature_workflow` 的 `source_path` 和 `output_dir` 均可使用任意本地绝对路径，不再要求文件位于 `INput` 或 PaperWorkflow 项目目录内。省略 `output_dir` 时，默认写入 `output/workflows/<source fingerprint>/`。成功返回值顶层直接包含 `bundle_dir` 与 `workflow_path`，无需猜测目录；默认不把完整 workflow 塞进 MCP 响应，如确有需要可设置 `include_workflow=true`。
+
+如果需要先浏览一个目录内的论文，可调用 `paperworkflow_prompt_builder` 并传 `source_dir`；省略时仍兼容旧的 `INput` 目录。
+
+## 传统批处理快速开始
 
 在 WSL Bash 中执行：
 
 ~~~bash
-cd /home/simcrq/0_Project/paperworkflow
+cd PaperWorkflow
 
 # 先把 iconfig.yaml 复制为 config.yaml 并按需修改
 cp -n iconfig.yaml config.yaml
@@ -23,7 +48,7 @@ python3 main.py --dry-run
 python3 main.py
 ~~~
 
-PDF 应放在 `INput/<任务ID>/`，例如 `INput/4668/paper-a.pdf`。任务 ID 决定使用 `deep_read`、`skim` 或默认模式。
+传统 `main.py` 批处理仍从配置的 `paths.input_dir` 读取任务目录；这个限制只属于旧批处理模式，不适用于 MCP 工具。
 
 ## DeepSeek Harness 插件
 
@@ -35,8 +60,8 @@ integrations/deepseek-harness/
 
 它安装到 WSL 的 `web` profile 后暴露两个模型工具：
 
-- `paperworkflow_literature_workflow`：以项目内 PDF 或 Markdown 为入口，完成整套可追溯文献处理和下游交接。
-- `paperworkflow_prompt_builder`：递归索引 `INput` 下的全部 PDF，使用相对路径供用户选择，并根据研究信息自动生成主工作流提示词。
+- `paperworkflow_literature_workflow`：以任意本地 PDF 或 Markdown 为入口，完成整套可追溯文献处理和下游交接。
+- `paperworkflow_prompt_builder`：递归索引任意 `source_dir` 下的 PDF，使用相对路径供用户选择，并根据研究信息自动生成主工作流提示词。
 
 工具内部按顺序完成：
 
@@ -46,7 +71,7 @@ integrations/deepseek-harness/
 4. 只发现文件名或目录关系明确的补充材料，避免把同目录无关论文误判为关联文献。
 5. 保留 `E###` 粗粒度 chunk，同时建立带字符偏移的 `S####` 原子 span；检索命中后注册成去重的 `EV####` 证据。
 6. 输出带硬门禁的 `synthesis_readiness`；阅读顺序、证据暴露、覆盖率或补充材料缺失不能被加权总分掩盖。
-7. 写出 `workflow.json`、`document.manifest.json` 和 `evidence.md`，供其他插件继续处理。
+7. 自动生成一个 Total-pipe bundle，写出 `workflow.json`、`document.manifest.json`、`evidence.md`、`paper.md`、图片资产与 `bundle.manifest.json`。
 
 安装并启动：
 
@@ -86,21 +111,38 @@ pnpm dsh web
 
 ~~~bash
 curl --compressed -fsSL https://cdn-mineru.openxlab.org.cn/open-api-cli/install.sh -o /tmp/mineru-open-api-install.sh
-INSTALL_DIR=/home/simcrq/.local/bin sh /tmp/mineru-open-api-install.sh
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/mineru-open-api-install.sh
 mineru-open-api auth
 # 当前 WSL 配置 api.mineru.ocr=true，插件会向官方 CLI 传递 --ocr。
 ~~~
 
 历史 `mode: api` 配置会自动迁移到官方 CLI；只有同时设置 `legacy_http: true` 时才启用旧的手写 HTTP 适配器。
 
-## 输出与 Agent 接口
+## 输出与 Total-pipe 接口
 
-统一工具会为每个源文件生成：
+统一工具会为每个源文件生成一个目录：
 
-- `temp_markdowns/<cache>/.../full.md`：MinerU 原始 Markdown，Markdown 输入时直接复用源文件。
-- `output/workflows/<source fingerprint>/workflow.json`：阶段状态、分维度审计、query→EV 映射、去重 Evidence Registry、来源依赖、门禁和下游交接路径。
-- 同目录 `document.manifest.json`：保留原始 `E###` chunk，并提供 `S####` 原子科学句段、模态、语义父标题、行号和字符偏移。
-- 同目录 `evidence.md`：查询区只列 EV 编号；证据正文只在 Evidence Registry 出现一次，供其他插件优先读取。
+~~~text
+output/workflows/<source fingerprint>/
+├── workflow.json             # schema v4；pwf2rpa 入口
+├── document.manifest.json    # E### chunk + S#### 原子 span
+├── evidence.md               # 去重后的 EV#### 证据包
+├── paper.md                  # OCR 后或原始 Markdown 的 bundle 副本
+├── images/                   # MinerU 提取图片，保留 Markdown 相对引用
+└── bundle.manifest.json      # Total-pipe 契约、角色、大小与逐文件 sha256
+~~~
+
+若 MinerU 使用 `figures/`、`assets/`、`media/` 等目录名，也会原样收集。发布文件中的路径全部相对于 bundle：`workflow.json.artifacts.bundle_relative_paths` 给出稳定入口，`artifacts.total_pipe_bundle_dir` 和 `bundle.manifest.json.bundle_dir` 均为 `.`。本机绝对路径只出现在 MCP 调用响应的 `bundle_dir` 与 `workflow_path`，不会写入产物。
+
+交给下一阶段时直接使用返回的 `workflow_path`：
+
+~~~bash
+cd ../Total-pipe/pwf2rpa
+PYTHONPATH=. python3 -m pwf2rpa /path/to/bundle/workflow.json \
+  --story /path/to/story_plan.json \
+  --story-model '<用户选择的模型>' --story-reasoning high \
+  --model-selected-by-user --strict --out /path/to/rpa_input.json
+~~~
 
 `E###` 只用于粗粒度回看，科学主张应优先引用 `EV####`，同时保留其 `S####`、原始行范围和字符偏移。伪标题（例如版式 `Article`）不会再覆盖语义父级；图注会携带 `parent_figure`。
 

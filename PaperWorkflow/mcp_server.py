@@ -4,8 +4,8 @@
 The contract lives in the ``total-pipe-deck`` skill (SKILL.md, stage 1) and is
 the authority for tool naming; do not rename these tools without updating it.
 
-    paperworkflow_prompt_builder        list INput PDFs, or build the stage-1 prompt
-    paperworkflow_literature_workflow   markdown/pdf -> workflow.json + evidence.md
+    paperworkflow_prompt_builder        list PDFs in any directory / build a prompt
+    paperworkflow_literature_workflow   PDF/Markdown -> self-contained Total-pipe bundle
     paperworkflow_outline               section outline of a converted .md
     paperworkflow_search_evidence       line-addressable evidence passages
     paperworkflow_process_pdf           OCR only, no evidence registry
@@ -31,34 +31,22 @@ import os
 import sys
 import threading
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SERVER_INFO = {"name": "paperworkflow", "version": "0.2.0"}
+SERVER_INFO = {"name": "paperworkflow", "version": "0.3.0"}
 PROTOCOL_VERSION = "2025-06-18"
 
 DEFAULT_INPUT_DIR = ROOT / "INput"
 DEFAULT_OUTPUT_ROOT = ROOT / "output"
 DEFAULT_WORKFLOW_ROOT = DEFAULT_OUTPUT_ROOT / "workflows"
-DEFAULT_MARKDOWN_ROOT = DEFAULT_OUTPUT_ROOT / "markdowns"
-
 DEFAULT_TIMEOUT = float(os.environ.get("PAPERWORKFLOW_TOOL_TIMEOUT", "120"))
 OCR_TIMEOUT = float(os.environ.get("PAPERWORKFLOW_OCR_TIMEOUT", "1800"))
-
-_env_roots = os.environ.get("PAPERWORKFLOW_ROOTS")
-ALLOWED_ROOTS = [
-    Path(p).expanduser().resolve()
-    for p in (_env_roots.split(os.pathsep) if _env_roots else [str(ROOT)])
-]
-for _extra in (DEFAULT_INPUT_DIR, DEFAULT_OUTPUT_ROOT):
-    try:
-        ALLOWED_ROOTS.append(_extra.resolve())
-    except OSError:
-        pass
 
 
 def log(msg: str) -> None:
@@ -74,10 +62,10 @@ def log(msg: str) -> None:
 
 
 INSTRUCTIONS = (
-    "PaperWorkflow stage 1 of the Total-pipe pipeline. Start with "
-    "paperworkflow_prompt_builder with no arguments to list the PDFs in INput and let "
-    "the user choose — never pick for them. Call it again with selected_pdf to build "
-    "the prompt, then paperworkflow_literature_workflow to produce workflow.json. "
+    "PaperWorkflow stage 1 of the Total-pipe pipeline. Sources may be anywhere on "
+    "the local filesystem. paperworkflow_literature_workflow produces a self-contained "
+    "bundle with workflow.json, evidence.md, paper.md, document.manifest.json, figure "
+    "assets and bundle.manifest.json. "
     "Gate on synthesis_readiness, not quality_audit. Take artefact paths from the "
     "return value; do not guess directories."
 )
@@ -139,26 +127,27 @@ def run_callable(fn: Callable[[], Any], timeout: float = DEFAULT_TIMEOUT) -> Any
 
 
 # --------------------------------------------------------------------------- #
-# Path safety
+# Path resolution
 # --------------------------------------------------------------------------- #
 
 
-def resolve_safe(raw: str) -> Path:
-    path = Path(raw).expanduser()
-    if not path.is_absolute():
-        path = ROOT / path
-    resolved = path.resolve()
-    for root in ALLOWED_ROOTS:
-        try:
-            resolved.relative_to(root)
-            return resolved
-        except ValueError:
-            continue
-    raise PermissionError(
-        f"Path outside allowed roots: {resolved}. "
-        f"Allowed: {', '.join(str(r) for r in ALLOWED_ROOTS)}. "
-        f"Set PAPERWORKFLOW_ROOTS to widen."
+def resolve_path(raw: str, *, must_exist: bool = False) -> Path:
+    """Resolve a local path without the historical project-root sandbox."""
+
+    value = str(raw).strip()
+    if not value:
+        raise ValueError("path is required")
+    path = Path(value).expanduser()
+    candidates = (
+        [path] if path.is_absolute() else [Path.cwd() / path, ROOT / path, input_root() / path]
     )
+    resolved = next(
+        (candidate.resolve() for candidate in candidates if candidate.exists()),
+        candidates[0].resolve(),
+    )
+    if must_exist and not resolved.exists():
+        raise FileNotFoundError(f"Not found: {resolved}")
+    return resolved
 
 
 def resolve_source(raw: str, *, suffix: str | None = None) -> Path:
@@ -166,16 +155,9 @@ def resolve_source(raw: str, *, suffix: str | None = None) -> Path:
     raw = str(raw).strip().replace("\\", "/")
     if not raw:
         raise ValueError("path is required")
-    candidate = Path(raw).expanduser()
-    if not candidate.is_absolute():
-        # Contract convention: bare paths are relative to INput.
-        inline = DEFAULT_INPUT_DIR / raw
-        resolved = inline if inline.exists() else ROOT / raw
-    else:
-        resolved = candidate
-    path = resolve_safe(str(resolved))
-    if not path.exists():
-        raise FileNotFoundError(f"Not found: {path}")
+    path = resolve_path(raw, must_exist=True)
+    if not path.is_file():
+        raise ValueError(f"Expected a file, got: {path}")
     if suffix and path.suffix.casefold() != suffix:
         raise ValueError(f"Expected a {suffix} file, got {path.suffix or '<none>'}")
     return path
@@ -198,7 +180,12 @@ def load_config() -> dict[str, Any]:
         return {}
 
 
-def input_root() -> Path:
+def input_root(source_dir: str | None = None) -> Path:
+    if source_dir:
+        path = resolve_path(source_dir, must_exist=True)
+        if not path.is_dir():
+            raise ValueError(f"source_dir must be a directory: {path}")
+        return path
     cfg = load_config()
     raw = (cfg.get("paths") or {}).get("input_dir")
     base = Path(raw).expanduser() if raw else DEFAULT_INPUT_DIR
@@ -237,15 +224,18 @@ def blocked_ocr(what: str) -> dict[str, Any]:
 
 
 def tool_prompt_builder(args: dict[str, Any]) -> dict[str, Any]:
-    """List INput PDFs (no args) or build the stage-1 prompt (with selected_pdf)."""
+    """List PDFs in any directory or build the stage-1 prompt."""
     from utils.literature_prompt import build_prompt_builder_result
 
+    source_root = input_root(args.get("source_dir"))
+    root_label = "INput" if source_root == input_root() else str(source_root)
     return build_prompt_builder_result(
-        input_root(),
+        source_root,
         selected_pdf=args.get("selected_pdf"),
         research_goal=args.get("research_goal"),
         focus_questions=args.get("focus_questions"),
         additional_context=args.get("additional_context"),
+        root_label=root_label,
     )
 
 
@@ -266,22 +256,29 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
     elif suffix == ".pdf":
         if missing_ocr_deps():
             return blocked_ocr("OCR for a PDF source")
-        markdown_path = _ocr_to_markdown(source_path)
-        ingestion = {"mode": _mineru_mode(), "engine": "mineru"}
+        conversion = _ocr_to_markdown(source_path)
+        markdown_path = Path(conversion["markdown_path"])
+        ingestion = {
+            "mode": _mineru_mode(),
+            "engine": "mineru",
+            **{key: value for key, value in conversion.items() if key != "content"},
+        }
     else:
         raise ValueError("source_path must be .pdf or .md")
 
     output_dir = args.get("output_dir")
     if output_dir:
-        out = resolve_safe(output_dir)
+        out = resolve_path(output_dir)
     else:
-        out = DEFAULT_WORKFLOW_ROOT / source_path.stem
+        from utils.paper_tools import source_fingerprint
+
+        out = DEFAULT_WORKFLOW_ROOT / source_fingerprint(source_path)
     out.mkdir(parents=True, exist_ok=True)
 
     workflow = build_literature_workflow(
         markdown_path=markdown_path,
         source_path=source_path,
-        project_root=ROOT,
+        project_root=source_path.parent,
         output_dir=out,
         custom_queries=args.get("queries") or (),
         include_default_queries=bool(args.get("include_default_queries", True)),
@@ -291,7 +288,7 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
     )
 
     readiness = workflow.get("synthesis_readiness") or {}
-    return {
+    result = {
         "status": "completed",
         "schema_version": workflow.get("schema_version"),
         "workflow_id": workflow.get("workflow_id"),
@@ -301,6 +298,8 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
             "input_type": workflow["source"]["input_type"],
         },
         "artifacts": workflow.get("artifacts"),
+        "bundle_dir": str(out.resolve()),
+        "workflow_path": str((out / "workflow.json").resolve()),
         "synthesis_readiness": readiness,
         "quality_audit": workflow.get("quality_audit"),
         "counts": {
@@ -313,16 +312,18 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
             "Gate on synthesis_readiness, not quality_audit. Take artefact paths from "
             "artifacts above; do not guess directory names."
         ),
-        "workflow": workflow,
     }
+    if bool(args.get("include_workflow", False)):
+        result["workflow"] = workflow
+    return result
 
 
 def _mineru_mode() -> str:
     return (load_config().get("api") or {}).get("mineru", {}).get("mode", "official_cli")
 
 
-def _ocr_to_markdown(pdf_path: Path) -> Path:
-    """OCR a PDF and persist the Markdown so downstream tools can address it."""
+def _ocr_to_markdown(pdf_path: Path) -> dict[str, Any]:
+    """OCR a PDF while preserving MinerU's Markdown and image directory."""
     from utils.pdf_handler import PDFProcessor
 
     config = load_config()
@@ -334,12 +335,7 @@ def _ocr_to_markdown(pdf_path: Path) -> Path:
     paths["temp_dir"] = str(temp_path)
     config.setdefault("api", {}).setdefault("mineru", {}).setdefault("mode", "official_cli")
 
-    markdown = PDFProcessor(config).convert_to_markdown(str(pdf_path))
-
-    DEFAULT_MARKDOWN_ROOT.mkdir(parents=True, exist_ok=True)
-    target = DEFAULT_MARKDOWN_ROOT / f"{pdf_path.stem}.md"
-    target.write_text(markdown, encoding="utf-8")
-    return target
+    return PDFProcessor(config).convert_to_markdown_result(str(pdf_path))
 
 
 def tool_process_pdf(args: dict[str, Any]) -> dict[str, Any]:
@@ -350,15 +346,18 @@ def tool_process_pdf(args: dict[str, Any]) -> dict[str, Any]:
     pdf_path = resolve_source(raw, suffix=".pdf")
     if missing_ocr_deps():
         return blocked_ocr("paperworkflow_process_pdf")
-    target = _ocr_to_markdown(pdf_path)
-    text = target.read_text(encoding="utf-8", errors="replace")
+    result = _ocr_to_markdown(pdf_path)
+    target = Path(result["markdown_path"])
+    text = result["content"]
     return {
         "status": "completed",
         "source_pdf": str(pdf_path),
         "markdown_path": str(target),
+        "cache_dir": result["cache_dir"],
+        "cache_hit": result["cache_hit"],
         "char_count": len(text),
         "note": "OCR only. No evidence registry produced — use "
-                "paperworkflow_literature_workflow for that.",
+        "paperworkflow_literature_workflow for that.",
     }
 
 
@@ -406,11 +405,15 @@ def tool_build_manifest(args: dict[str, Any]) -> dict[str, Any]:
 
 def tool_list_outputs(args: dict[str, Any]) -> dict[str, Any]:
     cfg = load_config()
-    raw = args.get("output_dir") or (cfg.get("paths") or {}).get("output_dir") or str(DEFAULT_OUTPUT_ROOT)
+    raw = (
+        args.get("output_dir")
+        or (cfg.get("paths") or {}).get("output_dir")
+        or str(DEFAULT_OUTPUT_ROOT)
+    )
     base = Path(raw).expanduser()
     if not base.is_absolute():
         base = ROOT / base
-    base = resolve_safe(str(base))
+    base = resolve_path(str(base))
     if not base.is_dir():
         return {"output_dir": str(base), "exists": False, "items": []}
 
@@ -419,14 +422,18 @@ def tool_list_outputs(args: dict[str, Any]) -> dict[str, Any]:
     for path in sorted(base.rglob("*")):
         if path.is_file():
             name = path.name
-            items.append({
-                "path": str(path),
-                "name": name,
-                "size": path.stat().st_size,
-                "kind": "manifest" if name.endswith(".manifest.json")
-                        else "workflow" if name == "workflow.json"
-                        else path.suffix.lstrip("."),
-            })
+            items.append(
+                {
+                    "path": str(path),
+                    "name": name,
+                    "size": path.stat().st_size,
+                    "kind": "manifest"
+                    if name.endswith(".manifest.json")
+                    else "workflow"
+                    if name == "workflow.json"
+                    else path.suffix.lstrip("."),
+                }
+            )
             if len(items) >= limit:
                 break
     return {"output_dir": str(base), "exists": True, "count": len(items), "items": items}
@@ -435,7 +442,7 @@ def tool_list_outputs(args: dict[str, Any]) -> dict[str, Any]:
 TOOLS: dict[str, dict[str, Any]] = {
     "paperworkflow_prompt_builder": {
         "description": (
-            "Stage 1a/1c. With no arguments: list the PDFs under INput as a "
+            "Stage 1a/1c. List PDFs under source_dir (legacy default: INput) as a "
             "pdf_index of selection_id (P001…) + relative_path — show it to the user "
             "and let them choose, never pick for them. With selected_pdf: build the "
             "stage-1 workflow prompt. Standard library only."
@@ -443,7 +450,14 @@ TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "selected_pdf": {"type": "string", "description": "selection_id (P001) or an INput-relative path"},
+                "source_dir": {
+                    "type": "string",
+                    "description": "Any local directory to index recursively; defaults to configured input_dir.",
+                },
+                "selected_pdf": {
+                    "type": "string",
+                    "description": "selection_id (P001) or a source_dir-relative path",
+                },
                 "research_goal": {"type": "string"},
                 "focus_questions": {"type": "array", "items": {"type": "string"}},
                 "additional_context": {"type": "string"},
@@ -455,19 +469,41 @@ TOOLS: dict[str, dict[str, Any]] = {
     "paperworkflow_literature_workflow": {
         "description": (
             "Stage 1b. Convert a .md (or .pdf via OCR) into the literature hand-off "
-            "package: workflow.json, document.manifest.json and evidence.md. Returns "
-            "synthesis_readiness (the hard gate) and the artefact paths. Slow for PDFs "
+            "bundle: workflow.json, document.manifest.json, evidence.md, paper.md, "
+            "extracted figures and bundle.manifest.json in one directory. Returns "
+            "the bundle path and synthesis_readiness hard gate. Slow for PDFs "
             "(OCR); do not re-run unnecessarily."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_path": {"type": "string", "description": "Required. INput-relative path or absolute path; .pdf or .md"},
-                "queries": {"type": "array", "items": {"type": "string"}, "maxItems": 12, "description": "Research questions, each <=2000 chars"},
+                "source_path": {
+                    "type": "string",
+                    "description": "Required. Any readable local .pdf or .md path.",
+                },
+                "queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 12,
+                    "description": "Research questions, each <=2000 chars",
+                },
                 "include_default_queries": {"type": "boolean", "default": True},
                 "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
-                "chunk_chars": {"type": "integer", "minimum": 500, "maximum": 20000, "default": 6000},
-                "output_dir": {"type": "string", "description": "Optional directory inside the project"},
+                "chunk_chars": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 20000,
+                    "default": 6000,
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Optional local bundle directory; may be outside the project.",
+                },
+                "include_workflow": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Embed the full workflow document in the MCP response. Defaults to false; use workflow_path to avoid a very large response.",
+                },
             },
             "required": ["source_path"],
         },
@@ -613,7 +649,9 @@ def handle(request: dict[str, Any]) -> dict[str, Any] | None:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}],
+                    "content": [
+                        {"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}
+                    ],
                     "structuredContent": result,
                     "isError": False,
                 },

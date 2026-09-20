@@ -4,17 +4,17 @@
 
 ## 1. 当前目录与组件
 
-本机已经准备好以下目录：
+建议准备以下相对目录结构：
 
 ~~~text
-/home/simcrq/0_Project/
+<workspace>/
 ├── dsh/                              # DeepSeek Harness 源码
 ├── dsh-anchored-standard/            # 社区 Agent preset（可选）
 └── paperworkflow/                    # 本项目
     └── integrations/deepseek-harness/ # 原生 dsh bundle 插件
 ~~~
 
-Harness 的 profile 根目录是 `/home/simcrq/.dsh`，当前 Web profile 是 `web`。插件已经安装到该 profile，向模型暴露两个工具：
+下文通过环境变量定位项目，不依赖发布者机器上的固定绝对路径。当前 Web profile 示例名为 `web`，插件向模型暴露两个工具：
 
 - `paperworkflow_literature_workflow`：以项目内 PDF 或 Markdown 为入口，自动执行文献接入、检查、索引、证据检索和下游交接。
 - `paperworkflow_prompt_builder`：递归索引 `INput` 下的 PDF，以相对路径和编号供用户选择，并自动生成严格的主工作流提示词。
@@ -35,9 +35,13 @@ Harness 的 profile 根目录是 `/home/simcrq/.dsh`，当前 Web profile 是 `w
 每次打开新的 WSL 终端，先执行：
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
-cd /home/simcrq/0_Project/dsh
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+export DSH_SOURCE="${DSH_SOURCE:-../dsh}"
+export PAPERWORKFLOW_ROOT="${PAPERWORKFLOW_ROOT:-$PWD}"
+export DSH_TOOLS_ENTRY="$(realpath "$DSH_SOURCE/packages/core/tools/lib/index.js")"
+source "$NVM_DIR/nvm.sh"
+cd "$DSH_SOURCE"
 node --version
 pnpm --version
 ~~~
@@ -47,9 +51,8 @@ pnpm --version
 ## 3. 启动 Harness Web
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
-cd /home/simcrq/0_Project/dsh
+source "$NVM_DIR/nvm.sh"
+cd "$DSH_SOURCE"
 pnpm dsh web
 ~~~
 
@@ -58,9 +61,8 @@ pnpm dsh web
 如果只想确认 profile 的配置层，不启动服务：
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
-cd /home/simcrq/0_Project/dsh
+source "$NVM_DIR/nvm.sh"
+cd "$DSH_SOURCE"
 pnpm dsh --profile web --dump-config | grep -n -E 'paperworkflow|paperwork'
 ~~~
 
@@ -77,39 +79,37 @@ pnpm dsh --profile web --dump-config | grep -n -E 'paperworkflow|paperwork'
 插件 bundle 的源码目录：
 
 ~~~text
-/home/simcrq/0_Project/paperworkflow/integrations/deepseek-harness
+$PAPERWORKFLOW_ROOT/integrations/deepseek-harness
 ~~~
 
 首次安装或重新安装：
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
-cd /home/simcrq/0_Project/dsh
-pnpm dsh plugin --profile web add /home/simcrq/0_Project/paperworkflow/integrations/deepseek-harness
+source "$NVM_DIR/nvm.sh"
+cd "$DSH_SOURCE"
+pnpm dsh plugin --profile web add "$PAPERWORKFLOW_ROOT/integrations/deepseek-harness"
 ~~~
 
 修改插件源码后，重新执行上面的 `add`（本地 link 会指向同一目录），再重启 `pnpm dsh web`。移除：
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
-cd /home/simcrq/0_Project/dsh
+source "$NVM_DIR/nvm.sh"
+cd "$DSH_SOURCE"
 pnpm dsh plugin --profile web remove paperworkflow-dsh-plugin
 ~~~
 
 该 bundle 遵循 Harness 官方格式：`package.json` 声明 `dsh.bundle`，`cordis.patch.yml` 插入插件行，`index.js` 注册工具，`bridge.py` 负责 JSON 桥接。参考官方 [插件打包与安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)。
 
-> 当前插件按本机固定 WSL 路径加载 Harness 的 `dsh-tools` 构建产物：`/home/simcrq/0_Project/dsh/packages/core/tools/lib/index.js`。如果以后移动 Harness 目录，需要同步修改 `integrations/deepseek-harness/index.js` 的导入路径。
+> 启动前将 `DSH_TOOLS_ENTRY` 设置为 Harness tools 模块路径，例如 `$DSH_SOURCE/packages/core/tools/lib/index.js`。插件运行时动态加载该路径，源码中不包含机器相关绝对路径。
 
 ## 5. 直接测试 JSON bridge
 
-不依赖模型即可测试统一工作流。路径可以写相对项目根目录的路径，也可以写项目根目录以内的绝对路径；bridge 会拒绝项目目录之外的输入和输出路径。
+不依赖模型即可测试统一工作流。输入和输出既可使用相对路径，也可使用任意本地绝对路径；发布 bundle 内部只写相对路径。
 
 PDF 输入可能通过 MinerU 上传并执行 OCR；Markdown 输入不会调用 MinerU。两种输入都会完成后续审计、索引、证据检索和交接产物生成。
 
 ~~~bash
-cd /home/simcrq/0_Project/paperworkflow
+cd "$PAPERWORKFLOW_ROOT"
 
 printf '%s' '{"operation":"literature_workflow","source_path":"INput/4668/paper-a.pdf","queries":["样品制备与测量条件","关键结果与局限性"],"top_k":5}' \
   | python3 integrations/deepseek-harness/bridge.py \
@@ -146,7 +146,7 @@ P004  Li.pdf
 
 ~~~text
 请调用 paperworkflow_literature_workflow 处理：
-/home/simcrq/0_Project/paperworkflow/INput/4668/paper-a.pdf
+INput/4668/paper-a.pdf
 自定义问题：样品如何制备？物理图像是什么？最关键结果和局限性是什么？
 回答时遵守 workflow.json 中的 claim_ledger_contract：
 1. 每个主要结论和数字分别给出 E### 与精确行号。
@@ -168,13 +168,13 @@ P004  Li.pdf
 PDF 放在任务 ID 子目录，例如：
 
 ~~~text
-/home/simcrq/0_Project/paperworkflow/INput/4668/paper-a.pdf
+INput/4668/paper-a.pdf
 ~~~
 
 先检查任务映射：
 
 ~~~bash
-cd /home/simcrq/0_Project/paperworkflow
+cd "$PAPERWORKFLOW_ROOT"
 python3 main.py --dry-run
 ~~~
 
@@ -197,7 +197,7 @@ MinerU 建议使用官方 CLI 管理认证：
 
 ~~~bash
 curl --compressed -fsSL https://cdn-mineru.openxlab.org.cn/open-api-cli/install.sh -o /tmp/mineru-open-api-install.sh
-INSTALL_DIR=/home/simcrq/.local/bin sh /tmp/mineru-open-api-install.sh
+INSTALL_DIR="$HOME/.local/bin" sh /tmp/mineru-open-api-install.sh
 mineru-open-api auth
 # 配置中的 api.mineru.ocr 已设为 true；统一工作流处理 PDF 时会把它转换为官方 CLI 的 --ocr 参数。
 ~~~
@@ -228,10 +228,10 @@ workflow.json 记录阶段状态、文件哈希、参数、分维度质量审计
 
 ### bridge 报 source_path 或 file not found
 
-检查路径是否位于 /home/simcrq/0_Project/paperworkflow 内，并确认扩展名是 .pdf 或 .md。Markdown 可先这样查找：
+确认路径存在且扩展名是 `.pdf` 或 `.md`。Markdown 可先这样查找：
 
 ~~~bash
-find /home/simcrq/0_Project/paperworkflow/temp_markdowns -type f -name '*.md' | head
+find "$PAPERWORKFLOW_ROOT/temp_markdowns" -type f -name '*.md' | head
 ~~~
 
 ### Harness 能聊天，但 Python 工作流报 API Key 缺失
@@ -243,7 +243,7 @@ Harness 页面保存的模型凭证与 Python 子进程环境变量是两套配�
 重新执行：
 
 ~~~bash
-source /home/simcrq/.nvm/nvm.sh
+source "$NVM_DIR/nvm.sh"
 node --version
 pnpm --version
 ~~~
@@ -251,7 +251,7 @@ pnpm --version
 ### 需要开发或更新 Harness 本身
 
 ~~~bash
-cd /home/simcrq/0_Project/dsh
+cd "$DSH_SOURCE"
 pnpm install
 pnpm run build
 ~~~
@@ -261,14 +261,13 @@ pnpm run build
 ## 10. 最小验收清单
 
 ~~~bash
-cd /home/simcrq/0_Project/paperworkflow
+cd "$PAPERWORKFLOW_ROOT"
 python3 -m py_compile utils/literature_workflow.py integrations/deepseek-harness/bridge.py
 python3 -m unittest discover -s tests -v
 # 直接 bridge 示例见第 5 节。
 
-cd /home/simcrq/0_Project/dsh
-source /home/simcrq/.nvm/nvm.sh
-export DSH_HOME=/home/simcrq/.dsh
+cd "$DSH_SOURCE"
+source "$NVM_DIR/nvm.sh"
 pnpm dsh --profile web --dump-config | grep -n paperwork
 curl -fsSI http://127.0.0.1:3080
 ~~~

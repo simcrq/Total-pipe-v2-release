@@ -1,6 +1,18 @@
 import { spawn } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { defineTool } from process.env.DSH_TOOLS_ENTRY || '/home/simcrq/0_Project/dsh/packages/core/tools/lib/index.js'
+import { isAbsolute, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const DSH_TOOLS_ENTRY = process.env.DSH_TOOLS_ENTRY
+  || (process.env.DSH_SOURCE
+    ? resolve(process.env.DSH_SOURCE, 'packages/core/tools/lib/index.js')
+    : '')
+if (!DSH_TOOLS_ENTRY) {
+  throw new Error('Set DSH_TOOLS_ENTRY or DSH_SOURCE so the plugin can load Harness tools')
+}
+const toolsSpecifier = isAbsolute(DSH_TOOLS_ENTRY)
+  ? pathToFileURL(DSH_TOOLS_ENTRY).href
+  : DSH_TOOLS_ENTRY
+const { defineTool } = await import(toolsSpecifier)
 
 export const name = 'paperworkflow-dsh-plugin'
 export const inject = ['tools']
@@ -59,12 +71,12 @@ function outputSpec() {
 export function apply(ctx) {
   ctx.tools.register(defineTool({
     name: 'paperworkflow_literature_workflow',
-    description: 'Run the complete PaperWorkflow literature-ingestion workflow for one project-local PDF or Markdown file. PDF input is converted with the configured MinerU OCR pipeline; Markdown input skips OCR. The tool builds raw E### chunks plus atomic S#### spans, localizes exact supporting passages, deduplicates them in an EV#### Evidence Registry, measures retrieval precision and workflow-facet coverage separately, and audits text capture, reading order, semantic headings, chunk coherence, supplementary dependencies, linked quantities and symbol definitions. It writes workflow.json, document.manifest.json and evidence.md. quality_audit means OCR/Markdown usability only; synthesis_readiness is hard-gated and must be used for scientific hand-off. Cite EV#### plus S####/E###, exact lines and character offsets for every major claim and number. Treat unavailable supplementary-dependent mechanisms as partial, separate laboratory and roll-to-roll conditions, and never merge differing values silently. The tool itself does not invent an LLM summary.',
+    description: 'Run PaperWorkflow stage 1 for any local PDF or Markdown file. PDF input uses the configured MinerU OCR pipeline; Markdown input skips OCR. The tool emits one self-contained Total-pipe bundle containing workflow.json, document.manifest.json, evidence.md, paper.md, extracted figure assets, and bundle.manifest.json. synthesis_readiness is the scientific hand-off gate. Cite EV#### plus S####/E### and exact offsets for major claims.',
     parameters: {
       source_path: {
         type: 'string',
         required: true,
-        description: 'Project-local .pdf or .md path, absolute or relative to the PaperWorkflow project root.',
+        description: 'Any readable local .pdf or .md path.',
       },
       queries: {
         type: 'array',
@@ -85,7 +97,7 @@ export function apply(ctx) {
       },
       output_dir: {
         type: 'string',
-        description: 'Optional project-local artifact directory. Defaults to output/workflows/<source fingerprint>.',
+        description: 'Optional local bundle directory, including outside the project. Defaults to output/workflows/<source fingerprint>.',
       },
     },
     timeoutMs: 1900000,
@@ -105,11 +117,15 @@ export function apply(ctx) {
 
   ctx.tools.register(defineTool({
     name: 'paperworkflow_prompt_builder',
-    description: 'Index every PDF under PaperWorkflow/INput and generate a ready-to-use literature-workflow prompt from the user information. Call without selected_pdf first when the user has not chosen a paper: the result contains a deterministic numbered PDF index whose paths are all relative to INput. Present those choices and wait for the user selection. Call again with a selection_id such as P001 or an INput-relative path such as 4668/paper.pdf, plus any research goal, focus questions, and context. Never invent or expose an absolute path in the selection index.',
+    description: 'Index PDFs under any source_dir and generate a ready-to-use literature-workflow prompt. source_dir defaults to the legacy INput folder. Call without selected_pdf to list deterministic P001-style choices, then call again with the chosen id or relative path.',
     parameters: {
+      source_dir: {
+        type: 'string',
+        description: 'Any local directory to index recursively. Defaults to PaperWorkflow/INput.',
+      },
       selected_pdf: {
         type: 'string',
-        description: 'Optional selection_id from the returned index, or PDF path relative to INput. Omit to list all selectable PDFs.',
+        description: 'Optional selection_id or source_dir-relative PDF path. Omit to list all PDFs.',
       },
       research_goal: {
         type: 'string',
@@ -130,6 +146,7 @@ export function apply(ctx) {
     async execute(args) {
       return runBridge({
         operation: 'prompt_builder',
+        source_dir: args.source_dir,
         selected_pdf: args.selected_pdf,
         research_goal: args.research_goal,
         focus_questions: args.focus_questions,
