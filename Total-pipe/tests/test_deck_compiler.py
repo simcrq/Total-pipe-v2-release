@@ -4,12 +4,14 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+from PIL import Image
 from deck_compiler.contracts import TextBoxContract, issue, report, digest, file_hash
 from deck_compiler.ir import validate, derive
 from deck_compiler.layout import compile_deck
 from deck_compiler.text_flow import select_text_flow
 from deck_compiler.ooxml import target_part, fill, background, NS
-from deck_compiler.pipeline import ingest_native, promote, write_json, locked
+from deck_compiler.pipeline import (ingest_native, promote, record_powerpoint_review,
+                                    write_json, locked)
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).parents[1]
@@ -84,6 +86,32 @@ class CompilerTests(unittest.TestCase):
         ir=fixture(); ir['assets']={'bad':{'path':'does-not-exist.png'}}
         _,items=compile_deck(ir,ROOT)
         self.assertIn('ASSET_INVALID',{i['rule'] for i in items})
+    def test_figure_source_mismatch_is_fail(self):
+        ir=fixture(); slide=ir['slides'][0]
+        ir['assets']={'panel':{'path':'panel.png','source_figure':'3e'}}
+        slide['composition']['figure_refs']=[{
+            'asset_id':'panel','source_figure':'3f','caption':'Source: Fig.3f','panel_count':1
+        }]
+        self.assertIn('FIGURE_SOURCE_MISMATCH',{i['rule'] for i in validate(ir)})
+    def test_figure_caption_must_name_exact_panel(self):
+        ir=fixture(); slide=ir['slides'][0]
+        ir['assets']={'panel':{'path':'panel.png','source_figure':'3e'}}
+        slide['composition']['figure_refs']=[{
+            'asset_id':'panel','source_figure':'3e','caption':'Source: Fig.3','panel_count':1
+        }]
+        self.assertIn('FIGURE_CAPTION_MISMATCH',{i['rule'] for i in validate(ir)})
+    def test_scientific_panel_minimum_is_hard_gate(self):
+        with tempfile.TemporaryDirectory() as d:
+            image_path=Path(d)/'panel.png'; Image.new('RGB',(400,400),'white').save(image_path)
+            ir=fixture(); slide=ir['slides'][0]
+            slide['composition']['archetype']='cover-hero'
+            ir['assets']={'panel':{'path':str(image_path),'source_figure':'3e'}}
+            slide['composition']['figure_refs']=[{
+                'asset_id':'panel','source_figure':'3e','caption':'Source: Fig.3e',
+                'panel_count':1,'min_panel_extent':500
+            }]
+            _,items=compile_deck(ir,ROOT)
+            self.assertIn('SCIENTIFIC_PANEL_TOO_SMALL',{i['rule'] for i in items})
     def test_derived_truth(self):
         ir=fixture(); layout,_=compile_deck(ir,ROOT)
         self.assertTrue(all(v['ir_sha256']==digest(ir) and v['read_only'] for v in derive(ir,layout).values()))
@@ -147,5 +175,27 @@ class PublicationTests(unittest.TestCase):
             out=Path(d); fake=out/'native.pdf'; fake.write_bytes(b'not a PDF')
             with self.assertRaisesRegex(ValueError,'required'):
                 ingest_native(out,fake)
+
+    def test_powerpoint_review_binds_every_slide(self):
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d); (out/'staging.pptx').write_bytes(b'candidate')
+            write_json(out/'layout.json',{'slides':[{'id':'a'},{'id':'b'}]})
+            with self.assertRaisesRegex(ValueError,'every slide'):
+                record_powerpoint_review(out,'reviewer',['a'])
+            path=record_powerpoint_review(out,'reviewer',['all'])
+            evidence=json.loads(path.read_text())
+            self.assertEqual(evidence['method'],'powerpoint-ui')
+            self.assertEqual(evidence['reviewed_slide_ids'],['a','b'])
+
+    def test_promotion_requires_direct_powerpoint_review(self):
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d); (out/'staging.pptx').write_bytes(b'candidate')
+            (out/'native.pdf').write_bytes(b'%PDF fake')
+            write_json(out/'deck_ir.json',fixture()); write_json(out/'layout.json',{'slides':[]})
+            qa=report([],file_hash(out/'staging.pptx'),digest(fixture()),
+                      {'structural':True,'native':True,'visual_review':False})
+            qa['layout_sha256']=file_hash(out/'layout.json'); write_json(out/'qa_report.json',qa)
+            with self.assertRaisesRegex(ValueError,'PowerPoint UI review'):
+                promote(out)
 
 if __name__=='__main__': unittest.main()

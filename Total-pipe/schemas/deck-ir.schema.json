@@ -26,7 +26,10 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["path"],
-        "properties": {"path": {"type": "string", "minLength": 1}}
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]$"}
+        }
       }
     },
     "slides": {
@@ -93,12 +96,17 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["asset_id", "caption"],
+                "required": ["asset_id", "caption", "source_figure"],
                 "properties": {
                   "asset_id": {"type": "string", "minLength": 1},
                   "caption": {"type": "string", "maxLength": 180},
                   "alt": {"type": "string"},
-                  "panel_count": {"type": "integer", "minimum": 1, "maximum": 6}
+                  "panel_count": {"type": "integer", "minimum": 1, "maximum": 6},
+                  "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]$"},
+                  "min_panel_extent": {"type": "number", "minimum": 140, "maximum": 500},
+                  "caption_height": {"type": "number", "minimum": 24, "maximum": 96},
+                  "caption_font_size": {"type": "number", "minimum": 12, "maximum": 28},
+                  "caption_font_floor": {"type": "number", "minimum": 10, "maximum": 28}
                 }
               }
             }

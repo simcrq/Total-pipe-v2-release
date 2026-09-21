@@ -1,15 +1,16 @@
+import json
+import os
 import tempfile
 import unittest
-import json
 from pathlib import Path
 from unittest.mock import patch
 
-from utils.paper_tools import search_markdown, split_markdown_sections
+from main import process_single_paper
 from utils.agent_tools import get_document_outline, retrieve_evidence
+from utils.paper_tools import search_markdown, split_markdown_sections
 from utils.pdf_official_handler import OfficialMinerUProcessor
 from utils.prompt_builder import PromptBuilder
 from utils.workflow_utils import determine_mode, find_pdf_files
-from main import process_single_paper
 
 
 class CoreWorkflowTests(unittest.TestCase):
@@ -72,6 +73,30 @@ class CoreWorkflowTests(unittest.TestCase):
                 self.assertIn("--model", command)
                 self.assertIn("vlm", command)
                 self.assertEqual(run.call_args.kwargs["env"]["MINERU_TOKEN"], "token-for-child-process")
+
+    def test_official_cli_config_token_overrides_inherited_environment(self):
+        config = {
+            "api": {
+                "mineru": {
+                    "mode": "official_cli",
+                    "cli_command": "mineru-open-api",
+                    "api_key": "token-from-config",
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "paper.pdf"
+            pdf.write_bytes(b"pdf")
+            with (
+                patch.dict(os.environ, {"MINERU_TOKEN": "stale-parent-token"}),
+                patch("utils.pdf_official_handler.subprocess.run") as run,
+            ):
+                run.return_value.returncode = 0
+                run.return_value.stdout = ""
+                run.return_value.stderr = ""
+                OfficialMinerUProcessor(config).process(str(pdf), str(Path(tmp) / "out"))
+
+            self.assertEqual(run.call_args.kwargs["env"]["MINERU_TOKEN"], "token-from-config")
 
     def test_agent_wrappers_return_json_friendly_results(self):
         with tempfile.TemporaryDirectory() as tmp:

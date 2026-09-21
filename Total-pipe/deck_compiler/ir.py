@@ -1,6 +1,17 @@
 """Canonical input validation and read-only derived views."""
+import re
+
 from .catalog import ARCHETYPES, COMPONENTS
 from .contracts import digest, issue
+
+
+SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]$")
+CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])", re.IGNORECASE)
+
+
+def caption_figure_ids(caption):
+    """Return normalized paper panel ids explicitly named by a caption."""
+    return {f"{number}{panel.lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
 
 
 def validate(ir):
@@ -26,6 +37,10 @@ def validate(ir):
         return errors
     for key, asset in assets.items():
         check(isinstance(asset, dict) and isinstance(asset.get("path"), str), f"asset {key}: path required")
+        if isinstance(asset, dict) and "source_figure" in asset:
+            check(isinstance(asset.get("source_figure"), str) and
+                  bool(SOURCE_FIGURE.fullmatch(asset["source_figure"])),
+                  f"asset {key}: source_figure must look like 3a", rule="FIGURE_PROVENANCE_INVALID")
     seen = set()
     for n, s in enumerate(slides, 1):
         if not isinstance(s, dict):
@@ -66,6 +81,24 @@ def validate(ir):
         for f in figures:
             check(isinstance(f, dict) and f.get("asset_id") in assets and
                   isinstance(f.get("caption"), str), "Figure needs asset reference and caption", n)
+            if not isinstance(f, dict) or f.get("asset_id") not in assets:
+                continue
+            asset = assets[f["asset_id"]]
+            expected = f.get("source_figure")
+            actual = asset.get("source_figure") if isinstance(asset, dict) else None
+            check(isinstance(expected, str) and bool(SOURCE_FIGURE.fullmatch(expected)),
+                  "Figure reference requires source_figure such as 3a", n,
+                  "FIGURE_PROVENANCE_REQUIRED")
+            check(isinstance(actual, str) and bool(SOURCE_FIGURE.fullmatch(actual)),
+                  f"Asset {f['asset_id']} requires source_figure", n,
+                  "FIGURE_PROVENANCE_REQUIRED")
+            if isinstance(expected, str) and isinstance(actual, str):
+                check(expected == actual,
+                      f"Caption expects Fig.{expected}, but asset {f['asset_id']} is Fig.{actual}", n,
+                      "FIGURE_SOURCE_MISMATCH")
+                check(expected in caption_figure_ids(f.get("caption", "")),
+                      f"Caption must explicitly name Fig.{expected}", n,
+                      "FIGURE_CAPTION_MISMATCH")
         if archetype in ARCHETYPES:
             cap = ARCHETYPES[archetype]
             check(len(blocks) <= cap["blocks"] and len(figures) <= cap["figures"],

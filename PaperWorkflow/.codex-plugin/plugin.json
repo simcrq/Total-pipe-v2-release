@@ -1,0 +1,28 @@
+{
+  "name": "paperworkflow",
+  "version": "0.2.0+codex.20260920153025",
+  "description": "Evidence-tracked paper ingestion and Total-pipe artifact bundling for Codex.",
+  "author": {
+    "name": "PaperWorkflow"
+  },
+  "license": "GPL-3.0",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "PaperWorkflow",
+    "shortDescription": "Turn papers into portable Total-pipe evidence bundles.",
+    "longDescription": "Runs PaperWorkflow as an MCP service for PDF or Markdown intake, OCR Markdown, evidence extraction, image asset collection, portable workflow manifests, and Total-pipe handoff.",
+    "developerName": "PaperWorkflow",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Analysis",
+      "Write"
+    ],
+    "brandColor": "#2563EB",
+    "defaultPrompt": [
+      "Build a portable Total-pipe evidence bundle from this paper.",
+      "Extract evidence and image assets from this paper.",
+      "Search this paper for evidence about a specific claim."
+    ]
+  }
+}

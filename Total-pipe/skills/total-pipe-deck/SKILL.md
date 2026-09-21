@@ -108,13 +108,33 @@ python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> --node <node
 编译器保持一个 mutable candidate、一个 staging 和一个 final。`--skip-native` 只用于
 开发，不能晋级 final。
 
-在 macOS 上用 Microsoft PowerPoint 打开 `staging.pptx` 并导出 `native.pdf`，逐页
-检查文字、图像比例、面板标签、碰撞和字体。然后绑定原生证据：
+在 macOS 上必须直接控制 Microsoft PowerPoint 打开 `staging.pptx`，在普通视图或
+阅读视图中逐页眼检可编辑幻灯片本身，检查文字、图像比例、论文图号与图注对应、
+panel 标签、碰撞和字体。眼检与导出应在同一次 PowerPoint 控制流程中完成；不得先
+导出 PDF、再以 Preview 或逐页渲染图代替 PowerPoint 眼检。
+
+完成逐页 PowerPoint 眼检后，先把检查记录绑定到当前 staging 与 layout：
+
+```bash
+python -m deck_compiler record-powerpoint-review --out <build_dir> \
+  --reviewer "<reviewer>" --slides all
+```
+
+然后在 PowerPoint 中导出 `native.pdf`，再绑定原生证据：
 
 ```bash
 python -m deck_compiler validate-native --out <build_dir> \
   --pdf <build_dir>/native.pdf --reviewer "<reviewer>"
 ```
+
+`powerpoint_review.json` 必须声明 `method=powerpoint-ui`，覆盖全部 slide id，并与
+`staging.pptx` 和 `layout.json` 的哈希一致；否则 `validate-native` 与 `promote` 都拒绝继续。
+
+每个论文图素材与 figure reference 都必须写 `source_figure`（如 `3e`）。编译器会把
+asset、figure reference 和图注中的 `Fig.3e` 三方对齐；缺失或不一致均为 FAIL。
+科学图面默认最小有效尺寸为 220 px，低于阈值时返回
+`SCIENTIFIC_PANEL_TOO_SMALL` FAIL，必须换版式、拆页或精简内容，不能以人工
+acknowledgement 放行。
 
 统一报告为 `qa_report.json`：
 
@@ -139,7 +159,8 @@ python -m deck_compiler promote --out <build_dir> --ack <review_ack.json>
 - pwf2rpa strict 0 warning，RPA 三个规划门禁通过。
 - canonical truth count = 1，new adapter count = 0。
 - Deck Compiler 预检与结构 QA 为 0 FAIL。
-- PowerPoint native PDF 页数一致且逐页目检完成。
+- staging 已在 PowerPoint UI 中逐页目检；图号—图注—素材一致，科学图面尺寸过门禁。
+- PowerPoint native PDF 页数一致并与同一 staging 哈希绑定。
 - 所有 REVIEW 均有 artifact-bound acknowledgement。
 - `state.json.phase=final`，最终只交付 `final.pptx`。
 

@@ -79,6 +79,8 @@ def compile_deck(ir, base, _retry=True):
     slides = []
     for n, slide in enumerate(ir["slides"], 1):
         sem, comp = slide["semantic"], slide["composition"]
+        blocks, figs = comp["blocks"], comp["figure_refs"]
+        family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
                  anchor="top", color=None, flow=None):
@@ -106,16 +108,27 @@ def compile_deck(ir, base, _retry=True):
                              **({"text_flow": flow} if flow else {})})
         spacious = slide["presentation"].get("variant") == "spacious"
         text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
-        text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, 76], "takeaway", 28, 24, 2)
+        # These two evidence-heavy slides use a single-line takeaway; reclaiming
+        # the unused vertical room lets the original scientific panels render
+        # larger without colliding with the title block.
+        takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
+        text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
         footer = " · ".join(sem["evidence_refs"])
-        text("footer", footer, [56, 658, 1168, 44], "footer", 18, 16, 2)
+        footer_y, footer_h = 658, 44
+        caveat_y, caveat_h = 604, 46
+        if slide["id"] == "s05-anneal":
+            footer_y, footer_h = 666, 36
+        elif family == "dual":
+            # Compact callouts and larger scientific panels extend lower on
+            # dual-evidence slides, while keeping caveats and evidence ids clear.
+            caveat_y, caveat_h = 622, 36
+            footer_y, footer_h = 670, 32
+        text("footer", footer, [56, footer_y, 1168, footer_h], "footer", 18, 16, 2)
         if sem["caveats"]:
-            text("caveats", "；".join(sem["caveats"]), [56, 604, 1168, 46], "caveat", 20, 18, 2)
+            text("caveats", "；".join(sem["caveats"]), [56, caveat_y, 1168, caveat_h], "caveat", 20, 18, 2)
         bottom = 588 if sem["caveats"] else 640
         top = 236 if spacious else 260
         bh = bottom-top
-        blocks, figs = comp["blocks"], comp["figure_refs"]
-        family = ARCHETYPES[comp["archetype"]]["layout"]
         def block(b, box):
             label = b.get("label", "")
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
@@ -127,8 +140,8 @@ def compile_deck(ir, base, _retry=True):
                     "role": "decoration",
                     "bbox": box,
                     "geometry": "rect",
-                    "fill": theme.get("panel_fill", "#F4F8FA"),
-                    "line": theme.get("panel_line", "#D6E4EA"),
+                    "fill": theme.get("panel_fill", "none"),
+                    "line": theme.get("panel_line", "#142735"),
                     "line_width": 1,
                     "collision_mode": "container",
                 })
@@ -181,19 +194,26 @@ def compile_deck(ir, base, _retry=True):
                 block(b, [box[0], box[1]+k*(h+gap), box[2], h])
         def figure(f, box, k):
             asset = assets[f["asset_id"]]
-            caption_h = 62 if f["caption"] else 0
+            caption_h = f.get("caption_height", 62) if f["caption"] else 0
             h = box[3] - caption_h - 12
             scale = min(box[2]/asset["width"], h/asset["height"])
             w, h = asset["width"]*scale, asset["height"]*scale
             bbox = [box[0]+(box[2]-w)/2, box[1], w, h]
             eid = f"figure-{k}"
+            min_extent = f.get("min_panel_extent", 220)
+            actual_extent = min(w / f.get("panel_count", 1), h)
             elements.append({"id": eid, "kind": "image", "role": "evidence", "bbox": bbox,
-                             "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"])})
-            if min(w / f.get("panel_count", 1), h) < 140:
-                issues.append(issue("PANEL_TOO_SMALL", "WARNING", "Scientific panel needs readability review", n, eid,
-                                    detector="geometric-preflight", confidence="MEDIUM"))
+                             "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
+                             "source_figure": f["source_figure"],
+                             "min_panel_extent": min_extent,
+                             "actual_panel_extent": actual_extent})
+            if actual_extent < min_extent:
+                issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
+                                    f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
+                                    n, eid, detector="geometric-preflight", confidence="HIGH",
+                                    source_figure=f["source_figure"]))
             text(eid+":caption", f["caption"], [box[0], box[1]+box[3]-caption_h, box[2], caption_h],
-                 "caption", 22, 20, 2)
+                 "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20), 2)
             issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW", "Confirm scientific panel labels and evidence fidelity",
                                 n, eid, detector="scientific-review", confidence="MEDIUM"))
         adaptations = []
@@ -202,19 +222,47 @@ def compile_deck(ir, base, _retry=True):
             fig_w, txt_w = (692, 440) if family == "figure-left" else (672, 460)
             figure(figs[0], [fig_x, top, fig_w, bh], 1)
             stack(blocks, [txt_x, top, txt_w, bh])
-        elif family in ("dual", "process") and figs:
-            text_h = 88 if blocks else 0
-            if blocks:
-                for k, b in enumerate(blocks):
-                    bw = (1168-24*(len(blocks)-1))/len(blocks)
-                    block(b, [56+k*(bw+24), top, bw, text_h])
+        elif family == "process" and figs and len(blocks) >= 4:
+            # The method slide needs both a legible process summary and a readable
+            # source panel. A four-row left column frees the right half for the
+            # original Fig.3a panel instead of squeezing it into a shallow strip.
+            left_x, left_w = 56, 520
+            row_h, row_gap = 75, 5
+            for k, b in enumerate(blocks[:4]):
+                y = top + k * (row_h + row_gap)
+                text(b["id"]+":label", b.get("label", ""), [left_x, y, left_w, 32],
+                     "heading", 24, 22, 1)
+                text(b["id"], b["text"], [left_x, y+32, left_w, row_h-32],
+                     "body", 22, 20, 1)
+            figure(figs[0], [650, top-40, 574, bh+40], 1)
+        elif slide["id"] == "s07-contact" and figs:
+            # Keep the two numeric callouts compact so the two original Fig.3e/f
+            # panels can occupy most of the evidence area at readable size.
+            for k, b in enumerate(blocks[:2]):
+                x = 56 + k * 600
+                text(b["id"]+":label", b.get("label", ""), [x, top, 568, 32],
+                     "heading", 24, 22, 1)
+                text(b["id"], b["text"], [x, top+32, 568, 38],
+                     "body", 26, 22, 1)
             fw = (1168-32*(len(figs)-1))/len(figs)
             for k, f in enumerate(figs):
-                figure(f, [56+k*(fw+32), top+text_h+12, fw, bh-text_h-12], k+1)
+                figure(f, [56+k*(fw+32), top+70, fw, bh-40], k+1)
+        elif family == "dual" and figs:
+            # Dual scientific figures get compact native callouts and a hard
+            # 240px evidence band. This avoids the former 154px thumbnails.
+            for k, b in enumerate(blocks[:2]):
+                x = 56 + k * 600
+                text(b["id"]+":label", b.get("label", ""), [x, top, 568, 30],
+                     "heading", 24, 22, 1)
+                text(b["id"], b["text"], [x, top+30, 568, 34],
+                     "body", 22, 20, 1)
+            fw = (1168-32*(len(figs)-1))/len(figs)
+            for k, f in enumerate(figs):
+                figure(f, [56+k*(fw+32), top+70, fw, bh-40], k+1)
         elif family == "evidence":
             for col, role in enumerate(("direct-evidence", "hypothesis")):
                 x = 56 + col*600
-                text(role+":heading", "Direct evidence" if col == 0 else "Hypothesis (unconfirmed)",
+                text(role+":heading", "直接证据" if col == 0 else "假设（未证实）",
                      [x, top, 568, 44], "heading", 28, 24, 1)
                 stack([b for b in blocks if b["component"] == role], [x, top+56, 568, bh-56])
         else:

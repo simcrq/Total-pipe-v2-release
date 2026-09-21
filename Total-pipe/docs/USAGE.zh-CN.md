@@ -109,18 +109,28 @@ python -m deck_compiler build +  --ir /absolute/path/to/deck_ir.json +  --out /a
 
 ## 5. PowerPoint 原生验收
 
-验收对象始终是当前 `staging.pptx`。如果自动导出未完成：
+验收对象始终是当前 `staging.pptx`。在 macOS 上：
 
-1. 用 Microsoft PowerPoint 打开 staging；
-2. 导出为同一 build directory 下的 `native.pdf`；
-3. 逐页检查文字、图片比例、panel 标签、页脚、越界、碰撞和字体；
-4. 绑定该 PDF：
+1. 用 Microsoft PowerPoint 打开 staging，在普通视图或阅读视图直接逐页检查；
+2. 核对文字、图片比例、论文图号—图注—素材、panel 标签、页脚、越界、碰撞和字体；
+3. 不要用 Preview、PDF 或逐页渲染图代替 PowerPoint 中的眼检；
+4. 眼检完成后记录与当前 staging/layout 哈希绑定的证据：
+
+```bash
+python -m deck_compiler record-powerpoint-review \
+  --out /absolute/path/to/build --reviewer "reviewer" --slides all
+```
+
+5. 在同一次 PowerPoint 控制流程中导出为 build directory 下的 `native.pdf`；
+6. 绑定该 PDF：
 
 ```bash
 python -m deck_compiler validate-native +  --out /absolute/path/to/build +  --pdf /absolute/path/to/build/native.pdf +  --reviewer "reviewer"
 ```
 
-`validate-native` 会重新检查当前 staging 与 layout；不要复用其他版本的 PDF。
+`validate-native` 会重新检查当前 staging、layout 与 `powerpoint_review.json`；不要复用
+其他版本的 PDF 或眼检记录。论文图 asset、figure reference 和图注必须声明并匹配
+同一个 `source_figure`；科学图面默认最小有效尺寸为 220 px，任一条件不满足均为 FAIL。
 
 ## 6. REVIEW acknowledgement 与晋级
 

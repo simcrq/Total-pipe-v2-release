@@ -1,7 +1,8 @@
 import argparse
 import json
 from pathlib import Path
-from .pipeline import build, compile_input, ingest_native, locked, promote
+from .pipeline import (build, compile_input, ingest_native, locked, promote,
+                       record_powerpoint_review)
 
 
 def main():
@@ -20,7 +21,13 @@ def main():
     p = commands.add_parser('validate-native')
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--pdf', required=True, type=Path)
-    p.add_argument('--reviewer', help='Records who visually inspected every rendered page')
+    p.add_argument('--reviewer', help='Must match the direct PowerPoint UI review record')
+    p = commands.add_parser('record-powerpoint-review')
+    p.add_argument('--out', required=True, type=Path)
+    p.add_argument('--reviewer', required=True,
+                   help='Reviewer who inspected staging.pptx directly in PowerPoint')
+    p.add_argument('--slides', nargs='*', default=['all'],
+                   help='Every reviewed slide id, or all')
     args = parser.parse_args()
     try:
         out = args.out.resolve()
@@ -32,6 +39,9 @@ def main():
             print(json.dumps({'status': qa['status'], 'counts': qa['counts'],
                               'report': str(out/'qa_report.json')}))
             return 1 if qa['counts']['FAIL'] else 0
+        if args.command == 'record-powerpoint-review':
+            print(record_powerpoint_review(out, args.reviewer, args.slides))
+            return 0
         if args.command == 'compile':
             with locked(out):
                 _, _, qa = compile_input(args.ir.resolve(), out)

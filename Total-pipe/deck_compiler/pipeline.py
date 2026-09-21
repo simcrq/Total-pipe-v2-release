@@ -21,6 +21,14 @@ def write_json(path, value):
     os.replace(temp, path)
 
 
+POWERPOINT_REVIEW_CHECKS = [
+    'figure_caption_alignment',
+    'scientific_panel_readability',
+    'text_overflow_and_collisions',
+    'font_rendering',
+]
+
+
 @contextmanager
 def locked(out):
     out.mkdir(parents=True, exist_ok=True)
@@ -53,7 +61,8 @@ def build(ir_path, out, node='node', native_render=True):
         # Last final remains a previous successful artifact, explicitly identified in state.
         old_final = file_hash(out/'final.pptx') if (out/'final.pptx').exists() else None
         write_json(out/'state.json', {'phase': 'compiling', 'previous_final_sha256': old_final})
-        for name in ('candidate.pptx', 'staging.pptx', 'native.pdf', 'native.json', 'layout.json'):
+        for name in ('candidate.pptx', 'staging.pptx', 'native.pdf', 'native.json',
+                     'powerpoint_review.json', 'layout.json'):
             (out/name).unlink(missing_ok=True)
         ir, layout, qa = compile_input(ir_path, out)
         items = qa['items']
@@ -106,6 +115,66 @@ def build(ir_path, out, node='node', native_render=True):
         return qa
 
 
+def record_powerpoint_review(out, reviewer, slide_ids=None):
+    """Bind a direct PowerPoint UI review to the current staging bytes.
+
+    The caller records this only after inspecting the editable staging deck in
+    PowerPoint itself. Preview/PDF inspection is native evidence, but does not
+    satisfy this visual-review gate.
+    """
+    out = Path(out)
+    with locked(out):
+        staging = out/'staging.pptx'
+        layout_path = out/'layout.json'
+        if not staging.exists() or not layout_path.exists():
+            raise ValueError('staging.pptx and layout.json are required')
+        if not reviewer or not reviewer.strip():
+            raise ValueError('PowerPoint reviewer is required')
+        layout = json.loads(layout_path.read_text())
+        expected = [slide['id'] for slide in layout.get('slides', [])]
+        reviewed = expected if not slide_ids or slide_ids == ['all'] else slide_ids
+        if len(reviewed) != len(set(reviewed)) or set(reviewed) != set(expected):
+            missing = sorted(set(expected) - set(reviewed))
+            extra = sorted(set(reviewed) - set(expected))
+            raise ValueError(f'PowerPoint review must cover every slide; missing={missing}, extra={extra}')
+        evidence = {
+            'schema_version': '2.0',
+            'method': 'powerpoint-ui',
+            'reviewer': reviewer.strip(),
+            'artifact_sha256': file_hash(staging),
+            'layout_sha256': file_hash(layout_path),
+            'reviewed_slide_ids': expected,
+            'checks': POWERPOINT_REVIEW_CHECKS,
+        }
+        write_json(out/'powerpoint_review.json', evidence)
+        state_path = out/'state.json'
+        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        state.update({'phase': 'awaiting_native_validation',
+                      'artifact_sha256': evidence['artifact_sha256'],
+                      'powerpoint_visual_reviewed': True})
+        write_json(state_path, state)
+        return out/'powerpoint_review.json'
+
+
+def _load_powerpoint_review(out, staging, layout_path, reviewer=None):
+    path = out/'powerpoint_review.json'
+    if not path.exists():
+        raise ValueError('Direct PowerPoint UI review is required; run record-powerpoint-review')
+    evidence = json.loads(path.read_text())
+    layout = json.loads(layout_path.read_text())
+    expected = {slide['id'] for slide in layout.get('slides', [])}
+    if (evidence.get('method') != 'powerpoint-ui' or
+            evidence.get('artifact_sha256') != file_hash(staging) or
+            evidence.get('layout_sha256') != file_hash(layout_path) or
+            set(evidence.get('reviewed_slide_ids', [])) != expected or
+            set(evidence.get('checks', [])) != set(POWERPOINT_REVIEW_CHECKS) or
+            not evidence.get('reviewer')):
+        raise ValueError('PowerPoint UI review evidence is stale or incomplete')
+    if reviewer and reviewer != evidence['reviewer']:
+        raise ValueError('PowerPoint reviewer does not match recorded review')
+    return evidence
+
+
 def ingest_native(out, pdf, reviewer=None):
     """Attach a PowerPoint-exported PDF to the exact staging artifact.
 
@@ -123,6 +192,7 @@ def ingest_native(out, pdf, reviewer=None):
             raise ValueError('staging.pptx, layout.json, deck_ir.json and native PDF are required')
         if not pdf.read_bytes().startswith(b'%PDF'):
             raise ValueError('Native evidence is not a PDF')
+        review = _load_powerpoint_review(out, staging, layout_path, reviewer)
         layout = json.loads(layout_path.read_text())
         ir = json.loads(ir_path.read_text())
         prior = json.loads((out/'qa_report.json').read_text())
@@ -140,15 +210,15 @@ def ingest_native(out, pdf, reviewer=None):
             'artifact_sha256': file_hash(staging),
             'pdf_sha256': file_hash(native_path),
             'pdf': str(native_path.resolve()),
-            'visual_review': ({'reviewer': reviewer, 'status': 'reviewed'}
-                              if reviewer else {'status': 'not_recorded'}),
+            'visual_review': review,
         }
         write_json(out/'native.json', evidence)
         qa = report(items, evidence['artifact_sha256'], digest(ir), {
             'structural': True,
             'native': True,
             'renderer': 'powerpoint',
-            'visual_review': bool(reviewer),
+            'visual_review': True,
+            'visual_review_method': 'powerpoint-ui',
         })
         qa['layout_sha256'] = file_hash(layout_path)
         write_json(out/'qa_report.json', qa)
@@ -157,11 +227,13 @@ def ingest_native(out, pdf, reviewer=None):
             metrics = json.loads(metrics_path.read_text())
             metrics['qa_counts'] = qa['counts']
             metrics['native_validated'] = True
-            metrics['powerpoint_visual_reviewed'] = bool(reviewer)
+            metrics['powerpoint_visual_reviewed'] = True
             write_json(metrics_path, metrics)
         write_json(out/'state.json', {
             'phase': 'awaiting_review' if qa['counts']['REVIEW'] else 'validated',
             'artifact_sha256': evidence['artifact_sha256'],
+            'powerpoint_visual_reviewed': True,
+            'powerpoint_reviewer': review['reviewer'],
         })
         return qa
 
@@ -181,8 +253,13 @@ def promote(out, acknowledgements=None):
             raise ValueError('FAIL findings block final')
         if not qa['checks'].get('structural') or not qa['checks'].get('native'):
             raise ValueError('Structural and PowerPoint golden validation required')
+        review = _load_powerpoint_review(out, out/'staging.pptx', out/'layout.json')
+        if not qa['checks'].get('visual_review') or qa['checks'].get('visual_review_method') != 'powerpoint-ui':
+            raise ValueError('Direct PowerPoint UI visual review required')
         evidence = json.loads((out/'native.json').read_text())
-        if evidence.get('renderer') != 'powerpoint' or evidence.get('artifact_sha256') != sha or evidence.get('pdf_sha256') != file_hash(out/'native.pdf'):
+        if (evidence.get('renderer') != 'powerpoint' or evidence.get('artifact_sha256') != sha or
+                evidence.get('pdf_sha256') != file_hash(out/'native.pdf') or
+                evidence.get('visual_review', {}).get('artifact_sha256') != review['artifact_sha256']):
             raise ValueError('Native evidence is stale or non-golden')
         reviews = {i['id'] for i in qa['items'] if i['severity']=='REVIEW'}
         ack = acknowledgements or {}

@@ -87,12 +87,23 @@ python -m deck_compiler build +  --ir examples/research.deck_ir.json +  --out /t
 ```
 
 `--skip-native` 仅用于开发检查，会产生 `REVIEW`，不能晋级 final。正式流程不要使用
-该参数；如果自动 PowerPoint 导出因首次授权或 GUI 状态未完成，应手工从同一个
-`staging.pptx` 导出 PDF，再绑定原生证据：
+该参数。正式流程在 macOS 上必须直接在 PowerPoint 普通视图或阅读视图逐页眼检
+`staging.pptx`；不得用导出后的 Preview/PDF 代替。确认图号—图注—素材、科学图面
+尺寸、碰撞和字体后，记录与当前 staging 绑定的 UI 眼检：
+
+```bash
+python -m deck_compiler record-powerpoint-review --out /tmp/total-pipe-build \
+  --reviewer "reviewer" --slides all
+```
+
+随后在同一次 PowerPoint 控制流程中导出 `native.pdf`，再绑定原生证据：
 
 ```bash
 python -m deck_compiler validate-native +  --out /tmp/total-pipe-build +  --pdf /tmp/total-pipe-build/native.pdf +  --reviewer "reviewer"
 ```
+
+论文图片还必须在 asset 与 figure reference 上声明相同的 `source_figure`（如 `3e`），
+且图注显式包含 `Fig.3e`；三方不一致或有效图面小于默认 220 px 都会直接 FAIL。
 
 若 `qa_report.json` 中存在 `REVIEW`，创建与当前 staging SHA-256 绑定的
 `review_ack.json`，列出全部接受的 review ID，然后晋级：

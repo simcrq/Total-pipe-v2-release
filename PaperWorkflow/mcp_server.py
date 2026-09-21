@@ -163,10 +163,55 @@ def resolve_source(raw: str, *, suffix: str | None = None) -> Path:
     return path
 
 
+def config_candidates() -> list[Path]:
+    """Return publish-safe config locations in precedence order.
+
+    Installed Codex plugins run from a cache that intentionally excludes the
+    gitignored ``config.yaml``.  Keep secrets outside the package and discover
+    them at MCP call time instead of baking a machine path into ``.mcp.json``.
+    """
+
+    candidates: list[Path] = []
+    explicit = str(os.environ.get("PAPERWORKFLOW_CONFIG") or "").strip()
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+
+    inherited_pwd = str(os.environ.get("PWD") or "").strip()
+    if inherited_pwd:
+        workspace = Path(inherited_pwd).expanduser()
+        candidates.extend((workspace / "config.yaml", workspace / "PaperWorkflow" / "config.yaml"))
+
+    candidates.extend(
+        (
+            ROOT / "config.yaml",
+            Path.home() / ".config" / "paperworkflow" / "config.yaml",
+        )
+    )
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate.resolve(strict=False))
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def find_config_path() -> Path | None:
+    """Find the first readable PaperWorkflow config for this MCP process."""
+
+    for candidate in config_candidates():
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
 def load_config() -> dict[str, Any]:
-    """config.yaml, or {} when pyyaml is unavailable (tools degrade, not crash)."""
-    cfg_path = ROOT / "config.yaml"
-    if not cfg_path.is_file():
+    """Load the MCP config, or {} when unavailable (tools degrade, not crash)."""
+
+    cfg_path = find_config_path()
+    if cfg_path is None:
         return {}
     try:
         import yaml  # type: ignore
@@ -174,7 +219,10 @@ def load_config() -> dict[str, Any]:
         log("[config] pyyaml not installed; config.yaml paths/modes unavailable")
         return {}
     try:
-        return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        config = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(config, dict):
+            raise ValueError("top-level YAML value must be a mapping")
+        return config
     except Exception as exc:  # noqa: BLE001
         log(f"[config] parse failed: {exc}")
         return {}

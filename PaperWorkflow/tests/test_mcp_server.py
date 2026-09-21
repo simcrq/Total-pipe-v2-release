@@ -1,7 +1,9 @@
 import importlib.util
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import mcp_server
 
@@ -23,6 +25,21 @@ def load_bridge():
 
 
 class MCPServerTests(unittest.TestCase):
+    def test_load_config_uses_explicit_external_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.yaml"
+            config_path.write_text(
+                "api:\n  mineru:\n    api_key: token-from-external-config\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {"PAPERWORKFLOW_CONFIG": str(config_path)},
+            ):
+                config = mcp_server.load_config()
+
+            self.assertEqual(config["api"]["mineru"]["api_key"], "token-from-external-config")
+
     def test_workflow_accepts_source_and_output_outside_project(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

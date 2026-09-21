@@ -67,8 +67,14 @@ $PYTHON -m deck_compiler build \
   --out build/deck-v2 \
   --node "$NODE"
 
-# If PowerPoint requests first-use file access, export build/deck-v2/staging.pptx
-# to a PDF and attach that exact native result:
+# Inspect every editable slide directly in PowerPoint (Normal or Reading view).
+# Preview/PDF inspection does not satisfy this gate. Record the reviewed staging:
+$PYTHON -m deck_compiler record-powerpoint-review \
+  --out build/deck-v2 \
+  --reviewer "reviewer name" \
+  --slides all
+
+# Export that same staging from PowerPoint and attach the exact native PDF:
 $PYTHON -m deck_compiler validate-native \
   --out build/deck-v2 \
   --pdf build/deck-v2/native.pdf \

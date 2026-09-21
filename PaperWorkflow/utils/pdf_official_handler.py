@@ -56,9 +56,11 @@ class OfficialMinerUProcessor:
             command.append("--ocr")
 
         child_env = os.environ.copy()
-        # The official CLI resolves MINERU_TOKEN itself.  Passing the token via
-        # the child environment keeps it out of logs and process arguments.
-        if self.api_key and "MINERU_TOKEN" not in child_env:
+        # The official CLI resolves MINERU_TOKEN itself. Passing the config
+        # value via the child environment keeps it out of logs and process
+        # arguments. A configured key is authoritative, including when Codex
+        # inherited an empty or stale MINERU_TOKEN from its parent process.
+        if self.api_key:
             child_env["MINERU_TOKEN"] = self.api_key
 
         safe_command = " ".join(shlex.quote(part) for part in command if part != str(source))
