@@ -22,7 +22,9 @@ build directory 中的重要文件：
 |---|---|
 | `deck_ir.json` | 本次编译冻结的 canonical input |
 | `layout.json` | 确定性布局、文本契约与 adaptation log |
-| `candidate.pptx` | artifact-tool 原始导出 |
+| `candidate.pptx` | 选定后端（artifact-tool 或 OfficeCLI）的原始导出 |
+| `candidate.officecli.batch.json` | 仅 OfficeCLI 后端生成的原子命令记录 |
+| `officecli_issues.json` | 仅 OfficeCLI 后端生成的 `view issues` 原始结果；已汇入统一 QA |
 | `staging.pptx` | OOXML finalizer 处理后的验收对象 |
 | `native.pdf` / `native.json` | PowerPoint 原生证据 |
 | `qa_report.json` | 统一 QA 结果 |
@@ -96,16 +98,22 @@ Deck IR 只接受
 
 ```bash
 cd Total-pipe
-python -m deck_compiler compile +  --ir /absolute/path/to/deck_ir.json +  --out /absolute/path/to/build
+python -m deck_compiler compile \
+  --ir /absolute/path/to/deck_ir.json --out /absolute/path/to/build
 ```
 
 正式生成：
 
 ```bash
-python -m deck_compiler build +  --ir /absolute/path/to/deck_ir.json +  --out /absolute/path/to/build +  --node /absolute/path/to/node
+python -m deck_compiler build \
+  --ir /absolute/path/to/deck_ir.json --out /absolute/path/to/build \
+  --node /absolute/path/to/node
 ```
 
 开发时可添加 `--skip-native`，但该结果只能用于检查，不能晋级 final。
+要使用 OfficeCLI 生成可编辑 PPTX，在 `build` 上添加
+`--backend officecli --officecli <可执行文件路径>`；完整协议与 agent 操作见
+[OfficeCLI 后端说明](officecli-backend.zh-CN.md)。
 
 ## 5. PowerPoint 原生验收
 
@@ -125,7 +133,9 @@ python -m deck_compiler record-powerpoint-review \
 6. 绑定该 PDF：
 
 ```bash
-python -m deck_compiler validate-native +  --out /absolute/path/to/build +  --pdf /absolute/path/to/build/native.pdf +  --reviewer "reviewer"
+python -m deck_compiler validate-native \
+  --out /absolute/path/to/build --pdf /absolute/path/to/build/native.pdf \
+  --reviewer "reviewer"
 ```
 
 `validate-native` 会重新检查当前 staging、layout 与 `powerpoint_review.json`；不要复用
@@ -147,7 +157,8 @@ python -m deck_compiler validate-native +  --out /absolute/path/to/build +  --pd
 必须列出当前报告中的全部 REVIEW ID：
 
 ```bash
-python -m deck_compiler promote +  --out /absolute/path/to/build +  --ack /absolute/path/to/review_ack.json
+python -m deck_compiler promote \
+  --out /absolute/path/to/build --ack /absolute/path/to/review_ack.json
 ```
 
 只有结构检查、PowerPoint 证据和 REVIEW acknowledgement 都与当前 bytes 对应时，

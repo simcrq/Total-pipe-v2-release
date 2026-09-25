@@ -98,15 +98,22 @@ archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`�
 
 ## 5. 编译与原生验收
 
-使用工作区提供的 Python、Node 和 artifact-tool，不安装替代依赖：
+使用工作区提供的 Python；artifact-tool 后端需要 Node 与 artifact-tool，
+OfficeCLI 后端需要可执行的 officecli：
 
 ```bash
 cd Total-pipe
 python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> --node <node>
+# 选用 OfficeCLI 后端时：
+python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> \
+  --backend officecli --officecli <officecli可执行文件>
 ```
 
 编译器保持一个 mutable candidate、一个 staging 和一个 final。`--skip-native` 只用于
 开发，不能晋级 final。
+OfficeCLI 映射的长度使用 CSS px，字号转换成 pt；batch 必须全项成功且无 warning。
+调用前阅读 `docs/officecli-backend.zh-CN.md`，检查 `qa_report.json.checks.backend`。
+OfficeCLI 源码目录不等于可执行文件；其 HTML/截图不能代替 PowerPoint 原生验收。
 
 在 macOS 上必须直接控制 Microsoft PowerPoint 打开 `staging.pptx`，在普通视图或
 阅读视图中逐页眼检可编辑幻灯片本身，检查文字、图像比例、论文图号与图注对应、

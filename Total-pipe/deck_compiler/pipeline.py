@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import time
@@ -10,6 +11,7 @@ from .contracts import digest, file_hash, issue, report
 from .ir import derive
 from .layout import compile_deck
 from .artifact import finalize, verify
+from . import officecli
 from . import native
 
 
@@ -55,13 +57,14 @@ def compile_input(ir_path, out):
     return ir, layout, qa
 
 
-def build(ir_path, out, node='node', native_render=True):
+def build(ir_path, out, node='node', native_render=True, backend='artifact-tool', officecli_executable='officecli'):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
         old_final = file_hash(out/'final.pptx') if (out/'final.pptx').exists() else None
         write_json(out/'state.json', {'phase': 'compiling', 'previous_final_sha256': old_final})
-        for name in ('candidate.pptx', 'staging.pptx', 'native.pdf', 'native.json',
+        for name in ('candidate.pptx', 'candidate.officecli.batch.json', 'officecli_issues.json',
+                     'staging.pptx', 'native.pdf', 'native.json',
                      'powerpoint_review.json', 'layout.json'):
             (out/name).unlink(missing_ok=True)
         ir, layout, qa = compile_input(ir_path, out)
@@ -77,18 +80,42 @@ def build(ir_path, out, node='node', native_render=True):
             for asset in layout['assets'].values():
                 if file_hash(Path(asset['path'])) != asset['sha256']:
                     raise ValueError('Asset changed since compilation')
-            render_env = os.environ.copy()
-            if not render_env.get('ARTIFACT_TOOL_MODULE'):
-                resolved_node = Path(shutil.which(node) or node).resolve()
-                bundled_module = (resolved_node.parents[1]/'node_modules'/'@oai'/'artifact-tool'/
-                                  'dist'/'artifact_tool.mjs')
-                if bundled_module.exists():
-                    render_env['ARTIFACT_TOOL_MODULE'] = str(bundled_module)
-            subprocess.run([node, str(Path(__file__).with_name('render.mjs')), str(out/'layout.json'),
-                            str(out/'candidate.pptx')], check=True, timeout=180, env=render_env)
+            if backend == 'officecli':
+                officecli.render(out/'layout.json', out/'candidate.pptx', officecli_executable)
+            elif backend == 'artifact-tool':
+                render_env = os.environ.copy()
+                if not render_env.get('ARTIFACT_TOOL_MODULE'):
+                    resolved_node = Path(shutil.which(node) or node).resolve()
+                    bundled_module = (resolved_node.parents[1]/'node_modules'/'@oai'/'artifact-tool'/
+                                      'dist'/'artifact_tool.mjs')
+                    if bundled_module.exists():
+                        render_env['ARTIFACT_TOOL_MODULE'] = str(bundled_module)
+                subprocess.run([node, str(Path(__file__).with_name('render.mjs')), str(out/'layout.json'),
+                                str(out/'candidate.pptx')], check=True, timeout=180, env=render_env)
+            else:
+                raise ValueError(f'Unknown renderer backend: {backend}')
             render_count = 1
             finalize(out/'candidate.pptx', out/'staging.pptx', layout)
             items += verify(out/'staging.pptx', layout)
+            if backend == 'officecli':
+                officecli_report = officecli.inspect(out/'staging.pptx', officecli_executable)
+                write_json(out/'officecli_issues.json', officecli_report)
+                for finding in officecli_report['issues']:
+                    severity = {'0': 'FAIL', '1': 'WARNING', '2': 'INFO',
+                                'error': 'FAIL', 'warning': 'WARNING', 'info': 'INFO'}.get(
+                                    str(finding.get('severity')).lower())
+                    if not severity:
+                        raise ValueError(f'OfficeCLI returned unknown issue severity: {finding}')
+                    path = finding.get('path') or ''
+                    slide = re.search(r'/slide\[(\d+)\]', path)
+                    category = finding.get('subtype') or {0: 'FORMAT', 1: 'CONTENT', 2: 'STRUCTURE'}.get(
+                        finding.get('type'), str(finding.get('type') or 'ISSUE'))
+                    rule = 'OFFICECLI_' + re.sub(r'[^A-Z0-9]+', '_',
+                        category.upper()).strip('_')
+                    items.append(issue(rule, severity, finding.get('message') or '',
+                                       int(slide.group(1)) if slide else None, path or None,
+                                       detector='officecli-view-issues', backend='officecli',
+                                       officecli_issue_id=finding.get('id')))
             structural_complete = True
             if native_render and not any(i['severity']=='FAIL' for i in items):
                 native_evidence, native_items = native.render(out/'staging.pptx', out/'native.pdf')
@@ -103,13 +130,17 @@ def build(ir_path, out, node='node', native_render=True):
             items.append(issue('COMPILATION_FAILED', 'FAIL', str(error), detector='compiler'))
         sha = file_hash(out/'staging.pptx') if (out/'staging.pptx').exists() else None
         qa = report(items, sha, digest(ir), {'structural': structural_complete,
-                    'native': native_evidence is not None, 'renderer': 'powerpoint' if native_evidence else None})
+                    'native': native_evidence is not None, 'renderer': 'powerpoint' if native_evidence else None,
+                    'backend': backend,
+                    'officecli_schema': backend == 'officecli' and structural_complete,
+                    'officecli_issues': backend == 'officecli' and structural_complete})
         qa['layout_sha256'] = file_hash(out/'layout.json')
         write_json(out/'qa_report.json', qa)
         write_json(out/'state.json', {'phase': 'failed' if qa['counts']['FAIL'] else 'awaiting_validation',
                                      'artifact_sha256': sha, 'previous_final_sha256': old_final})
         write_json(out/'metrics.json', {'elapsed_seconds': round(time.monotonic()-started, 3),
             'rerenders': render_count, 'canonical_truth_count': 1, 'new_adapter_count': 0,
+            'backend': backend,
             'slide_count': len(ir['slides']), 'layout_llm_fallback_count': 0,
             'qa_counts': qa['counts'], 'false_positive_rate': None, 'repair_amplification_factor': None})
         return qa
@@ -196,6 +227,8 @@ def ingest_native(out, pdf, reviewer=None):
         layout = json.loads(layout_path.read_text())
         ir = json.loads(ir_path.read_text())
         prior = json.loads((out/'qa_report.json').read_text())
+        if prior.get('artifact_sha256') != file_hash(staging):
+            raise ValueError('staging.pptx changed after build; rebuild before native validation')
         # Rebuild all artifact-derived findings against the current bytes.
         keep = [item for item in prior.get('items', [])
                 if item.get('source', {}).get('detector') not in ('native-visual', 'structural-ooxml')]
@@ -219,6 +252,9 @@ def ingest_native(out, pdf, reviewer=None):
             'renderer': 'powerpoint',
             'visual_review': True,
             'visual_review_method': 'powerpoint-ui',
+            'backend': prior.get('checks', {}).get('backend', 'artifact-tool'),
+            'officecli_schema': prior.get('checks', {}).get('officecli_schema', False),
+            'officecli_issues': prior.get('checks', {}).get('officecli_issues', False),
         })
         qa['layout_sha256'] = file_hash(layout_path)
         write_json(out/'qa_report.json', qa)

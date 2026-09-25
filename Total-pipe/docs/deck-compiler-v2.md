@@ -10,7 +10,7 @@ Evidence -> Story -> RPA -> deck_ir.json
                            | semantic preflight
                            | deterministic layout + TextBoxContract
                            v
-                       candidate.pptx
+                       candidate.pptx (artifact-tool | OfficeCLI)
                            | explicit OOXML finalization
                            v
                         staging.pptx
@@ -57,6 +57,13 @@ final file. A lock rejects concurrent writers. Promotion rechecks the actual sta
 requires matching IR, layout, structural QA and PowerPoint evidence hashes. `WARNING` does not
 block promotion. `REVIEW` requires an acknowledgement tied to the artifact hash. `FAIL` always
 blocks promotion.
+
+The renderer is selected with `build --backend artifact-tool|officecli` (default:
+`artifact-tool`). For OfficeCLI use `--backend officecli --officecli <executable>`;
+the backend maps compiled 96 dpi CSS px coordinates to OfficeCLI's `px` dimensions,
+converts CSS px text sizes to points, atomically runs a JSON batch, and validates the
+exported OpenXML. The same finalizer and structural verifier process either output.
+See [OfficeCLI backend and agent calls](officecli-backend.zh-CN.md) for the full protocol.
 
 ```bash
 PYTHON=/path/to/python

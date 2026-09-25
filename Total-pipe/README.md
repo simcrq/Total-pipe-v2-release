@@ -18,7 +18,7 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 - **Story Planner**：组织研究问题、回答、证据和叙事推进。
 - **pwf2rpa**：验证 Story provenance，并转换为 RPA Slide Brief。
 - **Research PPT Assistant**：选择 Layout、绑定 Slot、输出设计意图；不生成 PPTX。
-- **Deck Compiler v2**：验证 Deck IR、求解几何、生成 PPTX、写入 OOXML 契约。
+- **Deck Compiler v2**：验证 Deck IR、求解几何，选择 artifact-tool 或 OfficeCLI 生成 PPTX，并写入 OOXML 契约。
 - **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
 
 `deck_ir.json` 是编译阶段唯一可维护的页面真源。以下文件只能由编译器派生：
@@ -53,8 +53,9 @@ telemetry adapter；它们不属于 Deck Compiler 的 PPTX 生成路径。
 
 ## 环境
 
-优先使用 Codex `load_workspace_dependencies` 返回的 Python、Node 和
-artifact-tool。最低要求和 PowerPoint 说明见 [环境清单](环境清单.md)。
+使用 OfficeCLI 后端时需可执行的 `officecli`（源码克隆不等于已安装）；
+artifact-tool 后端使用 Codex 工作区提供的 Node 和 artifact-tool。
+最低要求和 PowerPoint 说明见 [环境清单](环境清单.md)。
 
 ```bash
 python -m unittest discover -s tests -v
@@ -77,13 +78,23 @@ npm run audit:layouts
 
 ```bash
 cd Total-pipe
-python -m deck_compiler compile +  --ir examples/research.deck_ir.json +  --out /tmp/total-pipe-compile
+python -m deck_compiler compile \
+  --ir examples/research.deck_ir.json --out /tmp/total-pipe-compile
 ```
 
 生成 `candidate.pptx` 和 `staging.pptx`：
 
 ```bash
-python -m deck_compiler build +  --ir examples/research.deck_ir.json +  --out /tmp/total-pipe-build +  --node /absolute/path/to/node +  --skip-native
+python -m deck_compiler build \
+  --ir examples/research.deck_ir.json --out /tmp/total-pipe-build \
+  --node /absolute/path/to/node --skip-native
+```
+
+OfficeCLI 后端（传入实际可执行文件；`--skip-native` 只用于开发检查）：
+
+```bash
+python -m deck_compiler build --ir /path/to/deck_ir.json --out /path/to/build \
+  --backend officecli --officecli /path/to/officecli --skip-native
 ```
 
 `--skip-native` 仅用于开发检查，会产生 `REVIEW`，不能晋级 final。正式流程不要使用
@@ -99,7 +110,9 @@ python -m deck_compiler record-powerpoint-review --out /tmp/total-pipe-build \
 随后在同一次 PowerPoint 控制流程中导出 `native.pdf`，再绑定原生证据：
 
 ```bash
-python -m deck_compiler validate-native +  --out /tmp/total-pipe-build +  --pdf /tmp/total-pipe-build/native.pdf +  --reviewer "reviewer"
+python -m deck_compiler validate-native \
+  --out /tmp/total-pipe-build --pdf /tmp/total-pipe-build/native.pdf \
+  --reviewer "reviewer"
 ```
 
 论文图片还必须在 asset 与 figure reference 上声明相同的 `source_figure`（如 `3e`），
@@ -109,11 +122,13 @@ python -m deck_compiler validate-native +  --out /tmp/total-pipe-build +  --pdf 
 `review_ack.json`，列出全部接受的 review ID，然后晋级：
 
 ```bash
-python -m deck_compiler promote +  --out /tmp/total-pipe-build +  --ack /tmp/total-pipe-build/review_ack.json
+python -m deck_compiler promote \
+  --out /tmp/total-pipe-build --ack /tmp/total-pipe-build/review_ack.json
 ```
 
 完整端到端步骤见 [中文使用说明](docs/USAGE.zh-CN.md)，编译器契约见
-[Deck Compiler v2](docs/deck-compiler-v2.md)。
+[Deck Compiler v2](docs/deck-compiler-v2.md)。OfficeCLI 后端的命令、接口协议与
+agent 调用顺序见 [OfficeCLI 后端说明](docs/officecli-backend.zh-CN.md)。
 
 ## Deck IR 与 text_flow
 

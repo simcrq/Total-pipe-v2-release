@@ -5,6 +5,7 @@ This directory is a source snapshot for release preparation. It contains the com
 ## Contents
 
 - `Total-pipe/`: canonical Deck IR, deterministic Deck Compiler v2, schemas, pwf2rpa, skills, tests, examples, documentation, and benchmarks.
+- `Total-pipe/docs/officecli-backend.zh-CN.md`: OfficeCLI backend protocol and agent invocation. The cloned OfficeCLI source in the sibling workspace is not bundled as an executable in this release snapshot.
 - `PaperWorkflow/`: PDF/Markdown evidence extraction source, integrations, and tests.
 - `research-ppt-assistant/`: scientific content normalization, slide planning, layout library, preflight, and visual-quality source.
 - `acceptance/Test3/`: release acceptance report, canonical Deck IR, Story/RPA plan, baseline final PPTX, revised `final_msyh.pptx` with 微软雅黑, the PowerPoint-polished `final_msyh_decorated.pptx` variant, PowerPoint native PDF, unified QA, metrics, state, and review acknowledgement.
@@ -49,3 +50,16 @@ This directory is a source snapshot for release preparation. It contains the com
 - QA schema: `Total-pipe/schemas/qa-report.schema.json`
 - PaperWorkflow: `PaperWorkflow/README.md`
 - Research PPT Assistant: `research-ppt-assistant/README.md`
+
+## OfficeCLI backend development
+
+Deck Compiler now accepts `build --backend officecli --officecli <executable>`. The backend
+uses an atomic OfficeCLI batch, validates the generated and finalized PPTX, incorporates
+`view issues` into unified QA, and keeps PowerPoint native review as the release gate.
+Agent instructions and the batch protocol are in
+`Total-pipe/docs/officecli-backend.zh-CN.md`.
+
+The OfficeCLI protocol and compiler test suites pass with local Windows fonts substituted
+for the macOS paths in the sample IR (36 tests). This workspace contains OfficeCLI source,
+but no installed OfficeCLI executable or .NET SDK, so a live OfficeCLI PPTX build has not
+been run here.

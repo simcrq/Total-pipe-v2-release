@@ -176,6 +176,17 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'required'):
                 ingest_native(out,fake)
 
+    def test_native_import_rejects_staging_changed_after_build(self):
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d); (out/'staging.pptx').write_bytes(b'new staging')
+            (out/'native.pdf').write_bytes(b'%PDF mock')
+            write_json(out/'layout.json',{'slides':[{'id':'s1'}]})
+            write_json(out/'deck_ir.json',fixture())
+            record_powerpoint_review(out,'reviewer',['all'])
+            write_json(out/'qa_report.json',report([], 'old hash'))
+            with self.assertRaisesRegex(ValueError,'changed after build'):
+                ingest_native(out,out/'native.pdf','reviewer')
+
     def test_powerpoint_review_binds_every_slide(self):
         with tempfile.TemporaryDirectory() as d:
             out=Path(d); (out/'staging.pptx').write_bytes(b'candidate')
