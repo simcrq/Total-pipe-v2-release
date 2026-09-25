@@ -1,6 +1,6 @@
 {
   "name": "paperworkflow",
-  "version": "0.2.0+codex.20260920153025",
+  "version": "0.2.0+codex.20260925120932",
   "description": "Evidence-tracked paper ingestion and Total-pipe artifact bundling for Codex.",
   "author": {
     "name": "PaperWorkflow"

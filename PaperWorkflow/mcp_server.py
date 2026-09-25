@@ -659,7 +659,7 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def respond(message: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(message, ensure_ascii=False) + "\n")
+    sys.stdout.write(json.dumps(message, ensure_ascii=True) + "\n")
     sys.stdout.flush()
 
 
