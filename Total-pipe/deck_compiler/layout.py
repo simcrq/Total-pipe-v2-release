@@ -36,7 +36,7 @@ def fit_text(text, bbox, contract):
     for size in range(int(contract.font_size), int(contract.font_floor) - 1, -1):
         font = ImageFont.truetype(contract.font_file, size)
         lines = break_lines(text, font, inner_w)
-        # Exact line spacing is emitted into OOXML by finalizer.
+        # OfficeCLI writes this exact line spacing into DrawingML.
         if (len(lines) <= contract.max_lines and len(lines) * size * contract.line_height <= inner_h
                 and all(font.getlength(line) <= inner_w for line in lines)):
             return "\n".join(lines), replace(contract, font_size=size)

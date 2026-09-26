@@ -51,15 +51,15 @@ This directory is a source snapshot for release preparation. It contains the com
 - PaperWorkflow: `PaperWorkflow/README.md`
 - Research PPT Assistant: `research-ppt-assistant/README.md`
 
-## OfficeCLI backend development
+## OfficeCLI single-backend development
 
-Deck Compiler now accepts `build --backend officecli --officecli <executable>`. The backend
-uses an atomic OfficeCLI batch, validates the generated and finalized PPTX, incorporates
-`view issues` into unified QA, and keeps PowerPoint native review as the release gate.
+Deck Compiler now uses OfficeCLI as its only PPTX writer. `build --officecli <executable>`
+checks OfficeCLI 1.0.152+ and the required PPTX schema, uses an atomic batch, validates the
+candidate and byte-identical staging PPTX, incorporates `view issues` into unified QA, and
+keeps PowerPoint native review as the release gate.
 Agent instructions and the batch protocol are in
 `Total-pipe/docs/officecli-backend.zh-CN.md`.
 
-The OfficeCLI protocol and compiler test suites pass with local Windows fonts substituted
-for the macOS paths in the sample IR (36 tests). This workspace contains OfficeCLI source,
-but no installed OfficeCLI executable or .NET SDK, so a live OfficeCLI PPTX build has not
-been run here.
+The compiler suite passes with local Windows fonts substituted for the macOS paths in the
+sample IR (38 tests). A live OfficeCLI 1.0.152 build produced a structurally valid PPTX on
+Windows with zero FAIL; PowerPoint native validation remains pending for that smoke build.

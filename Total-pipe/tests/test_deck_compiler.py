@@ -1,6 +1,7 @@
 import copy
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 import zipfile
@@ -10,13 +11,23 @@ from deck_compiler.ir import validate, derive
 from deck_compiler.layout import compile_deck
 from deck_compiler.text_flow import select_text_flow
 from deck_compiler.ooxml import target_part, fill, background, NS
-from deck_compiler.pipeline import (ingest_native, promote, record_powerpoint_review,
+from deck_compiler.pipeline import (build, ingest_native, promote, record_powerpoint_review,
                                     write_json, locked)
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).parents[1]
 def fixture():
-    return json.loads((ROOT/'examples/research.deck_ir.json').read_text())
+    ir = json.loads((ROOT/'examples/research.deck_ir.json').read_text())
+    if not Path(ir['theme']['font_file']).exists():
+        for regular, bold in (
+                ('C:/Windows/Fonts/arial.ttf', 'C:/Windows/Fonts/arialbd.ttf'),
+                ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                 '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')):
+            if Path(regular).exists() and Path(bold).exists():
+                ir['theme']['font_file'] = regular
+                ir['theme']['bold_font_file'] = bold
+                break
+    return ir
 
 class InfrastructureTests(unittest.TestCase):
     def test_opc_targets(self):
@@ -51,6 +62,24 @@ class InfrastructureTests(unittest.TestCase):
             self.assertFalse((Path(d)/'.compiler.lock').exists())
 
 class CompilerTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI executable required')
+    def test_officecli_is_the_only_pptx_writer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ir = fixture()
+            ir['slides'] = ir['slides'][:1]
+            ir['slides'][0]['semantic']['speaker_notes'] = '中文讲解：核对证据。'
+            ir_path = root/'deck_ir.json'
+            ir_path.write_text(json.dumps(ir, ensure_ascii=False), encoding='utf-8')
+            out = root/'build'
+            qa = build(ir_path, out, native_render=False)
+            self.assertEqual(qa['counts']['FAIL'], 0)
+            self.assertEqual(qa['checks']['backend'], 'officecli')
+            self.assertTrue(qa['checks']['officecli_runtime']['version'])
+            self.assertEqual(file_hash(out/'candidate.pptx'), file_hash(out/'staging.pptx'))
+            self.assertEqual(file_hash(out/'candidate.officecli.batch.json'),
+                             qa['checks']['officecli_commands_sha256'])
+
     def test_determinism_no_mutation(self):
         ir = fixture(); before = copy.deepcopy(ir)
         a, ai = compile_deck(ir, ROOT); b, bi = compile_deck(ir, ROOT)

@@ -22,10 +22,10 @@ build directory 中的重要文件：
 |---|---|
 | `deck_ir.json` | 本次编译冻结的 canonical input |
 | `layout.json` | 确定性布局、文本契约与 adaptation log |
-| `candidate.pptx` | 选定后端（artifact-tool 或 OfficeCLI）的原始导出 |
-| `candidate.officecli.batch.json` | 仅 OfficeCLI 后端生成的原子命令记录 |
-| `officecli_issues.json` | 仅 OfficeCLI 后端生成的 `view issues` 原始结果；已汇入统一 QA |
-| `staging.pptx` | OOXML finalizer 处理后的验收对象 |
+| `candidate.pptx` | OfficeCLI 写出的 PPTX |
+| `candidate.officecli.batch.json` | 原子命令记录，哈希写入 QA |
+| `officecli_issues.json` | `view issues` 原始结果；已汇入统一 QA |
+| `staging.pptx` | 与 candidate 字节一致的验收对象 |
 | `native.pdf` / `native.json` | PowerPoint 原生证据 |
 | `qa_report.json` | 统一 QA 结果 |
 | `metrics.json` | 编译指标 |
@@ -107,17 +107,16 @@ python -m deck_compiler compile \
 ```bash
 python -m deck_compiler build \
   --ir /absolute/path/to/deck_ir.json --out /absolute/path/to/build \
-  --node /absolute/path/to/node
+  --officecli /absolute/path/to/officecli
 ```
 
 开发时可添加 `--skip-native`，但该结果只能用于检查，不能晋级 final。
-要使用 OfficeCLI 生成可编辑 PPTX，在 `build` 上添加
-`--backend officecli --officecli <可执行文件路径>`；完整协议与 agent 操作见
+OfficeCLI 是唯一的 PPTX 写入后端；完整协议与 agent 操作见
 [OfficeCLI 后端说明](officecli-backend.zh-CN.md)。
 
 ## 5. PowerPoint 原生验收
 
-验收对象始终是当前 `staging.pptx`。在 macOS 上：
+验收对象始终是当前 `staging.pptx`。在 macOS 或 Windows 的 PowerPoint 中：
 
 1. 用 Microsoft PowerPoint 打开 staging，在普通视图或阅读视图直接逐页检查；
 2. 核对文字、图片比例、论文图号—图注—素材、panel 标签、页脚、越界、碰撞和字体；
@@ -141,6 +140,8 @@ python -m deck_compiler validate-native \
 `validate-native` 会重新检查当前 staging、layout 与 `powerpoint_review.json`；不要复用
 其他版本的 PDF 或眼检记录。论文图 asset、figure reference 和图注必须声明并匹配
 同一个 `source_figure`；科学图面默认最小有效尺寸为 220 px，任一条件不满足均为 FAIL。
+macOS 可由编译器自动尝试导出 PowerPoint PDF；Windows 当前按上述步骤在 PowerPoint
+界面完成逐页眼检与 PDF 导出，再使用 `validate-native` 绑定原生证据。
 
 ## 6. REVIEW acknowledgement 与晋级
 

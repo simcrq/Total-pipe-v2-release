@@ -1,9 +1,12 @@
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
 from subprocess import CompletedProcess
+import xml.etree.ElementTree as ET
+import zipfile
 
 from deck_compiler import officecli
 
@@ -19,7 +22,8 @@ class OfficeCliProtocolTests(unittest.TestCase):
                 {'id': 'title', 'kind': 'text', 'bbox': [56, 34, 1168, 120],
                  'text': '第一行\n第二行', 'color': '#142735', 'contract': {
                      'font_family': 'Arial', 'font_size': 44, 'font_weight': 700,
-                     'vertical_anchor': 'top'}},
+                     'line_height': 1.25, 'vertical_anchor': 'top',
+                     'inset': {'left': 0, 'right': 0, 'top': 0, 'bottom': 0}}},
                 {'id': 'figure-1', 'kind': 'image', 'bbox': [60, 260, 400, 300],
                  'asset_id': 'fig', 'alt': 'Fig.3e'},
             ]}]}
@@ -30,9 +34,39 @@ class OfficeCliProtocolTests(unittest.TestCase):
         self.assertEqual(operations[1]['props']['layout'], 'blank')
         self.assertEqual(operations[2]['props']['x'], '0px')
         self.assertEqual(operations[3]['props']['size'], '33pt')
+        self.assertEqual(operations[3]['props']['lineSpacing'], '41.25pt')
+        self.assertEqual(operations[3]['props']['font.ea'], 'Arial')
         self.assertEqual(operations[3]['props']['text'], '第一行\n第二行')
         self.assertEqual(operations[4]['type'], 'picture')
-        self.assertEqual(operations[5]['type'], 'notes')
+        self.assertEqual(operations[5]['command'], 'raw-set')
+        self.assertEqual(operations[5]['xml'], 'wrap=none')
+        self.assertEqual(operations[6]['type'], 'notes')
+
+    @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI executable required')
+    def test_officecli_writes_text_contract_without_package_finalizer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            layout = {'slide_size': [1280, 720], 'assets': {}, 'slides': [{
+                'background': '#FFFFFF', 'notes': '说明', 'elements': [{
+                    'id': 'text:1', 'kind': 'text', 'bbox': [10, 20, 300, 120],
+                    'text': '第一行\n第二行', 'color': '#142735', 'contract': {
+                        'font_family': 'Arial', 'font_size': 32, 'font_weight': 400,
+                        'line_height': 1.2, 'vertical_anchor': 'top',
+                        'inset': {'left': 1, 'right': 3, 'top': 2, 'bottom': 4}}}]}]}
+            layout_path = root/'layout.json'
+            layout_path.write_text(json.dumps(layout, ensure_ascii=False), encoding='utf-8')
+            output = root/'candidate.pptx'
+            officecli.render(layout_path, output)
+            with zipfile.ZipFile(output) as deck:
+                slide = ET.fromstring(deck.read('ppt/slides/slide1.xml'))
+            ns = {'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+                  'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
+            body = slide.find('.//p:sp/p:txBody/a:bodyPr', ns)
+            self.assertEqual(body.get('wrap'), 'none')
+            self.assertEqual([body.get(name) for name in ('lIns', 'tIns', 'rIns', 'bIns')],
+                             ['9525', '19050', '28575', '38100'])
+            spacing = slide.find('.//p:sp/p:txBody/a:p/a:pPr/a:lnSpc/a:spcPts', ns)
+            self.assertEqual(spacing.get('val'), '2880')
 
     def test_batch_rejects_partial_success_or_warnings(self):
         with tempfile.TemporaryDirectory() as directory:

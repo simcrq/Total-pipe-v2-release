@@ -13,9 +13,7 @@ def main():
         p.add_argument('--ir', required=True, type=Path)
         p.add_argument('--out', required=True, type=Path)
         if name == 'build':
-            p.add_argument('--node', default='node')
-            p.add_argument('--backend', choices=['artifact-tool', 'officecli'], default='artifact-tool')
-            p.add_argument('--officecli', default='officecli', help='OfficeCLI executable for --backend officecli')
+            p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
     p = commands.add_parser('promote')
     p.add_argument('--out', required=True, type=Path)
@@ -34,7 +32,7 @@ def main():
     try:
         out = args.out.resolve()
         if args.command == 'promote':
-            print(promote(out, json.loads(args.ack.read_text()) if args.ack else None))
+            print(promote(out, json.loads(args.ack.read_text(encoding='utf-8')) if args.ack else None))
             return 0
         if args.command == 'validate-native':
             qa = ingest_native(out, args.pdf.resolve(), args.reviewer)
@@ -48,8 +46,7 @@ def main():
             with locked(out):
                 _, _, qa = compile_input(args.ir.resolve(), out)
         else:
-            qa = build(args.ir.resolve(), out, args.node, not args.skip_native,
-                       args.backend, args.officecli)
+            qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli)
         print(json.dumps({'status': qa['status'], 'counts': qa['counts'], 'report': str(out/'qa_report.json')}))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

@@ -9,7 +9,7 @@ description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—�
 
 ```text
 PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
-    → canonical deck_ir.json → deterministic layout → artifact-tool
+    → canonical deck_ir.json → deterministic layout → OfficeCLI
     → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
     → qa_report.json → final.pptx
 ```
@@ -98,27 +98,27 @@ archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`�
 
 ## 5. 编译与原生验收
 
-使用工作区提供的 Python；artifact-tool 后端需要 Node 与 artifact-tool，
-OfficeCLI 后端需要可执行的 officecli：
+使用工作区提供的 Python；生成 PPTX 需要 OfficeCLI 1.0.152+ 可执行文件：
 
 ```bash
 cd Total-pipe
-python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> --node <node>
-# 选用 OfficeCLI 后端时：
 python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> \
-  --backend officecli --officecli <officecli可执行文件>
+  --officecli <officecli可执行文件>
 ```
 
 编译器保持一个 mutable candidate、一个 staging 和一个 final。`--skip-native` 只用于
 开发，不能晋级 final。
 OfficeCLI 映射的长度使用 CSS px，字号转换成 pt；batch 必须全项成功且无 warning。
-调用前阅读 `docs/officecli-backend.zh-CN.md`，检查 `qa_report.json.checks.backend`。
+调用前阅读 `docs/officecli-backend.zh-CN.md`，检查 `qa_report.json.checks.backend`、
+OfficeCLI 版本和命令哈希。`candidate.pptx` 与 `staging.pptx` 必须字节一致。
 OfficeCLI 源码目录不等于可执行文件；其 HTML/截图不能代替 PowerPoint 原生验收。
 
 在 macOS 上必须直接控制 Microsoft PowerPoint 打开 `staging.pptx`，在普通视图或
 阅读视图中逐页眼检可编辑幻灯片本身，检查文字、图像比例、论文图号与图注对应、
 panel 标签、碰撞和字体。眼检与导出应在同一次 PowerPoint 控制流程中完成；不得先
 导出 PDF、再以 Preview 或逐页渲染图代替 PowerPoint 眼检。
+在 Windows 上执行同样的 PowerPoint 界面眼检，并从该 staging 手工导出原生 PDF，
+再调用 `validate-native`；OfficeCLI 预览不能替代此门禁。
 
 完成逐页 PowerPoint 眼检后，先把检查记录绑定到当前 staging 与 layout：
 

@@ -1,65 +1,12 @@
-"""Finalization and structural verification of the actual exported package."""
-from pathlib import Path
+"""Read-only structural verification of the actual exported package."""
 import zipfile
 from lxml import etree as ET
-from .contracts import issue, TextBoxContract
+from .contracts import issue
 from .layout import intersect
 from .ooxml import NS, slide_parts, relationships, background
 
 A = '{' + NS['a'] + '}'
 EMU = 9525
-
-
-def finalize(candidate, staging, layout):
-    """Set explicit body/paragraph properties; no font substitution or content edits."""
-    with zipfile.ZipFile(candidate) as z:
-        parts = slide_parts(z)
-        if len(parts) != len(layout['slides']):
-            raise ValueError('Renderer changed slide count')
-        replacements = {}
-        for part, planned in zip(parts, layout['slides']):
-            root = ET.fromstring(z.read(part))
-            expected = {e['id']: e for e in planned['elements'] if e['kind'] == 'text'}
-            found = set()
-            for shape in root.findall('.//p:sp', NS):
-                name = shape.find('p:nvSpPr/p:cNvPr', NS).get('name')
-                if name not in expected:
-                    continue
-                found.add(name)
-                c = TextBoxContract(**expected[name]['contract'])
-                tx = shape.find('p:txBody', NS)
-                body = tx.find('a:bodyPr', NS)
-                if body is None:
-                    body = ET.Element(A+'bodyPr')
-                    tx.insert(0, body)
-                body.set('wrap', 'square' if c.wrap else 'none')
-                body.set('anchor', {'top': 't', 'middle': 'ctr', 'bottom': 'b'}[c.vertical_anchor])
-                for key, value in c.inset.items():
-                    body.set({'left': 'lIns', 'right': 'rIns', 'top': 'tIns', 'bottom': 'bIns'}[key], str(round(value*EMU)))
-                for node in list(body):
-                    if node.tag in (A+'noAutofit', A+'normAutofit', A+'spAutoFit'):
-                        body.remove(node)
-                ET.SubElement(body, A+'noAutofit')
-                for paragraph in tx.findall('a:p', NS):
-                    props = paragraph.find('a:pPr', NS)
-                    if props is None:
-                        props = ET.Element(A+'pPr')
-                        paragraph.insert(0, props)
-                    for tag in ('lnSpc', 'spcBef', 'spcAft'):
-                        old = props.find('a:'+tag, NS)
-                        if old is not None:
-                            props.remove(old)
-                    # Place spacing before default run properties (OOXML sequence).
-                    for idx, (tag, val) in enumerate((('lnSpc', round(c.font_size*c.line_height*75)), ('spcBef', 0), ('spcAft', 0))):
-                        spacing = ET.Element(A+tag)
-                        ET.SubElement(spacing, A+'spcPts', val=str(val))
-                        props.insert(idx, spacing)
-            if found != set(expected):
-                raise ValueError(f'Renderer lost text identities: {set(expected)-found}')
-            replacements[part] = ET.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
-        with zipfile.ZipFile(staging, 'w', zipfile.ZIP_DEFLATED) as out:
-            for info in z.infolist():
-                out.writestr(info, replacements.get(info.filename, z.read(info.filename)))
 
 
 def verify(path, layout):
@@ -95,6 +42,20 @@ def verify(path, layout):
                     add('BACKGROUND_UNRESOLVED', source, n, severity='REVIEW', confidence='LOW')
                 elif bg.upper() != slide['background'].upper():
                     add('BACKGROUND_MISMATCH', f'{bg} != {slide["background"]}', n)
+                notes_part = next((rel['target'] for rel in relationships(z, part).values()
+                                   if rel['type'] == 'notesSlide' and not rel['external']), None)
+                if notes_part not in z.namelist():
+                    add('MISSING_NOTES', 'Speaker notes part absent', n)
+                else:
+                    notes_root = ET.fromstring(z.read(notes_part))
+                    body = next((shape for shape in notes_root.findall('.//p:sp', NS)
+                                 if (shape.find('p:nvSpPr/p:nvPr/p:ph', NS) is not None and
+                                     shape.find('p:nvSpPr/p:nvPr/p:ph', NS).get('type') == 'body')), None)
+                    paragraphs = [] if body is None else [
+                        ''.join(text.text or '' for text in paragraph.findall('.//a:t', NS))
+                        for paragraph in body.findall('p:txBody/a:p', NS)]
+                    if '\n'.join(paragraphs) != slide['notes']:
+                        add('NOTES_MISMATCH', 'Speaker notes differ from compiled layout', n)
                 shapes = root.findall('p:cSld/p:spTree/p:sp', NS)
                 actual = {s.find('p:nvSpPr/p:cNvPr', NS).get('name'): s for s in shapes}
                 boxes = []
@@ -139,6 +100,11 @@ def verify(path, layout):
                                 face = default.find('a:latin', NS)
                             if attr('sz') is None or abs(int(attr('sz'))/75-c['font_size']) > .1 or face is None or face.get('typeface') != c['font_family']:
                                 add('FONT_CONTRACT_MISMATCH', 'Run font differs from contract', n, e['id'])
+                            if any('\u2e80' <= char <= '\uffef' for char in ''.join(
+                                    text.text or '' for text in run.findall('a:t', NS))):
+                                east_asian = props.find('a:ea', NS) if props is not None else None
+                                if east_asian is None or east_asian.get('typeface') != c['font_family']:
+                                    add('EAST_ASIAN_FONT_MISMATCH', 'East Asian font slot differs from contract', n, e['id'])
                 pics = root.findall('p:cSld/p:spTree/p:pic', NS)
                 planned_pics = [e for e in slide['elements'] if e['kind'] == 'image']
                 if len(pics) != len(planned_pics):

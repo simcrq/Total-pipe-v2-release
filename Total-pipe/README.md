@@ -18,7 +18,7 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 - **Story Planner**：组织研究问题、回答、证据和叙事推进。
 - **pwf2rpa**：验证 Story provenance，并转换为 RPA Slide Brief。
 - **Research PPT Assistant**：选择 Layout、绑定 Slot、输出设计意图；不生成 PPTX。
-- **Deck Compiler v2**：验证 Deck IR、求解几何，选择 artifact-tool 或 OfficeCLI 生成 PPTX，并写入 OOXML 契约。
+- **Deck Compiler v2**：验证 Deck IR、求解几何，并通过 OfficeCLI 唯一写入 PPTX。
 - **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
 
 `deck_ir.json` 是编译阶段唯一可维护的页面真源。以下文件只能由编译器派生：
@@ -53,8 +53,8 @@ telemetry adapter；它们不属于 Deck Compiler 的 PPTX 生成路径。
 
 ## 环境
 
-使用 OfficeCLI 后端时需可执行的 `officecli`（源码克隆不等于已安装）；
-artifact-tool 后端使用 Codex 工作区提供的 Node 和 artifact-tool。
+生成 PPTX 需要 OfficeCLI 1.0.152 或更新版本的可执行文件（源码克隆不等于已安装）。
+编译器会检查版本及所需 PPTX 属性 schema。
 最低要求和 PowerPoint 说明见 [环境清单](环境清单.md)。
 
 ```bash
@@ -87,18 +87,11 @@ python -m deck_compiler compile \
 ```bash
 python -m deck_compiler build \
   --ir examples/research.deck_ir.json --out /tmp/total-pipe-build \
-  --node /absolute/path/to/node --skip-native
-```
-
-OfficeCLI 后端（传入实际可执行文件；`--skip-native` 只用于开发检查）：
-
-```bash
-python -m deck_compiler build --ir /path/to/deck_ir.json --out /path/to/build \
-  --backend officecli --officecli /path/to/officecli --skip-native
+  --officecli /absolute/path/to/officecli --skip-native
 ```
 
 `--skip-native` 仅用于开发检查，会产生 `REVIEW`，不能晋级 final。正式流程不要使用
-该参数。正式流程在 macOS 上必须直接在 PowerPoint 普通视图或阅读视图逐页眼检
+该参数。正式流程必须直接在 PowerPoint 普通视图或阅读视图逐页眼检
 `staging.pptx`；不得用导出后的 Preview/PDF 代替。确认图号—图注—素材、科学图面
 尺寸、碰撞和字体后，记录与当前 staging 绑定的 UI 眼检：
 
@@ -108,6 +101,7 @@ python -m deck_compiler record-powerpoint-review --out /tmp/total-pipe-build \
 ```
 
 随后在同一次 PowerPoint 控制流程中导出 `native.pdf`，再绑定原生证据：
+Windows 当前需在 PowerPoint 界面手工导出该 PDF。
 
 ```bash
 python -m deck_compiler validate-native \

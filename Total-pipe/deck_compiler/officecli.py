@@ -1,7 +1,9 @@
 """OfficeCLI backend for the compiled layout protocol (CSS pixels at 96 dpi)."""
 import json
+import hashlib
 import os
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -17,6 +19,40 @@ def _color(value):
     return value.lstrip('#') if value and value != 'none' else 'none'
 
 
+def preflight(executable='officecli'):
+    """Pin the minimum tested CLI and verify its schema before writing a deck."""
+    version = subprocess.run([executable, '--version'], capture_output=True, text=True,
+                             encoding='utf-8', errors='replace', timeout=15)
+    match = re.search(r'\b(\d+)\.(\d+)\.(\d+)\b', version.stdout)
+    if version.returncode or not match or tuple(map(int, match.groups())) < (1, 0, 152):
+        raise ValueError(f'OfficeCLI 1.0.152+ required: {version.stdout} {version.stderr}')
+    required = {
+        'presentation': {'slideWidth': 'set', 'slideHeight': 'set'},
+        'slide': {'layout': 'add', 'background': 'add'},
+        'shape': {key: 'add' for key in ('x', 'y', 'width', 'height', 'name', 'text',
+                                       'font', 'font.ea', 'size', 'lineSpacing', 'bold',
+                                       'color', 'fill', 'line', 'autoFit', 'margin', 'valign')},
+        'picture': {key: 'add' for key in ('x', 'y', 'width', 'height', 'name', 'src', 'alt')},
+        'notes': {'text': 'add'},
+    }
+    schemas = {}
+    for element, props in required.items():
+        response = subprocess.run([executable, 'help', 'pptx', element, '--json'],
+                                  capture_output=True, text=True, encoding='utf-8',
+                                  errors='replace', timeout=15)
+        if response.returncode:
+            raise ValueError(f'OfficeCLI schema unavailable for pptx {element}: {response.stderr}')
+        schema = json.loads(response.stdout)
+        properties = schema.get('properties') or {}
+        missing = [f'{key}.{operation}' for key, operation in props.items()
+                   if not (properties.get(key) or {}).get(operation)]
+        if missing:
+            raise ValueError(f'OfficeCLI pptx {element} lacks required capabilities: {missing}')
+        schemas[element] = schema
+    fingerprint = hashlib.sha256(json.dumps(schemas, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return {'version': match.group(0), 'schema_sha256': fingerprint}
+
+
 def commands(layout):
     """Translate only compiled geometry; Deck IR remains the sole content source."""
     width, height = layout['slide_size']
@@ -24,6 +60,7 @@ def commands(layout):
         'slideWidth': _px(width), 'slideHeight': _px(height)}}]
     for index, slide in enumerate(layout['slides'], 1):
         parent = f'/slide[{index}]'
+        has_text = False
         result.append({'command': 'add', 'parent': '/', 'type': 'slide',
                        'props': {'layout': 'blank', 'background': _color(slide['background'])}})
         for element in slide['elements']:
@@ -41,9 +78,13 @@ def commands(layout):
                               'lineWidth': _pt(element.get('line_width', 1))})
                 typ = 'shape'
             elif kind == 'text':
+                has_text = True
                 contract = element['contract']
                 props.update({'name': element['id'], 'text': element['text'],
-                              'font': contract['font_family'], 'size': _pt(contract['font_size']),
+                              'font': contract['font_family'],
+                              'font.ea': contract['font_family'],
+                              'size': _pt(contract['font_size']),
+                              'lineSpacing': _pt(contract['font_size'] * contract['line_height']),
                               'bold': str(contract['font_weight'] >= 700).lower(),
                               'color': _color(element['color']), 'fill': 'none', 'line': 'none',
                               'autoFit': 'none', 'margin': '0px',
@@ -53,6 +94,16 @@ def commands(layout):
             else:
                 raise ValueError(f'Unsupported compiled element kind: {kind}')
             result.append({'command': 'add', 'parent': parent, 'type': typ, 'props': props})
+            if kind == 'text' and any(contract['inset'].values()):
+                inset = contract['inset']
+                margin = ','.join(_px(inset[side]) for side in ('left', 'top', 'right', 'bottom'))
+                result.append({'command': 'set', 'path': f'{parent}/shape[@name={element["id"]}]',
+                               'props': {'margin': margin}})
+        if has_text:
+            # OfficeCLI has typed line spacing and insets, but no typed bodyPr.wrap yet.
+            result.append({'command': 'raw-set', 'part': parent,
+                           'xpath': '//p:sp[p:txBody]/p:txBody/a:bodyPr',
+                           'action': 'setattr', 'xml': 'wrap=none'})
         result.append({'command': 'add', 'parent': parent, 'type': 'notes',
                        'props': {'text': slide['notes']}})
     return result

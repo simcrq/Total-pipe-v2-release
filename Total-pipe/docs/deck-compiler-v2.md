@@ -10,8 +10,8 @@ Evidence -> Story -> RPA -> deck_ir.json
                            | semantic preflight
                            | deterministic layout + TextBoxContract
                            v
-                       candidate.pptx (artifact-tool | OfficeCLI)
-                           | explicit OOXML finalization
+                       candidate.pptx (OfficeCLI)
+                           | byte-identical staging copy
                            v
                         staging.pptx
                            | structural telemetry + PowerPoint PDF
@@ -29,7 +29,8 @@ Evidence -> Story -> RPA -> deck_ir.json
   compiler output and are rejected in Deck IR.
 - `schemas/textbox-contract.schema.json` fixes font, line height, wrapping, autofit, insets,
   line limit, font floor and overflow policy. The compiler inserts measured line breaks;
-  the PPTX finalizer writes the same values into DrawingML.
+  OfficeCLI writes the same values into DrawingML through typed properties and a narrow
+  `raw-set` for the wrapping flag.
 - `schemas/qa-report.schema.json` is the only QA result schema. Every finding identifies its
   detector, evidence source, confidence and diagnosis.
 
@@ -58,21 +59,19 @@ requires matching IR, layout, structural QA and PowerPoint evidence hashes. `WAR
 block promotion. `REVIEW` requires an acknowledgement tied to the artifact hash. `FAIL` always
 blocks promotion.
 
-The renderer is selected with `build --backend artifact-tool|officecli` (default:
-`artifact-tool`). For OfficeCLI use `--backend officecli --officecli <executable>`;
-the backend maps compiled 96 dpi CSS px coordinates to OfficeCLI's `px` dimensions,
-converts CSS px text sizes to points, atomically runs a JSON batch, and validates the
-exported OpenXML. The same finalizer and structural verifier process either output.
+OfficeCLI is the only PPTX writer. `build --officecli <executable>` checks version 1.0.152+
+and the required PPTX schemas, maps compiled 96 dpi CSS px coordinates to OfficeCLI's `px`
+dimensions, converts CSS px text sizes to points, atomically runs a JSON batch, and validates
+the exported OpenXML. `candidate.pptx` and `staging.pptx` have identical bytes; a separate
+read-only verifier checks the actual package.
 See [OfficeCLI backend and agent calls](officecli-backend.zh-CN.md) for the full protocol.
 
 ```bash
 PYTHON=/path/to/python
-NODE=/path/to/node
-
 $PYTHON -m deck_compiler build \
   --ir examples/research.deck_ir.json \
   --out build/deck-v2 \
-  --node "$NODE"
+  --officecli /path/to/officecli
 
 # Inspect every editable slide directly in PowerPoint (Normal or Reading view).
 # Preview/PDF inspection does not satisfy this gate. Record the reviewed staging:
