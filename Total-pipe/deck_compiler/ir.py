@@ -5,13 +5,13 @@ from .catalog import ARCHETYPES, COMPONENTS
 from .contracts import digest, issue
 
 
-SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]$")
-CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])", re.IGNORECASE)
+SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
+CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
 
 
 def caption_figure_ids(caption):
-    """Return normalized paper panel ids explicitly named by a caption."""
-    return {f"{number}{panel.lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    """Return normalized paper figure/panel ids explicitly named by a caption."""
+    return {f"{number}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
 
 
 def validate(ir):
@@ -40,7 +40,7 @@ def validate(ir):
         if isinstance(asset, dict) and "source_figure" in asset:
             check(isinstance(asset.get("source_figure"), str) and
                   bool(SOURCE_FIGURE.fullmatch(asset["source_figure"])),
-                  f"asset {key}: source_figure must look like 3a", rule="FIGURE_PROVENANCE_INVALID")
+                  f"asset {key}: source_figure must look like 3 or 3a", rule="FIGURE_PROVENANCE_INVALID")
     seen = set()
     for n, s in enumerate(slides, 1):
         if not isinstance(s, dict):
@@ -87,7 +87,7 @@ def validate(ir):
             expected = f.get("source_figure")
             actual = asset.get("source_figure") if isinstance(asset, dict) else None
             check(isinstance(expected, str) and bool(SOURCE_FIGURE.fullmatch(expected)),
-                  "Figure reference requires source_figure such as 3a", n,
+                  "Figure reference requires source_figure such as 3 or 3a", n,
                   "FIGURE_PROVENANCE_REQUIRED")
             check(isinstance(actual, str) and bool(SOURCE_FIGURE.fullmatch(actual)),
                   f"Asset {f['asset_id']} requires source_figure", n,
