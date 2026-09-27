@@ -1,15 +1,15 @@
 ---
 name: total-pipe-deck
-description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—编译—原生验收流水线。保留 PaperWorkflow、Story Planner、pwf2rpa 与 RPA 的科研职责，Deck IR 之后统一进入 Deck Compiler v2。
+description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—编译—原生验收流水线。保留 PaperWorkflow、Story Planner、pwf2rpa 与 RPA 的科研职责，Deck IR 之后统一进入 Deck Compiler v3。
 ---
 
-# Total-pipe Deck Compiler v2
+# Total-pipe Deck Compiler v3
 
 主链固定为：
 
 ```text
 PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
-    → canonical deck_ir.json → deterministic layout → OfficeCLI
+    → canonical deck_ir.json → v26 layout proposals + compiler fallback → OfficeCLI
     → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
     → qa_report.json → final.pptx
 ```
@@ -96,80 +96,23 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <deck_plan.json>
 archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`，再回 Story/RPA
 拆页。不得无限缩字号。
 
-## 5. 编译与原生验收
+## 5. Agent 直接调用 v3
 
-使用工作区提供的 Python；生成 PPTX 需要 OfficeCLI 1.0.152+ 可执行文件：
+在本实验目录运行；MCP 入口为 `deck_compiler/mcp_server.py`，配置见根目录 `.mcp.json`。
+该服务复用 pwf2rpa 协议和原有工具，同时新增：
 
-```bash
-cd Total-pipe
-python -m deck_compiler build --ir <deck_ir.json> --out <build_dir> \
-  --officecli <officecli可执行文件>
+- `totalpipe_compile(ir, out, layout_provider="v26")`：IR → layout + QA，不渲染。
+- `totalpipe_build(ir, out, layout_provider="v26", officecli="officecli")`：IR → OfficeCLI → PPTX 候选及 QA。
+- `totalpipe_review(out, officecli="officecli")`：需要看图时才导出逐页原生 PNG、schema 与 issues。
+
+`ir` 和 `out` 使用绝对路径。默认使用 v26；模型不支持或候选不通过时由现有布局逻辑回退，详情见 `layout_provider.json`。模型只提议 bbox，不改写科研内容。
+
+MCP 未加载时，使用 `.mcp.json` 中的 Python，工作目录为本项目根目录：
+
+```powershell
+python -m deck_compiler build --ir <absolute-deck_ir.json> --out <absolute-build-dir> --layout-provider v26 --officecli <officecli-path> --skip-native
 ```
 
-编译器保持一个 mutable candidate、一个 staging 和一个 final。`--skip-native` 只用于
-开发，不能晋级 final。
-OfficeCLI 映射的长度使用 CSS px，字号转换成 pt；batch 必须全项成功且无 warning。
-调用前阅读 `docs/officecli-backend.zh-CN.md`，检查 `qa_report.json.checks.backend`、
-OfficeCLI 版本和命令哈希。`candidate.pptx` 与 `staging.pptx` 必须字节一致。
-OfficeCLI 源码目录不等于可执行文件；其 HTML/截图不能代替 PowerPoint 原生验收。
+一般生成任务完成于候选 PPTX 与 QA；返回 artifact 路径、FAIL/WARNING/REVIEW 和模型回退情况。FAIL 必须处理；不能把候选称作 final。不要默认反复渲染或制作额外验收报告。
 
-在 macOS 上必须直接控制 Microsoft PowerPoint 打开 `staging.pptx`，在普通视图或
-阅读视图中逐页眼检可编辑幻灯片本身，检查文字、图像比例、论文图号与图注对应、
-panel 标签、碰撞和字体。眼检与导出应在同一次 PowerPoint 控制流程中完成；不得先
-导出 PDF、再以 Preview 或逐页渲染图代替 PowerPoint 眼检。
-在 Windows 上执行同样的 PowerPoint 界面眼检，并从该 staging 手工导出原生 PDF，
-再调用 `validate-native`；OfficeCLI 预览不能替代此门禁。
-
-完成逐页 PowerPoint 眼检后，先把检查记录绑定到当前 staging 与 layout：
-
-```bash
-python -m deck_compiler record-powerpoint-review --out <build_dir> \
-  --reviewer "<reviewer>" --slides all
-```
-
-然后在 PowerPoint 中导出 `native.pdf`，再绑定原生证据：
-
-```bash
-python -m deck_compiler validate-native --out <build_dir> \
-  --pdf <build_dir>/native.pdf --reviewer "<reviewer>"
-```
-
-`powerpoint_review.json` 必须声明 `method=powerpoint-ui`，覆盖全部 slide id，并与
-`staging.pptx` 和 `layout.json` 的哈希一致；否则 `validate-native` 与 `promote` 都拒绝继续。
-
-每个论文图素材与 figure reference 都必须写 `source_figure`（如 `3e`）。编译器会把
-asset、figure reference 和图注中的 `Fig.3e` 三方对齐；缺失或不一致均为 FAIL。
-科学图面默认最小有效尺寸为 220 px，低于阈值时返回
-`SCIENTIFIC_PANEL_TOO_SMALL` FAIL，必须换版式、拆页或精简内容，不能以人工
-acknowledgement 放行。
-
-统一报告为 `qa_report.json`：
-
-- `FAIL` 阻断 final。
-- `WARNING` 不阻断，但必须可追溯。
-- `REVIEW` 需要与 staging SHA-256 绑定的 reviewer acknowledgement。
-- `INFO` 仅记录。
-
-逐页检查后创建 acknowledgement，包含 `artifact_sha256`、`reviewer` 和完整
-`accepted_review_ids`，再晋级：
-
-```bash
-python -m deck_compiler promote --out <build_dir> --ack <review_ack.json>
-```
-
-`promote` 会重查 staging、IR、layout、PowerPoint PDF 与 acknowledgement 的哈希；
-任一证据过期都拒绝生成 `final.pptx`。
-
-## 6. 完成标准
-
-- PaperWorkflow 证据可追溯，Story 由用户选定的高能力 subagent 生成。
-- pwf2rpa strict 0 warning，RPA 三个规划门禁通过。
-- canonical truth count = 1，new adapter count = 0。
-- Deck Compiler 预检与结构 QA 为 0 FAIL。
-- staging 已在 PowerPoint UI 中逐页目检；图号—图注—素材一致，科学图面尺寸过门禁。
-- PowerPoint native PDF 页数一致并与同一 staging 哈希绑定。
-- 所有 REVIEW 均有 artifact-bound acknowledgement。
-- `state.json.phase=final`，最终只交付 `final.pptx`。
-
-旧 SlideDSL、`deckplan2slide.py`、`design_land.py`、artifact sidecar、PPTX sidecar 和
-旧 pipeline wrapper 已在 M5 删除，不再兼容或维护。
+用户要求正式 final 时，再按 `docs/deck-compiler-v2.md` 中原有原生验收与 promote 流程执行。OfficeCLI 截图不伪装为 PowerPoint UI 眼检。自动 issues 保留，不因截图观感而清零。

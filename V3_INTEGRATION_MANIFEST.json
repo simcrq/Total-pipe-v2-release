@@ -1,0 +1,85 @@
+{
+  "base": "user-provided total-pipe-v2 with pre-existing edits",
+  "installed_files": {
+    "requirements-v26.txt": {
+      "sha256": "e17cf51362f721a3e848002aec60ab936ff3ec754ffb30309f5b739e835cba84",
+      "previous_sha256": null
+    },
+    "deck_compiler\\layout.py": {
+      "sha256": "0836fd1aa9901b327e199270691eb524934ad50a7558b9fc77466e921b77eec6",
+      "previous_sha256": "f0c53f698a0afe575976b340093caf9166922dcd1bfff62cddc2f7d9199a1842"
+    },
+    "deck_compiler\\layout_provider.py": {
+      "sha256": "40ba3e840bf2f3e053a33791511cdca006fe0c7e30913484689c8d3d060af8f6",
+      "previous_sha256": null
+    },
+    "deck_compiler\\pipeline.py": {
+      "sha256": "5d59f558a74afb8c8f466072736b57a60d29b314f991b03f0a0a122dd7b3c7b9",
+      "previous_sha256": "d2773014575259ca0b2369e332c03e56bc36092d9f81654d72eb289f605b9a4c"
+    },
+    "deck_compiler\\__main__.py": {
+      "sha256": "eb72df92560074fa7507bed2390de2e50c991963ef4f5429d9785be540304cd2",
+      "previous_sha256": "7c838f931e874116f76a47eb5646061899efc80f46793cbd99867f43bc55ab32"
+    },
+    "docs\\v3-experiment.md": {
+      "sha256": "3ce36458985d1a81eb804c9a5a128be0d1c9d1a00da091cda41048ab819c25e3",
+      "previous_sha256": null
+    },
+    "layoutdiffusion_demo\\config.py": {
+      "sha256": "acf4087ff342d31708fa3347db1f378666d08f47bc67323663ffcca847d26156",
+      "previous_sha256": null
+    },
+    "layoutdiffusion_demo\\model.py": {
+      "sha256": "6d7eb41e87fe8942af887e1125a761ad2eed82991ca98835c143fb6dd1dfeef7",
+      "previous_sha256": null
+    },
+    "layoutdiffusion_demo\\__init__.py": {
+      "sha256": "e18b97da62e283961390a4f4df9a5bb319d603f7aad45568272dd715a9492542",
+      "previous_sha256": null
+    },
+    "models\\totalpipe_content_v26.pt": {
+      "sha256": "ab306795c73c8c6888889e78aadc2acd0bc799eee9614af67b0e1f865f5d050c",
+      "previous_sha256": null
+    },
+    "tests\\test_layout_provider.py": {
+      "sha256": "eb67ffd041c4d6c0a6d16067edfd93caa96506f391261089c15c7c88da62e357",
+      "previous_sha256": null
+    },
+    "totalpipe_layout\\contracts.py": {
+      "sha256": "cbd88314fa3162c2df469125b3353656072050c967959d4303956e6d752fe90d",
+      "previous_sha256": null
+    },
+    "totalpipe_layout\\data.py": {
+      "sha256": "6487a8d0df4549d3f551646a7e6bef3aa7980bb4924b759ce90230ecb55a4181",
+      "previous_sha256": null
+    },
+    "totalpipe_layout\\model.py": {
+      "sha256": "fc7076c96e564a81641a92331e750acc2325542e78a5f9c6ced382f5a8c30831",
+      "previous_sha256": null
+    },
+    "totalpipe_layout\\__init__.py": {
+      "sha256": "3028d3c553e3bda2f524369207e52ef1ea50951ade93dfd2ce757436014c10e5",
+      "previous_sha256": null
+    },
+    "deck_compiler\\officecli_review.py": {
+      "previous_sha256": null,
+      "sha256": "abe99857f1d8c452e34985f958e9140a39b9173043f10c0f64ab72cb7561c76a"
+    },
+    "deck_compiler\\mcp_server.py": {
+      "previous_sha256": null,
+      "sha256": "2056dc3a5f635ea77415e6355e087bf20a10bfb4ee53e2383d266dc8644de731"
+    },
+    ".mcp.json": {
+      "previous_sha256": "956a2153dd9b22de513dabc3ca78513149d15b1adc44cf8f33ab84e45bb0adc3",
+      "sha256": "54856e81f79f00b8852a7899e69e1854fa3ba3e6896622aa1adccf62661ddb5f"
+    },
+    ".codex-plugin\\plugin.json": {
+      "previous_sha256": "65a3a78a31bbd6760e5b2d6f6ffee9ba048ac38a2f4e76804f005f92a11bcf27",
+      "sha256": "1b9f0a90c3e0ae05d702dca4662d05bad512adb1cb073e69c282cdec8cac7221"
+    },
+    "skills\\total-pipe-deck\\SKILL.md": {
+      "previous_sha256": "2cf8e40554f31456ce5299954d12a02d8f0ed74f7ab260302e8096ed8e8afa5e",
+      "sha256": "edb48c3f06012449226fa15009acb60b367f32c6ce5a868d525c97e7a32ff04c"
+    }
+  }
+}

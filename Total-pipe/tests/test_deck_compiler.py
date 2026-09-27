@@ -8,7 +8,7 @@ import zipfile
 from PIL import Image
 from deck_compiler.contracts import TextBoxContract, issue, report, digest, file_hash
 from deck_compiler.ir import validate, derive
-from deck_compiler.layout import compile_deck
+from deck_compiler.layout import compile_deck, lower_whitespace_issue
 from deck_compiler.text_flow import select_text_flow
 from deck_compiler.ooxml import target_part, fill, background, NS
 from deck_compiler.pipeline import (build, ingest_native, promote, record_powerpoint_review,
@@ -156,6 +156,29 @@ class CompilerTests(unittest.TestCase):
         layout,items=compile_deck(ir,ROOT)
         self.assertIn('\n',layout['slides'][0]['elements'][0]['text'])
         self.assertNotIn('TITLE_WRAPPED',{i['rule'] for i in items})
+    def test_text_only_lower_whitespace_notice(self):
+        layout,items=compile_deck(fixture(),ROOT)
+        notices=[i for i in items if i['rule']=='TEXT_ONLY_LOWER_WHITESPACE']
+        self.assertEqual(len(notices),1)
+        self.assertEqual(notices[0]['slide'],2)
+        self.assertEqual(notices[0]['severity'],'WARNING')
+        self.assertEqual(notices[0]['diagnosis'],'design')
+        self.assertGreaterEqual(notices[0]['source']['empty_lower_px'],160)
+        # The reserved body boxes run to y=640; the notice follows drawn lines.
+        self.assertEqual(max(e['bbox'][1]+e['bbox'][3] for e in layout['slides'][1]['elements']
+                             if e['role']=='body'),640)
+    def test_filled_text_columns_do_not_warn_about_lower_band(self):
+        layout,_=compile_deck(fixture(),ROOT)
+        elements=copy.deepcopy(layout['slides'][1]['elements'])
+        for element in elements:
+            if element['role']=='body':
+                element['text']='\n'.join(['Detail']*8)
+        self.assertIsNone(lower_whitespace_issue(elements,2,260,640))
+    def test_lower_caveat_prevents_empty_band_notice(self):
+        ir=fixture()
+        ir['slides'][1]['semantic']['caveats']=['A caveat occupies the lower page.']
+        _,items=compile_deck(ir,ROOT)
+        self.assertFalse([i for i in items if i['rule']=='TEXT_ONLY_LOWER_WHITESPACE'])
     def test_long_parallel_paragraphs_use_distributed_arrow_list(self):
         ir=fixture(); slide=ir['slides'][1]
         slide['composition']['blocks']=[{

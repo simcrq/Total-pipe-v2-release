@@ -1,0 +1,112 @@
+{
+  "derived_from": "deck_ir.json",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "read_only": true,
+  "slides": [
+    {
+      "index": 1,
+      "slide_id": "s01-cover",
+      "title": "Graphene Failure",
+      "layout_id": "cover-hero",
+      "evidence_ids": [
+        "EV0002",
+        "EV0045"
+      ]
+    },
+    {
+      "index": 2,
+      "slide_id": "s02-motivation",
+      "title": "What limits near-ideal graphene?",
+      "layout_id": "metric-comparison",
+      "evidence_ids": [
+        "EV0057",
+        "EV0033",
+        "EV0004",
+        "EV0002"
+      ]
+    },
+    {
+      "index": 3,
+      "slide_id": "s03-methods",
+      "title": "How are both limits tested?",
+      "layout_id": "process-flow",
+      "evidence_ids": [
+        "EV0004",
+        "EV0009",
+        "EV0017",
+        "EV0025"
+      ]
+    },
+    {
+      "index": 4,
+      "slide_id": "s04-k1-onset",
+      "title": "When does the K1 mode soften?",
+      "layout_id": "figure-parameters",
+      "evidence_ids": [
+        "EV0055",
+        "EV0025"
+      ]
+    },
+    {
+      "index": 5,
+      "slide_id": "s05-strength-route",
+      "title": "How can K1 softening reduce strength?",
+      "layout_id": "figure-parameters",
+      "evidence_ids": [
+        "EV0031",
+        "EV0034",
+        "EV0032"
+      ]
+    },
+    {
+      "index": 6,
+      "slide_id": "s06-failure-map",
+      "title": "Tensile state selects the failure mode",
+      "layout_id": "figure-parameters",
+      "evidence_ids": [
+        "EV0029",
+        "EV0045",
+        "EV0002"
+      ]
+    },
+    {
+      "index": 7,
+      "slide_id": "s07-robustness",
+      "title": "Do orientation and shear matter?",
+      "layout_id": "figure-parameters",
+      "evidence_ids": [
+        "EV0049",
+        "EV0024",
+        "EV0046",
+        "EV0005"
+      ]
+    },
+    {
+      "index": 8,
+      "slide_id": "s08-experiment-gap",
+      "title": "Experiment vs prediction?",
+      "layout_id": "metric-comparison",
+      "evidence_ids": [
+        "EV0054",
+        "EV0028",
+        "EV0021",
+        "EV0020",
+        "EV0014"
+      ]
+    },
+    {
+      "index": 9,
+      "slide_id": "s09-conclusions",
+      "title": "Conclusions and limits",
+      "layout_id": "figure-parameters",
+      "evidence_ids": [
+        "EV0029",
+        "EV0034",
+        "EV0002",
+        "EV0054",
+        "EV0021",
+        "EV0005"
+      ]
+    }
+  ]
+}

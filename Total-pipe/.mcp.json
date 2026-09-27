@@ -1,16 +1,12 @@
 {
   "mcpServers": {
-    "pwf2rpa": {
-      "command": "/Users/simcr/.workbuddy/binaries/python/envs/default/bin/python",
+    "total_pipe_v3": {
+      "command": "F:\\Workbuddy\\ppt-generator\\layoutdiffusion_group_meeting_pptbench\\.venv\\Scripts\\python.exe",
       "args": [
-        "./pwf2rpa/integrations/mcp/server.py"
+        "E:\\pptx_re\\total-pipe-v3-experiment\\Total-pipe\\deck_compiler\\mcp_server.py"
       ],
-      "cwd": ".",
-      "env_vars": [
-        "PATH"
-      ],
-      "startup_timeout_sec": 10,
-      "tool_timeout_sec": 120
+      "startup_timeout_sec": 20,
+      "tool_timeout_sec": 600
     }
   }
 }

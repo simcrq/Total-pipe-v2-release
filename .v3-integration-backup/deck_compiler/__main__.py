@@ -22,17 +22,9 @@ def main():
         p = commands.add_parser(name)
         p.add_argument('--ir', required=True, type=Path)
         p.add_argument('--out', required=True, type=Path)
-        p.add_argument('--layout-provider', choices=('deterministic', 'v26'), default='deterministic')
-        p.add_argument('--layout-checkpoint', type=Path)
-        p.add_argument('--layout-candidates', type=int, default=32)
-        p.add_argument('--layout-seed', type=int, default=20261007)
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
-    p = commands.add_parser('review-officecli')
-    p.add_argument('--out', required=True, type=Path)
-    p.add_argument('--officecli', default='officecli')
-    p.add_argument('--render', choices=('native','html'), default='native')
     p = commands.add_parser('promote')
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--ack', type=Path)
@@ -49,11 +41,6 @@ def main():
     args = parser.parse_args()
     try:
         out = args.out.resolve()
-        if args.command == 'review-officecli':
-            from .officecli_review import review
-            result = review(out, args.officecli, args.render)
-            print(json.dumps({'status':result['status'], 'issue_count':result['issue_count'], 'pages':len(result['pages']), 'report':str(out/'officecli_review.json')}))
-            return 1 if result['status'] == 'REJECT' else 0
         if args.command == 'promote':
             print(promote(out, json.loads(args.ack.read_text(encoding='utf-8')) if args.ack else None))
             return 0
@@ -64,13 +51,11 @@ def main():
         if args.command == 'record-powerpoint-review':
             print(record_powerpoint_review(out, args.reviewer, args.slides))
             return 0
-        options = {'name': args.layout_provider, 'checkpoint': args.layout_checkpoint,
-                   'candidates': args.layout_candidates, 'seed': args.layout_seed}
         if args.command == 'compile':
             with locked(out):
-                _, _, qa = compile_input(args.ir.resolve(), out, options)
+                _, _, qa = compile_input(args.ir.resolve(), out)
         else:
-            qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options)
+            qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

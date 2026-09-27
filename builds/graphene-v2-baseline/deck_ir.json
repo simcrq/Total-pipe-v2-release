@@ -1,0 +1,464 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "graphene-failure-under-tension",
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "C:/Windows/Fonts/arial.ttf",
+    "bold_font_file": "C:/Windows/Fonts/arialbd.ttf",
+    "foreground": "#162B3A",
+    "background": "#FFFFFF",
+    "accent": "#137C8B",
+    "panel_fill": "#F1F6F7",
+    "panel_line": "#C8D9DD"
+  },
+  "assets": {
+    "fig1": {
+      "path": "images/6fa7e38fdfde65edc884ac52473c287c16941ebdb6dbf9fa819945cfbbcb9a5a.jpg",
+      "source_figure": "1"
+    },
+    "fig3": {
+      "path": "images/70b6a3a03062b116285645d1c7a5c9c7dea5e817b6eb5021ca70f8908debdaa8.jpg",
+      "source_figure": "3"
+    },
+    "fig4a": {
+      "path": "images/604256c8ca25d849f4a4cb22d819f07192e87c8c356c533cb068b34fc5430d3f.jpg",
+      "source_figure": "4"
+    },
+    "fig4c": {
+      "path": "images/630e8fc486ddc01e1cd208cf0c7285c65e7a77813975b1e9d05d0fa68fc37f0b.jpg",
+      "source_figure": "4"
+    }
+  },
+  "slides": [
+    {
+      "id": "s01-cover",
+      "semantic": {
+        "title": "Graphene Failure",
+        "purpose": "Introduce the paper’s question about competing tensile failure mechanisms.",
+        "takeaway": "The predicted failure mode depends on the tensile state.",
+        "evidence_refs": [
+          "EV0002",
+          "EV0045"
+        ],
+        "caveats": [],
+        "speaker_notes": "Paper: “Failure Mechanisms of Graphene under Tension,” C. A. Marianetti and H. G. Yevick, Physical Review Letters 105, 245502 (2010), DOI 10.1103/PhysRevLett.105.245502. The title is shortened for the cover; the full paper title and citation are shown below. Figure 4(a) is the paper’s loading-direction map."
+      },
+      "composition": {
+        "archetype": "cover-hero",
+        "blocks": [
+          {
+            "id": "paper-title",
+            "component": "definition",
+            "label": "Paper",
+            "text": "Failure Mechanisms of Graphene under Tension"
+          },
+          {
+            "id": "authors",
+            "component": "source",
+            "label": "Authors and journal",
+            "text": "C. A. Marianetti & H. G. Yevick · Physical Review Letters 105 (2010)"
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig4a",
+            "source_figure": "4",
+            "caption": "Fig. 4(a). Maximum stable strain across tensile directions; regions differ in which instability occurs first.",
+            "alt": "Failure-mode map versus tensile direction, with distinct elastic and K1-instability regions.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s02-motivation",
+      "semantic": {
+        "title": "What limits near-ideal graphene?",
+        "purpose": "Set up the unresolved comparison between experimental failure and prior uniaxial theory.",
+        "takeaway": "The first failure mechanism under a generic tensile state was still an open question.",
+        "evidence_refs": [
+          "EV0057",
+          "EV0033",
+          "EV0004",
+          "EV0002"
+        ],
+        "caveats": [
+          "The prior experiment and calculations probe different loading contexts."
+        ],
+        "speaker_notes": "The paper opens with two findings from different loading contexts: nearly ideal nanoindentation caused failure, while previous armchair/zigzag phonon calculations identified elastic instability. The authors ask which instability comes first for a generic tensile state. This comparison motivates the calculations; it does not claim that the experiment and calculations reproduce identical boundary conditions."
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {
+            "id": "indentation",
+            "component": "direct-evidence",
+            "label": "Nanoindentation",
+            "text": "Lee et al. strained graphene to failure under conditions described as nearly ideal."
+          },
+          {
+            "id": "uniaxial",
+            "component": "direct-evidence",
+            "label": "Uniaxial phonons",
+            "text": "Earlier calculations found elastic instability for armchair or zigzag loading."
+          },
+          {
+            "id": "open-question",
+            "component": "question",
+            "label": "Open question",
+            "text": "Which instability occurs first for a generic state of tension?"
+          },
+          {
+            "id": "study",
+            "component": "body",
+            "label": "This study",
+            "text": "Compare the elastic limit with a finite-wave-vector K1 phonon instability."
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s03-methods",
+      "semantic": {
+        "title": "How are both limits tested?",
+        "purpose": "Summarize the strain-dependent force and phonon calculations.",
+        "takeaway": "The workflow compares elastic instability with the K1-mode onset.",
+        "evidence_refs": [
+          "EV0004",
+          "EV0009",
+          "EV0017",
+          "EV0025"
+        ],
+        "caveats": [],
+        "speaker_notes": "DFT forces as a function of strain are used to assess elastic instability. Phonons are computed with the displacement method, with forces generated using DFT in the local density approximation. The calculation then compares the elastic and K1-mode limits across tensile states. See the cited evidence in the speaker-note footer for the source spans."
+      },
+      "composition": {
+        "archetype": "process-flow",
+        "blocks": [
+          {
+            "id": "strain",
+            "component": "process-step",
+            "label": "1 · Strain states",
+            "text": "Evaluate strain-dependent tensile response, including equibiaxial loading."
+          },
+          {
+            "id": "forces",
+            "component": "process-step",
+            "label": "2 · DFT forces",
+            "text": "Generate strained-structure forces using the local density approximation."
+          },
+          {
+            "id": "phonons",
+            "component": "process-step",
+            "label": "3 · Phonons",
+            "text": "Calculate phonons with the displacement method."
+          },
+          {
+            "id": "compare",
+            "component": "process-step",
+            "label": "4 · Compare limits",
+            "text": "Track the elastic instability against the K1-mode onset."
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s04-k1-onset",
+      "semantic": {
+        "title": "When does the K1 mode soften?",
+        "purpose": "Show the calculated K1 softening threshold and its independent cross-check.",
+        "takeaway": "Two calculations place K1 softening near ε_A ≈ 0.21.",
+        "evidence_refs": [
+          "EV0055",
+          "EV0025"
+        ],
+        "caveats": [
+          "These are calculated thresholds for idealized equibiaxial loading, not measured breaking strains."
+        ],
+        "speaker_notes": "Figure 1 shows significant softening of in-plane phonons under equibiaxial strain. The phonon calculation places the K1 soft mode at ε_A = 0.205–0.212. A separate mode-energy analysis predicts ε_A = 0.213. These are closely matching calculated thresholds, not a direct measurement of breaking strain."
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "phonon-limit",
+            "component": "result",
+            "label": "Phonon threshold",
+            "text": "K1 softens at ε_A = 0.205–0.212 under equibiaxial strain."
+          },
+          {
+            "id": "energy-check",
+            "component": "comparison",
+            "label": "Independent check",
+            "text": "Mode-energy analysis predicts ε_A = 0.213, closely matching the phonon threshold."
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig1",
+            "source_figure": "1",
+            "caption": "Fig. 1. In-plane phonon branches under equibiaxial strain; the K1 mode approaches instability at K.",
+            "alt": "In-plane phonon dispersion branches for unstrained and strained graphene, showing softening toward K1 instability.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s05-strength-route",
+      "semantic": {
+        "title": "How can K1 softening reduce strength?",
+        "purpose": "Connect the soft-mode energy landscape to the proposed structural and mechanical consequences.",
+        "takeaway": "The authors link K1 softening to a structural transition and reduced strength in some tensile states.",
+        "evidence_refs": [
+          "EV0031",
+          "EV0034",
+          "EV0032"
+        ],
+        "caveats": [],
+        "speaker_notes": "The paper reports that further strain deepens and widens the K1 double-well potential. It interprets the mode as a route toward isolated hexagonal rings and reduced strength. Figure 3 supplies the mechanical response: the K-cell stress curve drops near the K1 softening. Present the structural pathway as the authors’ interpretation, not as a directly imaged transition in this calculation."
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "structure",
+            "component": "hypothesis",
+            "label": "Structural route",
+            "text": "The authors infer that the deepening K1 double well leads toward isolated hexagonal rings."
+          },
+          {
+            "id": "strength",
+            "component": "result",
+            "label": "Strength implication",
+            "text": "The K-cell stress drops near softening; the proposed route can reduce strength."
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig3",
+            "source_figure": "3",
+            "caption": "Fig. 3. Nominal stress versus equibiaxial strain; the K-cell response drops near K1 softening.",
+            "alt": "Nominal stress curves under equibiaxial strain, with a stress drop near the K1 soft-mode onset.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s06-failure-map",
+      "semantic": {
+        "title": "Tensile state selects the failure mode",
+        "purpose": "Read the paper’s loading-direction map of elastic and K1-mode limits.",
+        "takeaway": "Elastic instability governs regions I and III; the K1 mode occurs first in region II.",
+        "evidence_refs": [
+          "EV0029",
+          "EV0045",
+          "EV0002"
+        ],
+        "caveats": [],
+        "speaker_notes": "The authors identify regions I and III as elastic-instability failure, where the elastic limit precedes the K1 mode. The complementary region is limited first by the K1 instability. They emphasize that equibiaxial loading follows a different route from the usual uniaxial armchair/zigzag case. Use the labels in Figure 4(a) when presenting the regions."
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "elastic-regions",
+            "component": "direct-evidence",
+            "label": "Regions I and III",
+            "text": "Elastic instability precedes the K1 mode."
+          },
+          {
+            "id": "k1-region",
+            "component": "result",
+            "label": "Region II",
+            "text": "The K1-mode instability arrives first; the route changes with tensile direction."
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig4a",
+            "source_figure": "4",
+            "caption": "Fig. 4(a). Maximum stable strain across tensile directions; regions I/III are elastic-limited and region II is K1-limited.",
+            "alt": "Failure-mode map separating elastic-instability and K1-instability regions across tensile directions.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s07-robustness",
+      "semantic": {
+        "title": "Do orientation and shear matter?",
+        "purpose": "Summarize orientation rotation and shear checks, plus their scope limitation.",
+        "takeaway": "Rotation and shear make only small changes to the predicted K1 onset, but the state map is incomplete.",
+        "evidence_refs": [
+          "EV0049",
+          "EV0024",
+          "EV0046",
+          "EV0005"
+        ],
+        "caveats": [
+          "Rotation and shear checks do not enumerate every possible tensile state."
+        ],
+        "speaker_notes": "The coordinates were rotated in 3-degree increments; Figure 4(c) displays the 15-degree case. The rotated results remain within the envelope formed by the original and 15-degree curves. The authors report no qualitative shear-induced change and only small quantitative shifts to K1 onset. Because graphene is anisotropic, the paper notes that the orientation/shear enumeration is not exhaustive."
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "rotation",
+            "component": "observation",
+            "label": "Rotation",
+            "text": "The 15° map stays within the original/rotated envelope; orientations were sampled every 3°."
+          },
+          {
+            "id": "shear-scope",
+            "component": "limitation",
+            "label": "Shear and scope",
+            "text": "Shear shifts K1 onset only slightly. Anisotropy leaves some tensile states untested."
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig4c",
+            "source_figure": "4",
+            "caption": "Fig. 4(c). At 15° rotation, the failure map remains within the original/rotated envelope.",
+            "alt": "Failure map after a 15-degree rotation of the coordinate system.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s08-experiment-gap",
+      "semantic": {
+        "title": "Experiment vs prediction?",
+        "purpose": "Compare the nanoindentation breaking strain with the calculated elastic limit and separate evidence from explanation.",
+        "takeaway": "The measured nominal strain (0.225) is closer to the calculated elastic limit (0.216), but the failure route remains unresolved.",
+        "evidence_refs": [
+          "EV0054",
+          "EV0028",
+          "EV0021",
+          "EV0020",
+          "EV0014"
+        ],
+        "caveats": [
+          "K1 stabilization is a proposed explanation, not a demonstrated mechanism."
+        ],
+        "speaker_notes": "Lee et al. report a nominal equibiaxial breaking strain of 0.225. The paper says this is in much better agreement with its calculated equibiaxial elastic-instability strain of 0.216. The authors suggest that K1 may be stabilized in nanoindentation, but they do not establish this. They identify possible differences involving the indenter environment and the experimental versus constructed equibiaxial strain state."
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {
+            "id": "measurement",
+            "component": "result",
+            "label": "Measured",
+            "text": "Nanoindentation reports nominal equibiaxial breaking strain 0.225."
+          },
+          {
+            "id": "elastic-limit",
+            "component": "comparison",
+            "label": "Calculated elastic limit",
+            "text": "The equibiaxial elastic-instability strain is 0.216."
+          },
+          {
+            "id": "stabilization",
+            "component": "hypothesis",
+            "label": "Authors’ proposal",
+            "text": "The K1 mode may be stabilized during nanoindentation."
+          },
+          {
+            "id": "alternatives",
+            "component": "limitation",
+            "label": "Possible differences",
+            "text": "Indenter environment and strain construction may affect the comparison."
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "s09-conclusions",
+      "semantic": {
+        "title": "Conclusions and limits",
+        "purpose": "Summarize the mode-selection result, the proposed K1 strength route, and open limits.",
+        "takeaway": "Tensile state selects whether elastic instability or a K1 soft mode limits strength.",
+        "evidence_refs": [
+          "EV0029",
+          "EV0034",
+          "EV0002",
+          "EV0054",
+          "EV0021",
+          "EV0005"
+        ],
+        "caveats": [
+          "PaperWorkflow evidence coverage is under review; the paper also notes that rotation/shear sampling is not exhaustive."
+        ],
+        "speaker_notes": "The paper’s central result is mode selection by tensile state: elastic instability in regions I/III and a K1 soft-mode route in region II. The authors connect K1 softening with a phase transition and reduced strength in some states. The nanoindentation comparison does not settle which route occurred. The paper says its orientation/shear treatment is incomplete. PaperWorkflow’s synthesis readiness also marks evidence coverage as review, so this deck should not be read as exhaustive coverage of all workflow facets."
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "mode-selection",
+            "component": "conclusion",
+            "label": "Mode selection",
+            "text": "Elastic failure in regions I/III; K1 soft-mode failure in region II."
+          },
+          {
+            "id": "limits",
+            "component": "limitation",
+            "label": "Open limits",
+            "text": "Indentation leaves the route unresolved; rotation/shear sampling is incomplete."
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fig4a",
+            "source_figure": "4",
+            "caption": "Fig. 4(a). The loading-direction map summarizes where elastic and K1-mode instabilities occur first.",
+            "alt": "Summary of elastic-limited and K1-limited failure regions across tensile directions.",
+            "panel_count": 1,
+            "min_panel_extent": 220,
+            "caption_height": 62,
+            "caption_font_size": 20,
+            "caption_font_floor": 18
+          }
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

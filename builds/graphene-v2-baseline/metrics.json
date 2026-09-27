@@ -1,0 +1,25 @@
+{
+  "elapsed_seconds": 6.641,
+  "rerenders": 1,
+  "canonical_truth_count": 1,
+  "new_adapter_count": 0,
+  "backend": "officecli",
+  "layout_provider": {
+    "name": "deterministic"
+  },
+  "officecli_runtime": {
+    "version": "1.0.152",
+    "schema_sha256": "49e6ba4cc0319deae872d500e0bba3bcba077c86a787b02ca865a166c18ef1ce"
+  },
+  "officecli_commands_sha256": "1af5c927a839c6b1b73d452981bf71d4906ec2185d1dc7af8c76afed6638821f",
+  "slide_count": 9,
+  "layout_llm_fallback_count": 0,
+  "qa_counts": {
+    "FAIL": 0,
+    "WARNING": 19,
+    "REVIEW": 7,
+    "INFO": 0
+  },
+  "false_positive_rate": null,
+  "repair_amplification_factor": null
+}

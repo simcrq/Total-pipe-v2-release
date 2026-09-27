@@ -66,6 +66,8 @@ def issue(rule, severity, message, slide=None, shape=None, detector="semantic-pr
 def diagnose(detector, confidence, source):
     if detector in ("semantic-preflight",):
         return "content_capacity" if confidence == "HIGH" else "scientific_review"
+    if detector == "design-preflight":
+        return "design"
     if confidence != "HIGH":
         return "infra_or_measurement_review"
     if source.get("renderer") in ("libreoffice", "keynote"):

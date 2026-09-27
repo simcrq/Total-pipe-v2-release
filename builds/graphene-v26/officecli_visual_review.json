@@ -1,0 +1,83 @@
+{
+  "method": "independent-officecli-native-screenshot-review",
+  "reviewer": "officecli_visual_review",
+  "artifact_sha256": "1f4bb396b207251727e39fb38b19e3c95e63f538b6f05102da3c3ee790d72139",
+  "pages": [
+    {
+      "page": 1,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-1.png",
+      "sha256": "2a63fccc79b27006e0e47e68eb917ab72536df9effdfc839b614f54bf61a36e6",
+      "result": "PASS",
+      "observation": "图表比例、标题、图注及页脚完整。",
+      "matches_reexport": true
+    },
+    {
+      "page": 2,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-2.png",
+      "sha256": "0ef8dece86cb4ba572bb4cd8661b0c48db97036408230f9df458ebb8a76e1737",
+      "result": "PASS",
+      "observation": "四块文字完整，无列间碰撞。",
+      "matches_reexport": true
+    },
+    {
+      "page": 3,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-3.png",
+      "sha256": "dddd471508e601f44cf8081bc8f9f514f5a82367164336d1fa678bea76c5addc",
+      "result": "PASS",
+      "observation": "流程按行 1→2→3→4，顺序清楚。",
+      "matches_reexport": true
+    },
+    {
+      "page": 4,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-4.png",
+      "sha256": "402597e946e77c1e37b1100d7ac588b61d73bc9e3bfe154cb3ff9ac00c9c3a3c",
+      "result": "PASS",
+      "observation": "0.213 完整，声子图及限制说明正常。",
+      "matches_reexport": true
+    },
+    {
+      "page": 5,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-5.png",
+      "sha256": "b4c2ba6cf4f0a44821fb8683792221d60f84882add965eee9ea3a86a5b78b4f0",
+      "result": "PASS",
+      "observation": "应力图无裁切；内嵌图细刻度可选放大。",
+      "matches_reexport": true
+    },
+    {
+      "page": 6,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-6.png",
+      "sha256": "8ff01d6460804955d7a3b340b5b77c8aa695ece7b57568804bb3c36494d619ab",
+      "result": "PASS",
+      "observation": "区域 I/II/III 分界及对应文字可辨。",
+      "matches_reexport": true
+    },
+    {
+      "page": 7,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-7.png",
+      "sha256": "71bff39e65579b0ff98a17ef365d80c2257cf929aa066144ac28cafcbab0a081",
+      "result": "PASS",
+      "observation": "旋转示意、坐标、正文和 caveat 完整。",
+      "matches_reexport": true
+    },
+    {
+      "page": 8,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-8.png",
+      "sha256": "3e5b85927acb5e78e9914e6601d74cfa72e85d6663b5318107775eed8ed08ebc",
+      "result": "PASS",
+      "observation": "0.216 和 0.225 均完整，无数字断裂。",
+      "matches_reexport": true
+    },
+    {
+      "page": 9,
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-slide-9.png",
+      "sha256": "5b269fb0fec245682c03bb00af3253bb0eabf8a2171dfee95571e901496542b6",
+      "result": "PASS",
+      "observation": "图文及限制说明完整；科学图细字可选放大。",
+      "matches_reexport": true
+    }
+  ],
+  "result": "PASS",
+  "scope": "仅所列截图，无可见裁切、溢出或覆盖；不等同 PowerPoint UI 验收。",
+  "raw_issue_count": 16,
+  "strict_officecli_status": "REJECT"
+}

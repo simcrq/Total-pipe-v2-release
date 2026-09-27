@@ -1,0 +1,79 @@
+{
+  "derived_from": "deck_ir.json",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "read_only": true,
+  "visuals": [
+    {
+      "slide_id": "s01-cover",
+      "asset_id": "fig4a",
+      "source_figure": "4",
+      "caption": "Fig. 4(a). Maximum stable strain across tensile directions; regions differ in which instability occurs first.",
+      "alt": "Failure-mode map versus tensile direction, with distinct elastic and K1-instability regions.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    },
+    {
+      "slide_id": "s04-k1-onset",
+      "asset_id": "fig1",
+      "source_figure": "1",
+      "caption": "Fig. 1. In-plane phonon branches under equibiaxial strain; the K1 mode approaches instability at K.",
+      "alt": "In-plane phonon dispersion branches for unstrained and strained graphene, showing softening toward K1 instability.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    },
+    {
+      "slide_id": "s05-strength-route",
+      "asset_id": "fig3",
+      "source_figure": "3",
+      "caption": "Fig. 3. Nominal stress versus equibiaxial strain; the K-cell response drops near K1 softening.",
+      "alt": "Nominal stress curves under equibiaxial strain, with a stress drop near the K1 soft-mode onset.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    },
+    {
+      "slide_id": "s06-failure-map",
+      "asset_id": "fig4a",
+      "source_figure": "4",
+      "caption": "Fig. 4(a). Maximum stable strain across tensile directions; regions I/III are elastic-limited and region II is K1-limited.",
+      "alt": "Failure-mode map separating elastic-instability and K1-instability regions across tensile directions.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    },
+    {
+      "slide_id": "s07-robustness",
+      "asset_id": "fig4c",
+      "source_figure": "4",
+      "caption": "Fig. 4(c). At 15° rotation, the failure map remains within the original/rotated envelope.",
+      "alt": "Failure map after a 15-degree rotation of the coordinate system.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    },
+    {
+      "slide_id": "s09-conclusions",
+      "asset_id": "fig4a",
+      "source_figure": "4",
+      "caption": "Fig. 4(a). The loading-direction map summarizes where elastic and K1-mode instabilities occur first.",
+      "alt": "Summary of elastic-limited and K1-limited failure regions across tensile directions.",
+      "panel_count": 1,
+      "min_panel_extent": 220,
+      "caption_height": 62,
+      "caption_font_size": 20,
+      "caption_font_floor": 18
+    }
+  ]
+}

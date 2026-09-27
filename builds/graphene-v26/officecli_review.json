@@ -1,0 +1,66 @@
+{
+  "schema_version": "officecli-review-1",
+  "method": "officecli-cli",
+  "requested_render": "native",
+  "artifact_sha256": "1f4bb396b207251727e39fb38b19e3c95e63f538b6f05102da3c3ee790d72139",
+  "layout_sha256": "c683e209023056a0de26d93c362c0583a7c34f79c5e9a920397f7beffb39ed95",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "officecli_runtime": {
+    "version": "1.0.152",
+    "schema_sha256": "49e6ba4cc0319deae872d500e0bba3bcba077c86a787b02ca865a166c18ef1ce"
+  },
+  "schema_count": 0,
+  "issue_count": 16,
+  "structural_items": [],
+  "pages": [
+    {
+      "slide_id": "s01-cover",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-1.png",
+      "sha256": "2a63fccc79b27006e0e47e68eb917ab72536df9effdfc839b614f54bf61a36e6"
+    },
+    {
+      "slide_id": "s02-motivation",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-2.png",
+      "sha256": "0ef8dece86cb4ba572bb4cd8661b0c48db97036408230f9df458ebb8a76e1737"
+    },
+    {
+      "slide_id": "s03-methods",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-3.png",
+      "sha256": "dddd471508e601f44cf8081bc8f9f514f5a82367164336d1fa678bea76c5addc"
+    },
+    {
+      "slide_id": "s04-k1-onset",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-4.png",
+      "sha256": "402597e946e77c1e37b1100d7ac588b61d73bc9e3bfe154cb3ff9ac00c9c3a3c"
+    },
+    {
+      "slide_id": "s05-strength-route",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-5.png",
+      "sha256": "b4c2ba6cf4f0a44821fb8683792221d60f84882add965eee9ea3a86a5b78b4f0"
+    },
+    {
+      "slide_id": "s06-failure-map",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-6.png",
+      "sha256": "8ff01d6460804955d7a3b340b5b77c8aa695ece7b57568804bb3c36494d619ab"
+    },
+    {
+      "slide_id": "s07-robustness",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-7.png",
+      "sha256": "71bff39e65579b0ff98a17ef365d80c2257cf929aa066144ac28cafcbab0a081"
+    },
+    {
+      "slide_id": "s08-experiment-gap",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-8.png",
+      "sha256": "3e5b85927acb5e78e9914e6601d74cfa72e85d6663b5318107775eed8ed08ebc"
+    },
+    {
+      "slide_id": "s09-conclusions",
+      "path": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-9.png",
+      "sha256": "5b269fb0fec245682c03bb00af3253bb0eabf8a2171dfee95571e901496542b6"
+    }
+  ],
+  "status": "REJECT",
+  "powerpoint_ui_review": false,
+  "final_promotion": false,
+  "commands_sha256": "a0616a8df490fa06456b53b20a60b2ad6c5d481f80cb860699432acb6a7de50f"
+}

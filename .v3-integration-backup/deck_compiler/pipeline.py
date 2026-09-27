@@ -45,22 +45,12 @@ def locked(out):
         lock.unlink()
 
 
-def compile_input(ir_path, out, layout_options=None):
+def compile_input(ir_path, out):
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
-    if layout_options and layout_options.get('name') == 'v26':
-        try:
-            from .layout_provider import compile_v26
-            layout, issues = compile_v26(ir_path, checkpoint=layout_options.get('checkpoint'),
-                candidates=layout_options.get('candidates', 32), seed=layout_options.get('seed', 20261007))
-        except (ValueError, OSError, ImportError, RuntimeError) as error:
-            layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
-    else:
-        layout, issues = compile_deck(ir, ir_path.parent)
+    layout, issues = compile_deck(ir, ir_path.parent)
     write_json(out/'deck_ir.json', ir)
     if layout:
         write_json(out/'layout.json', layout)
-        if layout.get('layout_provider'):
-            write_json(out/'layout_provider.json', layout['layout_provider'])
         for name, value in derive(ir, layout).items():
             write_json(out/'derived'/name, value)
     qa = report(issues, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': layout is not None})
@@ -68,7 +58,7 @@ def compile_input(ir_path, out, layout_options=None):
     return ir, layout, qa
 
 
-def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None):
+def build(ir_path, out, native_render=True, officecli_executable='officecli'):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -76,9 +66,9 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
         write_json(out/'state.json', {'phase': 'compiling', 'previous_final_sha256': old_final})
         for name in ('candidate.pptx', 'candidate.officecli.batch.json', 'officecli_issues.json',
                      'staging.pptx', 'native.pdf', 'native.json',
-                     'powerpoint_review.json', 'layout.json', 'layout_provider.json'):
+                     'powerpoint_review.json', 'layout.json'):
             (out/name).unlink(missing_ok=True)
-        ir, layout, qa = compile_input(ir_path, out, layout_options) if layout_options else compile_input(ir_path, out)
+        ir, layout, qa = compile_input(ir_path, out)
         items = qa['items']
         if qa['counts']['FAIL']:
             write_json(out/'state.json', {'phase': 'preflight_failed', 'previous_final_sha256': old_final})
@@ -144,7 +134,6 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
         write_json(out/'metrics.json', {'elapsed_seconds': round(time.monotonic()-started, 3),
             'rerenders': render_count, 'canonical_truth_count': 1, 'new_adapter_count': 0,
             'backend': 'officecli',
-            'layout_provider': layout.get('layout_provider', {'name': 'deterministic'}),
             'officecli_runtime': officecli_runtime,
             'officecli_commands_sha256': command_sha256,
             'slide_count': len(ir['slides']), 'layout_llm_fallback_count': 0,

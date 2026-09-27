@@ -81,7 +81,7 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  empty_share=round(share, 3))
 
 
-def compile_deck(ir, base, _retry=True, proposals=None):
+def compile_deck(ir, base, _retry=True):
     issues = validate(ir)
     if issues:
         return None, issues
@@ -250,25 +250,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW", "Confirm scientific panel labels and evidence fidelity",
                                 n, eid, detector="scientific-review", confidence="MEDIUM"))
         adaptations = []
-        proposal = (proposals or {}).get(slide['id'])
-        if proposal:
-            supplied = proposal['units']
-            expected = [b['id'] for b in blocks] + [f'figure-{k+1}' for k in range(len(figs))]
-            if len(expected) != len(set(expected)) or set(supplied) != set(expected):
-                raise ValueError('Provider unit identities must match the canonical slide exactly')
-            if family == 'evidence':
-                for col, role in enumerate(('direct-evidence', 'hypothesis')):
-                    text(role+':heading', '直接证据' if col == 0 else '假设（未证实）',
-                         [56+col*600, top, 568, 44], 'heading', 28, 24, 1)
-            for b in blocks:
-                block(b, supplied[b['id']]['bbox'])
-            for k, f in enumerate(figs, 1):
-                group = supplied[f'figure-{k}']
-                figure({**f, 'caption_height': group.get('caption_height', f.get('caption_height', 62))},
-                       group['bbox'], k)
-            adaptations.append({'action': 'layout_provider', 'provider': 'v26',
-                                'status': proposal['status']})
-        elif family in ("figure-left", "figure-right") and figs:
+        if family in ("figure-left", "figure-right") and figs:
             fig_x, txt_x = (56, 784) if family == "figure-left" else (552, 56)
             fig_w, txt_w = (692, 440) if family == "figure-left" else (672, 460)
             figure(figs[0], [fig_x, top, fig_w, bh], 1)
@@ -344,7 +326,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         failed_slides = {i["slide"] for i in issues if i["rule"] == "SPLIT_REQUIRED"}
         for n in failed_slides:
             alternative["slides"][n-1]["presentation"]["variant"] = "spacious"
-        retry_layout, retry_issues = compile_deck(alternative, base, _retry=False, proposals=proposals)
+        retry_layout, retry_issues = compile_deck(alternative, base, _retry=False)
         if retry_layout and not any(i["severity"] == "FAIL" for i in retry_issues):
             retry_layout["ir_sha256"] = digest(ir)
             retry_layout["selected_variants"] = {str(n): "spacious" for n in sorted(failed_slides)}

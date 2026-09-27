@@ -1,0 +1,2 @@
+-r deck_compiler/requirements.txt
+torch>=2.6

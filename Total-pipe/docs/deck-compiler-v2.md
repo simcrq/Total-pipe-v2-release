@@ -51,6 +51,14 @@ rows and fit the component box above the font floor.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer
 new scientific claims or split prose at punctuation merely to fill space.
 
+For text-only column slides with at least three blocks, geometric preflight estimates the
+visible bottom of the laid-out text rather than treating the full reserved textbox as occupied.
+When the empty lower band is at least 160 CSS px and 40% of the body area, it emits
+`TEXT_ONLY_LOWER_WHITESPACE` as a slide-specific `WARNING` with measured bounds in
+`qa_report.json`; the CLI also includes it in `design_notices` with the slide number. This is a
+design notice, not an instruction to invent filler content or a
+promotion blocker; PowerPoint visual review remains the final judgment.
+
 ## Lifecycle
 
 Each output directory owns exactly one mutable candidate and staging file and one validated

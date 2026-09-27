@@ -1,0 +1,405 @@
+{
+  "schema_version": "2.0",
+  "artifact_sha256": "05982c62491838bb84cfe7c09de086e729aa23de07bd2e6551bade4f49db3715",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "status": "REVIEW",
+  "counts": {
+    "FAIL": 0,
+    "WARNING": 19,
+    "REVIEW": 7,
+    "INFO": 0
+  },
+  "checks": {
+    "structural": true,
+    "native": false,
+    "renderer": null,
+    "backend": "officecli",
+    "officecli_schema": true,
+    "officecli_issues": true,
+    "officecli_runtime": {
+      "version": "1.0.152",
+      "schema_sha256": "49e6ba4cc0319deae872d500e0bba3bcba077c86a787b02ca865a166c18ef1ce"
+    },
+    "officecli_commands_sha256": "1af5c927a839c6b1b73d452981bf71d4906ec2185d1dc7af8c76afed6638821f"
+  },
+  "items": [
+    {
+      "id": "5cd539a101a9a80e",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 1,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "481e3aaba481fa6f",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 4,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "b2bceba733ec483a",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 5,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "be0429f4a19c2143",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 6,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "322e5f96f53b3b5d",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 7,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "edea30127e76bf5d",
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "slide": 9,
+      "shape": "figure-1",
+      "message": "Confirm scientific panel labels and evidence fidelity",
+      "source": {
+        "detector": "scientific-review"
+      },
+      "confidence": "MEDIUM",
+      "diagnosis": "infra_or_measurement_review"
+    },
+    {
+      "id": "05c9b1a3305e9d98",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 1,
+      "shape": "/slide[1]/shape[@id=100004]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O1"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "3a6ac997490667d1",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 3,
+      "shape": "/slide[3]/shape[@id=100030]",
+      "message": "text overflow: 2 lines at 21.0pt need 52pt, usable 33pt. suggest.height=1.9cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O2"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "1401f95699f3a9db",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 4,
+      "shape": "/slide[4]/shape[@id=100037]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O3"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "f1ad868f453fbad3",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 4,
+      "shape": "/slide[4]/shape[@id=100041]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 83pt. suggest.height=4.65cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O4"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "c9823c3d4cf4e756",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 5,
+      "shape": "/slide[5]/shape[@id=100043]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O5"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "dc7716120747df12",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 5,
+      "shape": "/slide[5]/shape[@id=100046]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O6"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "6f78deb6692db923",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 5,
+      "shape": "/slide[5]/shape[@id=100048]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 103pt. suggest.height=4.65cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O7"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "3dc4e07391d04bca",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 6,
+      "shape": "/slide[6]/shape[@id=100055]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O8"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "9fdd60009a5e4c38",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 6,
+      "shape": "/slide[6]/shape[@id=100059]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 103pt. suggest.height=4.65cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O9"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "1c8795e907aeacda",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 7,
+      "shape": "/slide[7]/shape[@id=100061]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O10"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "e1b65a213279d78f",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 7,
+      "shape": "/slide[7]/shape[@id=100065]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O11"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "ff9e7df462ee3d42",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 7,
+      "shape": "/slide[7]/shape[@id=100067]",
+      "message": "text overflow: 4 lines at 20.2pt need 101pt, usable 83pt. suggest.height=3.6cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O12"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "85a39258202d1bbb",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 7,
+      "shape": "/slide[7]/shape[@id=100069]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 83pt. suggest.height=4.65cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O13"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "65446c016458aa2b",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 8,
+      "shape": "/slide[8]/shape[@id=100071]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O14"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "b9dc87673d02c9f3",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 8,
+      "shape": "/slide[8]/shape[@id=100076]",
+      "message": "text overflow: 2 lines at 18.0pt need 45pt, usable 33pt. suggest.height=1.6cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O15"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "4d1e259bceea6042",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 8,
+      "shape": "/slide[8]/shape[@id=100080]",
+      "message": "text overflow: 2 lines at 20.2pt need 51pt, usable 33pt. suggest.height=1.8cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O16"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "c937388217132376",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 9,
+      "shape": "/slide[9]/shape[@id=100085]",
+      "message": "text overflow: 2 lines at 15.0pt need 38pt, usable 34pt. suggest.height=1.35cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O17"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "73b995c2e8f280ed",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 9,
+      "shape": "/slide[9]/shape[@id=100087]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O18"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "86f0168f37bcae7f",
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "slide": 9,
+      "shape": "/slide[9]/shape[@id=100089]",
+      "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 83pt. suggest.height=3.75cm",
+      "source": {
+        "detector": "officecli-view-issues",
+        "backend": "officecli",
+        "officecli_issue_id": "O19"
+      },
+      "confidence": "HIGH",
+      "diagnosis": "layout_or_contract"
+    },
+    {
+      "id": "6cc7383d03b8bf5a",
+      "rule": "NATIVE_RENDER_SKIPPED",
+      "severity": "REVIEW",
+      "slide": null,
+      "shape": null,
+      "message": "Golden validation has not run",
+      "source": {
+        "detector": "native-visual",
+        "renderer": "powerpoint"
+      },
+      "confidence": "LOW",
+      "diagnosis": "infra_or_measurement_review"
+    }
+  ],
+  "layout_sha256": "5674967b776ecfaa2e83ebcc445b34d5a26c3f6c6f1a4f8d109f3389ea4bef3c"
+}

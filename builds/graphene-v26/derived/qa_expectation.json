@@ -1,0 +1,7 @@
+{
+  "derived_from": "deck_ir.json",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "read_only": true,
+  "slide_count": 9,
+  "required_renderer": "powerpoint"
+}

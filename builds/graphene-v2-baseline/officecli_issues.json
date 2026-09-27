@@ -1,0 +1,138 @@
+{
+  "count": 19,
+  "issues": [
+    {
+      "id": "O1",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[1]/shape[@id=100004]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O2",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[3]/shape[@id=100030]",
+      "message": "text overflow: 2 lines at 21.0pt need 52pt, usable 33pt. suggest.height=1.9cm"
+    },
+    {
+      "id": "O3",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[4]/shape[@id=100037]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O4",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[4]/shape[@id=100041]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 83pt. suggest.height=4.65cm"
+    },
+    {
+      "id": "O5",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[5]/shape[@id=100043]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+    },
+    {
+      "id": "O6",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[5]/shape[@id=100046]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O7",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[5]/shape[@id=100048]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 103pt. suggest.height=4.65cm"
+    },
+    {
+      "id": "O8",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[6]/shape[@id=100055]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O9",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[6]/shape[@id=100059]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 103pt. suggest.height=4.65cm"
+    },
+    {
+      "id": "O10",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[7]/shape[@id=100061]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+    },
+    {
+      "id": "O11",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[7]/shape[@id=100065]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O12",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[7]/shape[@id=100067]",
+      "message": "text overflow: 4 lines at 20.2pt need 101pt, usable 83pt. suggest.height=3.6cm"
+    },
+    {
+      "id": "O13",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[7]/shape[@id=100069]",
+      "message": "text overflow: 5 lines at 21.0pt need 131pt, usable 83pt. suggest.height=4.65cm"
+    },
+    {
+      "id": "O14",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[8]/shape[@id=100071]",
+      "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+    },
+    {
+      "id": "O15",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[8]/shape[@id=100076]",
+      "message": "text overflow: 2 lines at 18.0pt need 45pt, usable 33pt. suggest.height=1.6cm"
+    },
+    {
+      "id": "O16",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[8]/shape[@id=100080]",
+      "message": "text overflow: 2 lines at 20.2pt need 51pt, usable 33pt. suggest.height=1.8cm"
+    },
+    {
+      "id": "O17",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[9]/shape[@id=100085]",
+      "message": "text overflow: 2 lines at 15.0pt need 38pt, usable 34pt. suggest.height=1.35cm"
+    },
+    {
+      "id": "O18",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[9]/shape[@id=100087]",
+      "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 46pt. suggest.height=2cm"
+    },
+    {
+      "id": "O19",
+      "type": 0,
+      "severity": 1,
+      "path": "/slide[9]/shape[@id=100089]",
+      "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 83pt. suggest.height=3.75cm"
+    }
+  ]
+}

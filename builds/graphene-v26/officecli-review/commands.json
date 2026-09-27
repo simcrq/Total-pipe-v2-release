@@ -1,0 +1,518 @@
+[
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "validate",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "data": {
+        "count": 0,
+        "errors": []
+      }
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "issues",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "data": {
+        "count": 16,
+        "issues": [
+          {
+            "id": "O1",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[1]/shape[@id=100008]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          },
+          {
+            "id": "O2",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[2]/shape[@id=100014]",
+            "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 80pt. suggest.height=3.75cm"
+          },
+          {
+            "id": "O3",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[4]/shape[@id=100041]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          },
+          {
+            "id": "O4",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[5]/shape[@id=100043]",
+            "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+          },
+          {
+            "id": "O5",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[5]/shape[@id=100050]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          },
+          {
+            "id": "O6",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[6]/shape[@id=100057]",
+            "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 62pt. suggest.height=3.75cm"
+          },
+          {
+            "id": "O7",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[6]/shape[@id=100059]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          },
+          {
+            "id": "O8",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[7]/shape[@id=100061]",
+            "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+          },
+          {
+            "id": "O9",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[7]/shape[@id=100065]",
+            "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 65pt. suggest.height=3.75cm"
+          },
+          {
+            "id": "O10",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[7]/shape[@id=100069]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          },
+          {
+            "id": "O11",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[8]/shape[@id=100071]",
+            "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 57pt. suggest.height=2.8cm"
+          },
+          {
+            "id": "O12",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[8]/shape[@id=100075]",
+            "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 81pt. suggest.height=3.75cm"
+          },
+          {
+            "id": "O13",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[9]/shape[@id=100085]",
+            "message": "text overflow: 2 lines at 15.0pt need 38pt, usable 34pt. suggest.height=1.35cm"
+          },
+          {
+            "id": "O14",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[9]/shape[@id=100087]",
+            "message": "text overflow: 3 lines at 21.0pt need 79pt, usable 72pt. suggest.height=2.8cm"
+          },
+          {
+            "id": "O15",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[9]/shape[@id=100089]",
+            "message": "text overflow: 4 lines at 21.0pt need 105pt, usable 65pt. suggest.height=3.75cm"
+          },
+          {
+            "id": "O16",
+            "type": 0,
+            "severity": 1,
+            "path": "/slide[9]/shape[@id=100091]",
+            "message": "text overflow: 3 lines at 15.0pt need 56pt, usable 47pt. suggest.height=2cm"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "text",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "data": {
+        "totalSlides": 9,
+        "slides": [
+          {
+            "index": 1,
+            "path": "/slide[1]",
+            "texts": [
+              "Graphene Failure",
+              "The predicted failure mode depends on the tensile state.",
+              "EV0002 · EV0045",
+              "Paper",
+              "Failure Mechanisms of\nGraphene under Tension",
+              "Authors and journal",
+              "C. A. Marianetti & H. G.\nYevick · Physical Review\nLetters 105 (2010)",
+              "Fig. 4(a). Maximum stable strain across tensile directions; regions differ in which\ninstability occurs first."
+            ]
+          },
+          {
+            "index": 2,
+            "path": "/slide[2]",
+            "texts": [
+              "What limits near-ideal graphene?",
+              "The first failure mechanism under a generic tensile state was still an open question.",
+              "EV0057 · EV0033 · EV0004 · EV0002",
+              "The prior experiment and calculations probe different loading contexts.",
+              "Nanoindentation",
+              "Lee et al. strained graphene to failure under\nconditions described as nearly ideal.",
+              "Uniaxial phonons",
+              "Earlier calculations found elastic instability\nfor armchair or zigzag loading.",
+              "Open question",
+              "Which instability occurs first for a generic\nstate of tension?",
+              "This study",
+              "Compare the elastic limit with a finite-wave-\nvector K1 phonon instability."
+            ]
+          },
+          {
+            "index": 3,
+            "path": "/slide[3]",
+            "texts": [
+              "How are both limits tested?",
+              "The workflow compares elastic instability with the K1-mode onset.",
+              "EV0004 · EV0009 · EV0017 · EV0025",
+              "1 · Strain states",
+              "Evaluate strain-dependent tensile response,\nincluding equibiaxial loading.",
+              "2 · DFT forces",
+              "Generate strained-structure forces using the\nlocal density approximation.",
+              "3 · Phonons",
+              "Calculate phonons with the displacement\nmethod.",
+              "4 · Compare limits",
+              "Track the elastic instability against the K1-\nmode onset."
+            ]
+          },
+          {
+            "index": 4,
+            "path": "/slide[4]",
+            "texts": [
+              "When does the K1 mode soften?",
+              "Two calculations place K1 softening near ε_A ≈ 0.21.",
+              "EV0055 · EV0025",
+              "These are calculated thresholds for idealized equibiaxial loading, not measured breaking strains.",
+              "Phonon threshold",
+              "K1 softens at ε_A = 0.205–0.212 under\nequibiaxial strain.",
+              "Independent check",
+              "Mode-energy analysis predicts ε_A = 0.213,\nclosely matching the phonon threshold.",
+              "Fig. 1. In-plane phonon branches under equibiaxial strain;\nthe K1 mode approaches instability at K."
+            ]
+          },
+          {
+            "index": 5,
+            "path": "/slide[5]",
+            "texts": [
+              "How can K1 softening reduce strength?",
+              "The authors link K1 softening to a structural transition and reduced strength in some tensile\nstates.",
+              "EV0031 · EV0034 · EV0032",
+              "Structural route",
+              "The authors infer that the deepening K1 double well\nleads toward isolated hexagonal rings.",
+              "Strength implication",
+              "The K-cell stress drops near softening; the\nproposed route can reduce strength.",
+              "Fig. 3. Nominal stress versus equibiaxial strain; the\nK-cell response drops near K1 softening."
+            ]
+          },
+          {
+            "index": 6,
+            "path": "/slide[6]",
+            "texts": [
+              "Tensile state selects the failure mode",
+              "Elastic instability governs regions I and III; the K1 mode occurs first in region II.",
+              "EV0029 · EV0045 · EV0002",
+              "Regions I and III",
+              "Elastic instability precedes the K1 mode.",
+              "Region II",
+              "The K1-mode instability arrives first; the\nroute changes with tensile direction.",
+              "Fig. 4(a). Maximum stable strain across tensile directions; regions I/\nIII are elastic-limited and region II is K1-limited."
+            ]
+          },
+          {
+            "index": 7,
+            "path": "/slide[7]",
+            "texts": [
+              "Do orientation and shear matter?",
+              "Rotation and shear make only small changes to the predicted K1 onset, but the state map is\nincomplete.",
+              "EV0049 · EV0024 · EV0046 · EV0005",
+              "Rotation and shear checks do not enumerate every possible tensile state.",
+              "Rotation",
+              "The 15° map stays within the original/rotated\nenvelope; orientations were sampled every 3°.",
+              "Shear and scope",
+              "Shear shifts K1 onset only slightly. Anisotropy\nleaves some tensile states untested.",
+              "Fig. 4(c). At 15° rotation, the failure map remains\nwithin the original/rotated envelope."
+            ]
+          },
+          {
+            "index": 8,
+            "path": "/slide[8]",
+            "texts": [
+              "Experiment vs prediction?",
+              "The measured nominal strain (0.225) is closer to the calculated elastic limit (0.216), but the\nfailure route remains unresolved.",
+              "EV0054 · EV0028 · EV0021 · EV0020 · EV0014",
+              "K1 stabilization is a proposed explanation, not a demonstrated mechanism.",
+              "Measured",
+              "Nanoindentation reports nominal\nequibiaxial breaking strain 0.225.",
+              "Calculated elastic limit",
+              "The equibiaxial elastic-instability strain is 0.216.",
+              "Authors’ proposal",
+              "The K1 mode may be stabilized\nduring nanoindentation.",
+              "Possible differences",
+              "Indenter environment and strain construction may\naffect the comparison."
+            ]
+          },
+          {
+            "index": 9,
+            "path": "/slide[9]",
+            "texts": [
+              "Conclusions and limits",
+              "Tensile state selects whether elastic instability or a K1 soft mode limits strength.",
+              "EV0029 · EV0034 · EV0002 · EV0054 · EV0021 · EV0005",
+              "PaperWorkflow evidence coverage is under review; the paper also notes that rotation/shear sampling is not exhaustive.",
+              "Mode selection",
+              "Elastic failure in regions I/III; K1 soft-\nmode failure in region II.",
+              "Open limits",
+              "Indentation leaves the route unresolved;\nrotation/shear sampling is incomplete.",
+              "Fig. 4(a). The loading-direction map summarizes where elastic and\nK1-mode instabilities occur first."
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "1",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-1.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-1.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "2",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-2.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-2.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "3",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-3.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-3.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "4",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-4.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-4.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "5",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-5.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-5.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "6",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-6.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-6.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "7",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-7.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-7.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "8",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-8.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-8.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "view",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "screenshot",
+      "--render",
+      "native",
+      "--page",
+      "9",
+      "-o",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-9.png",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "stdout": "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\officecli-review\\slide-9.png\n",
+      "stderr": "[pages] total=9\n",
+      "response_format": "text"
+    }
+  },
+  {
+    "argv": [
+      "C:\\Users\\Beibei\\AppData\\Local\\OfficeCLI\\officecli.exe",
+      "close",
+      "E:\\pptx_re\\total-pipe-v3-experiment\\builds\\graphene-v26\\staging.pptx",
+      "--json"
+    ],
+    "exit_code": 0,
+    "response": {
+      "success": true,
+      "data": "staging.pptx is already saved to disk; nothing to close.",
+      "message": "staging.pptx is already saved to disk; nothing to close."
+    }
+  }
+]

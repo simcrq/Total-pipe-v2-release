@@ -1,0 +1,116 @@
+{
+  "elapsed_seconds": 18.094,
+  "rerenders": 1,
+  "canonical_truth_count": 1,
+  "new_adapter_count": 0,
+  "backend": "officecli",
+  "layout_provider": {
+    "name": "v26-experiment",
+    "checkpoint_sha256": "ab306795c73c8c6888889e78aadc2acd0bc799eee9614af67b0e1f865f5d050c",
+    "checkpoint_step": 2500,
+    "device": "cuda",
+    "seed": 20261007,
+    "candidates": 32,
+    "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+    "slides": [
+      {
+        "slide_id": "s01-cover",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 25,
+        "candidate_count": 32,
+        "seed": 20261007,
+        "request_sha256": "228f9f1c8e745dd1fbea337f3bff06e9f773b051665a718b008918fdf469ef8a"
+      },
+      {
+        "slide_id": "s02-motivation",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 32,
+        "candidate_count": 32,
+        "seed": 20261008,
+        "request_sha256": "8f52e25a9d9439f2b20e40714d4d9ffc18f6b8ca7357b19a9920cb04e0cbc239"
+      },
+      {
+        "slide_id": "s03-methods",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 31,
+        "candidate_count": 32,
+        "seed": 20261009,
+        "request_sha256": "50d1be7d98cec40b3142ea6c8033aa92e037cbe606dcacfc981870f02f737d0f"
+      },
+      {
+        "slide_id": "s04-k1-onset",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 30,
+        "candidate_count": 32,
+        "seed": 20261010,
+        "request_sha256": "af253c56fe7488c0bb855243f8658817fcf18293960315ca7db5a776b708fd9f"
+      },
+      {
+        "slide_id": "s05-strength-route",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 30,
+        "candidate_count": 32,
+        "seed": 20261011,
+        "request_sha256": "99a412fb4cb5ee1ab9a71519a9a4e7f80fbd144c754e393154885c45640ee3dd"
+      },
+      {
+        "slide_id": "s06-failure-map",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 10,
+        "candidate_count": 32,
+        "seed": 20261012,
+        "request_sha256": "c06f82b05f54dd381f0a320b4ee8092d0aa1d7cb3156036e0316e467f429e8be"
+      },
+      {
+        "slide_id": "s07-robustness",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 24,
+        "candidate_count": 32,
+        "seed": 20261013,
+        "request_sha256": "8ef6f3c0b5b3a5291cedc8c1fdacec93e07e44f172ba25f15f5297a2811f3d68"
+      },
+      {
+        "slide_id": "s08-experiment-gap",
+        "status": "PACKING_FALLBACK",
+        "valid_candidates": 0,
+        "candidate_count": 32,
+        "seed": 20261014,
+        "request_sha256": "32f406ceb9530b2e0adb985a3018cec058f2996e7e22fce44a25b78b793dca26"
+      },
+      {
+        "slide_id": "s09-conclusions",
+        "status": "MODEL_PROPOSAL",
+        "valid_candidates": 17,
+        "candidate_count": 32,
+        "seed": 20261015,
+        "request_sha256": "5ff05871c44ccdd682af8eec61b01d8970fdeebba8effe906c96380360de878a"
+      }
+    ],
+    "source_sha256": {
+      "deck_compiler\\layout_provider.py": "40ba3e840bf2f3e053a33791511cdca006fe0c7e30913484689c8d3d060af8f6",
+      "deck_compiler\\layout.py": "0836fd1aa9901b327e199270691eb524934ad50a7558b9fc77466e921b77eec6",
+      "totalpipe_layout\\__init__.py": "3028d3c553e3bda2f524369207e52ef1ea50951ade93dfd2ce757436014c10e5",
+      "totalpipe_layout\\contracts.py": "cbd88314fa3162c2df469125b3353656072050c967959d4303956e6d752fe90d",
+      "totalpipe_layout\\data.py": "6487a8d0df4549d3f551646a7e6bef3aa7980bb4924b759ce90230ecb55a4181",
+      "totalpipe_layout\\model.py": "fc7076c96e564a81641a92331e750acc2325542e78a5f9c6ced382f5a8c30831",
+      "layoutdiffusion_demo\\__init__.py": "e18b97da62e283961390a4f4df9a5bb319d603f7aad45568272dd715a9492542",
+      "layoutdiffusion_demo\\config.py": "acf4087ff342d31708fa3347db1f378666d08f47bc67323663ffcca847d26156",
+      "layoutdiffusion_demo\\model.py": "6d7eb41e87fe8942af887e1125a761ad2eed82991ca98835c143fb6dd1dfeef7"
+    }
+  },
+  "officecli_runtime": {
+    "version": "1.0.152",
+    "schema_sha256": "49e6ba4cc0319deae872d500e0bba3bcba077c86a787b02ca865a166c18ef1ce"
+  },
+  "officecli_commands_sha256": "29bacbb401c09063043c1538dc6402717e80b96013c7e4c575c771177b1e53c2",
+  "slide_count": 9,
+  "layout_llm_fallback_count": 0,
+  "qa_counts": {
+    "FAIL": 0,
+    "WARNING": 16,
+    "REVIEW": 7,
+    "INFO": 9
+  },
+  "false_positive_rate": null,
+  "repair_amplification_factor": null
+}

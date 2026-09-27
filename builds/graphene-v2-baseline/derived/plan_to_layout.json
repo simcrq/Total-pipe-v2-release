@@ -1,0 +1,2986 @@
+{
+  "derived_from": "deck_ir.json",
+  "ir_sha256": "b76968cb892023841312e9d774119bd1769b7e1ceee83c08787217d631a5ae2a",
+  "read_only": true,
+  "slides": [
+    {
+      "slide_id": "s01-cover",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "Graphene Failure",
+          "source_text": "Graphene Failure",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "The predicted failure mode depends on the tensile state.",
+          "source_text": "The predicted failure mode depends on the tensile state.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0002 · EV0045",
+          "source_text": "EV0002 · EV0045",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            719.9046822742475,
+            260,
+            336.190635451505,
+            306.0
+          ],
+          "asset_id": "fig4a",
+          "alt": "Failure-mode map versus tensile direction, with distinct elastic and K1-instability regions.",
+          "source_figure": "4",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 306.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 4(a). Maximum stable strain across tensile directions; regions differ in\nwhich instability occurs first.",
+          "source_text": "Fig. 4(a). Maximum stable strain across tensile directions; regions differ in which instability occurs first.",
+          "bbox": [
+            552,
+            578,
+            672,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "paper-title:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Paper",
+          "source_text": "Paper",
+          "bbox": [
+            56,
+            260.0,
+            460,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "paper-title",
+          "kind": "text",
+          "role": "body",
+          "text": "Failure Mechanisms of Graphene\nunder Tension",
+          "source_text": "Failure Mechanisms of Graphene under Tension",
+          "bbox": [
+            56,
+            304.0,
+            460,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "authors:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Authors and journal",
+          "source_text": "Authors and journal",
+          "bbox": [
+            56,
+            459.0,
+            460,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "authors",
+          "kind": "text",
+          "role": "body",
+          "text": "C. A. Marianetti & H. G. Yevick ·\nPhysical Review Letters 105 (2010)",
+          "source_text": "C. A. Marianetti & H. G. Yevick · Physical Review Letters 105 (2010)",
+          "bbox": [
+            56,
+            503.0,
+            460,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s02-motivation",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "What limits near-ideal graphene?",
+          "source_text": "What limits near-ideal graphene?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "The first failure mechanism under a generic tensile state was still an open question.",
+          "source_text": "The first failure mechanism under a generic tensile state was still an open question.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0057 · EV0033 · EV0004 · EV0002",
+          "source_text": "EV0057 · EV0033 · EV0004 · EV0002",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "caveats",
+          "kind": "text",
+          "role": "caveat",
+          "text": "The prior experiment and calculations probe different loading contexts.",
+          "source_text": "The prior experiment and calculations probe different loading contexts.",
+          "bbox": [
+            56,
+            604,
+            1168,
+            46
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "indentation:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Nanoindentation",
+          "source_text": "Nanoindentation",
+          "bbox": [
+            56.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "indentation",
+          "kind": "text",
+          "role": "body",
+          "text": "Lee et al. strained\ngraphene to failure\nunder conditions\ndescribed as nearly\nideal.",
+          "source_text": "Lee et al. strained graphene to failure under conditions described as nearly ideal.",
+          "bbox": [
+            56.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "uniaxial:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Uniaxial phonons",
+          "source_text": "Uniaxial phonons",
+          "bbox": [
+            356.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "uniaxial",
+          "kind": "text",
+          "role": "body",
+          "text": "Earlier calculations\nfound elastic\ninstability for\narmchair or zigzag\nloading.",
+          "source_text": "Earlier calculations found elastic instability for armchair or zigzag loading.",
+          "bbox": [
+            356.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "open-question:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Open question",
+          "source_text": "Open question",
+          "bbox": [
+            656.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "open-question",
+          "kind": "text",
+          "role": "body",
+          "text": "Which instability\noccurs first for a\ngeneric state of\ntension?",
+          "source_text": "Which instability occurs first for a generic state of tension?",
+          "bbox": [
+            656.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "study:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "This study",
+          "source_text": "This study",
+          "bbox": [
+            956.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "study",
+          "kind": "text",
+          "role": "body",
+          "text": "Compare the elastic\nlimit with a finite-\nwave-vector K1\nphonon instability.",
+          "source_text": "Compare the elastic limit with a finite-wave-vector K1 phonon instability.",
+          "bbox": [
+            956.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s03-methods",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "How are both limits tested?",
+          "source_text": "How are both limits tested?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "The workflow compares elastic instability with the K1-mode onset.",
+          "source_text": "The workflow compares elastic instability with the K1-mode onset.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0004 · EV0009 · EV0017 · EV0025",
+          "source_text": "EV0004 · EV0009 · EV0017 · EV0025",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "strain:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "1 · Strain states",
+          "source_text": "1 · Strain states",
+          "bbox": [
+            56.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "strain",
+          "kind": "text",
+          "role": "body",
+          "text": "Evaluate strain-\ndependent tensile\nresponse, including\nequibiaxial loading.",
+          "source_text": "Evaluate strain-dependent tensile response, including equibiaxial loading.",
+          "bbox": [
+            56.0,
+            304,
+            268.0,
+            336
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "forces:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "2 · DFT forces",
+          "source_text": "2 · DFT forces",
+          "bbox": [
+            356.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "forces",
+          "kind": "text",
+          "role": "body",
+          "text": "Generate strained-\nstructure forces using\nthe local density\napproximation.",
+          "source_text": "Generate strained-structure forces using the local density approximation.",
+          "bbox": [
+            356.0,
+            304,
+            268.0,
+            336
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "phonons:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "3 · Phonons",
+          "source_text": "3 · Phonons",
+          "bbox": [
+            656.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "phonons",
+          "kind": "text",
+          "role": "body",
+          "text": "Calculate phonons\nwith the\ndisplacement method\n.",
+          "source_text": "Calculate phonons with the displacement method.",
+          "bbox": [
+            656.0,
+            304,
+            268.0,
+            336
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "compare:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "4 · Compare limits",
+          "source_text": "4 · Compare limits",
+          "bbox": [
+            956.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "compare",
+          "kind": "text",
+          "role": "body",
+          "text": "Track the elastic\ninstability against the\nK1-mode onset.",
+          "source_text": "Track the elastic instability against the K1-mode onset.",
+          "bbox": [
+            956.0,
+            304,
+            268.0,
+            336
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s04-k1-onset",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "When does the K1 mode soften?",
+          "source_text": "When does the K1 mode soften?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "Two calculations place K1 softening near ε_A ≈ 0.21.",
+          "source_text": "Two calculations place K1 softening near ε_A ≈ 0.21.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0055 · EV0025",
+          "source_text": "EV0055 · EV0025",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "caveats",
+          "kind": "text",
+          "role": "caveat",
+          "text": "These are calculated thresholds for idealized equibiaxial loading, not measured breaking strains.",
+          "source_text": "These are calculated thresholds for idealized equibiaxial loading, not measured breaking strains.",
+          "bbox": [
+            56,
+            604,
+            1168,
+            46
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            179.17571059431526,
+            260,
+            445.6485788113695,
+            254.0
+          ],
+          "asset_id": "fig1",
+          "alt": "In-plane phonon dispersion branches for unstrained and strained graphene, showing softening toward K1 instability.",
+          "source_figure": "1",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 254.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 1. In-plane phonon branches under equibiaxial strain; the K1 mode\napproaches instability at K.",
+          "source_text": "Fig. 1. In-plane phonon branches under equibiaxial strain; the K1 mode approaches instability at K.",
+          "bbox": [
+            56,
+            526,
+            692,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "phonon-limit:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Phonon threshold",
+          "source_text": "Phonon threshold",
+          "bbox": [
+            784,
+            260.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "phonon-limit",
+          "kind": "text",
+          "role": "body",
+          "text": "K1 softens at ε_A = 0.205–0.212\nunder equibiaxial strain.",
+          "source_text": "K1 softens at ε_A = 0.205–0.212 under equibiaxial strain.",
+          "bbox": [
+            784,
+            304.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "energy-check:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Independent check",
+          "source_text": "Independent check",
+          "bbox": [
+            784,
+            433.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "energy-check",
+          "kind": "text",
+          "role": "body",
+          "text": "Mode-energy analysis predicts ε_A\n= 0.213, closely matching the\nphonon threshold.",
+          "source_text": "Mode-energy analysis predicts ε_A = 0.213, closely matching the phonon threshold.",
+          "bbox": [
+            784,
+            477.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s05-strength-route",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "How can K1 softening reduce strength?",
+          "source_text": "How can K1 softening reduce strength?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "The authors link K1 softening to a structural transition and reduced strength in some tensile\nstates.",
+          "source_text": "The authors link K1 softening to a structural transition and reduced strength in some tensile states.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0031 · EV0034 · EV0032",
+          "source_text": "EV0031 · EV0034 · EV0032",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            187.54393305439334,
+            260,
+            428.91213389121333,
+            306.0
+          ],
+          "asset_id": "fig3",
+          "alt": "Nominal stress curves under equibiaxial strain, with a stress drop near the K1 soft-mode onset.",
+          "source_figure": "3",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 306.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 3. Nominal stress versus equibiaxial strain; the K-cell response drops\nnear K1 softening.",
+          "source_text": "Fig. 3. Nominal stress versus equibiaxial strain; the K-cell response drops near K1 softening.",
+          "bbox": [
+            56,
+            578,
+            692,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "structure:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Structural route",
+          "source_text": "Structural route",
+          "bbox": [
+            784,
+            260.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "structure",
+          "kind": "text",
+          "role": "body",
+          "text": "The authors infer that the\ndeepening K1 double well leads\ntoward isolated hexagonal rings.",
+          "source_text": "The authors infer that the deepening K1 double well leads toward isolated hexagonal rings.",
+          "bbox": [
+            784,
+            304.0,
+            440,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "strength:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Strength implication",
+          "source_text": "Strength implication",
+          "bbox": [
+            784,
+            459.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "strength",
+          "kind": "text",
+          "role": "body",
+          "text": "The K-cell stress drops near\nsoftening; the proposed route can\nreduce strength.",
+          "source_text": "The K-cell stress drops near softening; the proposed route can reduce strength.",
+          "bbox": [
+            784,
+            503.0,
+            440,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s06-failure-map",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "Tensile state selects the failure mode",
+          "source_text": "Tensile state selects the failure mode",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "Elastic instability governs regions I and III; the K1 mode occurs first in region II.",
+          "source_text": "Elastic instability governs regions I and III; the K1 mode occurs first in region II.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0029 · EV0045 · EV0002",
+          "source_text": "EV0029 · EV0045 · EV0002",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            233.9046822742475,
+            260,
+            336.190635451505,
+            306.0
+          ],
+          "asset_id": "fig4a",
+          "alt": "Failure-mode map separating elastic-instability and K1-instability regions across tensile directions.",
+          "source_figure": "4",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 306.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 4(a). Maximum stable strain across tensile directions; regions I/III are\nelastic-limited and region II is K1-limited.",
+          "source_text": "Fig. 4(a). Maximum stable strain across tensile directions; regions I/III are elastic-limited and region II is K1-limited.",
+          "bbox": [
+            56,
+            578,
+            692,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "elastic-regions:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Regions I and III",
+          "source_text": "Regions I and III",
+          "bbox": [
+            784,
+            260.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "elastic-regions",
+          "kind": "text",
+          "role": "body",
+          "text": "Elastic instability precedes the K1\nmode.",
+          "source_text": "Elastic instability precedes the K1 mode.",
+          "bbox": [
+            784,
+            304.0,
+            440,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "k1-region:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Region II",
+          "source_text": "Region II",
+          "bbox": [
+            784,
+            459.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "k1-region",
+          "kind": "text",
+          "role": "body",
+          "text": "The K1-mode instability arrives first\n; the route changes with tensile\ndirection.",
+          "source_text": "The K1-mode instability arrives first; the route changes with tensile direction.",
+          "bbox": [
+            784,
+            503.0,
+            440,
+            137.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s07-robustness",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "Do orientation and shear matter?",
+          "source_text": "Do orientation and shear matter?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "Rotation and shear make only small changes to the predicted K1 onset, but the state map is\nincomplete.",
+          "source_text": "Rotation and shear make only small changes to the predicted K1 onset, but the state map is incomplete.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0049 · EV0024 · EV0046 · EV0005",
+          "source_text": "EV0049 · EV0024 · EV0046 · EV0005",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "caveats",
+          "kind": "text",
+          "role": "caveat",
+          "text": "Rotation and shear checks do not enumerate every possible tensile state.",
+          "source_text": "Rotation and shear checks do not enumerate every possible tensile state.",
+          "bbox": [
+            56,
+            604,
+            1168,
+            46
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            264.31391585760514,
+            260,
+            275.37216828478967,
+            254.0
+          ],
+          "asset_id": "fig4c",
+          "alt": "Failure map after a 15-degree rotation of the coordinate system.",
+          "source_figure": "4",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 254.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 4(c). At 15° rotation, the failure map remains within the original/rotated\nenvelope.",
+          "source_text": "Fig. 4(c). At 15° rotation, the failure map remains within the original/rotated envelope.",
+          "bbox": [
+            56,
+            526,
+            692,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "rotation:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Rotation",
+          "source_text": "Rotation",
+          "bbox": [
+            784,
+            260.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "rotation",
+          "kind": "text",
+          "role": "body",
+          "text": "The 15° map stays within the\noriginal/rotated envelope;\norientations were sampled every 3°.",
+          "source_text": "The 15° map stays within the original/rotated envelope; orientations were sampled every 3°.",
+          "bbox": [
+            784,
+            304.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 27,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "shear-scope:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Shear and scope",
+          "source_text": "Shear and scope",
+          "bbox": [
+            784,
+            433.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "shear-scope",
+          "kind": "text",
+          "role": "body",
+          "text": "Shear shifts K1 onset only slightly.\nAnisotropy leaves some tensile\nstates untested.",
+          "source_text": "Shear shifts K1 onset only slightly. Anisotropy leaves some tensile states untested.",
+          "bbox": [
+            784,
+            477.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s08-experiment-gap",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "Experiment vs prediction?",
+          "source_text": "Experiment vs prediction?",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "The measured nominal strain (0.225) is closer to the calculated elastic limit (0.216), but the\nfailure route remains unresolved.",
+          "source_text": "The measured nominal strain (0.225) is closer to the calculated elastic limit (0.216), but the failure route remains unresolved.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0054 · EV0028 · EV0021 · EV0020 · EV0014",
+          "source_text": "EV0054 · EV0028 · EV0021 · EV0020 · EV0014",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "caveats",
+          "kind": "text",
+          "role": "caveat",
+          "text": "K1 stabilization is a proposed explanation, not a demonstrated mechanism.",
+          "source_text": "K1 stabilization is a proposed explanation, not a demonstrated mechanism.",
+          "bbox": [
+            56,
+            604,
+            1168,
+            46
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "measurement:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Measured",
+          "source_text": "Measured",
+          "bbox": [
+            56.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "measurement",
+          "kind": "text",
+          "role": "body",
+          "text": "Nanoindentation\nreports nominal\nequibiaxial breaking\nstrain 0.225.",
+          "source_text": "Nanoindentation reports nominal equibiaxial breaking strain 0.225.",
+          "bbox": [
+            56.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "elastic-limit:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Calculated elastic limit",
+          "source_text": "Calculated elastic limit",
+          "bbox": [
+            356.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 24,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "elastic-limit",
+          "kind": "text",
+          "role": "body",
+          "text": "The equibiaxial\nelastic-instability\nstrain is 0.216.",
+          "source_text": "The equibiaxial elastic-instability strain is 0.216.",
+          "bbox": [
+            356.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "stabilization:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Authors’ proposal",
+          "source_text": "Authors’ proposal",
+          "bbox": [
+            656.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "stabilization",
+          "kind": "text",
+          "role": "body",
+          "text": "The K1 mode may be\nstabilized during\nnanoindentation.",
+          "source_text": "The K1 mode may be stabilized during nanoindentation.",
+          "bbox": [
+            656.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "alternatives:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Possible differences",
+          "source_text": "Possible differences",
+          "bbox": [
+            956.0,
+            260,
+            268.0,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 27,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "alternatives",
+          "kind": "text",
+          "role": "body",
+          "text": "Indenter environment\nand strain\nconstruction may\naffect the comparison\n.",
+          "source_text": "Indenter environment and strain construction may affect the comparison.",
+          "bbox": [
+            956.0,
+            304,
+            268.0,
+            284
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    },
+    {
+      "slide_id": "s09-conclusions",
+      "elements": [
+        {
+          "id": "title",
+          "kind": "text",
+          "role": "title",
+          "text": "Conclusions and limits",
+          "source_text": "Conclusions and limits",
+          "bbox": [
+            56,
+            34,
+            1168,
+            120
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 44,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 36
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "takeaway",
+          "kind": "text",
+          "role": "takeaway",
+          "text": "Tensile state selects whether elastic instability or a K1 soft mode limits strength.",
+          "source_text": "Tensile state selects whether elastic instability or a K1 soft mode limits strength.",
+          "bbox": [
+            56,
+            164,
+            1168,
+            76
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "footer",
+          "kind": "text",
+          "role": "footer",
+          "text": "EV0029 · EV0034 · EV0002 · EV0054 · EV0021 · EV0005",
+          "source_text": "EV0029 · EV0034 · EV0002 · EV0054 · EV0021 · EV0005",
+          "bbox": [
+            56,
+            658,
+            1168,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 18,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 16
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "caveats",
+          "kind": "text",
+          "role": "caveat",
+          "text": "PaperWorkflow evidence coverage is under review; the paper also notes that rotation/shear sampling is not exhaustive.",
+          "source_text": "PaperWorkflow evidence coverage is under review; the paper also notes that rotation/shear sampling is not exhaustive.",
+          "bbox": [
+            56,
+            604,
+            1168,
+            46
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "figure-1",
+          "kind": "image",
+          "role": "evidence",
+          "bbox": [
+            262.46989966555185,
+            260,
+            279.0602006688963,
+            254.0
+          ],
+          "asset_id": "fig4a",
+          "alt": "Summary of elastic-limited and K1-limited failure regions across tensile directions.",
+          "source_figure": "4",
+          "min_panel_extent": 220,
+          "actual_panel_extent": 254.0
+        },
+        {
+          "id": "figure-1:caption",
+          "kind": "text",
+          "role": "caption",
+          "text": "Fig. 4(a). The loading-direction map summarizes where elastic and K1-mode\ninstabilities occur first.",
+          "source_text": "Fig. 4(a). The loading-direction map summarizes where elastic and K1-mode instabilities occur first.",
+          "bbox": [
+            56,
+            526,
+            692,
+            62
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 20,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 2,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 18
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "mode-selection:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Mode selection",
+          "source_text": "Mode selection",
+          "bbox": [
+            784,
+            260.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "mode-selection",
+          "kind": "text",
+          "role": "body",
+          "text": "Elastic failure in regions I/III; K1\nsoft-mode failure in region II.",
+          "source_text": "Elastic failure in regions I/III; K1 soft-mode failure in region II.",
+          "bbox": [
+            784,
+            304.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "limits:label",
+          "kind": "text",
+          "role": "heading",
+          "text": "Open limits",
+          "source_text": "Open limits",
+          "bbox": [
+            784,
+            433.0,
+            440,
+            44
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+            "font_weight": 700,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 1,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        },
+        {
+          "id": "limits",
+          "kind": "text",
+          "role": "body",
+          "text": "Indentation leaves the route\nunresolved; rotation/shear\nsampling is incomplete.",
+          "source_text": "Indentation leaves the route unresolved; rotation/shear sampling is incomplete.",
+          "bbox": [
+            784,
+            477.0,
+            440,
+            111.0
+          ],
+          "contract": {
+            "font_family": "Arial",
+            "font_size": 28,
+            "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+            "font_weight": 400,
+            "line_height": 1.25,
+            "wrap": false,
+            "autofit": "none",
+            "inset": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "vertical_anchor": "top",
+            "max_lines": 10,
+            "overflow_policy": "wrap_shrink_variant_split",
+            "font_floor": 24
+          },
+          "color": "#162B3A"
+        }
+      ]
+    }
+  ]
+}
