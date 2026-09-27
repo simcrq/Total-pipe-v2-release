@@ -6,6 +6,10 @@
 
 Story 节点仍以 `question / answer / evidence / next` 为必需字段；需要保留连续细节时可选填 `key_points`，不限制条数。pwf2rpa 将 `answer` 映射为 `takeaway`，将 `key_points` 原顺序送入 RPA Slide Brief，并把它们计入容量。Brief 的 `body` 保留段落换行，`evidence_texts` 继续保存原始证据。详见 [pwf2rpa README](Total-pipe/pwf2rpa/README.md) 和 [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)。
 
+RPA 修订后以原始内容模型运行 `validate-deck`；若出现 `KEY_POINTS_LOST`，
+恢复详细内容，不用压缩后的 slot 文本替代。OfficeCLI `Text overflow`
+提示可能不准确，需查看实际页面。
+
 ## Agent 入口
 
 - Skill：`Total-pipe/skills/total-pipe-deck/SKILL.md`

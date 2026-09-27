@@ -854,6 +854,25 @@ test("validate-deck cross-checks declared metrics against the content model", as
   assert.equal(unchecked.cross_check_divergences.length, 0);
 });
 
+test("RPA preserves source key_points across planning and rejects a compressed revision", async () => {
+  const points = ["第一项完整观察", "第二项完整机制解释", "第三项完整适用边界"];
+  const plan = await createDeckPlan({
+    presentation_type: "custom",
+    slide_briefs: [{ title: "结果与边界", category_hint: "summary", key_points: points }],
+  });
+  assert.deepEqual(plan.content_model.slide_briefs[0].key_points, points);
+  assert.deepEqual(plan.slides[0].key_points, points);
+
+  const intact = await validateDeckPlan({ slides: plan.slides, content_model: plan.content_model });
+  assert.equal(intact.deck_issues.some((item) => item.code === "KEY_POINTS_LOST"), false);
+
+  const revised = structuredClone(plan.slides);
+  revised[0].key_points = [points[0], "机制解释", points[2]];
+  const rejected = await validateDeckPlan({ slides: revised, content_model: plan.content_model });
+  assert.equal(rejected.status, "invalid");
+  assert.ok(rejected.deck_issues.some((item) => item.code === "KEY_POINTS_LOST"));
+});
+
 test("rendered-slide QA flags leaked evidence ids and coverage gaps", async () => {
   const result = await validateRenderedSlide({
     viewing_mode: "projector",

@@ -11,6 +11,24 @@ using a model explicitly selected by the user; pwf2rpa builds the prompt,
 validates provenance and evidence references, then maps the reasoning chain to
 RPA planning units.
 
+The MCP tool `pwf2rpa_story_prompt` writes the complete, deterministic prompt
+JSON beside `workflow_path` as `<workflow-stem>.story_prompt.json` by default.
+An absolute `out_path` overrides that location. It always returns a compact
+receipt with the path and delegation metadata; the Story Planner subagent must
+read the full file. If an existing MCP process has not loaded the new handler
+or its transport times out, use the CLI below; prompt construction itself
+makes no model call.
+
+The MCP server writes ASCII-escaped JSON-RPC responses so Chinese evidence,
+warnings, and instructions remain valid UTF-8 on Windows even when the process
+starts with a legacy stdout code page. This applies to prompt, check, and
+convert calls; restart an existing MCP server to load the transport change.
+
+On later RPA revisions, retain the original normalized Slide Briefs as the
+content source. Validate revised plan slides against that content model;
+`KEY_POINTS_LOST` means a point was omitted or rewritten. Keep every point in
+Deck IR text or speaker notes, splitting a slide if its layout is too small.
+
 ```bash
 python3 pwf_to_rpa.py workflow.json \
   --make-story-prompt story_prompt.json \

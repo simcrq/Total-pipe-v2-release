@@ -217,14 +217,30 @@ def _tool_convert(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _tool_story_prompt(arguments: dict[str, Any]) -> dict[str, Any]:
-    workflow = Workflow.from_path(arguments["workflow_path"])
+    workflow_path = Path(arguments["workflow_path"])
+    workflow = Workflow.from_path(workflow_path)
     workflow.validate()
-    return build_story_prompt(
+    package = build_story_prompt(
         workflow,
         model=arguments.get("model", ""),
         reasoning_effort=arguments.get("reasoning_effort", "high"),
         selected_by_user=arguments.get("selected_by_user") is True,
     )
+    out_path = arguments.get("out_path")
+    if out_path is None:
+        destination = workflow_path.with_name(f"{workflow_path.stem}.story_prompt.json")
+    elif isinstance(out_path, str) and out_path.strip() and Path(out_path).is_absolute():
+        destination = Path(out_path)
+    else:
+        raise ValueError("out_path must be a non-empty absolute path")
+    destination = write_output(package, destination)
+    return {
+        "status": package["status"],
+        "output_path": str(destination.resolve()),
+        "evidence_count": len(package["evidence_store"]),
+        "delegation": package["delegation"],
+        "paper": package["paper"],
+    }
 
 
 def _tool_list_categories(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -271,8 +287,11 @@ TOOLS: dict[str, dict[str, Any]] = {
             "Build the evidence-bound prompt package for the required Story Planner "
             "subagent. Before calling, ask the user which currently available "
             "high-capability model to use. The tool blocks unless selected_by_user is "
-            "true, a model is named, and reasoning_effort is high or stronger. The "
-            "returned package must be sent to that subagent; the main agent must not "
+            "true, a model is named, and reasoning_effort is high or stronger. "
+            "The complete package is written next to workflow_path as "
+            "<workflow-stem>.story_prompt.json by default; out_path overrides this "
+            "with an absolute path. Only a small file receipt is returned. Give the "
+            "complete file to the subagent. The main agent must not "
             "write the Story output itself. Nodes may include optional key_points "
             "for evidence-supported detail that answer would otherwise omit."
         ),
@@ -299,6 +318,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "boolean",
                     "const": True,
                     "description": "Must be true only after the user explicitly chose the model.",
+                },
+                "out_path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Optional absolute override for the full prompt JSON. Default: <workflow-stem>.story_prompt.json next to workflow_path; response is always a compact file receipt.",
                 },
             },
         },
@@ -438,8 +462,13 @@ def _tool_descriptors() -> list[dict[str, Any]]:
 
 
 def _write(message: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(message, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+    # MCP stdio is UTF-8, but Windows may give stdout a legacy code page.
+    # ASCII-escaped JSON is valid UTF-8 under every such encoding. Use the
+    # original stream because a timed-out tool worker may still be diverting
+    # sys.stdout while the protocol thread reports its timeout.
+    output = sys.__stdout__ or sys.stdout
+    output.write(json.dumps(message, ensure_ascii=True) + "\n")
+    output.flush()
 
 
 def _result(message_id: Any, result: Any) -> dict[str, Any] | None:

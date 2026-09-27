@@ -56,7 +56,7 @@
       "required": ["primary", "secondary", "evidence_status"],
       "properties": {
         "primary": { "type": "string" },
-        "secondary": { "type": "array", "items": { "type": "string" }, "maxItems": 8 },
+        "secondary": { "type": "array", "items": { "type": "string" } },
         "evidence_status": { "enum": ["supported", "partial", "missing", "not_applicable"] }
       },
       "additionalProperties": false

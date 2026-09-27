@@ -930,6 +930,7 @@ export async function createDeckPlan(input = {}) {
         narrative_job: brief.narrative_job,
         evidence_ids: brief.evidence_ids,
         citation_ids: brief.citation_ids,
+        ...(brief.key_points?.length ? { key_points: [...brief.key_points] } : {}),
         category: choice.category,
         layout_family: choice.family ?? choice.category,
         layout_id: layoutId,
@@ -1679,6 +1680,26 @@ function crossCheckContentModel(slides, briefs) {
   return divergences;
 }
 
+function keyPointLosses(slides, briefs) {
+  const losses = [];
+  for (const brief of briefs) {
+    const expected = asArray(brief.key_points ?? brief.keyPoints);
+    if (!expected.length) continue;
+    const parentId = String(brief.slide_id ?? brief.slideId ?? "");
+    const matches = slides.filter((slide) => {
+      const slideId = String(slide.slide_id ?? slide.slideId ?? "");
+      return slideId === parentId || (parentId && slideId.startsWith(`${parentId}-part-`));
+    });
+    const actual = matches.flatMap((slide) => asArray(slide.key_points ?? slide.keyPoints));
+    let cursor = 0;
+    for (const point of actual) if (point === expected[cursor]) cursor += 1;
+    if (cursor < expected.length) {
+      losses.push({ slide_id: parentId, missing_indexes: expected.slice(cursor).map((_, index) => cursor + index + 1) });
+    }
+  }
+  return losses;
+}
+
 export async function validateDeckPlan(input = {}) {
   const catalog = await loadCatalog();
   const slides = asArray(input.slides ?? input.deck?.slides);
@@ -1701,6 +1722,16 @@ export async function validateDeckPlan(input = {}) {
       `第 ${divergence.index} 页声明的指标与源内容不一致：${divergence.findings.join("；")}。`,
       "以源 brief 的实际内容为准重新声明 content_metrics；不要手填与素材规模不符的指标。",
       { field: "content_model", actual: divergence.findings },
+    );
+  }
+  for (const loss of keyPointLosses(slides, briefs)) {
+    addIssue(
+      deckIssues,
+      "error",
+      "KEY_POINTS_LOST",
+      `Slide ${loss.slide_id} lost or rewrote source key_points at position(s) ${loss.missing_indexes.join(", ")}.`,
+      "Restore the exact source key_points in slide order, or revise the source brief explicitly before replanning.",
+      { field: "key_points", slide_id: loss.slide_id, missing_indexes: loss.missing_indexes },
     );
   }
 

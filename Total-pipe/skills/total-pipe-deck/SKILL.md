@@ -30,6 +30,23 @@ PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
 不得由主代理自行写 Story。用户选择后，用该模型的独立 subagent，reasoning 至少
 `high`，生成 5–8 个节点的 `story_plan.json`。
 
+先调用 `pwf2rpa_story_prompt` 生成证据约束的提示包。未传 `out_path` 时，工具在
+`workflow.json` 旁写出 `workflow.story_prompt.json`；也可用绝对路径 `out_path`
+指定本次输出目录。工具始终只返回小回执；子代理须读取
+该文件中的完整 `instructions`、`evidence_store` 和 `output_shape`。调用时原样传入
+用户选定的 `model`、`reasoning_effort` 与 `selected_by_user=true`。若当前 MCP
+服务调用超时，则在 `pwf2rpa` 目录直接运行同一确定性生成器：
+
+```bash
+python -m pwf2rpa <workflow.json> \
+  --make-story-prompt <story_prompt.json> \
+  --story-model <用户选择> --story-reasoning <用户选择的强度> \
+  --model-selected-by-user
+```
+
+提示包生成不调用模型；模型只在独立 Story Planner 子代理中使用。生成器代码位于本
+工作区的 `pwf2rpa`，插件 MCP 若已启动，需重启该服务才能读取新的工具 schema。
+
 每个节点保留以下四个必需字段：
 
 ```json
@@ -65,15 +82,20 @@ PYTHONPATH=. python -m pwf2rpa <workflow.json> \
 
 ```bash
 node research-ppt-assistant/server/cli.mjs normalize-content \
-  --file <rpa_input.json> --detail-level compact
+  --file <rpa_input.json> --detail-level full > <normalized_content.json>
 node research-ppt-assistant/server/cli.mjs plan --file <rpa_input.json> \
-  --presentation-type group_meeting --slide-count <N> --detail-level compact
-node research-ppt-assistant/server/cli.mjs validate-deck --file <deck_plan.json> \
+  --presentation-type group_meeting --slide-count <N> --detail-level standard > <deck_plan.json>
+node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_input.json> \
   --detail-level compact
 ```
 
 门禁分别要求 `status=valid`、`pipeline_status=plan_complete` 和
 `validate-deck status=valid`。RPA 负责科学页面规划与视觉意图，不输出最终 bbox。
+`validation_input.json` 必须包含本轮计划的 `slides` 和未被修订覆盖的
+`normalized_content.json`（作为 `content_model`）。`KEY_POINTS_LOST` 是错误，
+需要恢复原文及顺序，不能通过修改或删去源 `content_model` 来消除。MCP 精简返回
+会保留完整 `slides[].key_points`，但其摘要、截短的 slot 文本和设计意图不能代替
+`rpa_input.json` 或完整的内容模型。每次 RPA 修订都从这些原始文件重新核对。
 
 长多段正文应在 Slide Brief 中保留为 `key_points` / `secondary_messages`，或在
 `body` 中保留明确换行。`evidence_texts` 保持为原始证据，不自动充当正文。
@@ -96,6 +118,11 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 图注和参考文献保持原样；用 `plain` 禁止转换，用 `distributed_arrow_list` 显式请求。
 实际触发结果写入编译后 slide 的 `adaptation_log`。
 
+映射前逐条核对 `rpa_input.json` 中的 `key_points`。对应科学内容必须按原顺序
+进入 Deck IR 的 `composition.blocks[].text` 或 `semantic.speaker_notes`，不能只留下
+`takeaway`、缩写后的 slot 文本或 `design_ir.message.secondary`。如果一页容量不足，
+拆页并保留全部细节；改写科学内容需先明确修订 Story/Brief，再重新运行 RPA。
+
 禁止在 IR 中写最终 `x/y/w/h`。首代目录只使用 `deck_compiler/catalog.py` 中的稳定
 archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`，再回 Story/RPA
 拆页。不得无限缩字号。
@@ -105,9 +132,9 @@ archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`�
 在本实验目录运行；MCP 入口为 `deck_compiler/mcp_server.py`，配置见根目录 `.mcp.json`。
 该服务复用 pwf2rpa 协议和原有工具，同时新增：
 
-- `totalpipe_compile(ir, out, layout_provider="v26")`：IR → layout + QA，不渲染。
-- `totalpipe_build(ir, out, layout_provider="v26", officecli="officecli")`：IR → OfficeCLI → PPTX 候选及 QA。
-- `totalpipe_review(out, officecli="officecli")`：需要看图时才导出逐页原生 PNG、schema 与 issues。
+- `totalpipe_compile(ir, out, layout_provider="v26")`：编译布局，默认 v26；返回布局与 QA，不生成 PPTX。
+- `totalpipe_build(ir, out, layout_provider="v26", officecli="officecli")`：通过 OfficeCLI 生成 PPTX 候选和 QA。
+- `totalpipe_review(out, officecli="officecli")`：按需检查现有构建并导出逐页截图、schema 与 issues。
 
 `ir` 和 `out` 使用绝对路径。默认使用 v26；模型不支持或候选不通过时由现有布局逻辑回退，详情见 `layout_provider.json`。模型只提议 bbox，不改写科研内容。
 
@@ -120,3 +147,8 @@ python -m deck_compiler build --ir <absolute-deck_ir.json> --out <absolute-build
 一般生成任务完成于候选 PPTX 与 QA；返回 artifact 路径、FAIL/WARNING/REVIEW 和模型回退情况。FAIL 必须处理；不能把候选称作 final。不要默认反复渲染或制作额外验收报告。
 
 用户要求正式 final 时，再按 `docs/deck-compiler-v2.md` 中原有原生验收与 promote 流程执行。OfficeCLI 截图不伪装为 PowerPoint UI 眼检。自动 issues 保留，不因截图观感而清零。
+
+OfficeCLI `view issues` 的 `Text overflow` 判断不准确，可能误报或漏报。看到此项时
+保留原始 issue，并查看实际 PPTX 页面或按需用 `totalpipe_review` 定位；正式验收
+仍以 PowerPoint 逐页眼检为准。不要为了消除该提示而压缩、删改 `key_points`。
+确认真实溢出后调整布局或拆页，再重新生成和检查。

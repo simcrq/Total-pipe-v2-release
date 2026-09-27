@@ -32,6 +32,11 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 
 Story 节点的四个原有字段保持必需；只有需要保留细节时才加 `key_points`，没有固定条数。pwf2rpa 把它与 `takeaway` 一起计入布局容量；`evidence_texts` 仍是原始证据，不自动填入正文。完整用法见 [pwf2rpa README](pwf2rpa/README.md) 与 [中文使用说明](docs/USAGE.zh-CN.md)。
 
+RPA 修订须用原始 `normalized_content.json` 核对计划的 `key_points`；
+`validate-deck` 对丢失或改写的条目报告 `KEY_POINTS_LOST`。映射到 Deck IR 时，
+把每条细节保留在正文或讲者备注中，容量不足则拆页。OfficeCLI 的
+`Text overflow` issue 仅作排查线索，应以实际 PPTX 页面确认。
+
 ## 当前目录
 
 ```text

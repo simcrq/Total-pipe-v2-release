@@ -36,6 +36,14 @@ test("Design Compiler emits deterministic schema-valid SlideDesignIR v1", async 
   assert.deepEqual(first.design_intent.treatment_preferences.slice(0, 2), ["technical_annotation", "mechanism_diagram"]);
 });
 
+test("Design Compiler keeps more than eight key_points without silently truncating", async () => {
+  const schema = JSON.parse(await fs.readFile(path.join(ROOT, "schemas", "slide-design-ir.schema.json"), "utf8"));
+  const points = Array.from({ length: 9 }, (_, index) => `完整细节 ${index + 1}`);
+  const designIR = compileSlideDesignIR({ title: "完整细节", category_hint: "summary", key_points: points });
+  assert.deepEqual(designIR.message.secondary, points);
+  assert.equal(validateJsonSchema(schema, designIR).status, "valid");
+});
+
 test("treatment and decoration registries enforce the v0.5 grammar and budget", async () => {
   const registry = await loadDesignRegistry();
   assert.equal(registry.treatments.length, 9);

@@ -58,6 +58,9 @@ OfficeCLI 后端只处理已编译的三类元素：
 `view issues --json`；原始 issue 结果写入
 `officecli_issues.json`，逐条并入统一 `qa_report.json`（Error→FAIL、Warning→WARNING、
 Info→INFO）。
+其中 `Text overflow` 为不准确的启发式判断，可能误报或漏报；保留原始 issue，
+再以实际 PPTX 页面和 PowerPoint 逐页眼检确认。不要因此删减科学正文或
+`key_points`；确认真实溢出时调整布局或拆页。
 `batch` 外层 `success`、每项 `success`、`summary.succeeded/total` 和逐项 warning
 都必须通过；OfficeCLI 的退出码 `2` 也视为失败，防止属性被静默丢弃。
 

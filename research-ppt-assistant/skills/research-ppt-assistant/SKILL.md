@@ -9,6 +9,12 @@ Use the bundled MCP tools to turn research content into a readable slide specifi
 
 MCP calls default to `detail_level: "compact"`. Treat `structuredContent` as the canonical machine-readable result; the text block is only a concise status summary. Request `standard` when downstream work needs the normal page fields and `full` only for development or contract auditing.
 
+For scientific content revisions, retain the original full normalized content model. The planner
+returns source `key_points` in slide order, including in compact output; compact slot text can be
+truncated and is not a source for rewriting briefs. Call `validate_deck_plan` with revised `slides`
+and the original `content_model`. `KEY_POINTS_LOST` is an error: restore the full point text and
+order or explicitly revise the source brief before replanning. If a page is too dense, split it.
+
 ## Choose the workflow
 
 - When raw evidence or a PaperWorkflow v4 object is available, call `normalize_content` first. Require a valid Source → Citation → Evidence chain and structured Slide Briefs before planning; preserve upstream `EV####`, `S####`, `E###`, line ranges, and end-exclusive character ranges.

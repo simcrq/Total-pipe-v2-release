@@ -101,6 +101,7 @@ test("response formatting covers every compact projection and summary family", (
       index: 1,
       slide_id: "SLIDE0001",
       title: "Result",
+      key_points: [longText, "完整的第二项"],
       category: "summary",
       layout_id: "RM-SUMMARY-01",
       binding_status: "adapted",
@@ -114,10 +115,12 @@ test("response formatting covers every compact projection and summary family", (
       violations: [issue],
       adaptation_log: [{ action: "trim" }],
     }],
-    unplanned_slide_briefs: [{ slide_id: "SLIDE0002", slide_type: "result", title: "Later", category_hint: "summary" }],
+    unplanned_slide_briefs: [{ slide_id: "SLIDE0002", slide_type: "result", title: "Later", category_hint: "summary", key_points: [longText] }],
     warnings: [longText],
   };
   const compactPlan = formatStructuredContent("create_deck_plan", plan);
+  assert.deepEqual(compactPlan.slides[0].key_points, [longText, "完整的第二项"]);
+  assert.deepEqual(compactPlan.unplanned_slide_briefs[0].key_points, [longText]);
   assert.equal(compactPlan.slides[0].slot_assignments.title.text.endsWith("…"), true);
   assert.equal(compactPlan.slides[0].slot_assignments.title.items_count, 2);
   assert.equal(compactPlan.slides[0].slot_assignments.title.value, 3);

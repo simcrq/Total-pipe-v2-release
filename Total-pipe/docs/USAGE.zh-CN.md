@@ -37,6 +37,24 @@ build directory 中的重要文件：
 运行 PaperWorkflow 后，使用用户明确选择的高能力模型生成 Story。Story 节点保留
 `question / answer / evidence / next` 四个必需字段；如果一句回答会丢掉后续页面必须保留的细节，可选加 `key_points` 字符串数组，不要求每个节点都有，也不限制条数。Story 不决定最终版式或 bbox。
 
+调用 `pwf2rpa_story_prompt` 时传入 `workflow_path`、用户选定的 `model`、
+`reasoning_effort` 和 `selected_by_user=true`。工具默认在 `workflow.json` 旁写
+`workflow.story_prompt.json`；可用绝对路径 `out_path` 改写输出位置。MCP 始终只返回
+路径、证据数量和模型选择等小回执。Story Planner 子代理读取完整文件后生成
+`story_plan.json`。若 MCP 调度超时，在 `pwf2rpa` 目录使用同一生成器：
+
+```bash
+python -m pwf2rpa <workflow.json> \
+  --make-story-prompt <story_prompt.json> \
+  --story-model <user-selected-model> --story-reasoning <high-or-stronger> \
+  --model-selected-by-user
+```
+
+这一命令只验证并封装证据，不执行模型推理。更改 MCP 服务代码后须重启服务以刷新
+运行中的工具 schema；插件缓存中的技能说明需要刷新插件后才会同步工作区版本。
+MCP 服务以 ASCII 转义的 JSON-RPC 响应传送中文内容，避免 Windows 默认代码页使
+`story_prompt`、`check` 或 `convert` 的返回值变成无效 UTF-8；不改变解码后的内容。
+
 ```json
 {
   "question": "为什么出现这一现象？",
@@ -69,10 +87,16 @@ node server/cli.mjs plan --file plan-input.json --detail-level full
 
 实际路径按工作区调整。RPA 的 `normalize_content` 必须返回 `valid`，
 `create_deck_plan` 必须完成 `plan_complete`，之后再运行 `validate-deck`。
+保存未截短的 `normalized_content.json` 作为内容基准。每次修订 RPA 计划后，用
+`{ "slides": <修订后的 slides>, "content_model": <原 normalized_content> }`
+作为 `validate-deck` 输入；若返回 `KEY_POINTS_LOST`，恢复对应 `key_points`
+的原文与顺序，再重新规划。`compact` 输出会完整携带 `slides[].key_points`，
+但其 slot 文本可能截短，不能用它重建源 Slide Brief。
 
 Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 `deck_compiler/mcp_server.py`，内含 pwf2rpa 原有工具。`pwf2rpa_story_prompt`
-构造 Story 请求；`pwf2rpa_check` 在写文件前检查可选 `key_points` 与正文的容量；
+构造 Story 请求，默认写出 `workflow.story_prompt.json` 并返回小回执；
+`pwf2rpa_check` 在写文件前检查可选 `key_points` 与正文的容量；
 `pwf2rpa_convert` 写出 `rpa_input.json`。移动项目后需要更新配置中的 Python
 可执行文件和服务脚本绝对路径。
 
@@ -85,6 +109,8 @@ Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 - 视觉对象映射为 `figure_refs` 和 `assets`；
 - RPA Layout 只用于选择合适 archetype/component，不把坐标写进 IR；
 - 所有 `evidence_refs`、`caveats` 和 `speaker_notes` 必须保留。
+- `key_points` 的科学内容须按源 Brief 的顺序进入 block 正文或 speaker notes；
+  不能只保留 `takeaway` 或压缩后的设计意图。容量不足时拆页。
 
 Deck IR 只接受
 [catalog.py](../deck_compiler/catalog.py) 中的 archetype/component。
@@ -95,7 +121,7 @@ Deck IR 只接受
 
 如果 RPA 输出 `design_ir.text_flow.mode = distributed_arrow_list`：
 
-1. 保留 3–5 个条目的顺序；
+1. 保留该布局展示的条目顺序；源 Brief 的 `key_points` 没有固定条数；
 2. 用换行连接到一个 Deck IR block 的 `text`；
 3. 将该 block 的 `text_flow` 设置为 `distributed_arrow_list`。
 
@@ -116,6 +142,11 @@ Deck IR 只接受
 
 ## 4. 编译
 
+MCP 入口提供三个工具：`totalpipe_compile` 编译布局（默认 v26），
+`totalpipe_build` 通过 OfficeCLI 生成 PPTX 候选与 QA，
+`totalpipe_review` 按需检查现有构建并导出截图。三个工具的 `ir` / `out`
+路径都应为绝对路径；`review` 只需要 `out`。
+
 先做无渲染编译检查：
 
 ```bash
@@ -135,6 +166,9 @@ python -m deck_compiler build \
 开发时可添加 `--skip-native`，但该结果只能用于检查，不能晋级 final。
 OfficeCLI 是唯一的 PPTX 写入后端；完整协议与 agent 操作见
 [OfficeCLI 后端说明](officecli-backend.zh-CN.md)。
+OfficeCLI `view issues` 中的 `Text overflow` 判断不准确，既可能误报也可能漏报。
+保留该 issue 记录，结合实际 PPTX 页面和 PowerPoint 逐页眼检确认；
+不要为了清除提示压缩或删除 `key_points`。真实溢出应通过布局调整或拆页解决。
 
 ## 5. PowerPoint 原生验收
 

@@ -36,6 +36,10 @@ node server/cli.mjs summary
 CLI 支持 `--file input.json`、`--json '<object>'` 和普通参数。CLI 默认
 `detail_level: standard`，MCP 默认 `compact`；机器消费 MCP 输出时读取
 `structuredContent`。
+修订计划须保存原始完整 `normalize_content` 结果。把修订后的 `slides` 与该结果
+作为 `content_model` 一起交给 `validate_deck_plan`；`KEY_POINTS_LOST` 是丢失或
+改写源要点的错误。`compact` 计划响应完整保留 `slides[].key_points`，但 slot
+文本可能截短，不应用它重新生成 Brief。
 
 ## 3. 推荐工作流
 
@@ -156,7 +160,7 @@ node server/cli.mjs validate-deck --file deck-plan.json
 RPA 接受以下字段：
 
 - `body`：完整正文，可包含明确换行；
-- `key_points`：并列要点；
+- `key_points`：须保留的并列要点，无固定条数；
 - `secondary_messages`：次级信息；
 - `text_flow`：`auto | plain | distributed_arrow_list`。
 
@@ -192,7 +196,7 @@ RPA 接受以下字段：
 RPA 会优先选择 `structured_text / distributed_list_panel`，但不会绘制容器和箭头。
 下游若使用 Total-pipe，应：
 
-1. 保留条目顺序和换行；
+1. 按原 Brief 保留所有 `key_points` 的内容、顺序和换行；
 2. 将条目合并到对应 Deck IR block 的 `text`；
 3. 将 `design_ir.text_flow.mode` 复制到 block 的 `text_flow`。
 

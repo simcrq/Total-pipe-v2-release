@@ -14,10 +14,12 @@ transport.SERVER_VERSION = '3.1.0'
 transport.INSTRUCTIONS = ('Total-pipe v3: use existing PaperWorkflow, Story and RPA planning; '
     'Story nodes may carry optional key_points; pwf2rpa passes them to RPA briefs, '
     'counts their capacity, and preserves body paragraph breaks. '
+    'On RPA revisions, compare slides with the original content model; do not compress or drop key_points. '
     'Then pass canonical Deck IR to totalpipe_compile or totalpipe_build. '
     'v26 proposes layout, compiler enforces constraints, OfficeCLI writes PPTX. '
     'Build returns a candidate and QA, not automatic final approval. '
-    'totalpipe_review exports OfficeCLI screenshots only when visual review is needed.')
+    'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
+    'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
 
 
 def invoke(command, arguments):
@@ -42,9 +44,9 @@ def invoke(command, arguments):
 
 
 for name, command, description in (
-    ('totalpipe_compile', 'compile', 'Compile canonical Deck IR with v26 layout and fallback. Returns layout and QA; no PPTX render.'),
-    ('totalpipe_build', 'build', 'Build a PPTX candidate from canonical Deck IR using v26 and OfficeCLI. Returns QA and artifact paths; no final promotion.'),
-    ('totalpipe_review', 'review-officecli', 'Inspect an existing build and export OfficeCLI native slide PNGs. Preserves all warnings; optional visual review step.'),
+    ('totalpipe_compile', 'compile', 'Compile layout from canonical Deck IR, defaulting to v26. Returns layout and QA without rendering a PPTX.'),
+    ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from canonical Deck IR. Defaults to v26 layout.'),
+    ('totalpipe_review', 'review-officecli', 'Inspect an existing build and export slide screenshots, schema, and issues on demand. OfficeCLI Text overflow is an unreliable heuristic.'),
 ):
     properties = {'out': {'type':'string', 'description':'Absolute build directory path.'}}
     required = ['out']

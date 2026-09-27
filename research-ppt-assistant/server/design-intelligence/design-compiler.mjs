@@ -135,7 +135,7 @@ function secondaryMessages(brief) {
     ...asArray(brief.secondary_messages ?? brief.secondaryMessages),
     ...asArray(brief.key_points ?? brief.keyPoints),
   ];
-  return [...new Set(values.map(text).filter(Boolean))].slice(0, 8);
+  return [...new Set(values.map(text).filter(Boolean))];
 }
 
 function stripListPrefix(value) {

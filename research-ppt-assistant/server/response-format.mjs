@@ -108,6 +108,7 @@ function compactDeckPlan(payload) {
       planning_decision: slide.planning_decision,
       evidence_ids: slide.evidence_ids ?? [],
       citation_ids: slide.citation_ids ?? [],
+      ...(slide.key_points?.length ? { key_points: slide.key_points } : {}),
       slot_assignments: compactAssignments(slide.slot_assignments),
       violations: compactIssues(slide.violations),
       adaptation_count: slide.adaptation_log?.length ?? 0,
@@ -117,6 +118,7 @@ function compactDeckPlan(payload) {
       slide_type: brief.slide_type,
       title: brief.title,
       category_hint: brief.category_hint,
+      ...(brief.key_points?.length ? { key_points: brief.key_points } : {}),
     })),
     warnings: (payload.warnings ?? []).map((warning) => truncateText(warning, 180)),
   };

@@ -97,8 +97,8 @@ node server/cli.mjs help
 ## Slide Brief 与长多段正文
 
 Slide Brief 支持 `body`、`claims`、`key_points`、
-`secondary_messages` 和结构化集合。长多段正文可保留为 3–5 个
-`key_points` / `secondary_messages`，或在 `body` 中使用明确换行：
+`secondary_messages` 和结构化集合。长多段正文可保留为
+`key_points` / `secondary_messages`，或在 `body` 中使用明确换行；源要点没有固定条数：
 
 ```json
 {
@@ -131,6 +131,11 @@ Design Compiler 在以下条件满足时输出
 RPA 只输出意图和候选，不绘制矩形或箭头。使用 Total-pipe 时，RPA→Deck IR 映射必须
 保留条目边界，并把 `design_ir.text_flow.mode` 复制到对应 block 的
 `text_flow`。
+
+修订计划时，使用原始完整内容模型和修订后的 `slides` 调用 `validate-deck`。
+`KEY_POINTS_LOST` 表示源要点被删除或改写，必须恢复后再进入 Deck IR。
+MCP `compact` 响应完整保留 `slides[].key_points`，但 slot 文本可能截短，
+不得用它重建 Brief。
 
 ## 必须区分的状态
 
