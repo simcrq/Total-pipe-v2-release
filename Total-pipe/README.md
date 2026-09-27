@@ -1,12 +1,12 @@
-# Total-pipe Deck Compiler v2
+# Total-pipe Deck Compiler v3
 
 Total-pipe 是从论文证据到可验收 PPTX 的端到端编排项目。上游负责证据与科研叙事，
-Research PPT Assistant 负责页面规划，Deck Compiler v2 从 canonical
-`deck_ir.json` 开始确定性生成和验证 PPTX。
+Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
+`deck_ir.json` 开始接收 v26 布局建议、校验约束并生成 PPTX。
 
 ```text
 PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
-    → canonical deck_ir.json → Deck Compiler v2
+    → canonical deck_ir.json → Deck Compiler v3
     → candidate.pptx → staging.pptx
     → structural QA + PowerPoint PDF
     → qa_report.json → final.pptx
@@ -16,9 +16,9 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 
 - **PaperWorkflow**：从论文生成可追溯 Evidence。
 - **Story Planner**：组织研究问题、回答、证据和叙事推进。
-- **pwf2rpa**：验证 Story provenance，并转换为 RPA Slide Brief。
+- **pwf2rpa**：验证 Story provenance，将 `answer` 转成 `takeaway`，可选 `key_points` 原顺序传给 RPA，并保留 `body` 的段落边界。
 - **Research PPT Assistant**：选择 Layout、绑定 Slot、输出设计意图；不生成 PPTX。
-- **Deck Compiler v2**：验证 Deck IR、求解几何，并通过 OfficeCLI 唯一写入 PPTX。
+- **Deck Compiler v3**：验证 Deck IR、约束 v26 布局建议，并通过 OfficeCLI 唯一写入 PPTX。
 - **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
 
 `deck_ir.json` 是编译阶段唯一可维护的页面真源。以下文件只能由编译器派生：
@@ -29,6 +29,8 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 - `derived/qa_expectation.json`
 
 下游不得修改这些派生文件再回写语义。
+
+Story 节点的四个原有字段保持必需；只有需要保留细节时才加 `key_points`，没有固定条数。pwf2rpa 把它与 `takeaway` 一起计入布局容量；`evidence_texts` 仍是原始证据，不自动填入正文。完整用法见 [pwf2rpa README](pwf2rpa/README.md) 与 [中文使用说明](docs/USAGE.zh-CN.md)。
 
 ## 当前目录
 

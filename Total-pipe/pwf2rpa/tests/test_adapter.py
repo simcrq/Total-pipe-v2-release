@@ -642,6 +642,20 @@ class BodyAndEvidenceTexts(unittest.TestCase):
         self.assertEqual(briefs[0]["body"], "一段正文")
         self.assertNotIn("evidence_texts", briefs[0])
 
+    def test_body_keeps_three_paragraphs(self):
+        specs = [{"category_hint": "theory", "title": "方法", "body": "第一段。\n\n第二段。\n第三段。"}]
+        briefs, warnings = build_briefs(specs, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(briefs[0]["body"], "第一段。\n第二段。\n第三段。")
+
+    def test_long_key_points_affect_capacity(self):
+        points = ["细节" * 200 for _ in range(4)]
+        specs = [{"category_hint": "theory", "title": "方法", "key_points": points}]
+        briefs, warnings = build_briefs(specs, self.workflow)
+        self.assertEqual(briefs[0]["key_points"], points)
+        self.assertEqual(briefs[0]["text_chars"], sum(map(len, points)))
+        self.assertIn("CAPACITY_EXCEEDED", [warning.code for warning in warnings])
+
     def test_evidence_texts_are_collected_from_registry(self):
         specs = [{
             "category_hint": "theory",

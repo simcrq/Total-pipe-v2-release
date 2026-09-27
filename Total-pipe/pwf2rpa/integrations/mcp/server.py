@@ -59,8 +59,10 @@ INSTRUCTIONS = (
     "category_hint ids -- a free-form category label is not an error, RPA silently "
     "relaxes to a whole-library search and picks a mismatched layout. In the full "
     "pipeline this is the middle stage: paperworkflow produces workflow.json, the "
-    "user-selected Story subagent produces story_plan.json, pwf2rpa maps it to "
-    "slide_briefs, and research_ppt plans and renders the deck."
+    "user-selected Story subagent produces story_plan.json, pwf2rpa maps answer "
+    "to takeaway and optional key_points to slide_briefs, counts both toward "
+    "layout capacity, and preserves body paragraph breaks. evidence_texts stays "
+    "source material. Research PPT Assistant plans the deck."
 )
 
 
@@ -271,7 +273,8 @@ TOOLS: dict[str, dict[str, Any]] = {
             "high-capability model to use. The tool blocks unless selected_by_user is "
             "true, a model is named, and reasoning_effort is high or stronger. The "
             "returned package must be sent to that subagent; the main agent must not "
-            "write the Story output itself."
+            "write the Story output itself. Nodes may include optional key_points "
+            "for evidence-supported detail that answer would otherwise omit."
         ),
         "inputSchema": {
             "type": "object",
@@ -307,7 +310,8 @@ TOOLS: dict[str, dict[str, Any]] = {
             "Validate a PaperWorkflow v4 workflow.json and replay RPA's layout-capacity "
             "gates without writing any file. Returns the slide plan that would be "
             "produced plus every warning, each naming the field, the character count "
-            "and the ceiling. Call this before pwf2rpa_convert so problems are fixed "
+            "and the ceiling, including optional key_points and body text. Call this "
+            "before pwf2rpa_convert so problems are fixed "
             "while nothing is on disk yet."
         ),
         "inputSchema": {
@@ -341,6 +345,8 @@ TOOLS: dict[str, dict[str, Any]] = {
             "Convert a PaperWorkflow v4 workflow.json into rpa_input.json, the two-key "
             "content model RPA's normalize_content and create_deck_plan consume. "
             "paperworkflow_v4 is passed through untouched; only slide_briefs is built. "
+            "Story answer becomes takeaway; optional key_points and body paragraph "
+            "breaks are preserved in briefs. "
             "Blocking problems raise an error and write nothing. Warnings still produce "
             "a file because RPA does plan in those cases, just with a degraded layout "
             "-- unless strict is true. Output is byte-stable for identical input."

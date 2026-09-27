@@ -1,4 +1,4 @@
-# Total-pipe v2 使用说明
+# Total-pipe v3 使用说明
 
 本文描述当前主链，不兼容 M5 已删除的旧 SlideDSL、sidecar 或 Team wrapper。
 
@@ -34,25 +34,47 @@ build directory 中的重要文件：
 
 ## 2. 从 PaperWorkflow 到 RPA
 
-运行 PaperWorkflow 后，使用用户明确选择的高能力模型生成 Story。Story 节点只表达
-`question / answer / evidence / next`，不决定最终版式或 bbox。
+运行 PaperWorkflow 后，使用用户明确选择的高能力模型生成 Story。Story 节点保留
+`question / answer / evidence / next` 四个必需字段；如果一句回答会丢掉后续页面必须保留的细节，可选加 `key_points` 字符串数组，不要求每个节点都有，也不限制条数。Story 不决定最终版式或 bbox。
+
+```json
+{
+  "question": "为什么出现这一现象？",
+  "answer": "结果支持机制 A，但不能排除机制 B。",
+  "key_points": ["首先，实验观察到……", "进一步分析显示……", "但是仍不能排除……"],
+  "evidence": ["EV0012", "EV0013"],
+  "next": "如何区分机制 A 和机制 B？"
+}
+```
+
+pwf2rpa 将 `answer` 送入 Brief 的 `takeaway`，将 `key_points` 按原顺序送入同名字段，并计入 `text_chars` 与布局容量检查。`evidence_texts` 是原始证据资料，不自动进入正文。直接提供 Brief spec 时，`body` 中的段落换行会保留。
 
 ```bash
 cd Total-pipe/pwf2rpa
-PYTHONPATH=. python -m pwf2rpa workflow.json +  --story story_plan.json +  --story-model "<user-selected-model>" +  --story-reasoning high +  --model-selected-by-user +  --strict +  --out rpa_input.json
+PYTHONPATH=. python -m pwf2rpa workflow.json \
+  --story story_plan.json \
+  --story-model "<user-selected-model>" --story-reasoning high \
+  --model-selected-by-user --strict --out rpa_input.json
 ```
 
 然后在同级 `research-ppt-assistant` 项目运行：
 
 ```bash
 cd ../../research-ppt-assistant
-node server/cli.mjs normalize-content +  --file ../Total-pipe/pwf2rpa/rpa_input.json +  --detail-level standard
+node server/cli.mjs normalize-content \
+  --file ../Total-pipe/pwf2rpa/rpa_input.json --detail-level standard
 
-node server/cli.mjs plan +  --file plan-input.json +  --detail-level full
+node server/cli.mjs plan --file plan-input.json --detail-level full
 ```
 
 实际路径按工作区调整。RPA 的 `normalize_content` 必须返回 `valid`，
 `create_deck_plan` 必须完成 `plan_complete`，之后再运行 `validate-deck`。
+
+Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
+`deck_compiler/mcp_server.py`，内含 pwf2rpa 原有工具。`pwf2rpa_story_prompt`
+构造 Story 请求；`pwf2rpa_check` 在写文件前检查可选 `key_points` 与正文的容量；
+`pwf2rpa_convert` 写出 `rpa_input.json`。移动项目后需要更新配置中的 Python
+可执行文件和服务脚本绝对路径。
 
 ## 3. RPA 到 Deck IR
 

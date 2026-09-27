@@ -28,7 +28,7 @@ __all__ = [
 HIGH_REASONING_EFFORTS = frozenset({"high", "xhigh", "max", "ultra"})
 _ROOT_FIELDS = frozenset({"planner", "core_question", "main_message", "story", "ending"})
 _PLANNER_FIELDS = frozenset({"mode", "model", "reasoning_effort", "selected_by_user"})
-_NODE_FIELDS = frozenset({"question", "answer", "evidence", "next"})
+_NODE_FIELDS = frozenset({"question", "answer", "key_points", "evidence", "next"})
 _ENDING_FIELDS = frozenset({"takeaway", "limitation"})
 
 _GENERIC_NEXT = re.compile(
@@ -198,6 +198,20 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
         question = _required_text(node_raw, "question", path, problems)
         answer = _required_text(node_raw, "answer", path, problems)
         next_question = _required_text(node_raw, "next", path, problems)
+        raw_key_points = node_raw.get("key_points", [])
+        if not isinstance(raw_key_points, list) or any(
+            not isinstance(point, str) or not point.strip() for point in raw_key_points
+        ):
+            problems.append(
+                Problem(
+                    "STORY_KEY_POINTS_INVALID",
+                    f"{path}.key_points",
+                    "key_points must be an optional array of non-empty strings.",
+                )
+            )
+            key_points = []
+        else:
+            key_points = list(raw_key_points)
         evidence_ids = _string_list(node_raw.get("evidence"))
         if not evidence_ids:
             problems.append(
@@ -254,12 +268,15 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
                 )
             )
 
-        nodes.append({
+        node = {
             "question": question,
             "answer": answer,
             "evidence": resolved,
             "next": next_question,
-        })
+        }
+        if key_points:
+            node["key_points"] = key_points
+        nodes.append(node)
 
     ending_raw = raw.get("ending")
     ending: dict[str, str] = {"takeaway": "", "limitation": ""}
@@ -354,26 +371,27 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
     for index, node in enumerate(plan["story"]):
         category = _category_for(node["question"], index)
         title_limit = max((layout.title_chars or 0) for layout in fit.CATEGORIES[category].layouts) or 34
-        specs.append(
-            {
-                "slide_type": "custom",
-                "category_hint": category,
-                "title": _truncate(node["question"], title_limit),
-                "takeaway": node["answer"],
-                "evidence_ids": list(node["evidence"]),
-                "content_roles": ["primary_claim", "primary_evidence"],
-                "narrative_job": "story_reasoning",
-                "allow_auto_split": True,
-                "metadata": {
-                    **common,
-                    "story_role": "reasoning_node",
-                    "story_node_index": index + 1,
-                    "story_question": node["question"],
-                    "story_answer": node["answer"],
-                    "story_next": node["next"],
-                },
-            }
-        )
+        spec = {
+            "slide_type": "custom",
+            "category_hint": category,
+            "title": _truncate(node["question"], title_limit),
+            "takeaway": node["answer"],
+            "evidence_ids": list(node["evidence"]),
+            "content_roles": ["primary_claim", "primary_evidence"],
+            "narrative_job": "story_reasoning",
+            "allow_auto_split": True,
+            "metadata": {
+                **common,
+                "story_role": "reasoning_node",
+                "story_node_index": index + 1,
+                "story_question": node["question"],
+                "story_answer": node["answer"],
+                "story_next": node["next"],
+            },
+        }
+        if node.get("key_points"):
+            spec["key_points"] = list(node["key_points"])
+        specs.append(spec)
 
     final_evidence = list(dict.fromkeys(
         evidence_id
@@ -468,6 +486,8 @@ def build_story_prompt(
         "6. 允许删除重复、展示性或弱相关证据，目标是最短、最清晰的核心证据链。\n"
         "7. 不决定 PPT 页数、布局、配色、裁图或完整实验参数。\n"
         "8. 相邻节点应能用‘因此/但是/为了验证/为了排除/如果该解释成立’连接。\n\n"
+        "当一句 answer 会抹掉必须保留的连续内容时，可在该 node 添加 key_points 字符串数组；"
+        "逐条保留证据支持的细节，不要求每个 node 都添加，也不限制条数。\n\n"
         "自检：删掉任一 node 后，下一 node 是否仍只因为论文顺序而出现？如果是，重写链条。"
     )
     return {

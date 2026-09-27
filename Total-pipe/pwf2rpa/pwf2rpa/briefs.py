@@ -35,7 +35,7 @@ SPEC_FIELDS = frozenset(
     {
         "slide_type", "category_hint", "title", "goal", "claims", "takeaway",
         "question", "notes", "narrative_job", "evidence_ids", "citation_ids",
-        "body", "evidence_texts",
+        "body", "key_points", "evidence_texts",
         "visuals", "comparison_dimensions", "process_steps", "timeline_events",
         "experiment_groups", "data_series", "content_roles", "image_count",
         "text_chars", "title_chars", "table_count", "chart_count",
@@ -70,6 +70,13 @@ _VISUAL_KEYS = frozenset(
 
 def _text(value: Any) -> str:
     return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def _block_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    paragraphs = [" ".join(paragraph.split()) for paragraph in value.splitlines() if paragraph.strip()]
+    return "\n".join(paragraphs)
 
 
 def _string_list(value: Any) -> list[str]:
@@ -156,6 +163,8 @@ def _shape_for(brief: Mapping[str, Any], category: str) -> fit.PageShape:
         text = _claim_text(claim)
         if text:
             items.append(fit.TextItem(f"claims[{index}]", text, ("callout", "text"), False))
+    for index, text in enumerate(brief.get("key_points", [])):
+        items.append(fit.TextItem(f"key_points[{index}]", text, ("text", "callout"), True))
 
     visuals = tuple(
         fit.VisualItem(
@@ -274,10 +283,16 @@ def _build_one(
     if category:
         brief["category_hint"] = category
 
-    for field in ("takeaway", "question", "notes", "narrative_job", "body"):
+    for field in ("takeaway", "question", "notes", "narrative_job"):
         text = _text(spec.get(field))
         if text:
             brief[field] = text
+    body = _block_text(spec.get("body"))
+    if body:
+        brief["body"] = body
+    key_points = _string_list(spec.get("key_points"))
+    if key_points:
+        brief["key_points"] = key_points
 
     # P0: carry the referenced evidence source text alongside the brief so a
     # downstream drafting role can expand it into full prose without
@@ -307,7 +322,7 @@ def _build_one(
         len(text)
         for text in (
             [brief.get("goal", ""), brief.get("takeaway", ""), brief.get("question", ""), brief.get("notes", ""), brief.get("body", "")]
-            + claims
+            + claims + key_points
         )
         if text
     )

@@ -30,11 +30,14 @@ PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
 不得由主代理自行写 Story。用户选择后，用该模型的独立 subagent，reasoning 至少
 `high`，生成 5–8 个节点的 `story_plan.json`。
 
-每个节点只允许：
+每个节点保留以下四个必需字段：
 
 ```json
 {"question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
 ```
+
+仅在一句 `answer` 会丢失必须保留的连续内容时，可选加 `key_points` 字符串数组；
+不要求每个节点都有，也不限制条数。`answer` 是摘要，`key_points` 是要传给 RPA 的细节。
 
 顶层必须记录：
 
@@ -72,8 +75,9 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <deck_plan.json>
 门禁分别要求 `status=valid`、`pipeline_status=plan_complete` 和
 `validate-deck status=valid`。RPA 负责科学页面规划与视觉意图，不输出最终 bbox。
 
-长多段正文应在 Slide Brief 中保留为 3–5 个 `key_points` / `secondary_messages`，或在
-`body` 中保留明确换行。RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
+长多段正文应在 Slide Brief 中保留为 `key_points` / `secondary_messages`，或在
+`body` 中保留明确换行。`evidence_texts` 保持为原始证据，不自动充当正文。
+RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 `design_ir.text_flow.mode=distributed_arrow_list`，并优先选择
 `structured_text / distributed_list_panel`。Story Planner 不决定该版式。
 

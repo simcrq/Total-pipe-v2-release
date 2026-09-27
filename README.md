@@ -2,6 +2,10 @@
 
 本目录复用完整 v2 科研链路，新增 v26 布局模型与 agent MCP 工具。PaperWorkflow、Story、pwf2rpa、RPA 规划职责保持不变；编译器约束最终布局，OfficeCLI 写入 PPTX。
 
+## v3.1-pwf2rpa
+
+Story 节点仍以 `question / answer / evidence / next` 为必需字段；需要保留连续细节时可选填 `key_points`，不限制条数。pwf2rpa 将 `answer` 映射为 `takeaway`，将 `key_points` 原顺序送入 RPA Slide Brief，并把它们计入容量。Brief 的 `body` 保留段落换行，`evidence_texts` 继续保存原始证据。详见 [pwf2rpa README](Total-pipe/pwf2rpa/README.md) 和 [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)。
+
 ## Agent 入口
 
 - Skill：`Total-pipe/skills/total-pipe-deck/SKILL.md`

@@ -10,9 +10,11 @@ spec = importlib.util.spec_from_file_location('totalpipe_transport', ROOT/'pwf2r
 transport = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(transport)
 transport.SERVER_NAME = 'total-pipe-v3'
-transport.SERVER_VERSION = '3.0.0'
+transport.SERVER_VERSION = '3.1.0'
 transport.INSTRUCTIONS = ('Total-pipe v3: use existing PaperWorkflow, Story and RPA planning; '
-    'then pass canonical Deck IR to totalpipe_compile or totalpipe_build. '
+    'Story nodes may carry optional key_points; pwf2rpa passes them to RPA briefs, '
+    'counts their capacity, and preserves body paragraph breaks. '
+    'Then pass canonical Deck IR to totalpipe_compile or totalpipe_build. '
     'v26 proposes layout, compiler enforces constraints, OfficeCLI writes PPTX. '
     'Build returns a candidate and QA, not automatic final approval. '
     'totalpipe_review exports OfficeCLI screenshots only when visual review is needed.')

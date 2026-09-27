@@ -68,7 +68,8 @@ silently or write the Story itself. The output records:
   "core_question": "...",
   "main_message": "...",
   "story": [
-    {"question": "...", "answer": "...", "evidence": ["EV0001"], "next": "..."}
+    {"question": "...", "answer": "...", "evidence": ["EV0001"], "next": "..."},
+    {"question": "...", "answer": "...", "key_points": ["观察 A", "分析 B"], "evidence": ["EV0002"], "next": "..."}
   ],
   "ending": {"takeaway": "...", "limitation": "..."}
 }
@@ -77,6 +78,12 @@ silently or write the Story itself. The output records:
 Five to eight nodes are required. A node is a scientific reasoning step, not a
 Figure and not necessarily one final slide. `allow_auto_split` remains enabled
 for reasoning nodes so the downstream planner retains page-count authority.
+Each node may add `key_points` when its one-sentence `answer` would omit detail
+needed by RPA. The bridge maps `answer` to `takeaway` and preserves those points
+in `slide_briefs`; `evidence_texts` remains source material. Brief `body` text
+keeps paragraph breaks. There is no required point count; `key_points` is omitted
+from briefs when the Story node has none. Both `key_points` and `body` count
+toward layout capacity.
 The full machine-readable contract is in `schemas/story-plan.schema.json`.
 
 The validator blocks when the model was not user-selected, execution was not a

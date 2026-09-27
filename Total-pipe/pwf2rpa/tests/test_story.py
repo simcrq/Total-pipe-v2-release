@@ -109,6 +109,25 @@ class StoryChainTests(unittest.TestCase):
         self.assertTrue(node["allow_auto_split"])
         self.assertEqual(node["metadata"]["story_node_index"], 1)
         self.assertIn("仍不足", node["metadata"]["story_next"])
+        self.assertNotIn("key_points", node)
+
+    def test_four_key_points_reach_rpa_brief_in_order(self):
+        story = make_story()
+        points = [
+            "First observation stays complete.",
+            "Second analysis preserves its qualifier.",
+            "Third result identifies a boundary.",
+            "Fourth point names the remaining alternative.",
+        ]
+        story["story"][0]["key_points"] = points
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(specs[1]["key_points"], points)
+        payload, warnings = convert(self.workflow, story=story, strict_fit=False)
+        self.assertEqual(warnings, [])
+        brief = payload["slide_briefs"][1]
+        self.assertEqual(brief["takeaway"], story["story"][0]["answer"])
+        self.assertEqual(brief["key_points"], points)
 
     def test_story_rejects_unknown_evidence(self):
         story = make_story()

@@ -5,6 +5,9 @@
       "args": [
         "E:\\pptx_re\\total-pipe-v3-experiment\\Total-pipe\\deck_compiler\\mcp_server.py"
       ],
+      "env": {
+        "PYTHONUTF8": "1"
+      },
       "startup_timeout_sec": 20,
       "tool_timeout_sec": 600
     }
