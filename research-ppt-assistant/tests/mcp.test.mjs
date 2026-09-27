@@ -481,5 +481,9 @@ test("MCP stdio server drains an accepted request after stdin closes", async () 
   assert.ok(response, `missing response; stderr=${stderr}`);
   assert.equal(response.result.isError, false);
   assert.equal(response.result.structuredContent.pipeline_status, "plan_complete");
-  assert.equal(response.result.structuredContent.slide_count, 30);
+  assert.equal(response.result.structuredContent.requested_slide_count, 30);
+  assert.equal(
+    response.result.structuredContent.slide_count + response.result.structuredContent.unplanned_slide_briefs.length,
+    30,
+  );
 });

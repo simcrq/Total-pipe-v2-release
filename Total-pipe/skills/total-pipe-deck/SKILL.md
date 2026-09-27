@@ -89,13 +89,24 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_inpu
   --detail-level compact
 ```
 
-门禁分别要求 `status=valid`、`pipeline_status=plan_complete` 和
-`validate-deck status=valid`。RPA 负责科学页面规划与视觉意图，不输出最终 bbox。
+门禁分别要求 `normalize-content status=valid`、`pipeline_status=plan_complete`、
+`plan status=success/adapted` 且 `unplanned_slide_briefs` 为空，以及
+`validate-deck status=valid`。`adapted` 时逐条检查 `adaptation_log`，正文、
+`key_points`、结论和限制不得出现 `truncate_text`。RPA 负责科学页面规划与视觉意图，
+不输出最终 bbox。
 `validation_input.json` 必须包含本轮计划的 `slides` 和未被修订覆盖的
 `normalized_content.json`（作为 `content_model`）。`KEY_POINTS_LOST` 是错误，
 需要恢复原文及顺序，不能通过修改或删去源 `content_model` 来消除。MCP 精简返回
 会保留完整 `slides[].key_points`，但其摘要、截短的 slot 文本和设计意图不能代替
 `rpa_input.json` 或完整的内容模型。每次 RPA 修订都从这些原始文件重新核对。
+
+`SOURCE_TEXT_NOT_BOUND` 表示原始 `body` 或要点未完整进入 Slot Binding，是硬错误。
+总结页仍须使用 summary 版式；容量不足时应保持 `needs_replan`，由 Story/RPA
+拆页或调整内容结构，不能回退到 literature 等错误类别来凑齐页数。
+`max_chars` 与总 `text_chars` 只是按码点计算的粗筛，不区分英文单词、字宽和真实
+换行。RPA 会按槽宽、字号及中英文字符宽度估计换行并报告 `SLOT_WRAP_RISK`；
+该估计也不能代替实际渲染检查。`ROLE_MISMATCH` 只比较版式展示角色，
+不把 Evidence 的 `primary_claim / primary_evidence` 当作版式角色。
 
 长多段正文应在 Slide Brief 中保留为 `key_points` / `secondary_messages`，或在
 `body` 中保留明确换行。`evidence_texts` 保持为原始证据，不自动充当正文。

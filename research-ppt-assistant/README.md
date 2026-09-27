@@ -137,6 +137,12 @@ RPA 只输出意图和候选，不绘制矩形或箭头。使用 Total-pipe 时�
 MCP `compact` 响应完整保留 `slides[].key_points`，但 slot 文本可能截短，
 不得用它重建 Brief。
 
+`body` 和 `key_points` 在绑定时不可自动截断；`SOURCE_TEXT_NOT_BOUND` 是
+原始正文或要点未完整落槽的硬错误。总结页若装不下，应返回 `needs_replan`
+而不是放宽到其他类别。总字符数和槽位字符上限只是码点粗筛；绑定器用槽宽、
+字号和中英文字符宽度估计换行，`SLOT_WRAP_RISK` 需要渲染后复核。
+Evidence 优先级角色不会再与版式展示角色直接比较。
+
 ## 必须区分的状态
 
 - `pipeline_status` 表示阶段是否完成，例如 `plan_complete`、

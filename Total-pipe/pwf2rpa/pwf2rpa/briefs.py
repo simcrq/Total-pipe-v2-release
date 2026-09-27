@@ -52,10 +52,8 @@ _TEXT_FIELDS: tuple[tuple[str, tuple[str, ...], bool], ...] = (
     ("takeaway", ("callout", "text"), False),
     ("question", ("question", "text"), False),
     ("notes", ("text", "caption"), True),
-    # body carries the page's full prose (the scientific argument), not a
-    # 10-char callout label. It prefers a "text" slot and may be trimmed to
-    # the slot's capacity, which is exactly what a long body paragraph needs.
-    ("body", ("text",), True),
+    # body carries the full scientific argument and must survive binding.
+    ("body", ("text",), False),
 )
 
 _VISUAL_KEYS = frozenset(
@@ -163,8 +161,10 @@ def _shape_for(brief: Mapping[str, Any], category: str) -> fit.PageShape:
         text = _claim_text(claim)
         if text:
             items.append(fit.TextItem(f"claims[{index}]", text, ("callout", "text"), False))
-    for index, text in enumerate(brief.get("key_points", [])):
-        items.append(fit.TextItem(f"key_points[{index}]", text, ("text", "callout"), True))
+    key_points = brief.get("key_points", [])
+    if key_points:
+        # RPA binds these as one ordered multiline item, never by truncating it.
+        items.append(fit.TextItem("key_points", "\n".join(key_points), ("text", "callout"), False))
 
     visuals = tuple(
         fit.VisualItem(

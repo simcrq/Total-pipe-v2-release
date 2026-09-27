@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTENT_MODEL_VERSION, createViolation, normalizeContentModel, normalizePaperWorkflowV4 } from "./content-model.mjs";
-import { evaluateLayoutCompatibility, scoreLayout } from "./layout-retriever.mjs";
+import { evaluateLayoutCompatibility, layoutComparableRoles, scoreLayout } from "./layout-retriever.mjs";
 import { PLANNING_LOOP_VERSION, planSlideClosedLoop, splitSlideBrief, inferSemanticCategory } from "./planning-loop.mjs";
 import { validateRendererInputs, verifyRendererInputsOnDisk } from "./renderer-guard.mjs";
 import {
@@ -10,6 +10,7 @@ import {
   assignmentHasContent,
   bindSlideToLayout,
   canonicalAssignmentType,
+  estimateTextLines,
   truncateTextDeterministically,
   validateSlotBindingContract,
 } from "./slot-binding.mjs";
@@ -846,7 +847,8 @@ export async function createDeckPlan(input = {}) {
     }, {
       searchLayouts: async (query) => {
         let result = await searchLayouts(query);
-        if (!result.results.length && asArray(query.categories).length) {
+        const requiredSummary = canonical.slide_type === "summary" || canonical.narrative_job === "summary";
+        if (!result.results.length && asArray(query.categories).length && !requiredSummary) {
           result = await searchLayouts({ ...query, categories: undefined, category: undefined });
           categoryRelaxed = true;
         }
@@ -1121,6 +1123,10 @@ function validateAssignmentCapacity(issues, slot, assignment, assignmentType) {
       { field: "slot_assignments", slot_id: slot.id, actual, capacity: recommendedCapacity },
     );
   }
+  const estimatedLines = estimateTextLines(assignment.text, slot);
+  if (Number.isFinite(slot.max_lines) && estimatedLines !== null && estimatedLines > slot.max_lines) {
+    addIssue(issues, "warning", "SLOT_WRAP_RISK", `slot_assignments[${slot.id}] 估计需要 ${estimatedLines} 行，版式声明最多 ${slot.max_lines} 行。`, "按实际字体和渲染检查换行；必要时换大槽位或拆页。", { field: "slot_assignments", slot_id: slot.id, estimated_lines: estimatedLines, max_lines: slot.max_lines });
+  }
 }
 
 function validateSlotContract(issues, layout, slotSpecs, assignments) {
@@ -1248,7 +1254,7 @@ export async function validateSlide(input = {}) {
     addIssue(issues, "warning", "TEXT_NEAR_LIMIT", `正文已使用约 ${Math.round((metrics.textChars / layout.max_text_chars) * 100)}% 的建议容量。`, "装填真实文本后检查换行与最小字号。");
   }
   const supportedRoles = new Set(layout.content_roles ?? []);
-  const unsupportedRoles = metrics.contentRoles.filter((role) => !supportedRoles.has(role));
+  const unsupportedRoles = layoutComparableRoles(metrics.contentRoles).filter((role) => !supportedRoles.has(role));
   if (unsupportedRoles.length) {
     addIssue(issues, "warning", "ROLE_MISMATCH", `版式未显式支持角色：${unsupportedRoles.join(", ")}。`, "检查候选版式的 content_roles 或重新检索。");
   }
@@ -1700,6 +1706,30 @@ function keyPointLosses(slides, briefs) {
   return losses;
 }
 
+function sourceTextLosses(slides, briefs) {
+  const losses = [];
+  for (const brief of briefs) {
+    const parentId = String(brief.slide_id ?? brief.slideId ?? "");
+    const matching = slides.filter((slide) => {
+      const id = String(slide.slide_id ?? slide.slideId ?? "");
+      return id === parentId || (parentId && id.startsWith(`${parentId}-part-`));
+    });
+    const boundTexts = matching.flatMap((slide) => Object.values(slide.slot_assignments ?? {}))
+      .map((assignment) => assignment?.text)
+      .filter((value) => typeof value === "string");
+    const body = brief.body;
+    if (typeof body === "string" && body && !boundTexts.some((text) => text.includes(body))) {
+      losses.push({ slide_id: parentId, field: "body", expected_chars: [...body].length });
+    }
+    for (const [index, point] of asArray(brief.key_points ?? brief.keyPoints).entries()) {
+      if (typeof point === "string" && point && !boundTexts.some((text) => text.includes(point))) {
+        losses.push({ slide_id: parentId, field: `key_points[${index}]`, expected_chars: [...point].length });
+      }
+    }
+  }
+  return losses;
+}
+
 export async function validateDeckPlan(input = {}) {
   const catalog = await loadCatalog();
   const slides = asArray(input.slides ?? input.deck?.slides);
@@ -1732,6 +1762,16 @@ export async function validateDeckPlan(input = {}) {
       `Slide ${loss.slide_id} lost or rewrote source key_points at position(s) ${loss.missing_indexes.join(", ")}.`,
       "Restore the exact source key_points in slide order, or revise the source brief explicitly before replanning.",
       { field: "key_points", slide_id: loss.slide_id, missing_indexes: loss.missing_indexes },
+    );
+  }
+  for (const loss of sourceTextLosses(slides, briefs)) {
+    addIssue(
+      deckIssues,
+      "error",
+      "SOURCE_TEXT_NOT_BOUND",
+      `Slide ${loss.slide_id} does not bind the complete source ${loss.field} (${loss.expected_chars} characters).`,
+      "Restore the complete source text in slot_assignments, choose a larger layout, or split the slide.",
+      { field: loss.field, slide_id: loss.slide_id, expected_chars: loss.expected_chars },
     );
   }
 

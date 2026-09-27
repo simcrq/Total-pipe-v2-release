@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bindSlideToLayout,
+  estimateTextLines,
   truncateTextDeterministically,
   validateSlotBindingContract,
 } from "../server/slot-binding.mjs";
@@ -20,7 +21,7 @@ test("trimming prefers a sentence boundary and hard-cuts with a bounded ellipsis
   assert.equal([...truncateTextDeterministically("😀😀😀😀😀", 4)].length, 4);
 });
 
-test("safe body trimming is logged and returns adapted", () => {
+test("optional notes trimming is logged and returns adapted", () => {
   const result = bindSlideToLayout({
     slide_brief: { slide_id: "SLIDE0001", title: "标题", notes: "1234567。abcdefghijkl" },
     layout_spec: layout("TEXT", [
@@ -32,6 +33,45 @@ test("safe body trimming is logged and returns adapted", () => {
   assert.equal(result.slot_assignments.body.text, "1234567。");
   assert.ok(result.adaptation_log.some((entry) => entry.action === "truncate_text" && entry.content_id === "SLIDE0001:notes:1"));
   assert.ok(result.contract_valid);
+});
+
+test("scientific body is never truncated to a short callout", () => {
+  const body = "synthesis_readiness=review: evidence coverage incomplete.";
+  const brief = { slide_id: "SLIDE0001", title: "结论", body };
+  const spec = layout("SUMMARY", [
+    slot("title", "text", { required: true, max_chars: 20, priority: 5 }),
+    slot("take1", "text", { required: true, max_chars: 18, priority: 2 }),
+  ]);
+  const binding = bindSlideToLayout({ slide_brief: brief, layout_spec: spec });
+  assert.equal(binding.status, "needs_replan");
+  assert.equal(binding.slot_assignments.take1.text, body);
+  assert.equal(binding.adaptation_log.some((entry) => entry.action === "truncate_text"), false);
+  assert.ok(binding.violations.some((issue) => issue.code === "SLOT_CAPACITY_EXCEEDED"));
+
+  const revised = structuredClone(binding.slot_assignments);
+  revised.take1.text = "synthesis_readi...";
+  const contract = validateSlotBindingContract({ slide_brief: brief, layout_spec: spec, slot_assignments: revised });
+  assert.ok(contract.violations.some((issue) => issue.code === "SOURCE_TEXT_NOT_BOUND"));
+});
+
+test("binding prefers a slot that fits the full body", () => {
+  const body = "The full limitation stays intact in the wider text region.";
+  const binding = bindSlideToLayout({
+    slide_brief: { slide_id: "SLIDE0001", title: "结论", body },
+    layout_spec: layout("SUMMARY", [
+      slot("title", "text", { required: true, max_chars: 20, priority: 5 }),
+      slot("take1", "text", { max_chars: 18, priority: 9 }),
+      slot("details", "text", { max_chars: 120, priority: 1 }),
+    ]),
+  });
+  assert.equal(binding.status, "success");
+  assert.equal(binding.slot_assignments.details.text, body);
+});
+
+test("word wrap estimate distinguishes Latin and Han glyph widths", () => {
+  const geometry = { pptx_in: { w: 1.5 }, capacity: { min_font_pt: 20 } };
+  assert.ok(estimateTextLines("MMMMMMMMMMMMMMMMMMMM", geometry) > estimateTextLines("iiiiiiiiiiiiiiiiiiii", geometry));
+  assert.ok(estimateTextLines("汉".repeat(20), geometry) > estimateTextLines("i".repeat(20), geometry));
 });
 
 test("parallel key points bind as one ordered multiline text group", () => {

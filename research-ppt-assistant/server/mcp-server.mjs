@@ -343,7 +343,7 @@ const deckPlanValidationInputSchema = {
     content_model: {
       type: "object",
       additionalProperties: true,
-      description: "Optional normalized content model (normalize_content output). When provided, validate_deck_plan cross-checks declared metrics and rejects slides that lose or rewrite source key_points.",
+      description: "Optional original normalized content model. When provided, validate_deck_plan cross-checks declared metrics and rejects lost source key_points or body text in slot assignments.",
     },
     slides: {
       type: "array",
@@ -648,7 +648,7 @@ const rawTools = [
   {
     name: "create_deck_plan",
     title: "Plan a complete research presentation",
-    description: "Compile SlideDesignIR, rank legal layout/treatment/decoration candidates, bind content to exact slots, and replan or split when needed. Source key_points remain complete and ordered on slides, including compact responses. Use slide_briefs when real content is available; otherwise a scenario-specific blueprint is generated.",
+    description: "Compile SlideDesignIR, rank legal layout/treatment/decoration candidates, and bind full content to exact slots. Body and key_points are never silently truncated; a summary that cannot fit remains needs_replan. Use slide_briefs when real content is available; otherwise a scenario-specific blueprint is generated.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1013,7 +1013,7 @@ async function handle(request) {
           protocolVersion,
           capabilities: { tools: { listChanged: false }, resources: { subscribe: false, listChanged: false } },
           serverInfo: SERVER_INFO,
-          instructions: "Use normalize_content to establish traceable Sources, Citations, Evidence, and Slide Briefs before create_deck_plan. On revisions, validate slides against the original full content model; KEY_POINTS_LOST requires restoring the complete points. Confirm plan_complete, call run_preflight before rendering, then pass canonical Render Telemetry to evaluate_visual_quality or validate_rendered_deck. MCP responses default to compact; request standard or full for the complete source content model.",
+          instructions: "Use normalize_content to establish traceable Sources, Citations, Evidence, and Slide Briefs before create_deck_plan. On revisions, validate slides against the original full content model; KEY_POINTS_LOST and SOURCE_TEXT_NOT_BOUND block delivery. Character capacities are coarse; inspect SLOT_WRAP_RISK and actual rendering. A summary that cannot fit stays needs_replan. Confirm plan_complete, call run_preflight before rendering, then pass canonical Render Telemetry to evaluate_visual_quality or validate_rendered_deck. MCP responses default to compact; request standard or full for the complete source content model.",
         });
         return;
       }

@@ -26,6 +26,10 @@ export const DEFAULT_WEIGHTS = {
   support_space_fit: 0.05,
 };
 
+// Evidence priority and layout display roles are separate vocabularies.
+const EVIDENCE_PRIORITY_ROLES = new Set(["primary_claim", "primary_evidence", "supporting_evidence", "optional_visual", "context"]);
+export const layoutComparableRoles = (roles = []) => roles.filter((role) => !EVIDENCE_PRIORITY_ROLES.has(role));
+
 const layoutSlots = (layout) => layout.slot_specs ?? layout.slots ?? [];
 
 const percent = (value) => `${Math.round(value * 100)}%`;
@@ -234,9 +238,10 @@ export function scoreLayout(layout, input) {
     ? gaussianAspectFit(input.visualAspectRatio, layout.preferred_visual_aspect_ratio)
     : 0.85;
 
-  if (input.contentRoles?.length) {
+  const comparableRoles = layoutComparableRoles(input.contentRoles ?? []);
+  if (comparableRoles.length) {
     const supported = new Set(layout.content_roles ?? []);
-    components.role_fit = input.contentRoles.filter((role) => supported.has(role)).length / input.contentRoles.length;
+    components.role_fit = comparableRoles.filter((role) => supported.has(role)).length / comparableRoles.length;
     components.genericity_prior = 0.85;
   } else {
     components.role_fit = 0.85;

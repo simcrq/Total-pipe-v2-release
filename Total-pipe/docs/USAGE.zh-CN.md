@@ -93,6 +93,17 @@ node server/cli.mjs plan --file plan-input.json --detail-level full
 的原文与顺序，再重新规划。`compact` 输出会完整携带 `slides[].key_points`，
 但其 slot 文本可能截短，不能用它重建源 Slide Brief。
 
+还需检查 `SOURCE_TEXT_NOT_BOUND`：它表示 `body` 或某条 `key_points` 只以
+内容 ID 占了槽，实际文本已被截短或改写。此项是硬错误。长正文不可自动裁切；
+总结页装不下时保持 `needs_replan` 和未规划 Brief，不能改选 literature 类别来
+假装完成。`adapted` 只表示规划经过调整，须核对 `adaptation_log`；正式进入
+Deck IR 前要求无未规划页、`validate-deck status=valid`。
+
+RPA 的总 `text_chars` 与槽位 `max_chars` 是码点粗筛，不等于英文单词、字宽或
+实际换行数。绑定器优先选能完整容纳正文的槽；验收还会用槽宽和字号估计中英文
+换行，`SLOT_WRAP_RISK` 需要真实页面复核。Evidence 内容角色与布局展示角色
+分属不同体系，不应制造 `ROLE_MISMATCH`；真正的布局角色不匹配仍保留警告。
+
 Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 `deck_compiler/mcp_server.py`，内含 pwf2rpa 原有工具。`pwf2rpa_story_prompt`
 构造 Story 请求，默认写出 `workflow.story_prompt.json` 并返回小回执；

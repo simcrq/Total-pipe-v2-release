@@ -275,10 +275,9 @@ function collectContentItems(brief) {
     ["takeaway", "primary_claim", false, ["callout", "text"]],
     ["question", "question", false, ["question", "text"]],
     ["notes", "context", true, ["text", "caption"]],
-    // body is the page's full prose (the scientific argument). It binds into a
-    // "text" slot and is trimmable so an over-long paragraph truncates rather
-    // than failing the whole page.
-    ["body", "context", true, ["text"]],
+    // body is the page's full scientific argument. A short slot must trigger
+    // replanning instead of silently replacing it with an ellipsis.
+    ["body", "context", false, ["text"]],
   ];
   for (const [field, role, allowTrim, preferred] of scalarFields) {
     const value = stringValue(briefField(brief, field));
@@ -402,11 +401,59 @@ function itemSlotAffinity(slot, item) {
   return 0;
 }
 
+function glyphAdvance(char) {
+  if (/\p{Mark}/u.test(char)) return 0;
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(char)) return 1;
+  if (/\s/u.test(char)) return 0.3;
+  if (/[mwMW@%]/u.test(char)) return 0.85;
+  if (/[ilI.,:;!|']/u.test(char)) return 0.3;
+  if (/[A-Z0-9]/u.test(char)) return 0.62;
+  return 0.55;
+}
+
+/** Approximate word wrapping at the slot's minimum font; final fit needs a render. */
+export function estimateTextLines(value, slot) {
+  const widthInches = Number(slot?.pptx_in?.w ?? slot?.pptx_in?.width);
+  const capacity = isRecord(slot?.capacity) ? slot.capacity : slot;
+  const fontPt = Number(capacity?.min_font_pt ?? capacity?.font_pt_hint);
+  if (!(widthInches > 0) || !(fontPt > 0)) return null;
+  const widthEm = Math.max(1, (widthInches * 72 - 12) / fontPt);
+  let lines = 0;
+  for (const paragraph of String(value ?? "").split(/\r?\n/u)) {
+    let used = 0;
+    lines += 1;
+    for (const token of paragraph.match(/\s+|\S+/gu) ?? []) {
+      if (/^\s+$/u.test(token) && used === 0) continue;
+      const tokenWidth = [...token].reduce((sum, char) => sum + glyphAdvance(char), 0);
+      if (tokenWidth <= widthEm) {
+        if (used > 0 && used + tokenWidth > widthEm) { lines += 1; used = 0; }
+        if (!/^\s+$/u.test(token) || used > 0) used += tokenWidth;
+        continue;
+      }
+      for (const char of token) {
+        const width = glyphAdvance(char);
+        if (used > 0 && used + width > widthEm) { lines += 1; used = 0; }
+        used += width;
+      }
+    }
+  }
+  return lines;
+}
+
+function textFitRank(slot, item) {
+  if (item.type !== "text" || !item.text) return 0;
+  const maxChars = capacityNumber(slot, ["max_chars", "max_chars_at_min_font", "max_chars_at_absolute_min"]);
+  if (maxChars !== undefined && [...item.text].length > maxChars) return 0;
+  const maxLines = capacityNumber(slot, ["max_lines"]);
+  const lines = estimateTextLines(item.text, slot);
+  return maxLines !== undefined && lines !== null && lines > maxLines ? 1 : 2;
+}
+
 function candidateSlots(layout, item, occupied) {
   return layout.ordered
     .filter(({ slot }) => !occupied.has(slot.slot_id) && slotAcceptsItem(slot, item))
-    .map(({ slot, key, index }) => ({ slot, key, index, affinity: itemSlotAffinity(slot, item) }))
-    .sort((a, b) => b.affinity - a.affinity || compareSlots(a, b));
+    .map(({ slot, key, index }) => ({ slot, key, index, affinity: itemSlotAffinity(slot, item), fit: textFitRank(slot, item) }))
+    .sort((a, b) => b.fit - a.fit || b.affinity - a.affinity || compareSlots(a, b));
 }
 
 export function assignmentHasContent(value) {
@@ -875,6 +922,10 @@ export function validateSlotBindingContract(input = {}) {
       const optionalVisualDropped = item.field === "visuals" && !item.must_keep && arrayValue(input.adaptation_log).some((entry) => entry.action === "drop_optional_visual" && entry.content_id === item.content_id);
       if (item.explicit_slot_id && owners.length && !owners.includes(item.explicit_slot_id)) {
         violations.push(layoutViolation("INVALID_EXPLICIT_SLOT", `${item.field}[${item.index}].slot_id`, item.explicit_slot_id, owners[0], "preserve_explicit_slot_assignment", `Explicit content ${item.content_id} was bound to ${owners[0]} instead of ${item.explicit_slot_id}.`, { slot_id: item.explicit_slot_id, actual_slot_id: owners[0], content_id: item.content_id }, false));
+      }
+      if (preserved && item.type === "text" && !item.allow_trim && item.text
+        && !owners.some((slotId) => assignmentText(assignmentMap[slotId]) === item.text)) {
+        violations.push(layoutViolation("SOURCE_TEXT_NOT_BOUND", item.field, item.content_id, "exact source text", "restore_source_text_or_replan", `Content ${item.content_id} was changed after binding.`, { content_id: item.content_id, slot_ids: owners }));
       }
       if (preserved || optionalVisualDropped) continue;
       if (item.structural || item.must_keep || item.type === "reference" || item.field === "title") {

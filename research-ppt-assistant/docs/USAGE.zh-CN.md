@@ -40,6 +40,12 @@ CLI 支持 `--file input.json`、`--json '<object>'` 和普通参数。CLI 默�
 作为 `content_model` 一起交给 `validate_deck_plan`；`KEY_POINTS_LOST` 是丢失或
 改写源要点的错误。`compact` 计划响应完整保留 `slides[].key_points`，但 slot
 文本可能截短，不应用它重新生成 Brief。
+`SOURCE_TEXT_NOT_BOUND` 表示 `body` 或 `key_points` 只保留了内容 ID，
+实际文本已丢失；这是硬错误。长正文不可自动裁切，总结页容量不足时
+返回 `needs_replan` 和未规划 Brief，不能改用别的页面类别。
+`text_chars / max_chars` 是码点粗筛，无法代表英文单词与真实换行。
+`SLOT_WRAP_RISK` 使用槽宽、字号和中英文字符宽度估计行数，需在真实渲染中复核。
+Evidence 的 `primary_claim / primary_evidence` 与布局展示角色不直接比较。
 
 ## 3. 推荐工作流
 

@@ -14,6 +14,12 @@ returns source `key_points` in slide order, including in compact output; compact
 truncated and is not a source for rewriting briefs. Call `validate_deck_plan` with revised `slides`
 and the original `content_model`. `KEY_POINTS_LOST` is an error: restore the full point text and
 order or explicitly revise the source brief before replanning. If a page is too dense, split it.
+`SOURCE_TEXT_NOT_BOUND` likewise blocks delivery when body or key point text is missing from
+slot assignments. Never accept `truncate_text` on scientific body, claims, or limitations.
+For a required summary page, keep its category; if no summary layout fits, return `needs_replan`.
+Character counts are only a coarse filter. Check `SLOT_WRAP_RISK` from the script-aware line
+estimate and verify actual wrapping after rendering. Evidence priority roles are distinct from
+layout display roles; only the latter can trigger `ROLE_MISMATCH`.
 
 ## Choose the workflow
 

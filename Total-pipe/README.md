@@ -36,6 +36,8 @@ RPA 修订须用原始 `normalized_content.json` 核对计划的 `key_points`；
 `validate-deck` 对丢失或改写的条目报告 `KEY_POINTS_LOST`。映射到 Deck IR 时，
 把每条细节保留在正文或讲者备注中，容量不足则拆页。OfficeCLI 的
 `Text overflow` issue 仅作排查线索，应以实际 PPTX 页面确认。
+RPA 的字符容量只是粗筛；正文和要点在 Slot Binding 中不可静默裁切。
+若总结页无法完整绑定，规划必须返回 `needs_replan`，不能用其他类别替代。
 
 ## 当前目录
 

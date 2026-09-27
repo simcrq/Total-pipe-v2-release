@@ -9,6 +9,8 @@ Story 节点仍以 `question / answer / evidence / next` 为必需字段；需�
 RPA 修订后以原始内容模型运行 `validate-deck`；若出现 `KEY_POINTS_LOST`，
 恢复详细内容，不用压缩后的 slot 文本替代。OfficeCLI `Text overflow`
 提示可能不准确，需查看实际页面。
+RPA 现在会阻止正文静默截断，并在原文未完整绑定时报告
+`SOURCE_TEXT_NOT_BOUND`；字符容量仍只是前置粗筛，需检查换行风险与实际页面。
 
 ## Agent 入口
 

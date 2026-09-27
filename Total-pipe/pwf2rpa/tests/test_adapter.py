@@ -656,6 +656,19 @@ class BodyAndEvidenceTexts(unittest.TestCase):
         self.assertEqual(briefs[0]["text_chars"], sum(map(len, points)))
         self.assertIn("CAPACITY_EXCEEDED", [warning.code for warning in warnings])
 
+    def test_body_and_key_points_are_untrimmable_binding_items(self):
+        from pwf2rpa.briefs import _shape_for
+
+        shape = _shape_for({
+            "title": "结论与边界",
+            "body": "synthesis_readiness=review: evidence coverage incomplete.",
+            "key_points": ["完整限制一", "完整限制二"],
+        }, "summary")
+        items = {item.field: item for item in shape.text_items}
+        self.assertFalse(items["body"].trimmable)
+        self.assertEqual(items["key_points"].text, "完整限制一\n完整限制二")
+        self.assertFalse(items["key_points"].trimmable)
+
     def test_evidence_texts_are_collected_from_registry(self):
         specs = [{
             "category_hint": "theory",

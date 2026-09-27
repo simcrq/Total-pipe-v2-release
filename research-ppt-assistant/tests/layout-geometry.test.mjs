@@ -165,9 +165,9 @@ test("bundled library only intersects through declared overlays and has consiste
   assert.equal(declaredPairs, 38, "the bundled library ships 38 declared overlay pairs");
 });
 
-test("bundled library payload round-trips byte-for-byte through the migration serializer", () => {
+test("bundled library payload round-trips through the migration serializer across checkout line endings", () => {
   const raw = fs.readFileSync(path.join(LIBRARY_DIR, "layouts.json"), "utf8");
-  assert.equal(serializeLayouts(JSON.parse(raw)), raw);
+  assert.equal(serializeLayouts(JSON.parse(raw)), raw.replace(/\r\n/gu, "\n"));
 });
 
 test("layout generator reproduces every shipped SVG preview", () => {

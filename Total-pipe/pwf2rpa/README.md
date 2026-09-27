@@ -28,6 +28,10 @@ On later RPA revisions, retain the original normalized Slide Briefs as the
 content source. Validate revised plan slides against that content model;
 `KEY_POINTS_LOST` means a point was omitted or rewritten. Keep every point in
 Deck IR text or speaker notes, splitting a slide if its layout is too small.
+The bridge treats `body` and the ordered `key_points` group as untrimmable.
+Its character limits are only a preliminary screen; RPA must check the actual
+slot binding and estimated English/CJK wrapping. A summary that does not fit
+must remain unplanned for revision rather than silently truncating the body.
 
 ```bash
 python3 pwf_to_rpa.py workflow.json \

@@ -873,6 +873,48 @@ test("RPA preserves source key_points across planning and rejects a compressed r
   assert.ok(rejected.deck_issues.some((item) => item.code === "KEY_POINTS_LOST"));
 });
 
+test("validate-deck rejects a body shortened after planning", async () => {
+  const body = "synthesis_readiness=review: evidence coverage incomplete.";
+  const plan = await createDeckPlan({
+    presentation_type: "custom",
+    slide_briefs: [{ title: "边界", category_hint: "background", body }],
+  });
+  const revised = structuredClone(plan.slides);
+  const assignment = Object.values(revised[0].slot_assignments).find((entry) => entry.content_id?.includes(":body:"));
+  assert.ok(assignment);
+  assignment.text = "synthesis_readi...";
+  const result = await validateDeckPlan({ slides: revised, content_model: plan.content_model });
+  assert.equal(result.status, "invalid");
+  assert.ok(result.deck_issues.some((issue) => issue.code === "SOURCE_TEXT_NOT_BOUND" && issue.details?.field === "body"));
+});
+
+test("summary with two long prose fields stays unplanned instead of changing category", async () => {
+  const body = "synthesis_readiness=review: evidence coverage incomplete. 0 K pure graphene; softening signals transition, not proven fracture. Shear map and experiment match unresolved.";
+  const plan = await createDeckPlan({
+    presentation_type: "custom",
+    slide_briefs: [{
+      slide_id: "SLIDE0010", slide_type: "summary", category_hint: "summary", title: "结论与边界",
+      takeaway: "K₁ governs some tensile failures; regions 1 and 3 fail elastically.", body,
+    }],
+  });
+  assert.equal(plan.status, "needs_replan");
+  assert.equal(plan.slides.length, 0);
+  assert.equal(plan.unplanned_slide_briefs[0].body, body);
+  assert.ok(plan.planning_contexts[0].replan_context.violations.some((issue) => issue.code === "SLOT_CAPACITY_EXCEEDED"));
+});
+
+test("validation separates evidence roles from display roles and flags line-wrap risk", async () => {
+  const result = await validateSlide({
+    layout_id: "RM-SUMMARY-08",
+    content_roles: ["primary_claim", "primary_evidence", "unavailable_display_role"],
+    slot_assignments: { take1: { type: "text", text: "A\nB\nC\nD" } },
+  });
+  const mismatch = result.issues.find((issue) => issue.code === "ROLE_MISMATCH");
+  assert.match(mismatch.message, /unavailable_display_role/);
+  assert.doesNotMatch(mismatch.message, /primary_claim|primary_evidence/);
+  assert.ok(result.issues.some((issue) => issue.code === "SLOT_WRAP_RISK" && issue.details?.estimated_lines === 4));
+});
+
 test("rendered-slide QA flags leaked evidence ids and coverage gaps", async () => {
   const result = await validateRenderedSlide({
     viewing_mode: "projector",
