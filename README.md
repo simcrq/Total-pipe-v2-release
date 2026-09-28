@@ -11,6 +11,11 @@ RPA 修订后以原始内容模型运行 `validate-deck`；若出现 `KEY_POINTS
 提示可能不准确，需查看实际页面。
 RPA 现在会阻止正文静默截断，并在原文未完整绑定时报告
 `SOURCE_TEXT_NOT_BOUND`；字符容量仍只是前置粗筛，需检查换行风险与实际页面。
+PaperWorkflow 首轮应按论文主题设置检索问题，文件名不相似的补充材料用
+`supplementary_paths` 明确配对，补充 OCR 文本纳入分析后才声明
+`supplementary_content_included=true`；`quality_audit` 的 OCR 就绪不代表
+`synthesis_readiness` 已通过。英文 Story 经 pwf2rpa 转换会生成英文结尾标题，
+`title_chars` 随实际标题自动计算。
 
 ## Agent 入口
 

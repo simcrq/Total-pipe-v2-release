@@ -351,9 +351,10 @@ def audit_source_dependencies(
     markdown: str,
     related_documents: Iterable[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Detect referenced supplementary sources even when files are unavailable."""
+    """Require referenced supplements to be both local and in the evidence text."""
 
     local_supplements = [item for item in related_documents if item.get("role") == "supplementary_candidate"]
+    indexed_supplements = [item for item in local_supplements if item.get("content_included") is True]
     dependencies: list[dict[str, Any]] = []
     for dependency_type, pattern in DEPENDENCY_PATTERNS.items():
         matches = [re.sub(r"\s+", " ", match.group(0)).strip() for match in pattern.finditer(markdown)]
@@ -364,10 +365,12 @@ def audit_source_dependencies(
             "required_for_full_evidence": True,
             "reference_count": len(matches),
             "reference_examples": list(dict.fromkeys(matches))[:12],
-            "availability": "available" if local_supplements else "unavailable",
+            "availability": "available" if indexed_supplements else "unindexed" if local_supplements else "unavailable",
             "local_paths": [item["path"] for item in local_supplements],
         })
     missing = [item for item in dependencies if item["availability"] == "unavailable"]
+    unindexed = [item for item in dependencies if item["availability"] == "unindexed"]
+    unresolved = missing + unindexed
     warnings = []
     if missing:
         warnings.append(_warning(
@@ -376,13 +379,22 @@ def audit_source_dependencies(
             "The paper relies on supplementary evidence that is referenced but not present locally: "
             + ", ".join(item["dependency_type"] for item in missing) + ".",
         ))
-    score = max(35, 100 - 12 * len(missing))
+    if unindexed:
+        warnings.append(_warning(
+            "required_supplementary_sources_unindexed",
+            "high",
+            "Supplementary files are paired but their OCR/Markdown content has not been confirmed in the evidence text: "
+            + ", ".join(item["dependency_type"] for item in unindexed) + ".",
+        ))
+    score = max(35, 100 - 12 * len(unresolved))
     return {
-        "scope": "Availability of sources referenced by the paper; DOI links do not count as local evidence.",
+        "scope": "Availability and caller-confirmed evidence-text inclusion of referenced supplementary sources; DOI links do not count as local evidence.",
         "score": score,
-        "readiness": "review" if missing else "ready",
+        "readiness": "review" if unresolved else "ready",
         "dependencies": dependencies,
-        "missing_required_count": len(missing),
+        "unavailable_required_count": len(missing),
+        "unindexed_required_count": len(unindexed),
+        "missing_required_count": len(unresolved),
         "warnings": warnings,
     }
 

@@ -166,6 +166,68 @@ class LiteratureWorkflowTests(unittest.TestCase):
             self.assertEqual([Path(item["path"]).name for item in related], ["Li-supplement.pdf"])
             self.assertEqual(related[0]["match_reason"], "supplement_filename")
 
+    def test_explicit_supplement_pairs_an_unrelated_filename_without_guessing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "cus.pdf"
+            supplement = root / "1-s2.0-S2095927326000691-mmc1.pdf"
+            source.write_bytes(b"main")
+            supplement.write_bytes(b"supplement")
+            self.assertEqual(discover_related_documents(source, root), [])
+
+            related = discover_related_documents(
+                source, root, supplementary_paths=[supplement, supplement.name]
+            )
+            self.assertEqual(len(related), 1)
+            self.assertEqual(related[0]["path"], supplement.name)
+            self.assertEqual(related[0]["role"], "supplementary_candidate")
+            self.assertEqual(related[0]["match_reason"], "explicit_supplementary_path")
+
+            with self.assertRaisesRegex(ValueError, "primary source directory"):
+                discover_related_documents(source, root, supplementary_paths=[root.parent / "outside.pdf"])
+
+    def test_custom_queries_replace_generic_defaults_when_option_is_omitted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "paper.md"
+            source.write_text(
+                "# Results\nThe reported result has a measured step height.\n"
+                "Supplementary Information describes the measurement.\n"
+                "# Supplementary source: unlinked-mmc1.pdf\n"
+                "The supplementary measurement records an instrument noise floor.\n",
+                encoding="utf-8",
+            )
+            supplement = root / "unlinked-mmc1.pdf"
+            supplement.write_bytes(b"supplement")
+            workflow = build_literature_workflow(
+                markdown_path=source,
+                source_path=source,
+                project_root=root,
+                output_dir=root / "bundle",
+                custom_queries=["Measured step height and instrument noise"],
+                supplementary_paths=[supplement],
+            )
+            self.assertEqual([item["query_id"] for item in workflow["evidence"]], ["custom-01"])
+            self.assertEqual(workflow["source_dependencies"]["dependencies"][0]["availability"], "unindexed")
+            self.assertEqual(workflow["source_dependencies"]["unindexed_required_count"], 1)
+            self.assertEqual(workflow["source_dependencies"]["readiness"], "review")
+            self.assertEqual(workflow["related_documents"][0]["path"], supplement.name)
+            self.assertNotIn(str(root.resolve()), (root / "bundle" / "workflow.json").read_text(encoding="utf-8"))
+
+            indexed = build_literature_workflow(
+                markdown_path=source,
+                source_path=source,
+                project_root=root,
+                output_dir=root / "indexed-bundle",
+                custom_queries=["Measured step height and instrument noise"],
+                supplementary_paths=[supplement],
+                supplementary_content_included=True,
+            )
+            self.assertEqual(indexed["source_dependencies"]["missing_required_count"], 0)
+            self.assertEqual(indexed["source_dependencies"]["unindexed_required_count"], 0)
+            self.assertEqual(indexed["source_dependencies"]["dependencies"][0]["availability"], "available")
+            self.assertNotEqual(workflow["workflow_id"], indexed["workflow_id"])
+
     def test_quantity_audit_preserves_differing_temperature_ranges(self):
         audit = audit_quantities(
             "The hotplate ranged from 50 to 250 °C.\n"

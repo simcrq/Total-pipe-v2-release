@@ -163,6 +163,8 @@ INput/4668/paper-a.pdf
 3. 下一个总结、比较、教程或知识库插件优先读取 `evidence.md`，需要上下文时再读取原始 Markdown。
 4. 下游结论保留 `E###`、精确行号和证据类型，并使用 `workflow.json` 追溯参数与源文件哈希。
 
+首轮调用前给出贴合论文的 `queries`；有定制问题且省略 `include_default_queries` 时，不会再混入通用默认问题。文件名无法匹配的补充材料可传 `supplementary_paths`；仅配对时补充门禁仍为 `review`，把其 OCR/Markdown 纳入分析输入后才设置 `supplementary_content_included=true`。
+
 ## 7. 运行完整 PaperWorkflow
 
 PDF 放在任务 ID 子目录，例如：

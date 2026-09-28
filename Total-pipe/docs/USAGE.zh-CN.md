@@ -34,6 +34,16 @@ build directory 中的重要文件：
 
 ## 2. 从 PaperWorkflow 到 RPA
 
+在首轮 PaperWorkflow 调用前按论文主题设置 `queries`，并检查主文引用的补充文件。
+有定制问题且未设置 `include_default_queries` 时只使用定制问题；没有定制问题时
+才运行通用默认问题。文件名无法关联的补充 PDF/Markdown 可传
+`supplementary_paths`（与主文处于同一源目录，可用绝对或相对路径）；工具记录
+显式配对并检查文件存在。仅配对时补充材料门禁仍为 `review`；先将补充 PDF
+合并后 OCR，或把其 OCR/Markdown 与主文合并为分析输入，再设置
+`supplementary_content_included=true`。`quality_audit.ready` 只说明文本捕获可用，
+科学综合要看 `synthesis_readiness` 六项门禁；出现 `review` 就按失败门禁补证据，
+不能把 OCR 分数当作交付许可。
+
 运行 PaperWorkflow 后，使用用户明确选择的高能力模型生成 Story。Story 节点保留
 `question / answer / evidence / next` 四个必需字段；如果一句回答会丢掉后续页面必须保留的细节，可选加 `key_points` 字符串数组，不要求每个节点都有，也不限制条数。Story 不决定最终版式或 bbox。
 
@@ -66,6 +76,9 @@ MCP 服务以 ASCII 转义的 JSON-RPC 响应传送中文内容，避免 Windows
 ```
 
 pwf2rpa 将 `answer` 送入 Brief 的 `takeaway`，将 `key_points` 按原顺序送入同名字段，并计入 `text_chars` 与布局容量检查。`evidence_texts` 是原始证据资料，不自动进入正文。直接提供 Brief spec 时，`body` 中的段落换行会保留。
+默认结尾标题根据 Story 主体语言选择：英文为 `Conclusions and scope`，中文为
+`结论与边界`；`title_chars` 由转换器根据生成标题计算。转换后检查整套标题语言，
+若需改写标题，先改 Story/规划输入再运行转换，避免标题与计数不一致。
 
 ```bash
 cd Total-pipe/pwf2rpa

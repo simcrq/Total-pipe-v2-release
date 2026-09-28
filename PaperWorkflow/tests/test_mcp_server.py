@@ -47,11 +47,14 @@ class MCPServerTests(unittest.TestCase):
             output_dir = root / "external-output"
             source_dir.mkdir()
             source = source_dir / "paper.md"
+            supplement = source_dir / "unlinked-mmc1.pdf"
+            supplement.write_bytes(b"supplement")
             source.write_text(
                 "# External paper\n\n"
                 "# Methods\nThe sample was measured at 300 K.\n\n"
                 "# Results\nThe measured response increased by 20 percent.\n\n"
-                "# Conclusion\nThe method supports the reported result.\n",
+                "# Conclusion\nThe method supports the reported result.\n"
+                "Supplementary Information contains further measurements.\n",
                 encoding="utf-8",
             )
 
@@ -60,7 +63,7 @@ class MCPServerTests(unittest.TestCase):
                     "source_path": str(source),
                     "output_dir": str(output_dir),
                     "queries": ["measured response"],
-                    "include_default_queries": False,
+                    "supplementary_paths": [str(supplement)],
                 }
             )
 
@@ -70,6 +73,11 @@ class MCPServerTests(unittest.TestCase):
             )
             self.assertTrue((output_dir / "paper.md").is_file())
             self.assertTrue((output_dir / "bundle.manifest.json").is_file())
+            workflow = result["synthesis_readiness"]
+            self.assertEqual(result["counts"]["queries"], 1)
+            self.assertEqual(result["related_documents"][0]["path"], supplement.name)
+            self.assertEqual(result["source_dependency_readiness"], "review")
+            self.assertEqual(next(g["status"] for g in workflow["gates"] if g["gate"] == "supplementary_dependencies"), "review")
 
     def test_prompt_builder_indexes_arbitrary_source_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -88,6 +96,8 @@ class MCPServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "paper.md"
+            supplement = root / "unlinked-mmc1.pdf"
+            supplement.write_bytes(b"supplement")
             output = root / "bundle"
             source.write_text(
                 "# Bridge paper\n\n# Results\nThe measured value increased by 20 percent.\n",
@@ -100,7 +110,7 @@ class MCPServerTests(unittest.TestCase):
                     "source_path": str(source),
                     "output_dir": str(output),
                     "queries": ["measured value"],
-                    "include_default_queries": False,
+                    "supplementary_paths": [str(supplement)],
                 }
             )
 
@@ -110,6 +120,8 @@ class MCPServerTests(unittest.TestCase):
                 Path(workflow["runtime_artifacts"]["bundle_dir"]), output.resolve()
             )
             self.assertTrue((output / "bundle.manifest.json").is_file())
+            self.assertEqual([item["query_id"] for item in workflow["evidence"]], ["custom-01"])
+            self.assertEqual(workflow["related_documents"][0]["path"], supplement.name)
 
 
 if __name__ == "__main__":

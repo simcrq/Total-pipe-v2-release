@@ -1,6 +1,6 @@
 {
   "name": "total-pipe-v3",
-  "version": "3.1.0+codex.20260927171214",
+  "version": "3.1.0+codex.20260928131412",
   "description": "Research presentation pipeline with v26 layout proposals, compiler constraints and OfficeCLI output.",
   "author": {
     "name": "Total-pipe"

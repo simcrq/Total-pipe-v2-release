@@ -134,6 +134,7 @@ def build_workflow_prompt(
         [
             "",
             "执行要求：",
+            "检索准备：首轮调用前根据重点问题设置 queries；主文引用但文件名无法关联的补充材料用 supplementary_paths 明确配对。只有补充 OCR/Markdown 已并入分析输入时才设 supplementary_content_included=true。",
             "1. 遵守 workflow.json 中的 claim_ledger_contract。",
             "2. 每个主要结论和数字必须引用 EV####，并保留 S####/E###、精确行号和字符偏移。",
             "3. 区分直接观察、测量、模拟、拟合、作者推断和二次推断。",

@@ -32,6 +32,11 @@ The bridge treats `body` and the ordered `key_points` group as untrimmable.
 Its character limits are only a preliminary screen; RPA must check the actual
 slot binding and estimated English/CJK wrapping. A summary that does not fit
 must remain unplanned for revision rather than silently truncating the body.
+The generated ending title follows the Story's dominant language: an English
+Story gets `Conclusions and scope`, while a Chinese Story keeps `结论与边界`.
+`title_chars` is computed from that generated title. If a presentation has a
+language requirement, check all brief titles before RPA; revise the Story and
+reconvert instead of editing `rpa_input.json` counters by hand.
 
 ```bash
 python3 pwf_to_rpa.py workflow.json \

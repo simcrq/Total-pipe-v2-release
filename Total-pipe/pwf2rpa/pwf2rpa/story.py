@@ -37,6 +37,8 @@ _GENERIC_NEXT = re.compile(
     re.IGNORECASE,
 )
 _FIGURE_ONLY = re.compile(r"^(?:fig(?:ure)?\.?|图)\s*[0-9a-z]+\s*$", re.IGNORECASE)
+_HAN = re.compile(r"[\u3400-\u9fff]")
+_LATIN = re.compile(r"[A-Za-z]")
 _EPISTEMIC_MARKERS = (
     "但是", "然而", "仍", "尚", "不足", "疑问", "验证", "排除", "解释", "机制", "能否", "是否",
     "如果", "因此需要", "为了", "but", "however", "remain", "unclear", "test", "verify", "rule out",
@@ -339,6 +341,15 @@ def _category_for(question: str, index: int) -> str:
     return ("case", "gap", "theory", "decision")[(index - 1) % 4]
 
 
+def _ending_title(plan: Mapping[str, Any]) -> str:
+    """Follow the Story's display language instead of forcing a Chinese title."""
+    texts = [plan["core_question"], plan["main_message"], *plan["ending"].values()]
+    texts.extend(text for node in plan["story"] for text in (node["question"], node["answer"]))
+    chinese = sum(bool(_HAN.search(text)) for text in texts)
+    english = sum(bool(_LATIN.search(text)) and not _HAN.search(text) for text in texts)
+    return "结论与边界" if chinese > english else "Conclusions and scope"
+
+
 def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], list[Problem]]:
     """Turn Story nodes into semantic planning units for RPA.
 
@@ -402,7 +413,7 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
         {
             "slide_type": "summary",
             "category_hint": "summary",
-            "title": "结论与边界",
+            "title": _ending_title(plan),
             "takeaway": plan["ending"]["takeaway"],
             "body": plan["ending"]["limitation"],
             "evidence_ids": final_evidence,

@@ -500,8 +500,9 @@ def discover_related_documents(
     project_root: Path,
     limit: int = 50,
     exclude_roots: Iterable[Path] = (),
+    supplementary_paths: Iterable[str | Path] = (),
 ) -> list[dict[str, Any]]:
-    """Return only filename-linked supplements or close sibling documents."""
+    """Return explicitly paired supplements and filename-linked siblings."""
 
     source_path = source_path.expanduser().resolve()
     project_root = project_root.expanduser().resolve()
@@ -509,12 +510,45 @@ def discover_related_documents(
     parent = source_path.parent
     source_stem = _normalise_document_stem(source_path.stem)
     results: list[dict[str, Any]] = []
+    if isinstance(supplementary_paths, (str, bytes)):
+        raise ValueError("supplementary_paths must be an array of paths")
+    explicit_paths: set[Path] = set()
+    for raw_path in supplementary_paths:
+        if not isinstance(raw_path, (str, Path)) or not str(raw_path).strip():
+            raise ValueError("each supplementary path must be a non-empty path")
+        candidate = Path(raw_path).expanduser()
+        resolved = (candidate if candidate.is_absolute() else parent / candidate).resolve()
+        try:
+            relative_path = resolved.relative_to(parent)
+        except ValueError as exc:
+            raise ValueError("supplementary paths must be inside the primary source directory") from exc
+        if resolved == source_path or not resolved.is_file() or resolved.suffix.lower() not in {".pdf", ".md"}:
+            raise ValueError(f"supplementary path must name a separate local PDF or Markdown file: {raw_path}")
+        if any(resolved == root or root in resolved.parents for root in excluded):
+            raise ValueError("supplementary path cannot be inside the output directory")
+        if resolved in explicit_paths:
+            continue
+        explicit_paths.add(resolved)
+        results.append({
+            "path": relative_path.as_posix(),
+            "type": resolved.suffix.lower().lstrip("."),
+            "role": "supplementary_candidate",
+            "size_bytes": resolved.stat().st_size,
+            "match_reason": "explicit_supplementary_path",
+            "filename_similarity": round(SequenceMatcher(None, source_stem, _normalise_document_stem(resolved.stem)).ratio(), 3),
+        })
+    if len(results) > limit:
+        raise ValueError(f"supplementary_paths accepts at most {limit} files")
+    if len(results) == limit:
+        return results
     for candidate in sorted(parent.rglob("*"), key=lambda item: str(item).casefold()):
         if not candidate.is_file() or candidate.resolve() == source_path.resolve():
             continue
         if candidate.suffix.lower() not in {".pdf", ".md"}:
             continue
         resolved = candidate.resolve()
+        if resolved in explicit_paths:
+            continue
         if any(resolved == root or root in resolved.parents for root in excluded):
             continue
         try:
@@ -792,7 +826,9 @@ def build_literature_workflow(
     project_root: Path,
     output_dir: Path,
     custom_queries: Iterable[str] = (),
-    include_default_queries: bool = True,
+    include_default_queries: bool | None = None,
+    supplementary_paths: Iterable[str | Path] = (),
+    supplementary_content_included: bool = False,
     top_k: int = 5,
     chunk_chars: int = 6000,
     ingestion: dict[str, Any] | None = None,
@@ -845,9 +881,20 @@ def build_literature_workflow(
         source_path,
         project_root,
         exclude_roots=(output_dir,),
+        supplementary_paths=supplementary_paths,
     )
+    if not isinstance(supplementary_content_included, bool):
+        raise ValueError("supplementary_content_included must be a boolean")
+    for item in related_documents:
+        if item["role"] == "supplementary_candidate":
+            item["content_included"] = supplementary_content_included
     dependency_audit = audit_source_dependencies(markdown, related_documents)
 
+    custom_queries = tuple(custom_queries)
+    if include_default_queries is not None and not isinstance(include_default_queries, bool):
+        raise ValueError("include_default_queries must be a boolean when supplied")
+    if include_default_queries is None:
+        include_default_queries = not custom_queries
     query_specs = build_evidence_queries(custom_queries, include_defaults=include_default_queries)
     evidence: list[dict[str, Any]] = []
     canonical_by_intent: dict[str, str] = {}
@@ -895,6 +942,7 @@ def build_literature_workflow(
         "source_sha256": source_sha256,
         "markdown_sha256": markdown_sha256,
         "queries": query_specs,
+        "related_documents": [(item["path"], item["role"], item.get("content_included")) for item in related_documents],
         "top_k": top_k,
         "chunk_chars": chunk_chars,
     }

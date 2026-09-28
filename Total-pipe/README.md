@@ -38,6 +38,12 @@ RPA 修订须用原始 `normalized_content.json` 核对计划的 `key_points`；
 `Text overflow` issue 仅作排查线索，应以实际 PPTX 页面确认。
 RPA 的字符容量只是粗筛；正文和要点在 Slot Binding 中不可静默裁切。
 若总结页无法完整绑定，规划必须返回 `needs_replan`，不能用其他类别替代。
+PaperWorkflow 的定制 `queries` 应在首轮调用前准备；无显式要求时它们会替代通用
+默认问题。文件名无法关联的补充 PDF 用 `supplementary_paths` 明确配对；仅配对时
+补充门禁仍为 `review`。将补充文本纳入 OCR/Markdown 输入后才设置
+`supplementary_content_included=true`。验收科学综合时看 `synthesis_readiness`
+六项门禁，不以 `quality_audit.ready` 代替。pwf2rpa 的默认结尾标题跟随 Story
+主要语言，英文 Story 生成 `Conclusions and scope`，`title_chars` 自动重算。
 
 ## 当前目录
 

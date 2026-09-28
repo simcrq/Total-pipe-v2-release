@@ -150,9 +150,17 @@ def literature_workflow(payload: dict[str, Any]) -> dict[str, Any]:
         if len(query) > 2000:
             raise ValueError("each query must be at most 2000 characters")
 
-    include_defaults = payload.get("include_default_queries", True)
-    if not isinstance(include_defaults, bool):
+    include_defaults = payload.get("include_default_queries")
+    if include_defaults is not None and not isinstance(include_defaults, bool):
         raise ValueError("include_default_queries must be a boolean")
+    supplementary_paths = payload.get("supplementary_paths", [])
+    if not isinstance(supplementary_paths, list) or len(supplementary_paths) > 50 or any(
+        not isinstance(path, str) or not path.strip() for path in supplementary_paths
+    ):
+        raise ValueError("supplementary_paths must contain at most 50 non-empty paths")
+    supplementary_content_included = payload.get("supplementary_content_included", False)
+    if not isinstance(supplementary_content_included, bool):
+        raise ValueError("supplementary_content_included must be a boolean")
     top_k = payload.get("top_k", 5)
     if not isinstance(top_k, int) or isinstance(top_k, bool) or not 1 <= top_k <= 20:
         raise ValueError("top_k must be an integer from 1 to 20")
@@ -187,6 +195,8 @@ def literature_workflow(payload: dict[str, Any]) -> dict[str, Any]:
         output_dir=output_dir,
         custom_queries=queries,
         include_default_queries=include_defaults,
+        supplementary_paths=supplementary_paths,
+        supplementary_content_included=supplementary_content_included,
         top_k=top_k,
         chunk_chars=chunk_chars,
         ingestion=ingestion,

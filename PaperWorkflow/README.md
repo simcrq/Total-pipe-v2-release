@@ -29,6 +29,8 @@ MCP 客户端配置示例：
 
 `paperworkflow_literature_workflow` 的 `source_path` 和 `output_dir` 均可使用任意本地绝对路径，不再要求文件位于 `INput` 或 PaperWorkflow 项目目录内。省略 `output_dir` 时，默认写入 `output/workflows/<source fingerprint>/`。成功返回值顶层直接包含 `bundle_dir` 与 `workflow_path`，无需猜测目录；默认不把完整 workflow 塞进 MCP 响应，如确有需要可设置 `include_workflow=true`。
 
+首轮运行前按论文主题准备 `queries`。传入定制问题且省略 `include_default_queries` 时，只执行定制问题；没有定制问题时使用通用默认问题。确需混用时显式设为 `true`。若补充 PDF 文件名与主文无关联，可用 `supplementary_paths` 指定同一源目录下的绝对或相对路径；工作流会记录为显式配对，并校验文件存在。配对仅证明文件在本地，补充材料门禁仍为 `review`。把补充材料的 OCR/Markdown 内容合并进待分析输入后，才设置 `supplementary_content_included=true`；这时补充内容可被检索。不要把 `quality_audit.ready` 当作科学综合通过；交接前逐项查看 `synthesis_readiness.gates`。
+
 如果需要先浏览一个目录内的论文，可调用 `paperworkflow_prompt_builder` 并传 `source_dir`；省略时仍兼容旧的 `INput` 目录。
 
 ## 传统批处理快速开始

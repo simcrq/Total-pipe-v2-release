@@ -66,6 +66,8 @@ INSTRUCTIONS = (
     "the local filesystem. paperworkflow_literature_workflow produces a self-contained "
     "bundle with workflow.json, evidence.md, paper.md, document.manifest.json, figure "
     "assets and bundle.manifest.json. "
+    "Set topic-specific queries and pair supplementary paths before the first run. "
+    "Confirm supplementary_content_included only after its OCR text joins the input. "
     "Gate on synthesis_readiness, not quality_audit. Take artefact paths from the "
     "return value; do not guess directories."
 )
@@ -329,7 +331,9 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
         project_root=source_path.parent,
         output_dir=out,
         custom_queries=args.get("queries") or (),
-        include_default_queries=bool(args.get("include_default_queries", True)),
+        include_default_queries=args.get("include_default_queries"),
+        supplementary_paths=args.get("supplementary_paths") or (),
+        supplementary_content_included=args.get("supplementary_content_included", False),
         top_k=int(args.get("top_k", 5)),
         chunk_chars=int(args.get("chunk_chars", 6000)),
         ingestion=ingestion,
@@ -350,6 +354,8 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
         "workflow_path": str((out / "workflow.json").resolve()),
         "synthesis_readiness": readiness,
         "quality_audit": workflow.get("quality_audit"),
+        "related_documents": workflow.get("related_documents") or [],
+        "source_dependency_readiness": (workflow.get("source_dependencies") or {}).get("readiness"),
         "counts": {
             "chunks": workflow["outline"]["chunk_count"],
             "spans": workflow["outline"]["span_count"],
@@ -357,8 +363,9 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
             "queries": len(workflow.get("evidence") or []),
         },
         "note": (
-            "Gate on synthesis_readiness, not quality_audit. Take artefact paths from "
-            "artifacts above; do not guess directory names."
+            "Gate on synthesis_readiness, not quality_audit. Explicit supplementary pairing "
+            "records availability; merge its OCR text before setting supplementary_content_included. "
+            "Take artefact paths from artifacts above."
         ),
     }
     if bool(args.get("include_workflow", False)):
@@ -519,8 +526,9 @@ TOOLS: dict[str, dict[str, Any]] = {
             "Stage 1b. Convert a .md (or .pdf via OCR) into the literature hand-off "
             "bundle: workflow.json, document.manifest.json, evidence.md, paper.md, "
             "extracted figures and bundle.manifest.json in one directory. Returns "
-            "the bundle path and synthesis_readiness hard gate. Slow for PDFs "
-            "(OCR); do not re-run unnecessarily."
+            "the bundle path and synthesis_readiness hard gate. Choose topic-specific "
+            "queries and explicitly pair oddly named supplementary files before OCR; "
+            "quality_audit is extraction quality only. Slow for PDFs (OCR)."
         ),
         "inputSchema": {
             "type": "object",
@@ -535,7 +543,21 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maxItems": 12,
                     "description": "Research questions, each <=2000 chars",
                 },
-                "include_default_queries": {"type": "boolean", "default": True},
+                "include_default_queries": {
+                    "type": "boolean",
+                    "description": "When omitted, defaults are used only if queries is empty. Set true to combine generic and custom queries.",
+                },
+                "supplementary_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 50,
+                    "description": "Explicit local supplementary PDF/Markdown paths under the primary source directory; avoids filename-only matching.",
+                },
+                "supplementary_content_included": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Set true only after the supplementary OCR/Markdown content has been merged into the analyzed input. File pairing alone leaves the supplementary gate at review.",
+                },
                 "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
                 "chunk_chars": {
                     "type": "integer",

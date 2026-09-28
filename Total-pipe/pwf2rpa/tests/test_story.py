@@ -111,6 +111,26 @@ class StoryChainTests(unittest.TestCase):
         self.assertIn("仍不足", node["metadata"]["story_next"])
         self.assertNotIn("key_points", node)
 
+    def test_english_story_generates_english_ending_and_consistent_title_count(self):
+        story = make_story()
+        specs, _ = story_to_specs(story, self.workflow)
+        self.assertEqual(specs[-1]["title"], "Conclusions and scope")
+        payload, _ = convert(self.workflow, story=story, strict_fit=False)
+        ending = payload["slide_briefs"][-1]
+        self.assertEqual(ending["title"], "Conclusions and scope")
+        self.assertEqual(ending["title_chars"], 21)
+
+    def test_chinese_story_keeps_chinese_ending(self):
+        story = make_story()
+        story["core_question"] = "该方法能否解决目标问题？"
+        story["main_message"] = "独立证据在明确边界内支持该方法。"
+        story["ending"] = {"takeaway": "主要结论得到支持。", "limitation": "机制仍受测试条件限制。"}
+        for node in story["story"]:
+            node["question"] = "这一结果说明什么？"
+            node["answer"] = "结果支持当前解释，但仍需验证。"
+        specs, _ = story_to_specs(story, self.workflow)
+        self.assertEqual(specs[-1]["title"], "结论与边界")
+
     def test_four_key_points_reach_rpa_brief_in_order(self):
         story = make_story()
         points = [

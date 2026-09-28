@@ -24,6 +24,15 @@ PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
 `evidence.md`。下游优先引用 `EV####`；当 `synthesis_readiness` 为 `review` 或
 `blocked` 时，保留门禁原因，不能用摘要覆盖。
 
+首轮运行前先按论文主题写检索 `queries`，有定制问题时省略
+`include_default_queries` 即只用定制问题；需要混用通用问题才显式设为 `true`。
+主文提到补充材料而文件名无法自动配对时，在 PaperWorkflow 调用中传
+`supplementary_paths` 的实际 PDF/Markdown 路径。此配对只证明来源在本地，
+补充材料门禁仍为 `review`。先将其 OCR/Markdown 内容合并到分析输入，再设置
+`supplementary_content_included=true`；不能只因文件存在就宣称完整证据审查通过。
+分别检查 `quality_audit` 与 `synthesis_readiness` 六项门禁：前者表示 OCR/文本捕获，
+不能用 `quality_audit.ready` 代替科学综合的 `synthesis_readiness.ready`。
+
 ## 2. Story Planner 硬门禁
 
 拿到 `workflow.json` 后，必须先问用户选择当前可用的高能力模型。不得默认选择，
@@ -99,6 +108,10 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_inpu
 需要恢复原文及顺序，不能通过修改或删去源 `content_model` 来消除。MCP 精简返回
 会保留完整 `slides[].key_points`，但其摘要、截短的 slot 文本和设计意图不能代替
 `rpa_input.json` 或完整的内容模型。每次 RPA 修订都从这些原始文件重新核对。
+转换后先核对整套 Brief 标题的展示语言。pwf2rpa 会根据 Story 主体语言生成默认
+结尾标题：英文 Story 用 `Conclusions and scope`，中文 Story 用 `结论与边界`；
+`title_chars` 自动按实际标题计算。若语言仍不符合演示要求，先修订 Story 并重跑转换，
+不要只手改 `rpa_input.json` 的标题而留下旧字符数。
 
 `SOURCE_TEXT_NOT_BOUND` 表示原始 `body` 或要点未完整进入 Slot Binding，是硬错误。
 总结页仍须使用 summary 版式；容量不足时应保持 `needs_replan`，由 Story/RPA
