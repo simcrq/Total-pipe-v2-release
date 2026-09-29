@@ -5,7 +5,7 @@ Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
 `deck_ir.json` 开始接收 v26 布局建议、校验约束并生成 PPTX。
 
 ```text
-PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
+PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → Research PPT Assistant
     → canonical deck_ir.json → Deck Compiler v3
     → candidate.pptx → staging.pptx
     → structural QA + PowerPoint PDF
@@ -16,8 +16,9 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 
 - **PaperWorkflow**：从论文生成可追溯 Evidence。
 - **Story Planner**：组织研究问题、回答、证据和叙事推进。
+- **DesignIntentPlanner（可选）**：只声明四个 Story 要点的流程关系与强调位置，不提供坐标。
 - **pwf2rpa**：验证 Story provenance，将 `answer` 转成 `takeaway`，可选 `key_points` 原顺序传给 RPA，并保留 `body` 的段落边界。
-- **Research PPT Assistant**：选择 Layout、绑定 Slot、输出设计意图；不生成 PPTX。
+- **Research PPT Assistant**：按完整内容和设计意图选择 Layout、绑定 Slot，输出可核对的 `layout_contract`；不生成 PPTX。
 - **Deck Compiler v3**：验证 Deck IR、约束 v26 布局建议，并通过 OfficeCLI 唯一写入 PPTX。
 - **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
 
@@ -33,6 +34,8 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 Deck IR 可在顶层声明 `"presentation": {"frame_variant": "spacious"}`（或 `default`）。省略时，只要任一页请求 `spacious`，整套使用同一个 spacious 标题、takeaway 和正文基线；否则整套为 default。编译结果在 `layout.json` 记录实际 `deck_frame_variant` 和覆盖的页码。`figure-parameters` 中按阅读顺序排列的 3–4 个 block 与一张图构成同级纵向组：v26 校正为 24 px 间距，容量允许时等高，否则依文本所需高度分配；图与图注相隔 12 px。校正后仍需通过容量、碰撞与字体检查，不通过则回退。
 
 若同一版型是无独立标签的四步加工流程，首项角色为 `method`、中间含 `process-step`、末项为 `result`，编译器会在文本列内加入 1–4 编号与纵向连线。编号占用的 56 px 会纳入 v26 容量检查；原 block 文本不重写，触发结果记入 `adaptation_log`。
+
+v3.2 可在 Story 后另写 `design_intent.json`，用 `--story` 与 `--design-intent` 一起转换。首版只接受恰好四条 `key_points` 的纵向 `process`，没有 bbox；未提供该文件时原有流程保持兼容。RPA `layout_contract` 必须核对整组原文的 Slot Binding。映射到 Deck IR 时，用实际 block ID 写 `composition.visual_intent.members`；该硬关系不得自动拆页，容量不足时返回重规划。编译器验证成员顺序并绘制编号连线，v26 仍只提供几何建议。
 
 每页的 `MODEL_PROPOSAL`、`PACKING_FALLBACK` 或 `COMPILER_FALLBACK` 可直接查 `layout_provider.json`；派生的 `plan_to_layout.json` 也记录 `layout_provider_status`，无需从 PPTX 的间距推断来源。
 

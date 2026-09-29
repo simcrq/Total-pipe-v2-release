@@ -20,13 +20,14 @@ produce byte-identical output.
 from .briefs import build_briefs
 from .capacity import CATEGORIES, LAYOUT_LIBRARY_VERSION
 from .convert import convert, load_specs, write_output
+from .design_intent import load_design_intent
 from .errors import AdapterError, BriefError, Problem, StoryError, WorkflowError
 from .fallback import fallback_specs
 from .fit import PageShape, category_ids, evaluate, is_known_category
 from .story import build_story_prompt, load_story, story_to_specs, validate_story
 from .workflow import Evidence, Workflow
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     "AdapterError",
@@ -48,6 +49,7 @@ __all__ = [
     "fallback_specs",
     "is_known_category",
     "load_specs",
+    "load_design_intent",
     "load_story",
     "story_to_specs",
     "validate_story",

@@ -8,7 +8,7 @@ description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—�
 主链固定为：
 
 ```text
-PDF → PaperWorkflow → Story Planner subagent → pwf2rpa → RPA planning
+PDF → PaperWorkflow → Story Planner subagent → [DesignIntentPlanner] → pwf2rpa → RPA planning
     → canonical deck_ir.json → v26 layout proposals + compiler fallback → OfficeCLI
     → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
     → qa_report.json → final.pptx
@@ -75,6 +75,20 @@ python -m pwf2rpa <workflow.json> \
 若确定性校验失败，把错误和原证据退回同一个 subagent 修订；主代理不能静默改写
 科学故事。
 
+## 2a. DesignIntentPlanner（可选）
+
+若四条 Story `key_points` 具有明确的步骤关系，让独立的
+DesignIntentPlanner 在 Story 完成后写 `design_intent.json`：
+
+```json
+{"slides":[{"story_node_index":2,"relation":"process","orientation":"vertical","emphasis":4}]}
+```
+
+索引从 1 开始；`emphasis` 可省略。首版只支持恰好四条要点的纵向
+`process`。只声明关系和强调，不写 bbox、`x/y/w/h`、Layout 或 Slot，
+也不改写 Story 的 `question/answer/evidence/next`。没有明确流程关系时
+省略该文件，保留旧流程。不要新增整套 deck 风格 pass。
+
 ## 3. pwf2rpa 与 RPA 规划
 
 用严格模式把 Story 转为 RPA 输入：
@@ -83,9 +97,15 @@ python -m pwf2rpa <workflow.json> \
 cd Total-pipe/pwf2rpa
 PYTHONPATH=. python -m pwf2rpa <workflow.json> \
   --story <story_plan.json> \
+  --design-intent <design_intent.json> \
   --story-model <用户选择> --story-reasoning high \
   --model-selected-by-user --strict --out <rpa_input.json>
 ```
+
+只有提供设计意图时才传 `--design-intent`；它必须与 `--story` 同用。
+`pwf2rpa_check` / `pwf2rpa_convert` 的同名 MCP 输入为可选
+`design_intent_path`，且必须同时给 `story_path`。转换器保留四条原文，
+在 Brief metadata 写关系，并设 `allow_auto_split=false`。
 
 随后运行 RPA：
 
@@ -101,8 +121,7 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_inpu
 门禁分别要求 `normalize-content status=valid`、`pipeline_status=plan_complete`、
 `plan status=success/adapted` 且 `unplanned_slide_briefs` 为空，以及
 `validate-deck status=valid`。`adapted` 时逐条检查 `adaptation_log`，正文、
-`key_points`、结论和限制不得出现 `truncate_text`。RPA 负责科学页面规划与视觉意图，
-不输出最终 bbox。
+`key_points`、结论和限制不得出现 `truncate_text`。RPA 负责 Layout、Slot、容量和 `layout_contract`；DesignIntentPlanner 只负责显式信息关系。RPA 不输出最终 bbox。
 `validation_input.json` 必须包含本轮计划的 `slides` 和未被修订覆盖的
 `normalized_content.json`（作为 `content_model`）。`KEY_POINTS_LOST` 是错误，
 需要恢复原文及顺序，不能通过修改或删去源 `content_model` 来消除。MCP 精简返回
@@ -112,6 +131,12 @@ node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_inpu
 结尾标题：英文 Story 用 `Conclusions and scope`，中文 Story 用 `结论与边界`；
 `title_chars` 自动按实际标题计算。若语言仍不符合演示要求，先修订 Story 并重跑转换，
 不要只手改 `rpa_input.json` 的标题而留下旧字符数。
+
+有流程意图时还要核对 `slide.design_ir.visual_topology` 和
+`slide.layout_contract`：后者记录实际 `layout_id`、绑定四条原文的
+`slot_id`、顺序与可选强调索引。`VISUAL_INTENT_NOT_BOUND` 和
+`VISUAL_INTENT_GROUP_SPLIT` 表示硬关系未满足，须重规划；不能删改
+要点或自动拆散流程组。
 
 `SOURCE_TEXT_NOT_BOUND` 表示原始 `body` 或要点未完整进入 Slot Binding，是硬错误。
 总结页仍须使用 summary 版式；容量不足时应保持 `needs_replan`，由 Story/RPA
@@ -143,7 +168,22 @@ v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长�
 图注置于图像下方 12 px，所有校正后重新执行容量与碰撞检查。实际 frame 与逐页
 `MODEL_PROPOSAL / PACKING_FALLBACK / COMPILER_FALLBACK` 在 `layout.json`、
 `layout_provider.json` 和 `derived/plan_to_layout.json` 中查看。
-如果 RPA 规划的是单图四步加工路径，保留四个无独立 `label` 的有序 block：首项
+若 RPA 给出流程 `layout_contract`，先将四条完整原文按顺序落入四个
+实际 block，再写 `composition.visual_intent`：
+
+```json
+{"relation":"process","members":["b1","b2","b3","b4"],
+ "orientation":"vertical","preserve_order":true,"emphasis":"b4"}
+```
+
+`members` 必须与 `composition.blocks[].id` 的实际顺序一致；`emphasis`
+可省略，存在时由 RPA `emphasis_index` 映射为真实 block ID。编译器只接受
+四个无独立 label 的 block：有一张图时用 `figure-parameters`，无图时用
+`process-flow`；其他形态以 `VISUAL_INTENT_INVALID` 阻断。v26 只建议几何；编译器决定文字适配、
+等距、编号连线和最终合法性。容量不足回到 Story/RPA 重规划，硬流程组不可
+自动拆页。
+
+没有显式意图时，如果 RPA 规划的是单图四步加工路径，保留四个无独立 `label` 的有序 block：首项
 `method`、中间包含 `process-step`、末项 `result`。编译器会在文本列增加 1–4 编号和
 纵向连线，让步骤关系可见；编号所需的 56 px 已计入容量检查。不要为触发样式而改写
 科研内容或强行把非流程页标为 `method/result`。
@@ -157,8 +197,7 @@ v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长�
 
 映射前逐条核对 `rpa_input.json` 中的 `key_points`。对应科学内容必须按原顺序
 进入 Deck IR 的 `composition.blocks[].text` 或 `semantic.speaker_notes`，不能只留下
-`takeaway`、缩写后的 slot 文本或 `design_ir.message.secondary`。如果一页容量不足，
-拆页并保留全部细节；改写科学内容需先明确修订 Story/Brief，再重新运行 RPA。
+`takeaway`、缩写后的 slot 文本或 `design_ir.message.secondary`。如果普通页面容量不足，拆页并保留全部细节；硬流程组先重规划，不能静默拆散；改写科学内容需先明确修订 Story/Brief，再重新运行 RPA。
 
 禁止在 IR 中写最终 `x/y/w/h`。首代目录只使用 `deck_compiler/catalog.py` 中的稳定
 archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`，再回 Story/RPA

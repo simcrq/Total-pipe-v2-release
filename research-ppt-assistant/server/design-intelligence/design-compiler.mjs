@@ -185,6 +185,37 @@ export function inferTextFlow(brief, semanticRole, visuals) {
 
 import { normalizePresentationIntent } from './presentation-intent.mjs';
 
+function visualTopologyFor(slideBrief) {
+  const intent = slideBrief.metadata?.visual_intent;
+  if (intent === undefined) return null;
+  if (!intent || typeof intent !== "object" || Array.isArray(intent)) {
+    throw new TypeError("metadata.visual_intent must be an object.");
+  }
+  const allowed = new Set(["relation", "source", "member_count", "orientation", "preserve_order", "emphasis_index"]);
+  if (Object.keys(intent).some((key) => !allowed.has(key))
+    || intent.relation !== "process"
+    || intent.source !== "key_points"
+    || intent.member_count !== 4
+    || intent.orientation !== "vertical"
+    || intent.preserve_order !== true
+    || (intent.emphasis_index !== undefined && (!Number.isInteger(intent.emphasis_index) || intent.emphasis_index < 1 || intent.emphasis_index > 4))) {
+    throw new TypeError("metadata.visual_intent must describe an ordered, vertical process of four key_points without geometry.");
+  }
+  const points = slideBrief.key_points;
+  if (!Array.isArray(points) || points.length !== 4 || points.some((point) => typeof point !== "string" || !point.trim())) {
+    throw new TypeError("metadata.visual_intent requires exactly four non-empty key_points in source order.");
+  }
+  return {
+    relation: "process",
+    source: "key_points",
+    member_count: 4,
+    order: [1, 2, 3, 4],
+    orientation: "vertical",
+    preserve_order: true,
+    ...(intent.emphasis_index === undefined ? {} : { emphasis_index: intent.emphasis_index }),
+  };
+}
+
 export function compileSlideDesignIR(slideBrief = {}) {
   if (!slideBrief || typeof slideBrief !== "object" || Array.isArray(slideBrief)) throw new TypeError("slideBrief must be an object");
   const category = text(slideBrief.category_hint ?? slideBrief.categoryHint ?? slideBrief.category);
@@ -193,7 +224,10 @@ export function compileSlideDesignIR(slideBrief = {}) {
   const density = densityLevel(slideBrief);
   const visualPriority = visualPriorityFor(semanticRole, visuals);
   const whitespace = whitespaceFor(semanticRole, density);
-  const textFlow = inferTextFlow(slideBrief, semanticRole, visuals);
+  const visualTopology = visualTopologyFor(slideBrief);
+  const textFlow = visualTopology
+    ? { mode: "plain", source: "explicit", bullet_glyph: "", item_count: 0, distribution: "top", container_style: "none" }
+    : inferTextFlow(slideBrief, semanticRole, visuals);
   const treatmentPreferences = textFlow.mode === DISTRIBUTED_ARROW_LIST
     ? ["structured_text", ...TREATMENTS_BY_ROLE[semanticRole].filter((id) => id !== "structured_text")]
     : TREATMENTS_BY_ROLE[semanticRole];
@@ -203,12 +237,13 @@ export function compileSlideDesignIR(slideBrief = {}) {
   const containerPolicy = ["evidence_audit", "reference_material"].includes(semanticRole)
     ? "audit_only"
     : ["results_comparison", "workflow_explanation"].includes(semanticRole) ? "structured" : ["opening_context", "narrative_navigation", "research_question", "discussion"].includes(semanticRole) ? "none" : "minimal";
-  const composition = compositionFor(semanticRole, visuals, density);
+  const composition = visualTopology ? "process" : compositionFor(semanticRole, visuals, density);
   const presentationIntent = normalizePresentationIntent(slideBrief.metadata?.presentation_intent);
 
   return {
     schema_version: SLIDE_DESIGN_IR_VERSION,
     ...(presentationIntent ? { presentation_intent: presentationIntent } : {}),
+    ...(visualTopology ? { visual_topology: visualTopology } : {}),
     semantic_role: semanticRole,
     message: {
       primary: presentationIntent?.objective || text(slideBrief.goal) || text(slideBrief.title) || "Establish the slide's primary research message",
@@ -237,7 +272,7 @@ export function compileSlideDesignIR(slideBrief = {}) {
     allowed_transformations: {
       preserve_visual_aspect: true,
       citation_required: asArray(slideBrief.citation_ids ?? slideBrief.citationIds).length > 0,
-      allow_split: slideBrief.allow_auto_split ?? slideBrief.allowAutoSplit ?? true,
+      allow_split: visualTopology ? false : (slideBrief.allow_auto_split ?? slideBrief.allowAutoSplit ?? true),
       allow_semantic_crop: asArray(slideBrief.visuals).some((visual) => visual?.semantic_crop_allowed === true || visual?.crop_policy === "semantic_crop_allowed"),
     },
   };

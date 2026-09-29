@@ -17,6 +17,10 @@ PaperWorkflow 首轮应按论文主题设置检索问题，文件名不相似的
 `synthesis_readiness` 已通过。英文 Story 经 pwf2rpa 转换会生成英文结尾标题，
 `title_chars` 随实际标题自动计算。
 
+## v3.2 可选设计意图
+
+Story 之后可由独立的 DesignIntentPlanner 写 `design_intent.json`，只声明信息之间的视觉关系，不写 bbox。首版仅支持含四条 `key_points` 的纵向 `process`：通过 `pwf2rpa --story story_plan.json --design-intent design_intent.json` 进入 RPA；不提供该文件时旧流程保持兼容。RPA 核对完整绑定后给出 `layout_contract`，映射到 Deck IR 时用实际 block ID 写 `composition.visual_intent`，编译器据此绘制编号与连线。硬流程组不能自动拆散；容量不足返回重规划。详见 [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)。
+
 ## v3.1 布局节奏修正
 
 同一 deck 的标题、takeaway 和正文使用统一 frame；有页面请求 `spacious` 时整套默认采用 `spacious`，也可在 Deck IR 顶层用 `presentation.frame_variant` 明确指定。`figure-parameters` 的同级 block 按原顺序形成纵向组，v26 候选经 24 px 等距校正和容量复查；图像与图注保持 12 px。逐页实际布局来源见 `layout_provider.json` 和派生的 `plan_to_layout.json`，详见 [v3 实验说明](Total-pipe/docs/v3-experiment.md)。

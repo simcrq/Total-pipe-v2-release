@@ -143,6 +143,13 @@ MCP `compact` 响应完整保留 `slides[].key_points`，但 slot 文本可能�
 字号和中英文字符宽度估计换行，`SLOT_WRAP_RISK` 需要渲染后复核。
 Evidence 优先级角色不会再与版式展示角色直接比较。
 
+## 四点流程的设计意图契约
+
+Total-pipe 可以给 Slide Brief 增加可选
+`metadata.visual_intent={relation:"process",source:"key_points",member_count:4,orientation:"vertical",preserve_order:true,emphasis_index?:1..4}`。它描述四条已有要点的流程关系，不包含坐标，也不会替代原文。RPA 将其写入 `slide.design_ir.visual_topology`，并优先使用流程语义；完整绑定后输出 `slide.layout_contract`，包括实际 `layout_id`、绑定整组原文的 `slot_id`、顺序和强调索引。
+
+流程关系是硬约束：RPA 只检索可容纳纵向四点组的文本槽（归一化宽度至少 0.30、高度至少 0.40）；四条 `key_points` 必须按原文和顺序完整落槽。不满足时返回 `needs_replan` / `VISUAL_INTENT_NOT_BOUND`。自动拆页不能拆散该组（`VISUAL_INTENT_GROUP_SPLIT`）。在 Total-pipe 中将契约映射为 Deck IR `composition.visual_intent`，其中 `members` 是该页真实的四个 block ID；RPA 不输出最终 bbox。没有该意图的旧 Slide Brief 仍按原规则规划。
+
 ## 必须区分的状态
 
 - `pipeline_status` 表示阶段是否完成，例如 `plan_complete`、

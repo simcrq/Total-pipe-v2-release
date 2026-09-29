@@ -749,6 +749,45 @@ function normalizeBrief(raw, index) {
   };
 }
 
+function processContainerSlots(layout) {
+  return asArray(layout?.slot_specs ?? layout?.slots).filter((slot) => {
+    const type = String(slot?.slot_type ?? slot?.type ?? "").toLowerCase();
+    return ["text", "body", "callout"].includes(type)
+      && Number(slot?.box?.w) >= 0.30
+      && Number(slot?.box?.h) >= 0.40;
+  });
+}
+
+function layoutContractFor(brief, designIR, layoutId, assignments, slotSpecs) {
+  const topology = designIR.visual_topology;
+  if (!topology) return null;
+  if (!Array.isArray(brief.key_points) || brief.key_points.length !== topology.member_count) return null;
+  const expectedId = `${brief.slide_id}:key_points:1`;
+  const expectedText = brief.key_points.join("\n");
+  const slots = processContainerSlots({ slot_specs: slotSpecs });
+  const matching = Object.entries(assignments ?? {}).filter(([slotId, assignment]) => {
+    return slots.some((slot) => slot.slot_id === slotId)
+      && assignment?.type === "text"
+      && assignment.content_id === expectedId
+      && assignment.text === expectedText
+      && Array.isArray(assignment.items)
+      && assignment.items.length === brief.key_points.length
+      && assignment.items.every((point, index) => point === brief.key_points[index]);
+  });
+  if (matching.length !== 1) return null;
+  return {
+    layout_id: layoutId,
+    relation: topology.relation,
+    source: topology.source,
+    member_count: topology.member_count,
+    order: [...topology.order],
+    preserve_order: topology.preserve_order,
+    orientation: topology.orientation,
+    slot_id: matching[0][0],
+    ...(topology.emphasis_index === undefined ? {} : { emphasis_index: topology.emphasis_index }),
+  };
+}
+
 export async function createDeckPlan(input = {}) {
   const [catalog, designRegistry] = await Promise.all([loadCatalog(), loadDesignRegistry()]);
   const type = input.presentation_type ?? "group_meeting";
@@ -841,7 +880,7 @@ export async function createDeckPlan(input = {}) {
       ...metrics,
       categories: metrics.category_hint ? [metrics.category_hint] : undefined,
       exclude_ids: usedLayoutIds,
-      allow_auto_split: metrics.allow_auto_split,
+      allow_auto_split: designIR.visual_topology ? false : metrics.allow_auto_split,
       max_replan_attempts: integer(input.max_replan_attempts, 3, 0, 20),
       k: 8,
     }, {
@@ -851,6 +890,14 @@ export async function createDeckPlan(input = {}) {
         if (!result.results.length && asArray(query.categories).length && !requiredSummary) {
           result = await searchLayouts({ ...query, categories: undefined, category: undefined });
           categoryRelaxed = true;
+        }
+        if (designIR.visual_topology) {
+          result = { ...result, results: result.results.filter((layout) => processContainerSlots(layout).length > 0) };
+          if (!result.results.length && asArray(query.categories).length && !requiredSummary) {
+            const wider = await searchLayouts({ ...query, categories: undefined, category: undefined });
+            result = { ...wider, results: wider.results.filter((layout) => processContainerSlots(layout).length > 0) };
+            categoryRelaxed = true;
+          }
         }
         const candidateResult = createDesignCandidates({
           design_ir: designIR,
@@ -879,14 +926,15 @@ export async function createDeckPlan(input = {}) {
       getLayout,
       bindSlide: bindSlideToLayout,
     });
-    planningContexts.push({
+    const planningContext = {
       slide_id: canonical.slide_id,
       planning_decision: planning.planning_decision,
       status: planning.status,
       replan_context: planning.replan_context,
       design_ir: designIR,
       candidate_runs: candidateRuns,
-    });
+    };
+    planningContexts.push(planningContext);
     if (categoryRelaxed) warnings.push(`第 ${index + 1} 页的类别提示无法满足，已放宽到全库检索。`);
     // RPA-5: 正文语义与 category hint 冲突时给出显式提示，避免静默选到语义错位的版面。
     const semanticSignals = inferSemanticCategory(canonical, metrics.category_hint ? [metrics.category_hint] : []);
@@ -902,11 +950,44 @@ export async function createDeckPlan(input = {}) {
       warnings.push(`第 ${index + 1} 个 Slide Brief 未形成合法页面（${planning.status}），请检查 replan_context。`);
       continue;
     }
+    if (designIR.visual_topology && planning.planning_decision === "split") {
+      const issue = createViolation({
+        code: "VISUAL_INTENT_GROUP_SPLIT",
+        field: "metadata.visual_intent",
+        actual: "split",
+        capacity: "one ordered key_points group",
+        recommended_action: "replan_without_splitting_visual_group",
+        message: "An ordered visual intent group cannot be split across slides.",
+      });
+      planningContext.status = "needs_replan";
+      planningContext.replan_context = { ...planning.replan_context, violations: [...(planning.replan_context?.violations ?? []), issue] };
+      if (planStatus !== "failed") planStatus = "needs_replan";
+      unplannedSlideBriefs.push(canonical);
+      warnings.push(`第 ${index + 1} 页的视觉流程组不能拆页，请重新规划。`);
+      continue;
+    }
     if (planning.status === "adapted" || planning.planning_decision === "split") planStatus = planStatus === "success" ? "adapted" : planStatus;
     for (const binding of planning.slides) {
       const choice = binding.layout_spec ?? {};
       const layoutId = binding.layout_id ?? choice.id ?? choice.layout_id;
       const brief = normalizeBrief(binding.slide_brief ?? canonical, slides.length);
+      const layoutContract = layoutContractFor(brief, designIR, layoutId, binding.slot_assignments, binding.slot_specs);
+      if (designIR.visual_topology && !layoutContract) {
+        const issue = createViolation({
+          code: "VISUAL_INTENT_NOT_BOUND",
+          field: "slot_assignments",
+          actual: brief.slide_id,
+          capacity: "one slot preserving all ordered key_points",
+          recommended_action: "replan_or_bind_full_key_points_group",
+          message: "The selected layout did not bind the complete visual intent group to one text slot.",
+        });
+        planningContext.status = "needs_replan";
+        planningContext.replan_context = { ...planning.replan_context, violations: [...(planning.replan_context?.violations ?? []), issue] };
+        if (planStatus !== "failed") planStatus = "needs_replan";
+        unplannedSlideBriefs.push(brief);
+        warnings.push(`第 ${index + 1} 页未完整绑定 key_points 视觉流程组，请重新规划。`);
+        continue;
+      }
       if (layoutId && !usedLayoutIds.includes(layoutId)) usedLayoutIds.push(layoutId);
       if ((choice.score ?? 100) < 65) warnings.push(`第 ${slides.length + 1} 页版式匹配分较低（${choice.score}），建议拆页或减少内容。`);
       const splitReasons = planning.planning_decision === "split" ? ["structural_capacity_exceeded"] : [];
@@ -936,6 +1017,7 @@ export async function createDeckPlan(input = {}) {
         category: choice.category,
         layout_family: choice.family ?? choice.category,
         layout_id: layoutId,
+        ...(layoutContract ? { layout_contract: layoutContract } : {}),
         layout_score: choice.score,
         variant: choice.variant_name_zh,
         density: choice.density,

@@ -11,6 +11,7 @@ from typing import Sequence
 from . import __version__
 from .capacity import CATEGORIES, LAYOUT_LIBRARY_VERSION
 from .convert import convert, load_specs, write_output
+from .design_intent import load_design_intent
 from .errors import AdapterError
 from .story import HIGH_REASONING_EFFORTS, build_story_prompt, load_story
 from .workflow import Workflow
@@ -40,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Story Planner JSON produced by a user-selected high-reasoning subagent",
     )
+    parser.add_argument("--design-intent", metavar="PATH",
+                        help="optional process intent JSON for Story nodes; requires --story")
     parser.add_argument(
         "--make-story-prompt",
         metavar="PATH",
@@ -126,6 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("workflow path is required (or use --list-categories)")
     if args.make_story_prompt and (args.story or args.briefs):
         parser.error("--make-story-prompt cannot be combined with --story or --briefs")
+    if args.design_intent and not args.story:
+        parser.error("--design-intent requires --story")
 
     try:
         workflow = Workflow.from_path(args.workflow)
@@ -142,10 +147,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         specs = load_specs(args.briefs) if args.briefs else None
         story = load_story(args.story) if args.story else None
+        design_intent = load_design_intent(args.design_intent) if args.design_intent else None
         payload, warnings = convert(
             workflow,
             specs,
             story=story,
+            design_intent=design_intent,
             strict_fit=not args.no_strict_fit,
         )
     except AdapterError as error:

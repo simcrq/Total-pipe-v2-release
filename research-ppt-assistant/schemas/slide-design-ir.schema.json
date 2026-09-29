@@ -18,6 +18,20 @@
     "allowed_transformations"
   ],
   "properties": {
+    "visual_topology": {
+      "type": "object",
+      "required": ["relation", "source", "member_count", "order", "orientation", "preserve_order"],
+      "properties": {
+        "relation": { "const": "process" },
+        "source": { "const": "key_points" },
+        "member_count": { "const": 4 },
+        "order": { "const": [1, 2, 3, 4] },
+        "orientation": { "const": "vertical" },
+        "preserve_order": { "const": true },
+        "emphasis_index": { "type": "integer", "minimum": 1, "maximum": 4 }
+      },
+      "additionalProperties": false
+    },
     "presentation_intent": {
       "type": "object",
       "required": ["objective", "emphasis", "required_on_screen", "speaker_notes", "appendix"],

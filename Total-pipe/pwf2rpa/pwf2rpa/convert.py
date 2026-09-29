@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from .briefs import build_briefs
-from .errors import BriefError, Problem
+from .design_intent import apply_design_intent
+from .errors import BriefError, Problem, StoryError
 from .fallback import fallback_specs
 from .story import story_to_specs
 from .workflow import Workflow
@@ -20,6 +21,7 @@ def convert(
     specs: Sequence[Mapping[str, Any]] | None = None,
     *,
     story: Any | None = None,
+    design_intent: Any | None = None,
     strict_fit: bool = True,
 ) -> tuple[dict[str, Any], list[Problem]]:
     """Build the two-key payload RPA expects.
@@ -34,6 +36,7 @@ def convert(
             are ``None`` a deterministic legacy fallback deck is derived.
         story: Validated Story Planner JSON produced by a user-selected,
             high-reasoning subagent. It is converted into semantic briefs.
+        design_intent: Optional Story-node visual relation JSON. Requires story.
         strict_fit: Check each page against its category's layout capacity.
 
     Returns:
@@ -49,11 +52,19 @@ def convert(
             [Problem("STORY_AND_BRIEFS_CONFLICT", "$", "provide either story or briefs, not both.")],
             summary="Ambiguous planning input",
         )
+    if design_intent is not None and story is None:
+        raise StoryError(
+            [Problem("DESIGN_INTENT_REQUIRES_STORY", "design_intent",
+                     "design intent requires a Story plan.")],
+            summary="Unusable design intent",
+        )
     story_warnings: list[Problem] = []
     if story is not None:
         resolved, story_warnings = story_to_specs(story, workflow)
     else:
         resolved = fallback_specs(workflow) if specs is None else specs
+    if design_intent is not None:
+        apply_design_intent(resolved, design_intent)
     briefs, warnings = build_briefs(resolved, workflow, strict_fit=strict_fit)
     payload = {
         "paperworkflow_v4": workflow.document,

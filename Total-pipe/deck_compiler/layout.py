@@ -21,8 +21,11 @@ def frame_variant(ir):
 
 
 def sequence_flow(composition):
-    """Use the existing block roles to recognize a four-step process beside a figure."""
+    """Render an explicit process intent, retaining the legacy role heuristic."""
     blocks = composition["blocks"]
+    intent = composition.get("visual_intent")
+    if intent is not None:
+        return intent.get("relation") == "process"
     return (composition["archetype"] == "figure-parameters" and
             len(composition["figure_refs"]) == 1 and len(blocks) == 4 and
             not any(block.get("label") for block in blocks) and
@@ -135,6 +138,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         sem, comp = slide["semantic"], slide["composition"]
         blocks, figs = comp["blocks"], comp["figure_refs"]
         show_sequence = sequence_flow(comp)
+        visual_intent = comp.get("visual_intent") or {}
         family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
@@ -241,7 +245,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                     n, b["id"], detector="geometric-preflight"))
             label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
-            text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h])
+            emphasis_color = theme.get("accent", "#142735") if b["id"] == visual_intent.get("emphasis") else None
+            text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color)
         def stack(bs, box):
             if not bs:
                 return
@@ -297,6 +302,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             fig_w, txt_w = (692, 440) if family == "figure-left" else (672, 460)
             figure(figs[0], [fig_x, top, fig_w, bh], 1)
             stack(blocks, [txt_x, top, txt_w, bh])
+        elif show_sequence and not figs:
+            stack(blocks, [280, top, 720, bh])
         elif family == "process" and figs and len(blocks) >= 4:
             # The method slide needs both a legible process summary and a readable
             # source panel. A four-row left column frees the right half for the
@@ -363,6 +370,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     text(f"sequence:number:{index}", str(index), badge, "badge", 20, 20, 1,
                          "middle", "#FFFFFF")
                 adaptations.append({"action": "sequence_rail",
+                    "source": "visual_intent" if visual_intent else "legacy_roles",
                     "block_ids": [b["id"] for b in blocks]})
         if family == "columns" and not figs and not sem["caveats"] and len(blocks) >= 3:
             notice = lower_whitespace_issue(elements, n, top, bottom)

@@ -34,13 +34,14 @@ from pwf2rpa import (  # noqa: E402
     convert,
     fallback_specs,
     load_specs,
+    load_design_intent,
     load_story,
     write_output,
 )
 from pwf2rpa.errors import AdapterError, Problem  # noqa: E402
 
 SERVER_NAME = "pwf2rpa"
-SERVER_VERSION = "1.1.0"
+SERVER_VERSION = "1.2.0"
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOLS = {"2025-06-18", "2025-03-26", "2024-11-05"}
 
@@ -61,7 +62,9 @@ INSTRUCTIONS = (
     "pipeline this is the middle stage: paperworkflow produces workflow.json, the "
     "user-selected Story subagent produces story_plan.json, pwf2rpa maps answer "
     "to takeaway and optional key_points to slide_briefs, counts both toward "
-    "layout capacity, and preserves body paragraph breaks. evidence_texts stays "
+    "layout capacity, and preserves body paragraph breaks. An optional separate "
+    "DesignIntentPlanner may pass a geometry-free four-point process through "
+    "design_intent_path with story_path; this hard group cannot auto-split. evidence_texts stays "
     "source material. Research PPT Assistant plans the deck."
 )
 
@@ -152,13 +155,18 @@ def _analyse(
     workflow_path: str,
     briefs_path: str | None,
     story_path: str | None,
+    design_intent_path: str | None,
     strict_fit: bool,
 ):
     """Shared body: validate, build briefs, return payload plus diagnostics."""
     workflow = Workflow.from_path(workflow_path)
     workflow.validate()
     specs, story, input_mode = _resolve_input(workflow, briefs_path, story_path)
-    payload, warnings = convert(workflow, specs, story=story, strict_fit=strict_fit)
+    if design_intent_path and not story_path:
+        raise ValueError("design_intent_path requires story_path")
+    intent = load_design_intent(design_intent_path) if design_intent_path else None
+    payload, warnings = convert(workflow, specs, story=story,
+                                design_intent=intent, strict_fit=strict_fit)
     return payload, warnings, input_mode
 
 
@@ -189,6 +197,7 @@ def _tool_check(arguments: dict[str, Any]) -> dict[str, Any]:
         workflow_path,
         arguments.get("briefs_path"),
         arguments.get("story_path"),
+        arguments.get("design_intent_path"),
         strict_fit=not arguments.get("no_strict_fit", False),
     )
     return _report(payload, warnings, None, input_mode)
@@ -201,6 +210,7 @@ def _tool_convert(arguments: dict[str, Any]) -> dict[str, Any]:
         workflow_path,
         arguments.get("briefs_path"),
         arguments.get("story_path"),
+        arguments.get("design_intent_path"),
         strict_fit=not arguments.get("no_strict_fit", False),
     )
     if warnings and arguments.get("strict", False):
@@ -336,7 +346,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "produced plus every warning, each naming the field, the character count "
             "and the ceiling, including optional key_points and body text. Call this "
             "before pwf2rpa_convert so problems are fixed "
-            "while nothing is on disk yet."
+            "while nothing is on disk yet. Optional design_intent_path requires story_path."
         ),
         "inputSchema": {
             "type": "object",
@@ -355,6 +365,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "description": "Recommended Story Planner JSON from the user-selected high-capability subagent.",
                 },
+                "design_intent_path": {
+                    "type": "string",
+                    "description": "Optional geometry-free DesignIntentPlanner JSON; requires story_path.",
+                },
                 "no_strict_fit": {
                     "type": "boolean",
                     "description": "Skip the layout-capacity simulation entirely. Defaults to false.",
@@ -370,7 +384,8 @@ TOOLS: dict[str, dict[str, Any]] = {
             "content model RPA's normalize_content and create_deck_plan consume. "
             "paperworkflow_v4 is passed through untouched; only slide_briefs is built. "
             "Story answer becomes takeaway; optional key_points and body paragraph "
-            "breaks are preserved in briefs. "
+            "breaks are preserved in briefs. Optional design_intent_path requires story_path "
+            "and carries a four-point process relation without geometry. "
             "Blocking problems raise an error and write nothing. Warnings still produce "
             "a file because RPA does plan in those cases, just with a degraded layout "
             "-- unless strict is true. Output is byte-stable for identical input."
@@ -391,6 +406,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "story_path": {
                     "type": "string",
                     "description": "Recommended Story Planner JSON from the user-selected high-capability subagent.",
+                },
+                "design_intent_path": {
+                    "type": "string",
+                    "description": "Optional geometry-free DesignIntentPlanner JSON; requires story_path.",
                 },
                 "out_path": {
                     "type": "string",

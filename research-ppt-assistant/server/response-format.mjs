@@ -93,6 +93,7 @@ function compactDeckPlan(payload) {
       title: slide.title,
       category: slide.category,
       layout_id: slide.layout_id,
+      ...(slide.layout_contract ? { layout_contract: slide.layout_contract } : {}),
       visual_treatment: slide.visual_treatment,
       decoration_profile: slide.decoration_profile?.id,
       aesthetic_score: slide.aesthetic_score?.score,
@@ -119,6 +120,7 @@ function compactDeckPlan(payload) {
       title: brief.title,
       category_hint: brief.category_hint,
       ...(brief.key_points?.length ? { key_points: brief.key_points } : {}),
+      ...(brief.metadata?.visual_intent ? { visual_intent: brief.metadata.visual_intent } : {}),
     })),
     warnings: (payload.warnings ?? []).map((warning) => truncateText(warning, 180)),
   };

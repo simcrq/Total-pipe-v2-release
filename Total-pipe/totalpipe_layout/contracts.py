@@ -140,9 +140,12 @@ def read_requests(path, root=None):
 
 
 def rhythm_groups(request):
-    """The ordered blocks beside one figure form a peer column in this archetype."""
+    """Keep peer blocks aligned, including an explicit figure-free process."""
     units = request['units']
     texts = [i for i, unit in enumerate(units) if unit['role'] != 'figure']
+    if (request.get('sequence_flow') and request['archetype'] == 'process-flow'
+            and len(texts) == 4 and len(units) == 4):
+        return [texts]
     if (request['archetype'] == 'figure-parameters' and len(texts) >= 3
             and len(units) - len(texts) == 1):
         return [texts]

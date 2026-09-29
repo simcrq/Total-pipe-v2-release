@@ -104,7 +104,8 @@ silently or write the Story itself. The output records:
 
 Five to eight nodes are required. A node is a scientific reasoning step, not a
 Figure and not necessarily one final slide. `allow_auto_split` remains enabled
-for reasoning nodes so the downstream planner retains page-count authority.
+for ordinary reasoning nodes. An explicitly declared hard process group is
+kept together; if it cannot fit, RPA returns a replan state.
 Each node may add `key_points` when its one-sentence `answer` would omit detail
 needed by RPA. The bridge maps `answer` to `takeaway` and preserves those points
 in `slide_briefs`; `evidence_texts` remains source material. Brief `body` text
@@ -118,6 +119,41 @@ subagent, reasoning is below `high`, an Evidence id does not resolve, or `next`
 degenerates into a sequential transition such as “接下来作者介绍 Fig.4”. It also
 warns when a hedged source appears to have been rewritten as a certain causal
 claim; strict mode can promote that warning to failure.
+
+## Optional DesignIntentPlanner input
+
+After Story Planning, an independent DesignIntentPlanner may write a small
+`design_intent.json`. It describes the relation among existing Story details;
+it does not select a layout or provide coordinates:
+
+```json
+{
+  "slides": [
+    {"story_node_index": 2, "relation": "process", "orientation": "vertical", "emphasis": 4}
+  ]
+}
+```
+
+The first version supports only `process` with `vertical` orientation and exactly
+four non-empty `key_points` in the selected Story node. `story_node_index` is
+1-based; `emphasis` is an optional 1-based point index from 1 to 4. Unknown
+fields, duplicate node indexes and geometry fields such as `bbox` or `x/y/w/h`
+are errors. Use `--design-intent` only together with `--story`:
+
+```bash
+python3 pwf_to_rpa.py workflow.json --story story_plan.json   --design-intent design_intent.json --out rpa_input.json
+```
+
+The MCP `pwf2rpa_check` and `pwf2rpa_convert` tools accept an optional
+`design_intent_path` alongside `story_path`; the path is rejected without Story.
+
+The bridge leaves `key_points` in their original order and adds
+`slide_briefs[].metadata.visual_intent` with the relation, source, count, order
+rule and optional emphasis index. It sets `allow_auto_split=false` for that
+brief so a hard four-point group cannot be divided silently. The intent adds
+no duplicate content. Without the optional file, output stays on the existing
+Story-to-RPA path. If the full group cannot fit, revise the Story or intent and
+replan; do not shorten its source text to satisfy a slot.
 
 ## The four hard constraints
 
@@ -179,6 +215,7 @@ one (`crowded_pages`), which avoids false alarms.
 
 ```bash
 python3 pwf_to_rpa.py workflow.json --story story_plan.json --out rpa_input.json
+python3 pwf_to_rpa.py workflow.json --story story_plan.json --design-intent design_intent.json --out rpa_input.json
 python3 pwf_to_rpa.py workflow.json --briefs briefs.json --out rpa_input.json
 python3 pwf_to_rpa.py workflow.json --out rpa_input.json   # fallback deck
 python3 pwf_to_rpa.py --list-categories                    # the 40 legal ids
@@ -190,11 +227,12 @@ Exit codes: `0` ok · `2` blocking problem (nothing written) · `3` `--strict` a
 ### As a library
 
 ```python
-from pwf2rpa import Workflow, convert, load_story, write_output
+from pwf2rpa import Workflow, convert, load_design_intent, load_story, write_output
 
 workflow = Workflow.from_path("workflow.json")
 workflow.validate()
-payload, warnings = convert(workflow, story=load_story("story_plan.json"))
+payload, warnings = convert(workflow, story=load_story("story_plan.json"),
+                            design_intent=load_design_intent("design_intent.json"))
 write_output(payload, "rpa_input.json")
 ```
 
@@ -252,6 +290,7 @@ pwf2rpa/
   fit.py              offline replay of RPA's two capacity gates
   fallback.py         deterministic briefs when none are supplied
   story.py            Story prompt, provenance/evidence validation, brief mapping
+  design_intent.py    optional topology validation and Story-node mapping
   convert.py          payload assembly and deterministic writing
   capacity.py         generated: 320 layouts x capacity envelope
   refresh.py          regenerates capacity.py from an RPA checkout

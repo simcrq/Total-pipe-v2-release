@@ -10,6 +10,7 @@
 论文 PDF
   → PaperWorkflow workflow.json
   → Story Planner story_plan.json
+  → [可选 DesignIntentPlanner design_intent.json]
   → pwf2rpa rpa_input.json
   → RPA deck_plan.json
   → canonical deck_ir.json
@@ -75,15 +76,31 @@ MCP 服务以 ASCII 转义的 JSON-RPC 响应传送中文内容，避免 Windows
 }
 ```
 
+需要把四条连续 `key_points` 明确表达为流程时，可在 Story 完成后由独立
+DesignIntentPlanner 写可选文件；它只判断关系，不写 bbox、槽位或坐标：
+
+```json
+{
+  "slides": [
+    {"story_node_index": 2, "relation": "process", "orientation": "vertical", "emphasis": 4}
+  ]
+}
+```
+
+`story_node_index` 从 1 开始，`emphasis` 可省略；首版只支持恰好四条
+`key_points` 的纵向 `process`。未知字段、重复索引和几何字段会报错。
+不需要流程意图的页面省略该文件，旧 Story 四字段与转换输出保持兼容。
+
 pwf2rpa 将 `answer` 送入 Brief 的 `takeaway`，将 `key_points` 按原顺序送入同名字段，并计入 `text_chars` 与布局容量检查。`evidence_texts` 是原始证据资料，不自动进入正文。直接提供 Brief spec 时，`body` 中的段落换行会保留。
 默认结尾标题根据 Story 主体语言选择：英文为 `Conclusions and scope`，中文为
 `结论与边界`；`title_chars` 由转换器根据生成标题计算。转换后检查整套标题语言，
-若需改写标题，先改 Story/规划输入再运行转换，避免标题与计数不一致。
+若需改写标题，先改 Story/规划输入再运行转换，避免标题与计数不一致。`--design-intent` 只在有流程意图时传入；对应 Brief 的 `metadata.visual_intent` 不复制要点正文，并设 `allow_auto_split=false`。容量不足时返回重规划，不能自动拆散四点硬关系。
 
 ```bash
 cd Total-pipe/pwf2rpa
 PYTHONPATH=. python -m pwf2rpa workflow.json \
   --story story_plan.json \
+  --design-intent design_intent.json \
   --story-model "<user-selected-model>" --story-reasoning high \
   --model-selected-by-user --strict --out rpa_input.json
 ```
@@ -112,6 +129,12 @@ node server/cli.mjs plan --file plan-input.json --detail-level full
 假装完成。`adapted` 只表示规划经过调整，须核对 `adaptation_log`；正式进入
 Deck IR 前要求无未规划页、`validate-deck status=valid`。
 
+有 `metadata.visual_intent` 时，RPA 输出 `slide.design_ir.visual_topology`，并用
+`slide.layout_contract` 记录所选 `layout_id`、绑定整组原文的 `slot_id`、四点顺序
+和强调索引。四条原文未完整落槽会返回 `needs_replan` /
+`VISUAL_INTENT_NOT_BOUND`；自动拆分不能破坏该组（`VISUAL_INTENT_GROUP_SPLIT`）。
+不要把 RPA 的布局坐标当作设计意图。
+
 RPA 的总 `text_chars` 与槽位 `max_chars` 是码点粗筛，不等于英文单词、字宽或
 实际换行数。绑定器优先选能完整容纳正文的槽；验收还会用槽宽和字号估计中英文
 换行，`SLOT_WRAP_RISK` 需要真实页面复核。Evidence 内容角色与布局展示角色
@@ -121,7 +144,7 @@ Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 `deck_compiler/mcp_server.py`，内含 pwf2rpa 原有工具。`pwf2rpa_story_prompt`
 构造 Story 请求，默认写出 `workflow.story_prompt.json` 并返回小回执；
 `pwf2rpa_check` 在写文件前检查可选 `key_points` 与正文的容量；
-`pwf2rpa_convert` 写出 `rpa_input.json`。移动项目后需要更新配置中的 Python
+`pwf2rpa_convert` 写出 `rpa_input.json`。`pwf2rpa_check` / `pwf2rpa_convert` 可传可选 `design_intent_path`，必须同时给 `story_path`。移动项目后需要更新配置中的 Python
 可执行文件和服务脚本绝对路径。
 
 ## 3. RPA 到 Deck IR
@@ -132,12 +155,33 @@ Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 - 内容角色映射为稳定的 `composition.blocks[].component`；
 - 视觉对象映射为 `figure_refs` 和 `assets`；
 - RPA Layout 只用于选择合适 archetype/component，不把坐标写进 IR；
+- 对通过验收的流程 `layout_contract`，把四条原文依序映射为四个实际 block，并在 `composition.visual_intent.members` 引用这些 block ID；
+- 该显式流程若有一张科学图用 `figure-parameters`，若没有图用 `process-flow`；不要为了版式凭空补图；
 - 整套页面先确定顶层 `presentation.frame_variant`（`default` 或 `spacious`）；省略时，只要任一页请求 `spacious`，编译器整套采用 spacious frame；
 - 一图加 3–4 个同级步骤/参数用 `figure-parameters`，将 block 按阅读顺序放入 `composition.blocks`；编译器据此保持 24 px 纵向间距，无需新增坐标字段；
 - 对单图四步加工路径，若四个 block 无独立 `label`，从 `method` 开始、中间含 `process-step`、以 `result` 结束，编译器会加入编号与纵向连线，展示由材料/方法到结果的推进；文本保持原样，56 px 引导区计入容量检查；
 - 所有 `evidence_refs`、`caveats` 和 `speaker_notes` 必须保留。
 - `key_points` 的科学内容须按源 Brief 的顺序进入 block 正文或 speaker notes；
-  不能只保留 `takeaway` 或压缩后的设计意图。容量不足时拆页。
+  不能只保留 `takeaway` 或压缩后的设计意图。普通页面容量不足时拆页；硬流程组须先重规划。
+
+显式流程意图在 Deck IR 中使用下面的无坐标结构；`members` 必须与四个
+`composition.blocks[].id` 的实际顺序完全一致，`emphasis` 为可选 block ID，
+从 RPA `emphasis_index` 映射而来：
+
+```json
+"visual_intent": {
+  "relation": "process",
+  "members": ["b1", "b2", "b3", "b4"],
+  "orientation": "vertical",
+  "preserve_order": true,
+  "emphasis": "b4"
+}
+```
+
+编译器只接受四个无独立标签的 block：单图时用 `figure-parameters`，
+无图时用 `process-flow`；
+成员不匹配会以 `VISUAL_INTENT_INVALID` 阻断。未声明显式意图时，
+旧版按组件角色识别的四步流程仍兼容。
 
 Deck IR 只接受
 [catalog.py](../deck_compiler/catalog.py) 中的 archetype/component。
@@ -170,7 +214,7 @@ Deck IR 只接受
 ## 4. 编译
 
 v26 候选通过同级间距和图注留白校正后再次检查容量、碰撞与字体；无法通过时回退。`layout.json` 给出实际 `deck_frame_variant`，`layout_provider.json` 与 `derived/plan_to_layout.json` 给出每页布局来源。图像至图注正常相隔 12 px；较长的同级文字允许不同框高，但不允许间距漂移。
-四步流程的编号连线由编译器生成，记录为 slide `adaptation_log` 中的 `sequence_rail`；不把装饰性几何写进 Deck IR。
+四步流程的编号连线由编译器生成，记录为 slide `adaptation_log` 中的 `sequence_rail`；不把装饰性几何写进 Deck IR。v26 只建议现有单位的宏观几何；文字适配、等距、连线及最终合法性由编译器负责，不另加排版器或全量 deck 风格 pass。
 
 MCP 入口提供三个工具：`totalpipe_compile` 编译布局（默认 v26），
 `totalpipe_build` 通过 OfficeCLI 生成 PPTX 候选与 QA，

@@ -96,6 +96,19 @@
                 }
               }
             },
+            "visual_intent": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relation", "members", "orientation", "preserve_order"],
+              "properties": {
+                "relation": {"const": "process"},
+                "members": {"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}},
+                "orientation": {"const": "vertical"},
+                "preserve_order": {"const": true},
+                "emphasis": {"type": "string", "minLength": 1}
+              }
+            },
             "figure_refs": {
               "type": "array",
               "items": {

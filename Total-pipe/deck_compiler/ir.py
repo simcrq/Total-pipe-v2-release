@@ -83,6 +83,30 @@ def validate(ir):
             check(b.get("text_flow", "auto") in ("auto", "plain", "distributed_arrow_list"),
                   "Unknown block text_flow", n)
             check(not any(k in b for k in ("bbox", "x", "y", "w", "h")), "Geometry belongs to compiled layout", n)
+        visual_intent = comp.get("visual_intent")
+        if visual_intent is not None:
+            valid_shape = isinstance(visual_intent, dict)
+            check(valid_shape, "composition.visual_intent must be an object", n, "VISUAL_INTENT_INVALID")
+            if valid_shape:
+                allowed = {"relation", "members", "orientation", "preserve_order", "emphasis"}
+                members = visual_intent.get("members")
+                ordered_ids = [b.get("id") for b in blocks if isinstance(b, dict)]
+                check(set(visual_intent) <= allowed and visual_intent.get("relation") == "process"
+                      and visual_intent.get("orientation") == "vertical"
+                      and visual_intent.get("preserve_order") is True,
+                      "Only a vertical ordered process intent is supported", n, "VISUAL_INTENT_INVALID")
+                check(((archetype == "figure-parameters" and len(figures) == 1)
+                       or (archetype == "process-flow" and len(figures) == 0))
+                      and len(blocks) == 4
+                      and not any(b.get("label") for b in blocks if isinstance(b, dict)),
+                      "Process intent requires four unlabeled blocks, with one figure or no figure",
+                      n, "VISUAL_INTENT_INVALID")
+                check(isinstance(members, list) and all(isinstance(item, str) for item in members)
+                      and members == ordered_ids and len(set(members)) == 4,
+                      "Process intent members must match block order exactly", n, "VISUAL_INTENT_INVALID")
+                if "emphasis" in visual_intent:
+                    check(visual_intent["emphasis"] in ordered_ids,
+                          "Process emphasis must name a member block", n, "VISUAL_INTENT_INVALID")
         for f in figures:
             check(isinstance(f, dict) and f.get("asset_id") in assets and
                   isinstance(f.get("caption"), str), "Figure needs asset reference and caption", n)

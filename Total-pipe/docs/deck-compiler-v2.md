@@ -6,7 +6,7 @@ output crosses one boundary into `deck_ir.json`; after that point no adapter may
 semantics.
 
 ```text
-Evidence -> Story -> RPA -> deck_ir.json
+Evidence -> Story -> [DesignIntentPlanner] -> RPA -> deck_ir.json
                            | semantic preflight
                            | deterministic layout + TextBoxContract
                            v
@@ -34,6 +34,43 @@ Evidence -> Story -> RPA -> deck_ir.json
 - `schemas/qa-report.schema.json` is the only QA result schema. Every finding identifies its
   detector, evidence source, confidence and diagnosis.
 
+The optional v3.2 DesignIntentPlanner is a topology layer after Story. The current
+contract supports one four-point vertical `process` relation with no bbox.
+`pwf2rpa --story ... --design-intent ...` sends it as Brief metadata; RPA verifies
+the complete group binding and emits `slide.layout_contract`. The mapping to Deck IR uses
+the actual block IDs:
+
+```json
+"composition": {
+  "archetype": "figure-parameters",
+  "visual_intent": {
+    "relation": "process",
+    "members": ["b1", "b2", "b3", "b4"],
+    "orientation": "vertical",
+    "preserve_order": true,
+    "emphasis": "b4"
+  },
+  "blocks": ["..."],
+  "figure_refs": ["..."]
+}
+```
+
+The example shows the relation fields; `blocks` and `figure_refs` require their
+normal full objects. The compiler accepts four unlabeled blocks with members
+matching block order exactly: use `figure-parameters` with one figure, or
+`process-flow` with no figure. Otherwise
+`VISUAL_INTENT_INVALID` blocks compilation. Its existing component-role inference
+remains available when no explicit intent is supplied. A hard process group
+cannot be split silently; insufficient capacity returns to planning.
+
+| Decision | Owner |
+|---|---|
+| Scientific content, order and evidence | Story Planner |
+| Process relation and optional emphasis | DesignIntentPlanner |
+| Layout family/id, slots, capacity and `layout_contract` | RPA |
+| Allowed macro geometry proposal | v26 |
+| Text fit, equal spacing, connector coordinates and final validity | Deck Compiler |
+
 The initial catalog contains nine research presentation archetypes and seventeen components.
 The layout compiler can select one `spacious` variant before returning `SPLIT_REQUIRED`; it
 never keeps shrinking below the component font floor.
@@ -42,7 +79,7 @@ The v3 integration uses one frame grid across a deck. Top-level
 `presentation.frame_variant` selects `default` or `spacious`; if omitted, any slide requesting
 `spacious` selects it for the deck. The compiled layout records the actual choice. For a
 `figure-parameters` slide, ordered blocks beside a figure share a 24 px vertical rhythm.
-The v26 provider snaps peer spacing and figure-caption slack, then repeats capacity and
+The v26 provider proposes macro geometry only. The compiler snaps peer spacing and figure-caption slack, then repeats capacity and
 collision checks. `derived/plan_to_layout.json` reports the provider status per slide.
 For a four-step, unlabeled `figure-parameters` process whose roles progress from `method`
 through `process-step` to `result`, the v3 compiler draws a numbered vertical rail beside
