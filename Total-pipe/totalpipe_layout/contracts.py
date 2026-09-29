@@ -74,7 +74,8 @@ def required_height(unit, width, request):
             return 10000.0
         return min_h + ch + 12
     label = unit.get('label', '')
-    lh = max(44, height(label, request['bold_font'], 24, width, 1)) if label else 0
+    label_box = 40 if request['archetype'] == 'figure-parameters' else 44
+    lh = max(label_box, height(label, request['bold_font'], 24, width, 1)) if label else 0
     return lh + height(unit['text'], request['font'], 24, width)
 
 
@@ -103,6 +104,7 @@ def read_requests(path, root=None):
     if layout is None:
         raise ValueError(json.dumps(compile_issues, ensure_ascii=False))
     requests = []
+    spacious = layout.get('deck_frame_variant', module.frame_variant(ir)) == 'spacious'
     for number, slide in enumerate(ir['slides'], 1):
         units = []
         for block in slide['composition']['blocks']:
@@ -112,7 +114,6 @@ def read_requests(path, root=None):
             units.append({**copy.deepcopy(ref), 'id': f'figure-{index}', 'role': 'figure',
                 'aspect': asset['width']/asset['height'], 'asset_sha256': asset['sha256'],
                 'member_ids': [f'figure-{index}', f'figure-{index}:caption']})
-        spacious = slide['presentation'].get('variant') == 'spacious'
         top = 236 if spacious else 260
         bottom = 588 if slide['semantic']['caveats'] else 640
         frames = [e for e in layout['slides'][number-1]['elements']
@@ -133,6 +134,54 @@ def read_requests(path, root=None):
     return requests, {'ir_sha256': digest(ir), 'compiler_issues': compile_issues,
         'compiler_sha256': hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
         'source': str(path)}
+
+
+def rhythm_groups(request):
+    """The ordered blocks beside one figure form a peer column in this archetype."""
+    units = request['units']
+    texts = [i for i, unit in enumerate(units) if unit['role'] != 'figure']
+    if (request['archetype'] == 'figure-parameters' and len(texts) >= 3
+            and len(units) - len(texts) == 1):
+        return [texts]
+    return []
+
+
+def snap_rhythm(request, boxes):
+    """Remove model slack without changing unit identity, order, or source text."""
+    result = [list(box) for box in boxes]
+    for i, unit in enumerate(request['units']):
+        if unit['role'] != 'figure' or not unit.get('caption'):
+            continue
+        box = result[i]
+        caption_h = max(unit.get('caption_height', 62),
+                        height(unit['caption'], request['font'],
+                               unit.get('caption_font_floor', 20), box[2], 2))
+        image_h = min(box[2] / unit['aspect'], box[3] - caption_h - 12)
+        if image_h > 0:
+            box[3] = image_h + caption_h + 12
+    for group in rhythm_groups(request):
+        members = [result[i] for i in group]
+        if (any(abs(box[0] - members[0][0]) > 4 or
+                abs(box[2] - members[0][2]) > 4 for box in members[1:]) or
+                any(a[1] >= b[1] for a, b in zip(members, members[1:]))):
+            continue
+        top = members[0][1]
+        bottom = members[-1][1] + members[-1][3]
+        gap = 24
+        available = bottom - top - gap * (len(group)-1)
+        minimums = [required_height(request['units'][index], members[0][2], request)
+                    for index in group]
+        if available < sum(minimums):
+            continue
+        equal_height = available / len(group)
+        heights = ([equal_height] * len(group) if equal_height >= max(minimums)
+                   else [minimum + (available - sum(minimums)) / len(group)
+                         for minimum in minimums])
+        cursor = top
+        for row, index in enumerate(group):
+            result[index] = [members[0][0], cursor, members[0][2], heights[row]]
+            cursor += heights[row] + gap
+    return result
 
 
 def check(request, boxes):
@@ -156,12 +205,19 @@ def check(request, boxes):
         if h + .1 < required_height(u, w, request):
             errors.append(f'{u["id"]}:CONTENT_CAPACITY')
             continue
+        if u['role'] == 'figure' and u.get('caption'):
+            caption_h = max(u.get('caption_height', 62),
+                            height(u['caption'], request['font'],
+                                   u.get('caption_font_floor', 20), w, 2))
+            if h - caption_h - 12 - w / u['aspect'] > 2:
+                errors.append(f'{u["id"]}:FIGURE_CAPTION_SLACK')
         if u['role'] != 'figure':
             if select_text_flow(u['text'], u.get('text_flow','auto'))['mode'] == DISTRIBUTED_ARROW_LIST:
                 errors.append(f'{u["id"]}:TEXT_FLOW_REQUIRES_COMPILER')
-            label=u.get('label',''); lh=44 if label else 0
+            label=u.get('label','')
+            lh=(40 if request['archetype']=='figure-parameters' else 44) if label else 0
             pieces=[(u['text'],[x,y+lh,w,h-lh],request['font'],28,24,10)]
-            if label: pieces.append((label,[x,y,w,44],request['bold_font'],28,24,1))
+            if label: pieces.append((label,[x,y,w,lh],request['bold_font'],28,24,1))
         else:
             ch=max(u.get('caption_height',62),height(u.get('caption',''),request['font'],u.get('caption_font_floor',20),w,2))
             pieces=[(u.get('caption',''),[x,y+h-ch,w,ch],request['font'],u.get('caption_font_size',22),u.get('caption_font_floor',20),2)]
@@ -184,6 +240,18 @@ def check(request, boxes):
             if min(x+w,other[0]+other[2])-max(x,other[0]) > .5 and min(y+h,other[1]+other[3])-max(y,other[1]) > .5:
                 errors.append(f'{u["id"]}:OVERLAP')
     if not errors:
+        for group in rhythm_groups(request):
+            members = [boxes[i] for i in group]
+            gaps = [b[1] - a[1] - a[3] for a, b in zip(members, members[1:])]
+            available = members[-1][1] + members[-1][3] - members[0][1] - 24*(len(group)-1)
+            equal_feasible = available / len(group) >= max(
+                required_height(units[i], members[0][2], request) for i in group)
+            if (any(abs(box[0] - members[0][0]) > 2 or
+                    abs(box[2] - members[0][2]) > 2 or
+                    (equal_feasible and abs(box[3] - members[0][3]) > 2)
+                    for box in members[1:]) or
+                    any(abs(gap - 24) > 2 for gap in gaps)):
+                errors.append('SAME_LEVEL_RHYTHM')
         textual=[(u,b) for u,b in zip(units,boxes) if u['role']!='figure']
         if request['archetype']=='process-flow':
             for (_,a),(_,b) in zip(textual,textual[1:]):
@@ -274,11 +342,17 @@ def quality(request, boxes):
             ch=max(u.get('caption_height',62),height(u.get('caption',''),request['font'],u.get('caption_font_floor',20),w,2))
             panel=min(w/u['aspect'],h-ch-12)
             score -= min(panel,panel*u['aspect']/u.get('panel_count',1))/100
+            if u.get('caption'):
+                score += max(0, h-ch-12-w/u['aspect'])/24
         else:
             score += abs(h-required_height(u,w,request))/max(h,1)*.2
     return score
 
 
 def teacher(request):
-    valid = [b for b in templates(request) if not check(request,b)]
+    valid = []
+    for candidate in templates(request):
+        candidate = snap_rhythm(request, candidate)
+        if not check(request, candidate):
+            valid.append(candidate)
     return min(valid,key=lambda b:quality(request,b)) if valid else None

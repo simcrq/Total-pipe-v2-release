@@ -38,6 +38,13 @@ The initial catalog contains nine research presentation archetypes and seventeen
 The layout compiler can select one `spacious` variant before returning `SPLIT_REQUIRED`; it
 never keeps shrinking below the component font floor.
 
+The v3 integration uses one frame grid across a deck. Top-level
+`presentation.frame_variant` selects `default` or `spacious`; if omitted, any slide requesting
+`spacious` selects it for the deck. The compiled layout records the actual choice. For a
+`figure-parameters` slide, ordered blocks beside a figure share a 24 px vertical rhythm.
+The v26 provider snaps peer spacing and figure-caption slack, then repeats capacity and
+collision checks. `derived/plan_to_layout.json` reports the provider status per slide.
+
 Blocks may set `text_flow` to `plain`, `auto`, or `distributed_arrow_list`. In `auto` mode,
 the compiler recognizes three to five explicit prose/list rows (72 or more display units;
 CJK characters count as two),

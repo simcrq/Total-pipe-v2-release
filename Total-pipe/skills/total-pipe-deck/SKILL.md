@@ -135,6 +135,15 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 - `composition`：archetype、blocks、figure_refs。
 - `presentation`：theme tokens 与稳定组件变体。
 
+整套先选择同一 frame：可在 Deck IR 顶层写 `presentation.frame_variant` 为 `default`
+或 `spacious`。若省略，只要某页请求 spacious，编译器整套采用 spacious；不要让短中文
+内容触发逐页随意切换。将 RPA 的同级步骤按阅读顺序放入 `figure-parameters` 的 3–4 个
+blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏契约，不需要模型写 bbox。
+v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长则保持等距并分配足够高度。
+图注置于图像下方 12 px，所有校正后重新执行容量与碰撞检查。实际 frame 与逐页
+`MODEL_PROPOSAL / PACKING_FALLBACK / COMPILER_FALLBACK` 在 `layout.json`、
+`layout_provider.json` 和 `derived/plan_to_layout.json` 中查看。
+
 从 RPA 映射到 Deck IR 时，保留这些段落边界，并把
 `design_ir.text_flow.mode` 复制到对应 block 的 `text_flow`。block 也可使用 `auto`：
 编译器只把 3–5 个明确段落、总显示长度不少于 72 单位且单段不超过 120 单位的正文

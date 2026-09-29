@@ -85,6 +85,20 @@ class CompilerTests(unittest.TestCase):
         a, ai = compile_deck(ir, ROOT); b, bi = compile_deck(ir, ROOT)
         self.assertEqual(a,b); self.assertEqual(ai,bi); self.assertEqual(ir,before)
         self.assertFalse([i for i in ai if i['severity']=='FAIL'])
+    def test_deck_frame_is_uniform_even_with_mixed_slide_variants(self):
+        ir = fixture()
+        ir['slides'][0]['presentation']['variant'] = 'spacious'
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'])
+        self.assertEqual(layout['deck_frame_variant'], 'spacious')
+        self.assertEqual(layout['frame_variant_overrides'], {'2': 'spacious'})
+        self.assertEqual([next(e['bbox'][1] for e in slide['elements'] if e['id'] == 'title')
+                          for slide in layout['slides']], [24, 24])
+        ir['presentation'] = {'frame_variant': 'default'}
+        layout, _ = compile_deck(ir, ROOT)
+        self.assertEqual(layout['deck_frame_variant'], 'default')
+        self.assertEqual([next(e['bbox'][1] for e in slide['elements'] if e['id'] == 'title')
+                          for slide in layout['slides']], [34, 34])
     def test_all_archetypes(self):
         from deck_compiler.catalog import ARCHETYPES
         ir=fixture()

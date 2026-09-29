@@ -11,6 +11,15 @@ from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
 WIDTH, HEIGHT = 1280, 720
 
 
+def frame_variant(ir):
+    """Use one title/takeaway/body grid for the whole deck."""
+    explicit = (ir.get("presentation") or {}).get("frame_variant")
+    if explicit:
+        return explicit
+    return ("spacious" if any(slide.get("presentation", {}).get("variant") == "spacious"
+                              for slide in ir["slides"]) else "default")
+
+
 def break_lines(text, font, width):
     """Preserve paragraphs, break at words/CJK glyphs; long tokens split safely."""
     lines = []
@@ -109,6 +118,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             issues.append(issue("ASSET_INVALID", "FAIL", f"{key}: {e}", detector="geometric-preflight"))
     if any(i["severity"] == "FAIL" for i in issues):
         return None, issues
+    deck_frame = frame_variant(ir)
     slides = []
     for n, slide in enumerate(ir["slides"], 1):
         sem, comp = slide["semantic"], slide["composition"]
@@ -139,7 +149,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),
                              **({"text_flow": flow} if flow else {})})
-        spacious = slide["presentation"].get("variant") == "spacious"
+        spacious = deck_frame == "spacious"
         text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
         # These two evidence-heavy slides use a single-line takeaway; reclaiming
         # the unused vertical room lets the original scientific panels render
@@ -215,13 +225,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 issues.append(issue("TEXT_FLOW_FALLBACK", "INFO",
                                     f"{b['id']} kept plain because its component box is too narrow or short",
                                     n, b["id"], detector="geometric-preflight"))
-            label_h = 44 if label else 0
+            label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
             text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h])
         def stack(bs, box):
             if not bs:
                 return
-            gap = 18
+            gap = 24 if comp["archetype"] == "figure-parameters" else 18
             h = (box[3]-gap*(len(bs)-1))/len(bs)
             for k, b in enumerate(bs):
                 block(b, [box[0], box[1]+k*(h+gap), box[2], h])
@@ -245,7 +255,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                     f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
                                     n, eid, detector="geometric-preflight", confidence="HIGH",
                                     source_figure=f["source_figure"]))
-            text(eid+":caption", f["caption"], [box[0], box[1]+box[3]-caption_h, box[2], caption_h],
+            text(eid+":caption", f["caption"], [box[0], bbox[1]+bbox[3]+12, box[2], caption_h],
                  "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20), 2)
             issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW", "Confirm scientific panel labels and evidence fidelity",
                                 n, eid, detector="scientific-review", confidence="MEDIUM"))
@@ -341,14 +351,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     if _retry and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
         import copy
         alternative = copy.deepcopy(ir)
-        failed_slides = {i["slide"] for i in issues if i["rule"] == "SPLIT_REQUIRED"}
-        for n in failed_slides:
-            alternative["slides"][n-1]["presentation"]["variant"] = "spacious"
+        alternative.setdefault("presentation", {})["frame_variant"] = "spacious"
         retry_layout, retry_issues = compile_deck(alternative, base, _retry=False, proposals=proposals)
         if retry_layout and not any(i["severity"] == "FAIL" for i in retry_issues):
             retry_layout["ir_sha256"] = digest(ir)
-            retry_layout["selected_variants"] = {str(n): "spacious" for n in sorted(failed_slides)}
+            retry_layout["selected_variants"] = {str(n): "spacious" for n in range(1, len(ir["slides"])+1)}
             return retry_layout, retry_issues
     return {"schema_version": "2.0", "ir_sha256": digest(ir), "slide_size": [WIDTH, HEIGHT],
+            "deck_frame_variant": deck_frame,
+            "frame_variant_overrides": {str(n): deck_frame for n, slide in enumerate(ir["slides"], 1)
+                if slide["presentation"].get("variant", "default") != deck_frame},
             "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in font_paths.values()},
             "slides": slides}, issues

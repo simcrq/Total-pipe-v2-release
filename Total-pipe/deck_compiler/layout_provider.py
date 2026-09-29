@@ -27,7 +27,7 @@ def compile_v26(ir_path, checkpoint=None, candidates=32, seed=20261007):
     # compiler continues to run without torch or model weights.
     import torch
     from layoutdiffusion_demo.config import DemoConfig
-    from totalpipe_layout.contracts import read_requests, check, teacher, quality, height
+    from totalpipe_layout.contracts import read_requests, check, teacher, quality, height, snap_rhythm
     from totalpipe_layout.data import tensors, decode
     from totalpipe_layout.model import ContentDenoiser, sample
     requests, _ = read_requests(ir_path, ROOT)
@@ -50,7 +50,7 @@ def compile_v26(ir_path, checkpoint=None, candidates=32, seed=20261007):
             batch = tensors([request] * candidates, cfg, device)
             tokens = sample(model, batch, seed + index).cpu().tolist()
             for token in tokens:
-                boxes = decode(request, token, cfg.num_bins)
+                boxes = snap_rhythm(request, decode(request, token, cfg.num_bins))
                 if not check(request, boxes):
                     valid.append(boxes)
         chosen = min(valid, key=lambda b: quality(request, b)) if valid else teacher(request)

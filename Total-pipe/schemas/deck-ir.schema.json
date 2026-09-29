@@ -8,6 +8,11 @@
   "properties": {
     "schema_version": {"const": "2.0"},
     "deck_id": {"type": "string", "minLength": 1},
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"frame_variant": {"enum": ["default", "spacious"]}}
+    },
     "theme": {
       "type": "object",
       "additionalProperties": false,

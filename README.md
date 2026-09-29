@@ -17,6 +17,10 @@ PaperWorkflow 首轮应按论文主题设置检索问题，文件名不相似的
 `synthesis_readiness` 已通过。英文 Story 经 pwf2rpa 转换会生成英文结尾标题，
 `title_chars` 随实际标题自动计算。
 
+## v3.1 布局节奏修正
+
+同一 deck 的标题、takeaway 和正文使用统一 frame；有页面请求 `spacious` 时整套默认采用 `spacious`，也可在 Deck IR 顶层用 `presentation.frame_variant` 明确指定。`figure-parameters` 的同级 block 按原顺序形成纵向组，v26 候选经 24 px 等距校正和容量复查；图像与图注保持 12 px。逐页实际布局来源见 `layout_provider.json` 和派生的 `plan_to_layout.json`，详见 [v3 实验说明](Total-pipe/docs/v3-experiment.md)。
+
 ## Agent 入口
 
 - Skill：`Total-pipe/skills/total-pipe-deck/SKILL.md`

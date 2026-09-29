@@ -132,6 +132,8 @@ Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 - 内容角色映射为稳定的 `composition.blocks[].component`；
 - 视觉对象映射为 `figure_refs` 和 `assets`；
 - RPA Layout 只用于选择合适 archetype/component，不把坐标写进 IR；
+- 整套页面先确定顶层 `presentation.frame_variant`（`default` 或 `spacious`）；省略时，只要任一页请求 `spacious`，编译器整套采用 spacious frame；
+- 一图加 3–4 个同级步骤/参数用 `figure-parameters`，将 block 按阅读顺序放入 `composition.blocks`；编译器据此保持 24 px 纵向间距，无需新增坐标字段；
 - 所有 `evidence_refs`、`caveats` 和 `speaker_notes` 必须保留。
 - `key_points` 的科学内容须按源 Brief 的顺序进入 block 正文或 speaker notes；
   不能只保留 `takeaway` 或压缩后的设计意图。容量不足时拆页。
@@ -165,6 +167,8 @@ Deck IR 只接受
 汉字按 2 单位计。公式、表格、图注、参考文献和单个长段落保持普通文本。
 
 ## 4. 编译
+
+v26 候选通过同级间距和图注留白校正后再次检查容量、碰撞与字体；无法通过时回退。`layout.json` 给出实际 `deck_frame_variant`，`layout_provider.json` 与 `derived/plan_to_layout.json` 给出每页布局来源。图像至图注正常相隔 12 px；较长的同级文字允许不同框高，但不允许间距漂移。
 
 MCP 入口提供三个工具：`totalpipe_compile` 编译布局（默认 v26），
 `totalpipe_build` 通过 OfficeCLI 生成 PPTX 候选与 QA，

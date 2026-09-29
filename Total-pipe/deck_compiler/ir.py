@@ -24,6 +24,11 @@ def validate(ir):
         return errors
     check(ir.get("schema_version") == "2.0", "schema_version must be 2.0")
     check(isinstance(ir.get("deck_id"), str) and bool(ir.get("deck_id")), "deck_id required")
+    deck_presentation = ir.get("presentation", {})
+    check(isinstance(deck_presentation, dict), "presentation must be an object")
+    if isinstance(deck_presentation, dict):
+        check(deck_presentation.get("frame_variant", "default") in ("default", "spacious"),
+              "Unknown deck frame variant")
     theme = ir.get("theme", {})
     check(isinstance(theme, dict) and all(isinstance(theme.get(k), str) and theme[k]
           for k in ("font_family", "font_file", "bold_font_file")), "Explicit theme fonts required")
@@ -130,8 +135,12 @@ def derive(ir, layout):
             "evidence_ids": s["semantic"]["evidence_refs"]} for n, s in enumerate(ir["slides"], 1)]},
         "visual_manifest.json": {**provenance, "visuals": [{"slide_id": s["id"], **f}
             for s in ir["slides"] for f in s["composition"]["figure_refs"]]},
-        "plan_to_layout.json": {**provenance, "slides": [{"slide_id": s["id"], "elements": s["elements"]}
-                                                       for s in layout["slides"]]},
+        "plan_to_layout.json": {**provenance, "deck_frame_variant": layout.get("deck_frame_variant"),
+            "slides": [{"slide_id": s["id"], "elements": s["elements"],
+                        "layout_provider_status": next((entry.get("status") for entry in
+                            s.get("adaptation_log", []) if entry.get("action") == "layout_provider"),
+                            "DETERMINISTIC")}
+                       for s in layout["slides"]]},
         "qa_expectation.json": {**provenance, "slide_count": len(ir["slides"]),
                                 "required_renderer": "powerpoint"},
     }
