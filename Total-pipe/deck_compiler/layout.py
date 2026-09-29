@@ -20,6 +20,17 @@ def frame_variant(ir):
                               for slide in ir["slides"]) else "default")
 
 
+def sequence_flow(composition):
+    """Use the existing block roles to recognize a four-step process beside a figure."""
+    blocks = composition["blocks"]
+    return (composition["archetype"] == "figure-parameters" and
+            len(composition["figure_refs"]) == 1 and len(blocks) == 4 and
+            not any(block.get("label") for block in blocks) and
+            blocks[0]["component"] == "method" and
+            any(block["component"] == "process-step" for block in blocks) and
+            blocks[-1]["component"] == "result")
+
+
 def break_lines(text, font, width):
     """Preserve paragraphs, break at words/CJK glyphs; long tokens split safely."""
     lines = []
@@ -123,6 +134,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     for n, slide in enumerate(ir["slides"], 1):
         sem, comp = slide["semantic"], slide["composition"]
         blocks, figs = comp["blocks"], comp["figure_refs"]
+        show_sequence = sequence_flow(comp)
         family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
@@ -174,6 +186,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         bh = bottom-top
         def block(b, box):
             label = b.get("label", "")
+            if show_sequence:
+                box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
             if flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520 and box[3] >= 220:
                 panel_id = b["id"] + ":panel"
@@ -331,6 +345,25 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 w = (1168-32*(len(blocks)-1))/len(blocks)
                 for k, b in enumerate(blocks):
                     block(b, [56+k*(w+32), top, w, bh])
+        if show_sequence:
+            rows = [next((e for e in elements if e["id"] == b["id"]), None) for b in blocks]
+            if all(rows):
+                rail_x = rows[0]["bbox"][0] - 56
+                centers = [row["bbox"][1] + 18 for row in rows]
+                accent = theme.get("accent", theme.get("foreground", "#17324D"))
+                elements.append({"id": "sequence:spine", "kind": "shape",
+                    "role": "decoration", "bbox": [rail_x+25, centers[0], 2, centers[-1]-centers[0]],
+                    "geometry": "rect", "fill": "#B9CCD8", "line": "none",
+                    "collision_mode": "container"})
+                for index, row in enumerate(rows, 1):
+                    badge = [rail_x+10, row["bbox"][1]+2, 32, 32]
+                    elements.append({"id": f"sequence:step:{index}", "kind": "shape",
+                        "role": "decoration", "bbox": badge, "geometry": "ellipse",
+                        "fill": accent, "line": "none", "collision_mode": "container"})
+                    text(f"sequence:number:{index}", str(index), badge, "badge", 20, 20, 1,
+                         "middle", "#FFFFFF")
+                adaptations.append({"action": "sequence_rail",
+                    "block_ids": [b["id"] for b in blocks]})
         if family == "columns" and not figs and not sem["caveats"] and len(blocks) >= 3:
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:

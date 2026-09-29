@@ -21,6 +21,7 @@ transport.INSTRUCTIONS = ('Total-pipe v3: use existing PaperWorkflow, Story and 
     'SOURCE_TEXT_NOT_BOUND blocks delivery; character limits are coarse, so inspect SLOT_WRAP_RISK. '
     'Then pass canonical Deck IR to totalpipe_compile or totalpipe_build. '
     'Use one deck frame; ordered figure-parameters blocks are a peer column with 24 px gaps. '
+    'A four-step figure process from method through process-step to result receives a numbered sequence rail; preserve original scientific text. '
     'v26 proposals are rhythm-snapped and rechecked; figure captions follow images by 12 px. '
     'Check layout_provider.json for exact per-slide provenance. '
     'v26 proposes layout, compiler enforces constraints, OfficeCLI writes PPTX. '

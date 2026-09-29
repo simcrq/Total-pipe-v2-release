@@ -32,6 +32,8 @@ PDF → PaperWorkflow → Story Planner → pwf2rpa → Research PPT Assistant
 
 Deck IR 可在顶层声明 `"presentation": {"frame_variant": "spacious"}`（或 `default`）。省略时，只要任一页请求 `spacious`，整套使用同一个 spacious 标题、takeaway 和正文基线；否则整套为 default。编译结果在 `layout.json` 记录实际 `deck_frame_variant` 和覆盖的页码。`figure-parameters` 中按阅读顺序排列的 3–4 个 block 与一张图构成同级纵向组：v26 校正为 24 px 间距，容量允许时等高，否则依文本所需高度分配；图与图注相隔 12 px。校正后仍需通过容量、碰撞与字体检查，不通过则回退。
 
+若同一版型是无独立标签的四步加工流程，首项角色为 `method`、中间含 `process-step`、末项为 `result`，编译器会在文本列内加入 1–4 编号与纵向连线。编号占用的 56 px 会纳入 v26 容量检查；原 block 文本不重写，触发结果记入 `adaptation_log`。
+
 每页的 `MODEL_PROPOSAL`、`PACKING_FALLBACK` 或 `COMPILER_FALLBACK` 可直接查 `layout_provider.json`；派生的 `plan_to_layout.json` 也记录 `layout_provider_status`，无需从 PPTX 的间距推断来源。
 
 Story 节点的四个原有字段保持必需；只有需要保留细节时才加 `key_points`，没有固定条数。pwf2rpa 把它与 `takeaway` 一起计入布局容量；`evidence_texts` 仍是原始证据，不自动填入正文。完整用法见 [pwf2rpa README](pwf2rpa/README.md) 与 [中文使用说明](docs/USAGE.zh-CN.md)。

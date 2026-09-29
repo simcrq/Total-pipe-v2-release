@@ -22,6 +22,7 @@ $python = 'F:/Workbuddy/ppt-generator/layoutdiffusion_group_meeting_pptbench/.ve
 - `derived/plan_to_layout.json` 同步记录逐页 `layout_provider_status`；PPTX 本身没有该 provenance，不要靠几何指纹猜测。
 - Deck IR 顶层可指定 `presentation.frame_variant`。省略时有任一页请求 spacious，整套采用 spacious frame；否则整套为 default。实际选择和覆盖页见 `layout.json`。
 - `figure-parameters` 的有序 block 是同级纵向组。模型候选先校正为 24 px 等距，容量允许时等高，文字较长时按所需高度分配；图像受宽度限制时收紧容器，使图注紧贴图像下方 12 px，然后重跑原有硬门禁。
+- 单图四步、无 block 标签、角色从 `method` 经 `process-step` 到 `result` 的页面增加编号与纵向连线。文本列为编号留出 56 px，v26 的容量门禁使用实际可用宽度；其他 `figure-parameters` 页面维持原呈现。
 - 分布式列表等不支持内容交回原编译器；所有回退仍经过编译器检查，FAIL 不会被删除后放行。
 - 模型文件必须匹配固定 SHA-256，载入使用 weights_only。文件缺失或损坏产生可追溯 FAIL。
 - `layout.json` 嵌入 provider、模型与源码哈希；生成派生文件、OfficeCLI 命令和验收仍走同一 pipeline。

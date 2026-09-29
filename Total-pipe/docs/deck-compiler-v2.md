@@ -44,6 +44,9 @@ The v3 integration uses one frame grid across a deck. Top-level
 `figure-parameters` slide, ordered blocks beside a figure share a 24 px vertical rhythm.
 The v26 provider snaps peer spacing and figure-caption slack, then repeats capacity and
 collision checks. `derived/plan_to_layout.json` reports the provider status per slide.
+For a four-step, unlabeled `figure-parameters` process whose roles progress from `method`
+through `process-step` to `result`, the v3 compiler draws a numbered vertical rail beside
+the original blocks and reserves its width during text fitting.
 
 Blocks may set `text_flow` to `plain`, `auto`, or `distributed_arrow_list`. In `auto` mode,
 the compiler recognizes three to five explicit prose/list rows (72 or more display units;

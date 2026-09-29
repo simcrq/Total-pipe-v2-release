@@ -143,6 +143,10 @@ v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长�
 图注置于图像下方 12 px，所有校正后重新执行容量与碰撞检查。实际 frame 与逐页
 `MODEL_PROPOSAL / PACKING_FALLBACK / COMPILER_FALLBACK` 在 `layout.json`、
 `layout_provider.json` 和 `derived/plan_to_layout.json` 中查看。
+如果 RPA 规划的是单图四步加工路径，保留四个无独立 `label` 的有序 block：首项
+`method`、中间包含 `process-step`、末项 `result`。编译器会在文本列增加 1–4 编号和
+纵向连线，让步骤关系可见；编号所需的 56 px 已计入容量检查。不要为触发样式而改写
+科研内容或强行把非流程页标为 `method/result`。
 
 从 RPA 映射到 Deck IR 时，保留这些段落边界，并把
 `design_ir.text_flow.mode` 复制到对应 block 的 `text_flow`。block 也可使用 `auto`：

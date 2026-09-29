@@ -73,6 +73,8 @@ def required_height(unit, width, request):
         if width < min_h * aspect:
             return 10000.0
         return min_h + ch + 12
+    if request.get('sequence_flow'):
+        width -= 56
     label = unit.get('label', '')
     label_box = 40 if request['archetype'] == 'figure-parameters' else 44
     lh = max(label_box, height(label, request['bold_font'], 24, width, 1)) if label else 0
@@ -124,6 +126,7 @@ def read_requests(path, root=None):
                           ('title', 'takeaway', 'footer', 'caveats')]
         request = {'slide_id': slide['id'], 'archetype': slide['composition']['archetype'],
             'ir_sha256': digest(ir), 'units': units, 'region': [56, top, 1168, bottom-top],
+            'sequence_flow': module.sequence_flow(slide['composition']),
             'font': str((path.parent/ir['theme']['font_file']).resolve()),
             'bold_font': str((path.parent/ir['theme']['bold_font_file']).resolve()),
             'font_family': ir['theme']['font_family'], 'frame': frames,
@@ -216,7 +219,8 @@ def check(request, boxes):
                 errors.append(f'{u["id"]}:TEXT_FLOW_REQUIRES_COMPILER')
             label=u.get('label','')
             lh=(40 if request['archetype']=='figure-parameters' else 44) if label else 0
-            pieces=[(u['text'],[x,y+lh,w,h-lh],request['font'],28,24,10)]
+            inset=56 if request.get('sequence_flow') else 0
+            pieces=[(u['text'],[x+inset,y+lh,w-inset,h-lh],request['font'],28,24,10)]
             if label: pieces.append((label,[x,y,w,lh],request['bold_font'],28,24,1))
         else:
             ch=max(u.get('caption_height',62),height(u.get('caption',''),request['font'],u.get('caption_font_floor',20),w,2))

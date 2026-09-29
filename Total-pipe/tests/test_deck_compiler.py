@@ -99,6 +99,41 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual(layout['deck_frame_variant'], 'default')
         self.assertEqual([next(e['bbox'][1] for e in slide['elements'] if e['id'] == 'title')
                           for slide in layout['slides']], [34, 34])
+    def test_four_step_figure_process_gets_a_numbered_rail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            Image.new('RGB', (680, 387), 'white').save(root/'process.png')
+            ir = fixture()
+            slide = ir['slides'][0]
+            ir['slides'] = [slide]
+            ir['assets'] = {'process': {'path': 'process.png', 'source_figure': '1a'}}
+            slide['composition'] = {
+                'archetype': 'figure-parameters',
+                'blocks': [{'id': name, 'component': role, 'text': value}
+                           for name, role, value in (
+                               ('sample', 'method', 'Sample preparation'),
+                               ('probe', 'process-step', 'Locate the focal plane'),
+                               ('power', 'parameter', 'Adjust writing power'),
+                               ('result', 'result', 'Form a graded pattern'))],
+                'figure_refs': [{'asset_id': 'process', 'source_figure': '1a',
+                                 'caption': 'Fig. 1a process diagram'}],
+            }
+            layout, issues = compile_deck(ir, root)
+            self.assertFalse([i for i in issues if i['severity'] == 'FAIL'])
+            page = layout['slides'][0]
+            by_id = {e['id']: e for e in page['elements']}
+            self.assertEqual([by_id[f'sequence:number:{i}']['text'] for i in range(1, 5)],
+                             ['1', '2', '3', '4'])
+            self.assertEqual([by_id[name]['source_text'] for name in
+                              ('sample', 'probe', 'power', 'result')],
+                             [b['text'] for b in slide['composition']['blocks']])
+            self.assertIn('sequence:spine', by_id)
+            self.assertTrue(any(a['action'] == 'sequence_rail' for a in page['adaptation_log']))
+
+            slide['composition']['blocks'][-1]['component'] = 'callout'
+            layout, _ = compile_deck(ir, root)
+            self.assertFalse(any(e['id'].startswith('sequence:')
+                                 for e in layout['slides'][0]['elements']))
     def test_all_archetypes(self):
         from deck_compiler.catalog import ARCHETYPES
         ir=fixture()
