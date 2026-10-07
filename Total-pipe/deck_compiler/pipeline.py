@@ -45,7 +45,7 @@ def locked(out):
         lock.unlink()
 
 
-def compile_input(ir_path, out, layout_options=None):
+def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True):
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
     if layout_options and layout_options.get('name') == 'v26':
         try:
@@ -56,6 +56,61 @@ def compile_input(ir_path, out, layout_options=None):
             layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
     else:
         layout, issues = compile_deck(ir, ir_path.parent)
+
+    # NEW: Detect severe text overflow and attempt automatic repair
+    if enable_overflow_repair and layout is not None:
+        qa_preliminary = report(issues, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': True})
+
+        # Check if we have severe overflow warnings
+        has_severe_overflow = any(
+            item.get('severity') == 'WARNING' and
+            item.get('rule') == 'OFFICECLI_FORMAT' and
+            'text overflow' in item.get('message', '')
+            for item in qa_preliminary.get('items', [])
+        )
+
+        if has_severe_overflow:
+            try:
+                from .overflow_repair import repair_overflow, overflow_summary
+
+                # Generate overflow summary for logging
+                summary = overflow_summary(qa_preliminary)
+
+                # Attempt repair (splits slides with severe overflow)
+                repaired_ir, was_modified = repair_overflow(ir, layout, qa_preliminary, overflow_threshold=0.25)
+
+                if was_modified:
+                    # Recompile with the repaired IR that has additional slides
+                    ir = repaired_ir
+                    if layout_options and layout_options.get('name') == 'v26':
+                        # Re-run v26 on the new slide count
+                        temp_ir_path = out / 'deck_ir_repaired.json'
+                        write_json(temp_ir_path, ir)
+                        try:
+                            from .layout_provider import compile_v26
+                            layout, issues = compile_v26(temp_ir_path,
+                                checkpoint=layout_options.get('checkpoint'),
+                                candidates=layout_options.get('candidates', 32),
+                                seed=layout_options.get('seed', 20261007))
+                        except (ValueError, OSError, ImportError, RuntimeError) as error:
+                            layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
+                        temp_ir_path.unlink(missing_ok=True)
+                    else:
+                        layout, issues = compile_deck(ir, ir_path.parent)
+
+                    # Add INFO item about the repair
+                    issues.append(issue('OVERFLOW_REPAIR_APPLIED', 'INFO',
+                        f"Automatically split content across additional slides. "
+                        f"Original: {summary['slides_affected']} slides with {summary['total_overflows']} overflows. "
+                        f"Max overflow ratio: {summary['max_overflow_ratio']:.1%}",
+                        detector='overflow-repair', confidence='HIGH',
+                        original_slide_count=len(ir['slides']) - sum(1 for s in ir['slides'] if '-cont' in s['id']),
+                        repaired_slide_count=len(ir['slides'])))
+            except Exception as error:
+                # Don't fail the build if repair fails; just log it
+                issues.append(issue('OVERFLOW_REPAIR_FAILED', 'WARNING',
+                    f"Automatic overflow repair failed: {error}", detector='overflow-repair'))
+
     write_json(out/'deck_ir.json', ir)
     if layout:
         write_json(out/'layout.json', layout)

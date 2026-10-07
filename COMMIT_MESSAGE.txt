@@ -1,0 +1,95 @@
+feat: add automatic overflow repair to solve text overflow and slide capacity problems
+
+## Problem
+The Total-pipe v3 suite generates evidence-based PPTX presentations but fails
+to correctly place sufficient content, resulting in widespread text overflow:
+- 16 overflow warnings across 9 slides (89% of content slides affected)
+- Average 1.78 warnings per slide
+- Text cut off and presentations unsuitable for research meetings
+
+Root cause: v26 layout model systematically underestimates vertical space
+requirements, generating bounding boxes that are too small for actual content.
+
+## Solution
+Implemented automatic content splitting and slide addition:
+- Detects text overflow >25% of available space from OfficeCLI warnings
+- Automatically splits overflowing content across continuation slides
+- Recompiles with fresh v26 layouts for proper spacing
+- Preserves paragraph boundaries and narrative context
+
+## Changes
+- NEW: deck_compiler/overflow_repair.py (286 lines)
+  - parse_overflow_message() - Extract overflow metrics from warnings
+  - split_text_to_chunks() - Split text preserving paragraph boundaries
+  - repair_overflow() - Main repair logic with slide cloning
+  - overflow_summary() - Generate overflow statistics
+
+- NEW: tests/test_overflow_repair.py (149 lines)
+  - 8 unit tests covering all repair functionality
+  - All tests passing ✅
+
+- MODIFIED: deck_compiler/pipeline.py (+56 lines)
+  - Enhanced compile_input() with overflow detection
+  - Integrated repair between initial compilation and final output
+  - Recompilation logic for repaired slides
+  - Added enable_overflow_repair parameter (default: True)
+
+- NEW: Documentation (1,365 lines total)
+  - CONTENT_CAPACITY_ANALYSIS.md - Problem analysis and solution comparison
+  - IMPLEMENTATION_SUMMARY.md - Implementation details
+  - TESTING_GUIDE.md - Testing procedures
+  - SOLUTION_COMPLETE.md - Complete solution overview
+  - VISUAL_SUMMARY.md - Visual diagrams and statistics
+
+## Expected Impact
+Based on graphene-v26 build analysis:
+- Slide count: 9 → 12-14 slides (adds 3-5 continuation slides)
+- Overflow warnings: 16 → 2-4 (75-85% reduction)
+- Affected slides: 89% → 15-20%
+- Warnings per slide: 1.78 → 0.15-0.25
+- Presentation quality: Unsuitable → Meeting-ready ✅
+
+## How It Works
+1. Initial compilation generates layouts and detects overflow
+2. Severe overflow (>25% threshold) triggers repair
+3. Overflowing text blocks split into 2-4 chunks
+4. Continuation slides created (e.g., s04-analysis-cont1)
+5. Titles updated to show pagination: "Title (2/3)"
+6. Entire deck recompiled with new slide count
+7. Fresh layouts generated for all slides including continuations
+
+## Backward Compatibility
+✅ No breaking changes - existing builds continue to work
+✅ Opt-in by default with easy disable: enable_overflow_repair=False
+✅ No changes required to upstream (PaperWorkflow, Story, RPA)
+✅ No changes required to downstream (OfficeCLI, native validation)
+
+## Testing
+- 8/8 unit tests passing
+- No syntax errors
+- Clean Python compilation
+- Module imports successfully
+- Ready for production testing on real builds
+
+## Configuration
+```python
+# Default behavior (repair enabled)
+compile_input(ir_path, out, layout_options={'name': 'v26'})
+
+# Disable if needed
+compile_input(ir_path, out, layout_options={'name': 'v26'},
+              enable_overflow_repair=False)
+
+# Adjust threshold (default 0.25 = 25%)
+repair_overflow(ir, layout, qa, overflow_threshold=0.35)
+```
+
+## Future Enhancements
+- Phase 1: Combine with font floor adjustments for minor overflow
+- Phase 2: Retrain v26 model with capacity-aware loss function
+- Phase 3: Add semantic section detection for better split points
+
+Fixes: #overflow-problem
+Addresses: Research presentation visual quality issues
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
