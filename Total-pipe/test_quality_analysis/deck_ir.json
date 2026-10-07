@@ -1,0 +1,47 @@
+{
+  "schema_version": "2.0",
+  "theme": {
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+    "bold_font_file": "C:\\Windows\\Fonts\\arialbd.ttf"
+  },
+  "slides": [
+    {
+      "id": "slide1",
+      "semantic": {
+        "title": "First Slide",
+        "takeaway": "This is the main point",
+        "evidence_refs": [
+          "EV001"
+        ]
+      },
+      "composition": {
+        "blocks": [
+          {
+            "id": "b1",
+            "text": "Content"
+          }
+        ],
+        "figure_refs": []
+      }
+    },
+    {
+      "id": "slide2",
+      "semantic": {
+        "title": "Second Slide",
+        "takeaway": "Another point",
+        "evidence_refs": []
+      },
+      "composition": {
+        "blocks": [
+          {
+            "id": "b2",
+            "text": "More content"
+          }
+        ],
+        "figure_refs": []
+      }
+    }
+  ]
+}

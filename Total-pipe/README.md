@@ -1,8 +1,41 @@
 # Total-pipe Deck Compiler v3
 
+**🎉 NEW: AI-Friendly Unified CLI + Comprehensive Quality Metrics** - [See Implementation Guide](IMPLEMENTATION_COMPLETE.md)
+
 Total-pipe 是从论文证据到可验收 PPTX 的端到端编排项目。上游负责证据与科研叙事，
 Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
 `deck_ir.json` 开始接收 v26 布局建议、校验约束并生成 PPTX。
+
+## 🚀 Quick Start (New Unified CLI)
+
+```bash
+# 1. Validate inputs (fast pre-check, <1 second)
+python totalpipe.py validate deck_ir.json
+
+# 2. Generate presentation with automatic overflow repair
+python totalpipe.py generate deck_ir.json --out build/
+
+# 3. Analyze quality (6 dimensions: readability, consistency, accessibility, etc.)
+python totalpipe.py quality build/
+
+# 4. Generate preview images (no PowerPoint required)
+python totalpipe.py preview build/ --format png
+```
+
+**Key Features**:
+- ✅ **Single entry point** - One CLI replaces multiple tools
+- ✅ **Cross-platform fonts** - Automatic font discovery (Windows/macOS/Linux)
+- ✅ **Quality scoring** - Comprehensive 0-100 quality analysis across 6 dimensions
+- ✅ **Fast validation** - Pre-flight checks in <1 second
+- ✅ **Structured errors** - Clear error messages with fix suggestions
+- ✅ **JSON output** - All commands support `--json` for AI integration
+- ✅ **Preview generation** - PNG/JPG previews without PowerPoint
+
+**Documentation**:
+- [Complete Implementation Guide](IMPLEMENTATION_COMPLETE.md) - Full feature documentation
+- [Quality Metrics Guide](docs/QUALITY_METRICS.md) - Visual quality analysis system
+- [AI Usage Guide](AI_USAGE_GUIDE.md) - For AI agents
+- [Quick Start Guide](QUICKSTART.md) - 5-minute introduction
 
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → Research PPT Assistant
@@ -95,6 +128,30 @@ cd ../research-ppt-assistant
 npm test
 npm run audit:layouts
 ```
+
+## Usage Options
+
+### Option A: Unified CLI (Recommended for AI Agents)
+
+Use the new `totalpipe.py` unified CLI for simplified workflows:
+
+```bash
+# Fast validation before generation
+python totalpipe.py validate deck_ir.json
+
+# Generate with automatic overflow repair and quality analysis
+python totalpipe.py generate deck_ir.json --out build/
+
+# Check quality (0-100 score across 6 dimensions)
+python totalpipe.py quality build/
+
+# Generate preview images
+python totalpipe.py preview build/
+```
+
+All commands support `--json` flag for machine-readable output. See [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) for details.
+
+### Option B: Traditional Deck Compiler (Full Control)
 
 ## Deck Compiler 快速使用
 

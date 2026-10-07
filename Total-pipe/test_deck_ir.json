@@ -1,0 +1,40 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "test-validation",
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "C:\\Windows\\Fonts\\arial.ttf",
+    "bold_font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#137C8B"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "slide1",
+      "semantic": {
+        "title": "Test Slide",
+        "purpose": "Testing",
+        "takeaway": "This is a test slide.",
+        "evidence_refs": [
+          "EV001"
+        ],
+        "caveats": [],
+        "speaker_notes": "Test notes"
+      },
+      "composition": {
+        "archetype": "evidence-hypothesis",
+        "blocks": [
+          {
+            "id": "b1",
+            "component": "direct-evidence",
+            "text": "Test evidence block with some text content."
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

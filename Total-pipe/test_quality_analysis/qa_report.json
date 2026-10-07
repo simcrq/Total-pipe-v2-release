@@ -1,0 +1,23 @@
+{
+  "status": "REVIEW",
+  "counts": {
+    "FAIL": 0,
+    "WARNING": 2,
+    "REVIEW": 1,
+    "INFO": 5
+  },
+  "items": [
+    {
+      "rule": "OFFICECLI_FORMAT",
+      "severity": "WARNING",
+      "message": "text overflow: 3 lines at 20pt need 70pt, usable 60pt",
+      "slide": 1
+    },
+    {
+      "rule": "SCIENTIFIC_PANEL_REVIEW",
+      "severity": "REVIEW",
+      "message": "Scientific panel review recommended",
+      "slide": 2
+    }
+  ]
+}

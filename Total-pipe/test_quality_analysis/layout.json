@@ -1,0 +1,59 @@
+{
+  "slides": [
+    {
+      "slide_number": 1,
+      "elements": [
+        {
+          "kind": "text",
+          "role": "body",
+          "name": "body1",
+          "bbox": [
+            50,
+            100,
+            400,
+            200
+          ],
+          "contract": {
+            "font_size": 22,
+            "text": "This is body text\nWith multiple lines\nOf content"
+          }
+        },
+        {
+          "kind": "text",
+          "role": "title",
+          "name": "title1",
+          "bbox": [
+            50,
+            20,
+            860,
+            60
+          ],
+          "contract": {
+            "font_size": 32,
+            "text": "Test Title"
+          }
+        }
+      ]
+    },
+    {
+      "slide_number": 2,
+      "elements": [
+        {
+          "kind": "text",
+          "role": "body",
+          "name": "body2",
+          "bbox": [
+            50,
+            100,
+            400,
+            150
+          ],
+          "contract": {
+            "font_size": 20,
+            "text": "Another body text block"
+          }
+        }
+      ]
+    }
+  ]
+}
