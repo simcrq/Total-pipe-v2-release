@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 from .contracts import digest, file_hash
+from .officecli import schema_error_count
 from .pipeline import locked, write_json
 from .structural import verify
 
@@ -46,7 +47,7 @@ def review(out, executable='officecli', render='native'):
         schema = run('validate', staging)
         issues = run('view', staging, 'issues')
         issue_data = issues.get('data') or {}
-        schema_count = (schema.get('data') or {}).get('count')
+        schema_count = schema_error_count(schema)
         if (not isinstance(schema_count, int) or schema_count < 0
                 or not isinstance(issue_data.get('issues'), list)
                 or issue_data.get('count') != len(issue_data['issues'])):

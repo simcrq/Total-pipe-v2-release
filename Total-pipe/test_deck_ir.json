@@ -3,8 +3,8 @@
   "deck_id": "test-validation",
   "theme": {
     "font_family": "Arial",
-    "font_file": "C:\\Windows\\Fonts\\arial.ttf",
-    "bold_font_file": "C:\\Windows\\Fonts\\arialbd.ttf",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
     "foreground": "#142735",
     "background": "#FFFFFF",
     "accent": "#137C8B"

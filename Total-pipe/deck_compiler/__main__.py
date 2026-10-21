@@ -22,10 +22,8 @@ def main():
         p = commands.add_parser(name)
         p.add_argument('--ir', required=True, type=Path)
         p.add_argument('--out', required=True, type=Path)
-        p.add_argument('--layout-provider', choices=('deterministic', 'v26'), default='deterministic')
-        p.add_argument('--layout-checkpoint', type=Path)
-        p.add_argument('--layout-candidates', type=int, default=32)
-        p.add_argument('--layout-seed', type=int, default=20261007)
+        p.add_argument('--layout-provider', default='packer',
+                       help='packer (bundled deterministic), compiler (templates only) or module:factory')
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
@@ -64,8 +62,10 @@ def main():
         if args.command == 'record-powerpoint-review':
             print(record_powerpoint_review(out, args.reviewer, args.slides))
             return 0
-        options = {'name': args.layout_provider, 'checkpoint': args.layout_checkpoint,
-                   'candidates': args.layout_candidates, 'seed': args.layout_seed}
+        options = {'name': args.layout_provider,
+                   'plugin': None if args.layout_provider in ('packer', 'compiler',
+                                                              'deterministic', 'none')
+                   else args.layout_provider}
         if args.command == 'compile':
             with locked(out):
                 _, _, qa = compile_input(args.ir.resolve(), out, options)

@@ -34,22 +34,40 @@ def sequence_flow(composition):
             blocks[-1]["component"] == "result")
 
 
+TOKEN = re.compile(r"[A-Za-z0-9_]+(?:[.,][0-9]+)*(?:%|[×x])?|[^\S\n]+|.")
+# Kinsoku: a line may not begin with closing punctuation or a unit suffix. When the break would
+# land there, the previous character travels down with it instead. Two real review findings drove
+# this: a wrapped "1." / "19×" (the DECIMAL_SPLIT rule) and a line that consisted of "。" alone.
+NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
+
+
 def break_lines(text, font, width):
     """Preserve paragraphs, break at words/CJK glyphs; long tokens split safely."""
     lines = []
     for paragraph in text.split("\n"):
-        current = ""
-        for token in re.findall(r"[A-Za-z0-9_]+|[^\S\n]+|.", paragraph):
-            if current and font.getlength(current + token) > width:
+        pieces = []
+        for token in TOKEN.findall(paragraph):
+            current = ''.join(pieces)
+            if pieces and font.getlength(current + token) > width:
+                # Kinsoku: a closing mark or unit never starts a line. The token before it travels
+                # down instead, so "2.84×，" does not become "2.84" / "×，".
+                if token[:1] in NO_LINE_START and len(current.strip()) > 2:
+                    carried = pieces.pop()
+                    lines.append(''.join(pieces).rstrip())
+                    pieces = [carried + token.lstrip()]
+                    continue
                 lines.append(current.rstrip())
-                current = ""
+                pieces = []
                 token = token.lstrip()
-            for char in token:
-                if current and font.getlength(current + char) > width:
-                    lines.append(current.rstrip())
-                    current = ""
-                current += char
-        lines.append(current.rstrip())
+            if not pieces and font.getlength(token) > width:
+                for char in token:
+                    if pieces and font.getlength(''.join(pieces) + char) > width:
+                        lines.append(''.join(pieces).rstrip())
+                        pieces = []
+                    pieces.append(char)
+                continue
+            pieces.append(token)
+        lines.append(''.join(pieces).rstrip())
     return lines
 
 
@@ -110,14 +128,33 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         return None, issues
     base = Path(base)
     theme = ir["theme"]
-    font_paths = {}
-    for key in ("font_file", "bold_font_file"):
-        path = (base / theme[key]).resolve()
-        try:
-            ImageFont.truetype(str(path), 24)
-        except (OSError, ValueError) as e:
-            issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(e), detector="geometric-preflight"))
-        font_paths[key] = str(path)
+    # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
+    # another operating system, and a deck that cannot find its declared face is still deliverable in
+    # a substituted one. Only "no font anywhere" is a FAIL.
+    from .fonts import resolve_theme_fonts
+    # Every character the deck will set, so the resolver can reject a face that cannot draw them.
+    # The compiler's own strings count too: the evidence family draws 直接证据 / 假设（未证实） and the
+    # header separator ·, none of which appear in the Deck IR. The ➢ bullet is left out of the sample
+    # on purpose: it is one decorative glyph, and letting it decide the face would push a Chinese deck
+    # from a sans face to a serif one. Its own element still reports a coverage REVIEW.
+    compiler_strings = '直接证据假设（未证实）·0123456789'
+    text_sample = compiler_strings + "".join(
+        [str(value) for slide in ir["slides"]
+         for value in (slide["semantic"].get("title", ""), slide["semantic"].get("purpose", ""),
+                       slide["semantic"].get("takeaway", ""), slide["semantic"].get("speaker_notes", ""))]
+        + [block.get("text", "")+block.get("label", "") for slide in ir["slides"]
+           for block in slide["composition"]["blocks"]]
+        + [figure.get("caption", "") for slide in ir["slides"]
+           for figure in slide["composition"]["figure_refs"]])
+    try:
+        regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
+    except (FileNotFoundError, OSError) as error:
+        issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(error), detector="geometric-preflight"))
+        return None, issues
+    font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
+    for note in font_notes:
+        issues.append(issue(note["rule"], note["severity"], note["message"],
+                            detector="font-resolution", detail=note.get("detail")))
     assets = {}
     for key, asset in ir.get("assets", {}).items():
         path = (base / asset["path"]).resolve()
@@ -295,7 +332,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 group = supplied[f'figure-{k}']
                 figure({**f, 'caption_height': group.get('caption_height', f.get('caption_height', 62))},
                        group['bbox'], k)
-            adaptations.append({'action': 'layout_provider', 'provider': 'v26',
+            adaptations.append({'action': 'layout_provider',
+                                'provider': proposal.get('provider', 'provider'),
                                 'status': proposal['status']})
         elif family in ("figure-left", "figure-right") and figs:
             fig_x, txt_x = (56, 784) if family == "figure-left" else (552, 56)
@@ -316,7 +354,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                      "heading", 24, 22, 1)
                 text(b["id"], b["text"], [left_x, y+32, left_w, row_h-32],
                      "body", 22, 20, 1)
-            figure(figs[0], [650, top-40, 574, bh+40], 1)
+            figure(figs[0], [650, top, 574, bh], 1)
         elif slide["id"] == "s07-contact" and figs:
             # Keep the two numeric callouts compact so the two original Fig.3e/f
             # panels can occupy most of the evidence area at readable size.

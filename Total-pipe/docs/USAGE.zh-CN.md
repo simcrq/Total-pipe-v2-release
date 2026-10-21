@@ -213,13 +213,13 @@ Deck IR 只接受
 
 ## 4. 编译
 
-v26 候选通过同级间距和图注留白校正后再次检查容量、碰撞与字体；无法通过时回退。`layout.json` 给出实际 `deck_frame_variant`，`layout_provider.json` 与 `derived/plan_to_layout.json` 给出每页布局来源。图像至图注正常相隔 12 px；较长的同级文字允许不同框高，但不允许间距漂移。
-四步流程的编号连线由编译器生成，记录为 slide `adaptation_log` 中的 `sequence_rail`；不把装饰性几何写进 Deck IR。v26 只建议现有单位的宏观几何；文字适配、等距、连线及最终合法性由编译器负责，不另加排版器或全量 deck 风格 pass。
+布局提供方（默认 `packer`）给出的提案先过容量、碰撞、间距与字体门禁；不过则整页回退模板。`layout.json` 给出实际 `deck_frame_variant`，`layout_provider.json` 与 `derived/plan_to_layout.json` 给出每页布局来源。图像至图注正常相隔 12 px；较长的同级文字允许不同框高，但不允许间距漂移。
+四步流程的编号连线由编译器生成，记录为 slide `adaptation_log` 中的 `sequence_rail`；不把装饰性几何写进 Deck IR。提供方只建议现有单位的宏观几何；文字适配、等距、连线及最终合法性由编译器负责，不另加排版器或全量 deck 风格 pass。可选值见 [layout-provider.md](layout-provider.md)。
 
-MCP 入口提供三个工具：`totalpipe_compile` 编译布局（默认 v26），
+MCP 入口提供三个工具：`totalpipe_compile` 编译布局（默认 `packer`），
 `totalpipe_build` 通过 OfficeCLI 生成 PPTX 候选与 QA，
 `totalpipe_review` 按需检查现有构建并导出截图。三个工具的 `ir` / `out`
-路径都应为绝对路径；`review` 只需要 `out`。
+路径相对当前目录或写绝对路径均可；`review` 只需要 `out`。
 
 先做无渲染编译检查：
 

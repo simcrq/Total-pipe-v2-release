@@ -1,0 +1,4 @@
+# Runtime dependencies of the whole Total-pipe pipeline.
+# The layout diffusion model was removed on 2026-10-21; torch is no longer required.
+-r deck_compiler/requirements.txt
+

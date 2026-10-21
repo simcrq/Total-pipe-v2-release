@@ -1,4 +1,6 @@
 {
+  "status": "historical",
+  "note": "Record of the 2026-10-29 integration into the v2 base. The hashes describe that snapshot, not the current tree: layoutdiffusion_demo/*, totalpipe_layout/model.py, totalpipe_layout/data.py, models/totalpipe_content_v26.pt and requirements-v26.txt were removed together with the v26 model on 2026-10-21, and every remaining file has changed since.",
   "base": "user-provided total-pipe-v2 with pre-existing edits",
   "installed_files": {
     "requirements-v26.txt": {

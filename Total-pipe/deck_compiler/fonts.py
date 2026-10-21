@@ -1,13 +1,188 @@
 """
 Font discovery and validation utilities.
 
-Priority 2 implementation for automatic font path resolution.
+Font paths in a Deck IR are a portability hazard: a deck authored on macOS names
+``/System/Library/Fonts/Supplemental/Arial.ttf``, a deck authored on Windows names
+``C:\\Windows\\Fonts\\arial.ttf``, and neither exists on the other machine. The theme keeps those
+fields for compatibility, but the compiler resolves them through :func:`resolve_theme_fonts`, which
+tries, in order: the path as given (absolute, or relative to the deck), the file name inside every
+known font directory, the declared family, and finally any discovered sans-serif face. A substitution
+is reported as a REVIEW issue instead of failing the build, because a deck is still deliverable in a
+substituted metric-compatible face while a hard failure means nothing renders at all.
+
+Both absolute-path sources are also honoured through ``TOTALPIPE_FONT_DIR`` (one or more directories,
+separated by ``os.pathsep``), so a machine can point the pipeline at a font folder without editing any
+deck.
 """
 
+import os
 import platform
+import sys
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from PIL import ImageFont
+
+FONT_DIRECTORY_VARIABLE = 'TOTALPIPE_FONT_DIR'
+# Faces tried last, in order, when neither the declared file nor the declared family resolves.
+# The list prefers a face that covers Latin and CJK, because these decks mix both.
+FALLBACK_FAMILIES = ('Microsoft YaHei', 'Noto Sans CJK SC', 'Arial', 'Liberation Sans',
+                     'DejaVu Sans', 'Helvetica')
+
+
+def font_search_dirs() -> List[Path]:
+    """Every directory a bare font file name is looked up in, most specific first."""
+    directories = []
+    configured = os.environ.get(FONT_DIRECTORY_VARIABLE, '')
+    for entry in configured.split(os.pathsep):
+        if entry.strip():
+            directories.append(Path(entry).expanduser())
+    system = platform.system()
+    if system == 'Windows':
+        windir = Path(os.environ.get('WINDIR', 'C:/Windows'))
+        directories += [windir/'Fonts', Path.home()/'AppData/Local/Microsoft/Windows/Fonts']
+    elif system == 'Darwin':
+        directories += [Path('/System/Library/Fonts'), Path('/System/Library/Fonts/Supplemental'),
+                        Path('/Library/Fonts'), Path.home()/'Library/Fonts']
+    else:
+        directories += [Path('/usr/share/fonts'), Path('/usr/local/share/fonts'),
+                        Path.home()/'.fonts', Path.home()/'.local/share/fonts']
+    unique = []
+    for directory in directories:
+        if directory not in unique and directory.is_dir():
+            unique.append(directory)
+    return unique
+
+
+def _loadable(path: Path) -> bool:
+    try:
+        ImageFont.truetype(str(path), 12)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def find_font_file(value, base_dir=None) -> Optional[str]:
+    """Resolve one theme font value to an existing, loadable file, or None.
+
+    Absolute paths are used as-is; relative ones are tried against the deck directory and then
+    against every font directory by file name, which is what makes a deck authored on another
+    machine compile here.
+    """
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    candidates = []
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        if base_dir is not None:
+            candidates.append(Path(base_dir)/path)
+        candidates.append(path)
+        candidates += [directory/path.name for directory in font_search_dirs()]
+    for candidate in candidates:
+        if candidate.is_file() and _loadable(candidate):
+            return str(candidate.resolve())
+    return None
+
+
+def missing_glyphs(font_path, text) -> set:
+    """Characters in ``text`` that the face cannot draw.
+
+    Comparing a character's mask with the mask of a code point no font defines is the same heuristic
+    the compiler already uses; it is conservative (a font may draw a notdef box the same way) but it
+    catches the real case here: Latin-only Arial asked to set Chinese headings.
+    """
+    try:
+        face = ImageFont.truetype(str(font_path), 24)
+    except (OSError, ValueError):
+        return set(text)
+    reference = None
+    missing = set()
+    for character in sorted(set(text)):
+        if character.isspace():
+            continue
+        try:
+            mask = bytes(face.getmask(character))
+        except Exception:
+            missing.add(character)
+            continue
+        if reference is None:
+            try:
+                reference = bytes(face.getmask('\U0010FFFF'))
+            except Exception:
+                reference = b''
+        if reference and mask == reference:
+            missing.add(character)
+    return missing
+
+
+def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
+    """Resolve the two theme fonts. Returns ``(regular, bold, notes)``; notes drive REVIEW issues."""
+    notes = []
+    regular = find_font_file(theme.get('font_file'), base_dir)
+    bold = find_font_file(theme.get('bold_font_file'), base_dir)
+    discovered = discover_fonts()
+    # Glyph coverage outranks the declared face: a deck whose body is Chinese cannot be set in a
+    # Latin-only face, and substituting is better than emitting tofu boxes. Coverage is scored
+    # rather than required to be perfect, because some glyphs (a decorative arrow, a symbol) may be
+    # missing from every installed face; the best face wins and the remainder is reported.
+    if text_sample and (regular is None or missing_glyphs(regular, text_sample)):
+        declared = theme.get('font_family')
+        preference = [declared] + [n for n in FALLBACK_FAMILIES if n != declared] + list(discovered)
+        best = None
+        for rank, name in enumerate(dict.fromkeys(preference)):
+            candidate = discovered.get(name)
+            if not candidate or not candidate.get('regular'):
+                continue
+            missing = missing_glyphs(candidate['regular'], text_sample)
+            score = (len(missing), rank)
+            if best is None or score < best[0]:
+                best = (score, name, candidate, missing)
+        if best is not None:
+            _, name, candidate, missing = best
+            declared_missing = missing_glyphs(regular, text_sample) if regular else set(text_sample)
+            if len(missing) < len(declared_missing):
+                notes.append({'rule': 'FONT_SUBSTITUTED', 'severity': 'REVIEW',
+                              'message': f"theme font {Path(regular).name if regular else theme.get('font_file')!r} "
+                                         f"cannot draw {len(declared_missing)} character(s) of this deck; "
+                                         f"used {name} instead ({len(missing)} still unsupported)",
+                              'detail': {'reason': 'glyph_coverage',
+                                         'declared': theme.get('font_file'),
+                                         'used_regular': candidate['regular'],
+                                         'used_bold': candidate.get('bold', candidate['regular']),
+                                         'family': name,
+                                         'unsupported_characters': ''.join(sorted(missing))[:40],
+                                         'declared_unsupported_sample': ''.join(sorted(declared_missing))[:40]}})
+                return candidate['regular'], candidate.get('bold', candidate['regular']), notes
+    if regular and bold:
+        return regular, bold, notes
+    family = theme.get('font_family') or ''
+    chosen = None
+    if family in discovered:
+        chosen = discovered[family]
+    else:
+        for name in FALLBACK_FAMILIES:
+            if name in discovered:
+                chosen = discovered[name]
+                break
+        if chosen is None and discovered:
+            chosen = discovered[next(iter(discovered))]
+    if chosen is None:
+        missing = theme.get('font_file') if not regular else theme.get('bold_font_file')
+        raise FileNotFoundError(
+            f'font {missing!r} was not found and no font is installed. '
+            f'Install a TrueType font or set {FONT_DIRECTORY_VARIABLE} to a directory of fonts.')
+    substitution = {'missing_regular': theme.get('font_file') if not regular else None,
+                    'missing_bold': theme.get('bold_font_file') if not bold else None,
+                    'used_regular': chosen.get('regular'),
+                    'used_bold': chosen.get('bold', chosen.get('regular')),
+                    'declared_family': family,
+                    'search_directories': [str(directory) for directory in font_search_dirs()]}
+    notes.append({'rule': 'FONT_SUBSTITUTED', 'severity': 'REVIEW',
+                  'message': f"theme font {substitution['missing_regular'] or substitution['missing_bold']!r} "
+                             f"is not installed; used {Path(substitution['used_regular']).name} instead",
+                  'detail': substitution})
+    return (regular or chosen.get('regular'), bold or chosen.get('bold', chosen.get('regular')), notes)
 
 
 def discover_fonts() -> Dict[str, Dict[str, str]]:
@@ -37,34 +212,50 @@ def discover_fonts() -> Dict[str, Dict[str, str]]:
     return fonts
 
 
-def _discover_windows_fonts() -> Dict[str, Dict[str, str]]:
-    """Discover fonts on Windows."""
+FONT_FILES = {
+    'Arial': {'regular': ('arial.ttf',), 'bold': ('arialbd.ttf',), 'italic': ('ariali.ttf',)},
+    'Calibri': {'regular': ('calibri.ttf',), 'bold': ('calibrib.ttf',)},
+    'Times New Roman': {'regular': ('times.ttf', 'Times New Roman.ttf'),
+                        'bold': ('timesbd.ttf', 'Times New Roman Bold.ttf')},
+    'Georgia': {'regular': ('georgia.ttf',), 'bold': ('georgiab.ttf',)},
+    'Verdana': {'regular': ('verdana.ttf',), 'bold': ('verdanab.ttf',)},
+    'Microsoft YaHei': {'regular': ('msyh.ttc', 'msyh.ttf'), 'bold': ('msyhbd.ttc', 'msyhbd.ttf')},
+    'SimSun': {'regular': ('simsun.ttc',), 'bold': ('simsunb.ttf',)},
+    'SimHei': {'regular': ('simhei.ttf',)},
+    'Noto Sans CJK SC': {'regular': ('NotoSansCJK-Regular.ttc', 'NotoSansSC-Regular.otf'),
+                         'bold': ('NotoSansCJK-Bold.ttc', 'NotoSansSC-Bold.otf')},
+    'Liberation Sans': {'regular': ('LiberationSans-Regular.ttf', 'liberation/LiberationSans-Regular.ttf'),
+                        'bold': ('LiberationSans-Bold.ttf', 'liberation/LiberationSans-Bold.ttf')},
+    'DejaVu Sans': {'regular': ('DejaVuSans.ttf', 'dejavu/DejaVuSans.ttf'),
+                    'bold': ('DejaVuSans-Bold.ttf', 'dejavu/DejaVuSans-Bold.ttf')},
+    'Helvetica': {'regular': ('Helvetica.ttc',)},
+}
+
+
+def _discover_platform_fonts() -> Dict[str, Dict[str, str]]:
+    """Map known family names to installed files, searching every font directory."""
+    directories = font_search_dirs()
     fonts = {}
-    font_dir = Path('C:/Windows/Fonts')
-
-    if not font_dir.exists():
-        return fonts
-
-    # Common fonts with known naming patterns
-    font_patterns = {
-        'Arial': {'regular': 'arial.ttf', 'bold': 'arialbd.ttf', 'italic': 'ariali.ttf'},
-        'Calibri': {'regular': 'calibri.ttf', 'bold': 'calibrib.ttf', 'italic': 'calibrii.ttf'},
-        'Times New Roman': {'regular': 'times.ttf', 'bold': 'timesbd.ttf', 'italic': 'timesi.ttf'},
-        'Georgia': {'regular': 'georgia.ttf', 'bold': 'georgiab.ttf', 'italic': 'georgiai.ttf'},
-        'Verdana': {'regular': 'verdana.ttf', 'bold': 'verdanab.ttf', 'italic': 'verdanai.ttf'},
-    }
-
-    for family, variants in font_patterns.items():
+    for family, variants in FONT_FILES.items():
         family_fonts = {}
-        for variant, filename in variants.items():
-            font_path = font_dir / filename
-            if font_path.exists():
-                family_fonts[variant] = str(font_path)
-
-        if 'regular' in family_fonts:  # At least regular variant must exist
+        for variant, names in variants.items():
+            for name in names:
+                found = None
+                for directory in directories:
+                    candidate = directory/name
+                    if candidate.is_file():
+                        found = str(candidate)
+                        break
+                if found:
+                    family_fonts[variant] = found
+                    break
+        if 'regular' in family_fonts:
             fonts[family] = family_fonts
-
     return fonts
+
+
+def _discover_windows_fonts() -> Dict[str, Dict[str, str]]:
+    return _discover_platform_fonts()
 
 
 def _discover_macos_fonts() -> Dict[str, Dict[str, str]]:

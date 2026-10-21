@@ -6,21 +6,21 @@ This guide helps Claude Code and other AI agents generate usable, visually appea
 
 ## Current System Status
 
-✅ **Working**: Core pipeline, all 59 tests passing  
-⚠️ **Partially Fixed**: Text overflow (auto-repair implemented)  
-❌ **Known Issues**: Asset path handling, font portability, complex workflow
+✅ **Working**: Core pipeline, all 64 tests passing, OfficeCLI write + QA  
+✅ **Fixed**: Text overflow (geometry gates + hugged boxes), font portability, absolute project paths  
+⚠️ **Remaining**: the macOS-only PowerPoint native review gate before `final.pptx`
 
 ## Prerequisites
 
 ```bash
-# 1. Install Python dependencies
+# 1. Install Python dependencies (no torch: the layout model was removed)
 cd Total-pipe
-pip install --user -r requirements-v26.txt
+pip install --user -r requirements.txt
 
 # 2. Verify installation
-python -c "import lxml, torch, PIL; print('✓ All dependencies installed')"
+python -c "import lxml, pdfplumber, PIL; print('✓ All dependencies installed')"
 
-# 3. Check OfficeCLI availability (optional for testing)
+# 3. Check OfficeCLI availability (required to write a PPTX)
 officecli --version || echo "OfficeCLI not in PATH"
 
 # 4. Run tests
@@ -46,7 +46,9 @@ Registry    + Answers                     Briefs    IR
 
 **Problem**: Generated slides have text that doesn't fit, cutting off content.
 
-**Root Cause**: v26 layout model underestimates vertical space requirements.
+**Root Cause (historical)**: The removed v26 layout model underestimated vertical space. The
+deterministic packer now sizes every text box from measured glyph widths and enforces
+`CONTENT_CAPACITY`, `FONT_BELOW_MINIMUM` and `ORPHAN_LINE` before a box is accepted.
 
 **Solution Implemented**: Automatic overflow repair in `deck_compiler/overflow_repair.py`
 - Detects overflow >25% of available space
@@ -89,38 +91,26 @@ build/
     [hash].jpg
 ```
 
-### Issue 3: Font Path Portability ❌ MANUAL FIX REQUIRED
+### Issue 3: Font Path Portability ✅ FIXED
 
-**Problem**: Example Deck IRs use macOS font paths (`/System/Library/Fonts/...`).
+**Problem (historical)**: Example Deck IRs named machine-specific font paths such as
+`/System/Library/Fonts/Supplemental/Arial.ttf` or `C:/Windows/Fonts/arial.ttf`, so a deck built on
+one machine failed on another.
 
-**Workaround** - Use platform-appropriate paths:
+**Current behaviour**: the theme names a font *file*, not a path. `deck_compiler.fonts
+.resolve_theme_fonts` looks in the deck directory, then `TOTALPIPE_FONT_DIR`, then the platform font
+directories. When the chosen file cannot draw the deck's characters, it substitutes a face that can
+and records `FONT_SUBSTITUTED` (REVIEW) with the characters that forced it.
 
-**Windows**:
 ```json
 "theme": {
     "font_family": "Arial",
-    "font_file": "C:/Windows/Fonts/arial.ttf",
-    "bold_font_file": "C:/Windows/Fonts/arialbd.ttf"
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf"
 }
 ```
 
-**macOS**:
-```json
-"theme": {
-    "font_family": "Arial",
-    "font_file": "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "bold_font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-}
-```
-
-**Linux**:
-```json
-"theme": {
-    "font_family": "Liberation Sans",
-    "font_file": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "bold_font_file": "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-}
-```
+An absolute path still works if it exists; it is simply no longer required.
 
 ### Issue 4: Complex Multi-Tool Workflow ⚠️ GUIDANCE PROVIDED
 
@@ -246,21 +236,23 @@ cd Total-pipe
 
 # Compile only (no PPTX generation)
 python -m deck_compiler compile \
-  --ir /absolute/path/to/deck_ir.json \
-  --out /absolute/path/to/build \
-  --layout-provider v26
+  --ir examples/research.deck_ir.json \
+  --out ../builds/my-deck \
+  --layout-provider packer
 
-# Full build (with PPTX)
+# Full build (writes the PPTX through OfficeCLI)
 python -m deck_compiler build \
-  --ir /absolute/path/to/deck_ir.json \
-  --out /absolute/path/to/build \
-  --layout-provider v26 \
-  --officecli officecli \
-  --skip-native
+  --ir examples/research.deck_ir.json \
+  --out ../builds/my-deck \
+  --layout-provider packer \
+  --officecli officecli
 
 # Check QA report
-cat /absolute/path/to/build/qa_report.json | python -m json.tool
+cat ../builds/my-deck/qa_report.json | python -m json.tool
 ```
+
+`--layout-provider` accepts `packer` (default), `compiler` (templates only) or
+`module:factory` for an external provider; see `Total-pipe/docs/layout-provider.md`.
 
 ## Error Recovery Decision Tree
 
@@ -437,9 +429,9 @@ Returns: `{ "status": "success", "output_path": "...", "slide_count": N }`
 ### totalpipe_compile
 ```json
 {
-  "ir": "/absolute/path/to/deck_ir.json",
-  "out": "/absolute/path/to/build",
-  "layout_provider": "v26"  // or "deterministic"
+  "ir": "examples/research.deck_ir.json",
+  "out": "builds/my-deck",
+  "layout_provider": "packer"  // or "compiler", or "module:factory"
 }
 ```
 Returns: QA report summary (status, counts, report path)
@@ -447,18 +439,18 @@ Returns: QA report summary (status, counts, report path)
 ### totalpipe_build
 ```json
 {
-  "ir": "/absolute/path/to/deck_ir.json",
-  "out": "/absolute/path/to/build",
-  "layout_provider": "v26",
-  "officecli": "officecli"  // or absolute path
+  "ir": "examples/research.deck_ir.json",
+  "out": "builds/my-deck",
+  "layout_provider": "packer",
+  "officecli": "officecli"  // or a path to the executable
 }
 ```
-Returns: QA report + candidate PPTX path
+Returns: QA report + staging PPTX path
 
 ### totalpipe_review
 ```json
 {
-  "out": "/absolute/path/to/build",
+  "out": "builds/my-deck",
   "officecli": "officecli"
 }
 ```
@@ -539,8 +531,8 @@ A usable, visually appealing presentation has:
 **Read these first**:
 1. `Total-pipe/docs/USAGE.zh-CN.md` - Full Chinese usage guide
 2. `Total-pipe/docs/deck-compiler-v2.md` - Compiler contracts
-3. `Total-pipe/pwf2rpa/README.md` - Story conversion details
-4. `CONTENT_CAPACITY_ANALYSIS.md` - Overflow problem deep-dive
+3. `Total-pipe/docs/layout-provider.md` - Layout provider contract and measurements
+4. `Total-pipe/pwf2rpa/README.md` - Story conversion details
 
 **Check these for errors**:
 - `build/qa_report.json` - Structured validation results
@@ -548,8 +540,8 @@ A usable, visually appealing presentation has:
 - `build/layout_provider.json` - Per-slide layout source
 
 **Examples**:
-- `Total-pipe/examples/research.deck_ir.json` - Minimal deck IR
-- `builds/graphene-v26/` - Real build artifacts (partial)
+- `Total-pipe/examples/research.deck_ir.json` - Minimal two-page deck
+- `Total-pipe/examples/demo_deck/` - Six-page deck with figures and its measurement script
 
 ## Summary
 

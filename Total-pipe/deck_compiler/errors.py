@@ -238,7 +238,7 @@ class RPAValidationError(RecoverableError):
 
 
 class LayoutProviderError(RecoverableError):
-    """Layout provider (v26) failed."""
+    """A layout provider failed to propose a usable body layout."""
 
     def __init__(
         self,
@@ -249,10 +249,12 @@ class LayoutProviderError(RecoverableError):
             f"Layout provider '{provider_name}' failed:\n"
             f"Error: {error_message}\n\n"
             f"Solutions:\n"
-            f"1. Use deterministic compiler: --layout-provider deterministic\n"
-            f"2. Check model checkpoint exists and is valid\n"
-            f"3. Verify PyTorch installation: python -c 'import torch'\n"
-            f"4. Check models/totalpipe_content_v26.pt SHA-256 hash"
+            f"1. Use the bundled packer: --layout-provider packer\n"
+            f"2. Use the compiler templates alone: --layout-provider compiler\n"
+            f"3. For an external provider, check that the module:factory spec resolves and the "
+            f"factory returns an object with propose(requests)\n"
+            f"4. A provider never blocks the build: the affected page falls back to the compiler "
+            f"templates and the fallback is recorded in layout_provider.json"
         )
 
         super().__init__(

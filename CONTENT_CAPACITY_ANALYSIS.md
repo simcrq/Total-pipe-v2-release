@@ -1,5 +1,11 @@
 # Content Capacity Problem Analysis
 
+> **Historical document (2026-10).** This analysis was written against the v26 diffusion layout
+> model, which has since been removed together with its weights and the torch dependency. The
+> default layout provider is now the deterministic `packer`, and box heights are derived from
+> measured glyph widths, so the retraining suggestions below no longer apply. Kept as a record of
+> the decisions that led here.
+
 ## Problem Statement
 
 The Total-pipe v3 suite successfully generates evidence-based and correctly formatted PPTX presentations, but **fails to correctly place a sufficient amount of content and PPT slides as needed to make research group meeting presentations visually appealing**. The generated presentations have widespread text overflow issues that make them unsuitable for actual use.

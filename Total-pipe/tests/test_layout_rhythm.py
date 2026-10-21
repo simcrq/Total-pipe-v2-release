@@ -1,4 +1,4 @@
-"""Small geometry regressions for the v26 proposal contract."""
+"""Small geometry regressions for the layout provider proposal contract."""
 import unittest
 
 from totalpipe_layout.contracts import check, snap_rhythm

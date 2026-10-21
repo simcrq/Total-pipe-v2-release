@@ -3,8 +3,8 @@
   "deck_id": "distributed-arrow-list-reference",
   "theme": {
     "font_family": "Arial",
-    "font_file": "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "bold_font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
     "foreground": "#142735",
     "background": "#FFFFFF"
   },
@@ -16,7 +16,9 @@
         "title": "Parallel findings need readable vertical rhythm",
         "purpose": "Reference the distributed arrow-list treatment",
         "takeaway": "Keep each claim intact and use spacing to expose the argument structure.",
-        "evidence_refs": ["layout-reference"],
+        "evidence_refs": [
+          "layout-reference"
+        ],
         "caveats": [],
         "speaker_notes": "Synthetic layout reference; no scientific claim is asserted."
       },

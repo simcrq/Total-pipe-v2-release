@@ -1,9 +1,13 @@
+> **Historical.** The v26 diffusion experiment described here has been removed from the code
+> base (2026-10-21). See `docs/layout-provider.md` for the interface that replaced it and for the
+> measured comparison between the bundled packer and the compiler templates.
+
 # Total-pipe v3 实验接入
 
 新增 `--layout-provider v26`；默认 `deterministic` 保持 v2 行为。
 模型、推理源码与编译器均位于此实验目录，不依赖训练仓库源码或插件缓存。
 当前机器复用已安装 PyTorch 的 Python 运行时：
-`F:/Workbuddy/ppt-generator/layoutdiffusion_group_meeting_pptbench/.venv/Scripts/python.exe`。
+`python`（Python 3.10+，依赖见 `requirements.txt`）。
 
 ## v3.2 可选流程意图
 
@@ -19,10 +23,10 @@ v26 检查点保持不变；既有节奏校正把候选框约束为同列等距�
 在 Total-pipe 目录执行：
 
 ```powershell
-$python = 'F:/Workbuddy/ppt-generator/layoutdiffusion_group_meeting_pptbench/.venv/Scripts/python.exe'
-& $python -m deck_compiler build --ir E:/pptx_re/Test1/total_pipe_fail_build/deck_ir.json `
+$python = "python"
+& $python -m deck_compiler build --ir <deck_ir.json> `
   --out ../builds/graphene-v26 --layout-provider v26 --layout-candidates 32 `
-  --layout-seed 20261007 --officecli C:/Users/Beibei/AppData/Local/OfficeCLI/officecli.exe --skip-native
+  --officecli <officecli> --skip-native
 ```
 
 ## 边界与回退
@@ -54,7 +58,7 @@ $python = 'F:/Workbuddy/ppt-generator/layoutdiffusion_group_meeting_pptbench/.ve
 
 ```powershell
 & $python -m deck_compiler review-officecli --out ../builds/graphene-v26 `
-  --officecli C:/Users/Beibei/AppData/Local/OfficeCLI/officecli.exe --render native
+  --officecli <officecli> --render native
 ```
 
 该命令重新验证 schema/结构、读取 issues/text、通过 OfficeCLI 导出每页截图，

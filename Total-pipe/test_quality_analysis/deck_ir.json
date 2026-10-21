@@ -3,8 +3,8 @@
   "theme": {
     "foreground": "#142735",
     "background": "#FFFFFF",
-    "font_file": "C:\\Windows\\Fonts\\arial.ttf",
-    "bold_font_file": "C:\\Windows\\Fonts\\arialbd.ttf"
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf"
   },
   "slides": [
     {

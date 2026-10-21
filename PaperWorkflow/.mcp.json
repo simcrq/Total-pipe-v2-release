@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "paperworkflow": {
-      "command": "C:\\Python312\\python.exe",
+      "command": "python",
       "args": [
         "mcp_server.py"
       ],

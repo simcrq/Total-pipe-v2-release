@@ -1,6 +1,6 @@
 # Total-pipe v3
 
-本目录复用完整 v2 科研链路，新增 v26 布局模型与 agent MCP 工具。PaperWorkflow、Story、pwf2rpa、RPA 规划职责保持不变；编译器约束最终布局，OfficeCLI 写入 PPTX。
+本目录复用完整 v2 科研链路，提供 agent MCP 工具。**v26 扩散模型已于 2026-10-21 完全移除**，改为内置确定性打包器 + 保留的模型接口（见 [布局提供方接口](Total-pipe/docs/layout-provider.md)）。PaperWorkflow、Story、pwf2rpa、RPA 规划职责保持不变；编译器约束最终布局，OfficeCLI 写入 PPTX。
 
 ## v3.1-pwf2rpa
 
@@ -23,19 +23,19 @@ Story 之后可由独立的 DesignIntentPlanner 写 `design_intent.json`，只�
 
 ## v3.1 布局节奏修正
 
-同一 deck 的标题、takeaway 和正文使用统一 frame；有页面请求 `spacious` 时整套默认采用 `spacious`，也可在 Deck IR 顶层用 `presentation.frame_variant` 明确指定。`figure-parameters` 的同级 block 按原顺序形成纵向组，v26 候选经 24 px 等距校正和容量复查；图像与图注保持 12 px。逐页实际布局来源见 `layout_provider.json` 和派生的 `plan_to_layout.json`，详见 [v3 实验说明](Total-pipe/docs/v3-experiment.md)。
+同一 deck 的标题、takeaway 和正文使用统一 frame；有页面请求 `spacious` 时整套默认采用 `spacious`，也可在 Deck IR 顶层用 `presentation.frame_variant` 明确指定。`figure-parameters` 的同级 block 按原顺序形成纵向组，候选布局经 24 px 等距校正和容量复查；图像与图注保持 12 px。逐页实际布局来源见 `layout_provider.json` 和派生的 `plan_to_layout.json`，详见 [v3 实验说明](Total-pipe/docs/v3-experiment.md)。
 
 单图、无独立 block 标签的四步流程（从 `method` 经 `process-step` 到 `result`）会在右侧增加编号和纵向连线，让已等距的内容保留清晰的阅读顺序；原文与证据绑定不变。
 
 ## Agent 入口
 
 - Skill：`Total-pipe/skills/total-pipe-deck/SKILL.md`
-- MCP：`Total-pipe/.mcp.json`（本机可执行配置，使用已装好 torch 的 Python）
+- MCP：`Total-pipe/.mcp.json`（本机可执行配置，使用已装好 Pillow/lxml 的 Python）
 - 服务：`Total-pipe/deck_compiler/mcp_server.py`
 - 工具：`totalpipe_compile`、`totalpipe_build`、`totalpipe_review`，并保留 pwf2rpa 原有 5 个工具。
 
-给 build 传入绝对 `ir`、`out` 路径即可，默认 v26。可选 `layout_provider="deterministic"`；OfficeCLI 不在 PATH 时传 `officecli` 绝对路径。返回 JSON QA 与候选文件路径。review 为可选步骤，不自动晋级 final。
+给 build 传入绝对 `ir`、`out` 路径即可，默认 `packer`；可选 `layout_provider="compiler"` 或 `module:factory`；OfficeCLI 不在 PATH 时传 `officecli` 绝对路径。返回 JSON QA 与候选文件路径。review 为可选步骤，不自动晋级 final。
 
-移动到其他机器时，安装 `Total-pipe/requirements-v26.txt` 和 OfficeCLI，并更新 `.mcp.json` 的 Python、服务脚本路径。模型文件随项目提供。
+移动到其他机器时，安装 `Total-pipe/requirements.txt`（Pillow/lxml/pdfplumber，无 torch）和 OfficeCLI，并更新 `.mcp.json` 的 Python、服务脚本路径。字体不再写死绝对路径：主题里的文件名会先在 deck 目录、再在系统字体目录查找，缺失时替换并报 REVIEW，可用 `TOTALPIPE_FONT_DIR` 指定字体目录。
 
-原始 v2 说明见 RELEASE_README.md；案例产物只是 smoke test，不是 v3 的主体。
+历史报告（IMPLEMENTATION_SUMMARY 等）可能仍提到已移除的 v26 模型。原始 v2 说明见 RELEASE_README.md；案例产物只是 smoke test，不是 v3 的主体。

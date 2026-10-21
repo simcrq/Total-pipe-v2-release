@@ -1,0 +1,72 @@
+{
+  "figure_fixture": [
+    {
+      "provider": "compiler",
+      "pages": 2,
+      "counts": {
+        "packed": 0,
+        "fallback": 2,
+        "rejected": 0
+      },
+      "slack_mean": 2.84,
+      "slack_max": 3.97,
+      "boxes": 5,
+      "void_max": 0.067,
+      "orphans": 0,
+      "min_font_pt": 28,
+      "fail": [
+        "SCIENTIFIC_PANEL_TOO_SMALL"
+      ]
+    },
+    {
+      "provider": "packer",
+      "pages": 2,
+      "counts": {
+        "packed": 2,
+        "fallback": 0,
+        "rejected": 0
+      },
+      "slack_mean": 1.19,
+      "slack_max": 1.23,
+      "boxes": 5,
+      "void_max": 0.047,
+      "orphans": 0,
+      "min_font_pt": 28,
+      "fail": []
+    }
+  ],
+  "research_example": [
+    {
+      "provider": "compiler",
+      "pages": 2,
+      "counts": {
+        "packed": 0,
+        "fallback": 2,
+        "rejected": 0
+      },
+      "slack_mean": 2.76,
+      "slack_max": 3.43,
+      "boxes": 5,
+      "void_max": null,
+      "orphans": 1,
+      "min_font_pt": 28,
+      "fail": []
+    },
+    {
+      "provider": "packer",
+      "pages": 2,
+      "counts": {
+        "packed": 2,
+        "fallback": 0,
+        "rejected": 0
+      },
+      "slack_mean": 0.85,
+      "slack_max": 1.15,
+      "boxes": 5,
+      "void_max": null,
+      "orphans": 0,
+      "min_font_pt": 25,
+      "fail": []
+    }
+  ]
+}

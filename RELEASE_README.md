@@ -10,6 +10,15 @@ This directory is a source snapshot for release preparation. It contains the com
 - `research-ppt-assistant/`: scientific content normalization, slide planning, layout library, preflight, and visual-quality source.
 - `acceptance/Test3/`: release acceptance report, canonical Deck IR, Story/RPA plan, baseline final PPTX, revised `final_msyh.pptx` with 微软雅黑, the PowerPoint-polished `final_msyh_decorated.pptx` variant, PowerPoint native PDF, unified QA, metrics, state, and review acknowledgement.
 
+## Post-release change (2026-10-21)
+
+The v26 layout diffusion model was removed from `Total-pipe/`: its package, checkpoint, torch
+dependency and CLI flags are gone, and the default body-layout provider is now the bundled
+deterministic packer. The provider interface it used is kept and documented in
+`Total-pipe/docs/layout-provider.md`, so a model can be plugged back in without touching the
+compiler. Font paths in the theme are resolved against the platform font directories instead of
+being expected to exist verbatim, which makes a deck authored on another machine compile.
+
 ## Security and privacy preparation
 
 - `PaperWorkflow/config.yaml` was intentionally excluded because it contains a configured MinerU credential.
@@ -19,7 +28,7 @@ This directory is a source snapshot for release preparation. It contains the com
 
 ## Acceptance status
 
-- Deck Compiler: 25 tests passed
+- Deck Compiler: 64 tests passed (2026-10-21, after the model removal)
 - pwf2rpa: 68 tests passed
 - Research PPT Assistant: 289 tests passed
 - Final deck: 9 slides, 0 FAIL

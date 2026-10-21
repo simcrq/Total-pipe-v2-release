@@ -1,0 +1,168 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "totalpipe-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF"
+  },
+  "assets": {
+    "quality": {"path": "figures/fig1_quality.png", "source_figure": "1"},
+    "stages": {"path": "figures/fig2_stages.png", "source_figure": "2"},
+    "provider": {"path": "figures/fig3_provider.png", "source_figure": "3"}
+  },
+  "slides": [
+    {
+      "id": "cover",
+      "semantic": {
+        "title": "把论文变成可交付的组会 PPT",
+        "purpose": "汇报 Total-pipe v2 的 MVP 形态与实测质量",
+        "takeaway": "扩散模型已完全移除，排版质量反而更好：文本框贴合度从 2.84× 降到 1.19×。",
+        "evidence_refs": ["tools/demo_measurements.py", "tests/test_packer_quality.py"],
+        "caveats": ["数据来自仓库内的双图夹具，不代表任意论文页面的排版质量。"],
+        "speaker_notes": "开场先给结论：模型删掉之后质量没有下降，因为可测的改进本来就来自几何规则。"
+      },
+      "composition": {
+        "archetype": "cover-hero",
+        "blocks": [
+          {"id": "c1", "component": "body", "text": "流水线：Deck IR → 布局提供方 → 编译器 → OfficeCLI → QA 门禁。"},
+          {"id": "c2", "component": "source", "text": "本仓库可复现：examples/demo_deck/"}
+        ],
+        "figure_refs": [
+          {"asset_id": "quality", "source_figure": "1", "panel_count": 1,
+           "caption": "Fig. 1. 双图夹具上的文本框贴合度：模板 2.84×，打包器 1.19×。",
+           "alt": "文本框贴合度柱状图"}
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "metrics",
+      "semantic": {
+        "title": "四项实测结果",
+        "purpose": "用可复算的数字替代“门禁全绿”式的自我评价",
+        "takeaway": "同一套门禁下，打包器在每一项上都不劣于模板，并且没有一次编译失败。",
+        "evidence_refs": ["examples/demo_deck/measurements.json"],
+        "caveats": [],
+        "speaker_notes": "四项都是复跑 tools/demo_measurements.py 得到的，不是手抄的。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {"id": "m1", "component": "metric", "label": "1.19×",
+           "text": "文本框贴合度均值，模板是 2.84×；1.00 表示框与文字恰好等高。"},
+          {"id": "m2", "component": "metric", "label": "0.047",
+           "text": "图框空洞比上限，门禁上限是 0.15；数值越低，图框越贴合图片本身。"},
+          {"id": "m3", "component": "metric", "label": "0",
+           "text": "编译 FAIL 数为 0；同样两页，模板路径在 4:1 宽图上报过图面过小。"},
+          {"id": "m4", "component": "metric", "label": "64",
+           "text": "单元测试通过，另有 2 项按环境跳过，覆盖契约、门禁与写入。"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "evidence",
+      "semantic": {
+        "title": "证据与假设：模型是不是必需的",
+        "purpose": "把“好看”拆成可测量项，分清证据和主张",
+        "takeaway": "可测的改进全部来自确定性规则；学习式模型目前只是候选，还没有对照证据。",
+        "evidence_refs": ["builds/", "tools/layout_quality_report.py"],
+        "caveats": ["这里只比较了本仓库的夹具页面，样本量小。"],
+        "speaker_notes": "左侧是能复算的证据，右侧是尚未验证的假设，两者不能互相替代。"
+      },
+      "composition": {
+        "archetype": "evidence-hypothesis",
+        "blocks": [
+          {"id": "ev", "component": "direct-evidence",
+           "text": "贴合度、图框空洞、孤行这三项的改善，全部来自网格对齐、同行等高和按比例收图框；没有一项依赖学习式模型。"},
+          {"id": "hy", "component": "hypothesis",
+           "text": "学习式提供方可能在没见过的版式上更好，但这需要同源评测与人工打分才能确认，目前还没有这样的证据。"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "pipeline",
+      "semantic": {
+        "title": "六个交接点，一个事实来源",
+        "purpose": "说明每一段谁负责，以及语义从哪一页开始冻结",
+        "takeaway": "deck_ir.json 之后只有编译器派生，下游不得回写语义。",
+        "evidence_refs": ["docs/layout-provider.md"],
+        "caveats": [],
+        "speaker_notes": "强调 Deck IR 之后是确定性阶段，这也是能删掉模型的前提。"
+      },
+      "composition": {
+        "archetype": "process-flow",
+        "blocks": [
+          {"id": "s1", "component": "method", "text": "论文 PDF：只读输入，原图按图号入库。"},
+          {"id": "s2", "component": "process-step", "text": "证据：PaperWorkflow 抽出 EV 编号与段落。"},
+          {"id": "s3", "component": "process-step", "text": "故事与规划：Story Planner、RPA 定页面意图。"},
+          {"id": "s4", "component": "result", "text": "编译与验收：Deck IR → PPTX → QA 报告。"}
+        ],
+        "figure_refs": [
+          {"asset_id": "stages", "source_figure": "2", "panel_count": 1,
+           "caption": "Fig. 2. 从论文 PDF 到 PPTX 的六个交接点。",
+           "alt": "流水线阶段示意图"}
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "provider",
+      "semantic": {
+        "title": "提供方边界：一个函数，三个槽位",
+        "purpose": "说清楚“保留模型接口”到底保留了什么",
+        "takeaway": "提供方只能给每个单元一个 bbox，内容、画框、门禁和写入都归编译器。",
+        "evidence_refs": ["deck_compiler/layout_provider.py"],
+        "caveats": [],
+        "speaker_notes": "这是删模型时保留的唯一耦合点，也是把模型接回来的唯一入口。"
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {"id": "p1", "component": "parameter", "label": "契约",
+           "text": "propose(requests) 只回答每单元一个 bbox。"},
+          {"id": "p2", "component": "parameter", "label": "校验",
+           "text": "提案先过 check()，不过则整页回退模板。"},
+          {"id": "p3", "component": "parameter", "label": "溯源",
+           "text": "layout_provider.json 记录状态、哈希与拒绝原因。"}
+        ],
+        "figure_refs": [
+          {"asset_id": "provider", "source_figure": "3", "panel_count": 1,
+           "caption": "Fig. 3. 三种内置提供方共用同一个 propose() 契约。",
+           "alt": "提供方接口示意图"}
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "conclusions",
+      "semantic": {
+        "title": "结论",
+        "purpose": "给组会一个可执行的下一步",
+        "takeaway": "流水线现在能自己排出可交付的 PPT，模型是可替换件而不是依赖。",
+        "evidence_refs": ["qa_report.json", "final.pptx"],
+        "caveats": ["Linux 与 macOS 上的字体回退尚未在同一版本上复核。"],
+        "speaker_notes": "下一步是把打包器的覆盖率补齐，让更多版式不再回退模板。"
+      },
+      "composition": {
+        "archetype": "three-conclusions",
+        "blocks": [
+          {"id": "x1", "component": "conclusion",
+           "text": "链路更短：没有 torch、没有权重、没有采样参数，装好就能跑。"},
+          {"id": "x2", "component": "conclusion",
+           "text": "质量更高：贴合度与图框空洞由确定性规则保证，实测优于模板。"},
+          {"id": "x3", "component": "conclusion",
+           "text": "接口仍在：新模型实现 propose() 即可接回，编译器与门禁不动。"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

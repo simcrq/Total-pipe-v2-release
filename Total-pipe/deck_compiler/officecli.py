@@ -152,16 +152,32 @@ def render(layout_path, output_path, executable='officecli'):
     if not output_path.exists():
         raise ValueError('OfficeCLI did not write candidate.pptx')
     validation = _run(executable, 'validate', output_path)
-    if (validation.get('data') or {}).get('count') != 0:
+    if schema_error_count(validation) != 0:
         raise ValueError(f'OfficeCLI schema validation did not pass: {validation.get("data")}')
     return batch_path
 
 
+def schema_error_count(payload):
+    """How many OpenXML schema errors OfficeCLI reported.
+
+    OfficeCLI 1.0.158 answers ``validate --json`` with a human message instead of a count object,
+    so a successful envelope is the zero. Older builds return ``data.count``; both are accepted.
+    """
+    data = payload.get('data')
+    if isinstance(data, dict):
+        count = data.get('count')
+        if isinstance(count, int):
+            return count
+    if payload.get('success') is True:
+        return 0
+    raise ValueError(f'OfficeCLI validate returned an unrecognised report: {payload}')
+
+
 def inspect(pptx_path, executable='officecli'):
     """Read OfficeCLI's supplemental issue report from the flushed staging PPTX."""
-    validation = _run(executable, 'validate', pptx_path).get('data') or {}
-    if validation.get('count') != 0:
-        raise ValueError(f'OfficeCLI staging schema validation did not pass: {validation}')
+    validation = _run(executable, 'validate', pptx_path)
+    if schema_error_count(validation) != 0:
+        raise ValueError(f'OfficeCLI staging schema validation did not pass: {validation.get("data")}')
     data = _run(executable, 'view', pptx_path, 'issues').get('data')
     if not isinstance(data, dict) or not isinstance(data.get('issues'), list):
         raise ValueError('OfficeCLI view issues returned an invalid JSON report')

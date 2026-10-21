@@ -17,15 +17,15 @@ This is the **essential guide** for AI agents (Claude Code, etc.) to generate re
 ```bash
 cd Total-pipe
 
-# Install Python dependencies
-pip install --user lxml torch pdfplumber Pillow pdfminer.six
+# Install Python dependencies (the layout model was removed; no torch needed)
+pip install --user -r requirements.txt
 
 # Verify installation
-python -c "import lxml, torch, PIL; print('✓ Ready')"
+python -c "import lxml, pdfplumber, PIL; print('✓ Ready')"
 
 # Run tests
 python -m unittest discover -s tests -v
-# Expected: Ran 59 tests in ~5s - OK (skipped=2)
+# Expected: Ran 64 tests - OK (skipped=2)
 ```
 
 ---
@@ -39,19 +39,19 @@ If you already have a canonical `deck_ir.json`:
 ```bash
 cd Total-pipe
 
-# Compile and build PPTX
+# Compile and build PPTX (paths may be relative to the current directory)
 python -m deck_compiler build \
-  --ir /absolute/path/to/deck_ir.json \
-  --out /absolute/path/to/build \
-  --layout-provider v26 \
-  --skip-native
+  --ir ../examples/research.deck_ir.json \
+  --out ../builds/my-deck \
+  --layout-provider packer \
+  --officecli officecli
 
 # Check result
-cat /absolute/path/to/build/qa_report.json | grep -E "(status|FAIL|WARNING)"
+cat ../builds/my-deck/qa_report.json | grep -E "(status|FAIL|WARNING)"
 
 # View PPTX
-open /absolute/path/to/build/candidate.pptx  # macOS
-start /absolute/path/to/build/candidate.pptx  # Windows
+open ../builds/my-deck/staging.pptx   # macOS
+start ..\builds\my-deck\staging.pptx  # Windows
 ```
 
 **Success criteria**:
@@ -84,29 +84,22 @@ start /absolute/path/to/build/candidate.pptx  # Windows
 
 ### Issue 2: `FONT_UNAVAILABLE` - Can't find font
 
-**Fix**: Update deck_ir.json with correct font paths for your platform:
+**Status**: ✅ Resolved. The theme now names a font *file*, not a machine path, and the compiler
+resolves it against the deck directory, `TOTALPIPE_FONT_DIR`, and the platform font directories.
+A missing glyph range is substituted and reported as `FONT_SUBSTITUTED` (REVIEW), not a FAIL.
 
-**Windows**:
 ```json
 {
   "theme": {
     "font_family": "Arial",
-    "font_file": "C:/Windows/Fonts/arial.ttf",
-    "bold_font_file": "C:/Windows/Fonts/arialbd.ttf"
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf"
   }
 }
 ```
 
-**macOS**:
-```json
-{
-  "theme": {
-    "font_family": "Arial",
-    "font_file": "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "bold_font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-  }
-}
-```
+Point `TOTALPIPE_FONT_DIR` at extra font directories (separate with the OS path separator) when a
+deck needs a face that is not installed system-wide.
 
 ### Issue 3: Many text overflow warnings
 
@@ -233,9 +226,9 @@ Choose the right slide layout:
 {
   "tool": "totalpipe_build",
   "params": {
-    "ir": "/absolute/path/to/deck_ir.json",
-    "out": "/absolute/path/to/build",
-    "layout_provider": "v26",
+    "ir": "examples/research.deck_ir.json",
+    "out": "builds/my-deck",
+    "layout_provider": "packer",
     "officecli": "officecli"
   }
 }
@@ -246,8 +239,8 @@ Returns:
 {
   "status": "REVIEW",
   "counts": {"FAIL": 0, "WARNING": 2, "REVIEW": 1, "INFO": 3},
-  "report": "/path/to/build/qa_report.json",
-  "candidate": "/path/to/build/candidate.pptx"
+  "report": "builds/my-deck/qa_report.json",
+  "staging": "builds/my-deck/staging.pptx"
 }
 ```
 
@@ -301,8 +294,9 @@ A good presentation has:
 - `Total-pipe/README.md` - Overview
 
 **Examples**:
-- `Total-pipe/examples/research.deck_ir.json` - Minimal example
-- `builds/graphene-v26/` - Real build artifacts
+- `Total-pipe/examples/research.deck_ir.json` - Minimal two-page deck
+- `Total-pipe/examples/demo_deck/` - Six-page deck with figures, plus the measurement script behind them
+- `Total-pipe/examples/distributed-arrow-list.deck_ir.json` - Text-flow page
 
 **Problem analysis**:
 - `CONTENT_CAPACITY_ANALYSIS.md` - Deep dive on overflow issue
@@ -313,10 +307,10 @@ A good presentation has:
 ## Known Limitations
 
 ⚠️ **Complex workflow** - Full pipeline requires 6 stages across 3 projects  
-⚠️ **Manual verification** - Must open PowerPoint to check final quality  
+⚠️ **Manual verification** - Must open PowerPoint to check final quality; `final.pptx` needs the macOS native-review gate  
 ⚠️ **Asset management** - Images must be organized correctly  
-⚠️ **Font discovery** - Must provide correct paths per platform  
-⚠️ **No preview** - Can't see slides without PowerPoint (except via OfficeCLI screenshots)
+✅ **Font discovery** - Resolved: theme names a file, the compiler searches deck, `TOTALPIPE_FONT_DIR` and platform fonts  
+✅ **Preview** - `python -m deck_compiler review-officecli --out <build>` exports one PNG per page
 
 But: **All have workarounds documented in `AI_USAGE_GUIDE.md`**
 

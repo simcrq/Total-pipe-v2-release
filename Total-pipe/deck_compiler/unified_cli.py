@@ -27,7 +27,7 @@ from .fonts import discover_fonts, validate_font_path
 def generate_presentation(
     deck_ir_path: Path,
     out_dir: Path,
-    layout_provider: str = "v26",
+    layout_provider: str = "packer",
     officecli: str = "officecli",
     skip_native: bool = True,
     enable_overflow_repair: bool = True
@@ -38,7 +38,8 @@ def generate_presentation(
     Args:
         deck_ir_path: Path to canonical deck_ir.json
         out_dir: Output directory for build artifacts
-        layout_provider: "v26" or "deterministic"
+        layout_provider: "packer" (bundled deterministic), "compiler" (templates only),
+            or "module:factory" for an external provider
         officecli: OfficeCLI executable path or command
         skip_native: Skip native PowerPoint validation (dev mode)
         enable_overflow_repair: Enable automatic overflow repair
@@ -48,6 +49,7 @@ def generate_presentation(
     """
     try:
         # Validate inputs first
+        layout_provider = layout_provider or "packer"
         if not deck_ir_path.exists():
             raise RecoverableError(
                 f"Deck IR not found: {deck_ir_path}",
@@ -59,7 +61,10 @@ def generate_presentation(
         out_dir = out_dir.resolve()
 
         # Run build pipeline
-        layout_options = {'name': layout_provider}
+        layout_options = {'name': layout_provider,
+                          'plugin': None if layout_provider in ('packer', 'compiler',
+                                                                'deterministic', 'none')
+                          else layout_provider}
         qa = pipeline.build(
             deck_ir_path,
             out_dir,
@@ -129,29 +134,36 @@ def validate_inputs(
             'message': f"Expected schema_version 2.0, got {ir.get('schema_version')}"
         })
 
-    # Validate theme and fonts
+    # Validate theme and fonts. The theme may name a file from another platform: that is not an
+    # error as long as the compiler can resolve a face, so the check mirrors resolve_theme_fonts
+    # instead of requiring the literal path to exist.
     if check_fonts:
         theme = ir.get('theme', {})
         font_file = theme.get('font_file')
-        bold_font_file = theme.get('bold_font_file')
-
-        if font_file:
-            font_path = Path(font_file)
-            if not font_path.exists():
-                issues.append({
-                    'type': 'FONT_UNAVAILABLE',
-                    'severity': 'FAIL',
-                    'path': str(font_file),
-                    'message': f"Font file not found: {font_file}",
-                    'suggested_fix': validate_font_path(font_file)
-                })
-        else:
+        if not font_file:
             issues.append({
                 'type': 'FONT_MISSING',
                 'severity': 'FAIL',
                 'message': "theme.font_file not specified",
-                'suggested_fix': "Add font_file path in theme section"
+                'suggested_fix': "Add font_file in the theme section, or a bare file name such as arial.ttf"
             })
+        else:
+            from .fonts import FONT_DIRECTORY_VARIABLE, resolve_theme_fonts
+            try:
+                regular, bold, notes = resolve_theme_fonts(theme, deck_ir_path.parent)
+            except (FileNotFoundError, OSError) as error:
+                issues.append({
+                    'type': 'FONT_UNAVAILABLE',
+                    'severity': 'FAIL',
+                    'path': str(font_file),
+                    'message': str(error),
+                    'suggested_fix': (f"Install the font, or point {FONT_DIRECTORY_VARIABLE} at a "
+                                      f"directory that contains it; run 'totalpipe discover-fonts' to list faces")
+                })
+            else:
+                for note in notes:
+                    warnings.append({'type': note['rule'], 'message': note['message'],
+                                     'resolved_regular': regular, 'resolved_bold': bold})
 
     # Validate assets
     if check_assets:
@@ -198,8 +210,7 @@ def validate_inputs(
                         'suggested_fix': "Consider splitting content or using overflow repair"
                     })
 
-    # Estimate generation time
-    # v26: ~2-5s per slide, deterministic: ~0.5s per slide
+    # Estimate generation time: layout is deterministic now (~0.5s per slide), plus OfficeCLI write.
     estimated_time_seconds = estimated_slides * 3  # Conservative estimate
 
     return {
@@ -295,8 +306,10 @@ Examples:
     gen = subparsers.add_parser('generate', help='Generate PPTX from Deck IR')
     gen.add_argument('deck_ir', type=Path, help='Path to deck_ir.json')
     gen.add_argument('--out', type=Path, required=True, help='Output directory')
-    gen.add_argument('--layout-provider', choices=['v26', 'deterministic'], default='v26',
-                     help='Layout provider (default: v26)')
+    gen.add_argument('--layout-provider', default=None,
+                     help='Body layout provider: "packer" (default, bundled deterministic), '
+                          '"compiler" (compiler templates only) or "module:factory" for an '
+                          'external provider; falls back to TOTALPIPE_LAYOUT_PROVIDER')
     gen.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
     gen.add_argument('--no-overflow-repair', action='store_true',
                      help='Disable automatic overflow repair')
@@ -331,7 +344,7 @@ Examples:
         if args.command == 'generate':
             print(f"[*] Generating presentation from {args.deck_ir}")
             print(f"    Output: {args.out}")
-            print(f"    Layout provider: {args.layout_provider}")
+            print(f"    Layout provider: {args.layout_provider or 'packer (default)'}")
 
             success, pptx_path, qa = generate_presentation(
                 args.deck_ir,

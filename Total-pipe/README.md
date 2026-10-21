@@ -4,7 +4,9 @@
 
 Total-pipe 是从论文证据到可验收 PPTX 的端到端编排项目。上游负责证据与科研叙事，
 Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
-`deck_ir.json` 开始接收 v26 布局建议、校验约束并生成 PPTX。
+`deck_ir.json` 开始接收布局建议（默认来自内置确定性打包器 packer，见
+[docs/layout-provider.md](docs/layout-provider.md)）、校验约束并生成 PPTX。
+原 v26 扩散模型已移除，模型接口保留。
 
 ## 🚀 Quick Start (New Unified CLI)
 
@@ -52,7 +54,7 @@ PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa �
 - **DesignIntentPlanner（可选）**：只声明四个 Story 要点的流程关系与强调位置，不提供坐标。
 - **pwf2rpa**：验证 Story provenance，将 `answer` 转成 `takeaway`，可选 `key_points` 原顺序传给 RPA，并保留 `body` 的段落边界。
 - **Research PPT Assistant**：按完整内容和设计意图选择 Layout、绑定 Slot，输出可核对的 `layout_contract`；不生成 PPTX。
-- **Deck Compiler v3**：验证 Deck IR、约束 v26 布局建议，并通过 OfficeCLI 唯一写入 PPTX。
+- **Deck Compiler v3**：验证 Deck IR、约束布局建议，并通过 OfficeCLI 唯一写入 PPTX。
 - **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
 
 `deck_ir.json` 是编译阶段唯一可维护的页面真源。以下文件只能由编译器派生：
@@ -64,11 +66,11 @@ PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa �
 
 下游不得修改这些派生文件再回写语义。
 
-Deck IR 可在顶层声明 `"presentation": {"frame_variant": "spacious"}`（或 `default`）。省略时，只要任一页请求 `spacious`，整套使用同一个 spacious 标题、takeaway 和正文基线；否则整套为 default。编译结果在 `layout.json` 记录实际 `deck_frame_variant` 和覆盖的页码。`figure-parameters` 中按阅读顺序排列的 3–4 个 block 与一张图构成同级纵向组：v26 校正为 24 px 间距，容量允许时等高，否则依文本所需高度分配；图与图注相隔 12 px。校正后仍需通过容量、碰撞与字体检查，不通过则回退。
+Deck IR 可在顶层声明 `"presentation": {"frame_variant": "spacious"}`（或 `default`）。省略时，只要任一页请求 `spacious`，整套使用同一个 spacious 标题、takeaway 和正文基线；否则整套为 default。编译结果在 `layout.json` 记录实际 `deck_frame_variant` 和覆盖的页码。`figure-parameters` 中按阅读顺序排列的 3–4 个 block 与一张图构成同级纵向组：同一网格列内按 24 px 间距重新堆叠，容量允许时等高，否则依文本所需高度分配；图与图注相隔 12 px。校正后仍需通过容量、碰撞与字体检查，不通过则回退。
 
-若同一版型是无独立标签的四步加工流程，首项角色为 `method`、中间含 `process-step`、末项为 `result`，编译器会在文本列内加入 1–4 编号与纵向连线。编号占用的 56 px 会纳入 v26 容量检查；原 block 文本不重写，触发结果记入 `adaptation_log`。
+若同一版型是无独立标签的四步加工流程，首项角色为 `method`、中间含 `process-step`、末项为 `result`，编译器会在文本列内加入 1–4 编号与纵向连线。编号占用的 56 px 会纳入容量检查；原 block 文本不重写，触发结果记入 `adaptation_log`。
 
-v3.2 可在 Story 后另写 `design_intent.json`，用 `--story` 与 `--design-intent` 一起转换。首版只接受恰好四条 `key_points` 的纵向 `process`，没有 bbox；未提供该文件时原有流程保持兼容。RPA `layout_contract` 必须核对整组原文的 Slot Binding。映射到 Deck IR 时，用实际 block ID 写 `composition.visual_intent.members`；该硬关系不得自动拆页，容量不足时返回重规划。编译器验证成员顺序并绘制编号连线，v26 仍只提供几何建议。
+v3.2 可在 Story 后另写 `design_intent.json`，用 `--story` 与 `--design-intent` 一起转换。首版只接受恰好四条 `key_points` 的纵向 `process`，没有 bbox；未提供该文件时原有流程保持兼容。RPA `layout_contract` 必须核对整组原文的 Slot Binding。映射到 Deck IR 时，用实际 block ID 写 `composition.visual_intent.members`；该硬关系不得自动拆页，容量不足时返回重规划。编译器验证成员顺序并绘制编号连线，布局提供方仍只提供几何建议。
 
 每页的 `MODEL_PROPOSAL`、`PACKING_FALLBACK` 或 `COMPILER_FALLBACK` 可直接查 `layout_provider.json`；派生的 `plan_to_layout.json` 也记录 `layout_provider_status`，无需从 PPTX 的间距推断来源。
 
@@ -246,17 +248,13 @@ block 支持：
 
 ## Test3 验收基线
 
-源工作区的验收证据位于：
+验收证据的发布副本位于仓库根目录：
 
 ```text
-/Users/simcr/0_Project/pptx-maker/Test3/acceptance/build/
+acceptance/Test3/build/
 ```
 
-发布副本位于：
-
-```text
-Total-pipe-v2-release/acceptance/Test3/build/
-```
+（`acceptance/` 按 `.gitignore` 不随仓库分发；从原始工作区复制时保持同样的目录结构即可。）
 
 发布副本包含 baseline final、微软雅黑版本、装饰修订版本、PowerPoint PDF、
 QA 报告、metrics、state 和 review acknowledgement。当前人工装饰版不等同于

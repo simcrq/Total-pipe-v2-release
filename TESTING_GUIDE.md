@@ -34,15 +34,13 @@ python -m deck_compiler build \
 ### Option 2: Quick Test via Python
 
 ```python
-import sys
-sys.path.insert(0, 'E:/pptx_re/total-pipe-v3-experiment/Total-pipe')
-
+# Run from the repository root; no sys.path juggling needed.
 from pathlib import Path
 import json
 from deck_compiler.overflow_repair import repair_overflow, overflow_summary
 
 # Load existing build artifacts
-build_dir = Path('../builds/graphene-v26')
+build_dir = Path('builds/my-deck')
 ir = json.loads((build_dir / 'deck_ir.json').read_text(encoding='utf-8'))
 layout = json.loads((build_dir / 'layout.json').read_text(encoding='utf-8'))
 qa_report = json.loads((build_dir / 'qa_report.json').read_text(encoding='utf-8'))

@@ -47,12 +47,14 @@ def locked(out):
 
 def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True):
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
-    if layout_options and layout_options.get('name') == 'v26':
+    provider_name = (layout_options or {}).get('name', 'compiler')
+    if provider_name not in ('compiler', 'deterministic', 'none') or (layout_options or {}).get('plugin'):
         try:
-            from .layout_provider import compile_v26
-            layout, issues = compile_v26(ir_path, checkpoint=layout_options.get('checkpoint'),
-                candidates=layout_options.get('candidates', 32), seed=layout_options.get('seed', 20261007))
-        except (ValueError, OSError, ImportError, RuntimeError) as error:
+            from .layout_provider import compile_with_provider, load_provider
+            provider = load_provider((layout_options or {}).get('plugin') or provider_name,
+                                     (layout_options or {}).get('totalpipe_root'))
+            layout, issues = compile_with_provider(ir_path, provider)
+        except (ValueError, OSError, ImportError, RuntimeError, TypeError) as error:
             layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
     else:
         layout, issues = compile_deck(ir, ir_path.parent)
@@ -82,17 +84,19 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                 if was_modified:
                     # Recompile with the repaired IR that has additional slides
                     ir = repaired_ir
-                    if layout_options and layout_options.get('name') == 'v26':
-                        # Re-run v26 on the new slide count
+                    if layout_options and (layout_options.get('plugin') or
+                                           layout_options.get('name', 'compiler') not in
+                                           ('compiler', 'deterministic', 'none')):
+                        # Re-run the provider on the new slide count
                         temp_ir_path = out / 'deck_ir_repaired.json'
                         write_json(temp_ir_path, ir)
                         try:
-                            from .layout_provider import compile_v26
-                            layout, issues = compile_v26(temp_ir_path,
-                                checkpoint=layout_options.get('checkpoint'),
-                                candidates=layout_options.get('candidates', 32),
-                                seed=layout_options.get('seed', 20261007))
-                        except (ValueError, OSError, ImportError, RuntimeError) as error:
+                            from .layout_provider import compile_with_provider, load_provider
+                            provider = load_provider(layout_options.get('plugin') or
+                                                     layout_options.get('name'),
+                                                     layout_options.get('totalpipe_root'))
+                            layout, issues = compile_with_provider(temp_ir_path, provider)
+                        except (ValueError, OSError, ImportError, RuntimeError, TypeError) as error:
                             layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
                         temp_ir_path.unlink(missing_ok=True)
                     else:

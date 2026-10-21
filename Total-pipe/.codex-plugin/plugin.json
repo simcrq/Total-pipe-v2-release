@@ -1,7 +1,7 @@
 {
   "name": "total-pipe-v3",
-  "version": "3.2.0+codex.20260929123814",
-  "description": "Research presentation pipeline with v26 layout proposals, compiler constraints and OfficeCLI output.",
+  "version": "3.3.0+codex.20261021203000",
+  "description": "Research presentation pipeline: Deck IR, pluggable layout providers, geometric gates and OfficeCLI output.",
   "author": {
     "name": "Total-pipe"
   },
@@ -9,8 +9,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Total-pipe v3",
-    "shortDescription": "Agent tools for evidence-grounded decks with learned layouts.",
-    "longDescription": "Research presentation pipeline with v26 layout proposals, compiler constraints and OfficeCLI output.",
+    "shortDescription": "Agent tools for evidence-grounded decks with deterministic layout.",
+    "longDescription": "Research presentation pipeline with pluggable layout providers (packer, compiler or module:factory), compiler-owned geometry and OfficeCLI output.",
     "developerName": "Total-pipe",
     "category": "Productivity",
     "capabilities": [
@@ -23,7 +23,7 @@
     "defaultPrompt": [
       "Turn this research paper into a presentation deck.",
       "Run the Total-pipe workflow for this paper.",
-      "Compile and validate this deck with PowerPoint."
+      "Compile and inspect this deck with OfficeCLI."
     ]
   }
 }

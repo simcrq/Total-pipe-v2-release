@@ -8,6 +8,7 @@ import hashlib
 import importlib
 import json
 import math
+import os
 import re
 import sys
 from functools import lru_cache
@@ -25,6 +26,23 @@ WIDTHS = (180, 280, 440, 700, 1168)
 MAX_UNITS = 16
 FEATURES = 17
 
+# One grid for the packer and the compiler: 12 columns of 75.33 px with 24 px gutters across the
+# 1168 px body. Every proposal is a whole number of columns, so gutters stay at 24 px and a page
+# cannot drift by a few pixels between templates.
+GRID_COLUMNS = 12
+GRID_GAP = 24.0
+# Human review rules, enforced instead of merely rendered: a scientific talk keeps every body size
+# at or above 18 pt, and a trailing line of one or two characters is a typographic defect.
+MIN_FONT_PT = 18.0
+MIN_LINE_CHARS = 3
+# A text box may exceed its content by this much before it reads as empty space. The pad covers
+# descenders and pixel rounding; the factor covers a last line that just misses fitting.
+HUG_FACTOR = 1.05
+HUG_PAD = 8.0
+# A figure box that is much larger than its picture leaves a visible empty band. The packer sizes
+# the box to the picture, so anything above this is a real defect, not a stylistic preference.
+MAX_FIGURE_VOID = 0.15
+
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
@@ -32,11 +50,25 @@ def digest(value):
 
 
 def compiler(root=None):
+    """Make the Deck Compiler importable and return its layout module.
+
+    Resolution order, so that a checkout runs against its own compiler and an installed deployment
+    does not silently pick up an unrelated one: an explicit ``root`` argument, the
+    ``DECK_COMPILER_ROOT`` environment variable, the compiler vendored next to this package, then the
+    plugin cache used by the Codex plugin deployment.
+    """
     if root is None:
-        paths = list((Path.home()/'.codex/plugins/cache/personal/total-pipe').glob('*/deck_compiler/ir.py'))
-        if not paths:
-            raise FileNotFoundError('Pass --totalpipe-root: installed Deck Compiler v2 required')
-        root = max(paths, key=lambda p: p.stat().st_mtime).parents[1]
+        root = os.environ.get('DECK_COMPILER_ROOT') or None
+    if root is None:
+        vendored = Path(__file__).resolve().parents[1]
+        if (vendored/'deck_compiler/ir.py').is_file():
+            root = vendored
+        else:
+            paths = list((Path.home()/'.codex/plugins/cache/personal/total-pipe').glob('*/deck_compiler/ir.py'))
+            if not paths:
+                raise FileNotFoundError('Pass --totalpipe-root or set DECK_COMPILER_ROOT: an installed '
+                                        'Deck Compiler is required')
+            root = max(paths, key=lambda p: p.stat().st_mtime).parents[1]
     root = Path(root).resolve()
     sys.path.insert(0, str(root))
     module = importlib.import_module('deck_compiler.layout')
@@ -91,6 +123,118 @@ def features(request):
             request['region'][3]/404, len(request['units'])/MAX_UNITS,
             len(unit.get('label', ''))/80, unit.get('caption_height', 0)/100,
             unit.get('caption_font_floor', 0)/28, unit['role'] == 'figure'])
+    return result
+
+
+def column_width(region_width):
+    """Width of one grid column inside a body region."""
+    return (region_width-GRID_GAP*(GRID_COLUMNS-1))/GRID_COLUMNS
+
+
+def span_width(region_width, columns):
+    """Width of ``columns`` adjacent grid columns, gutters included."""
+    columns = max(1, min(GRID_COLUMNS, int(columns)))
+    return columns*column_width(region_width)+GRID_GAP*(columns-1)
+
+
+def figure_caption_height(unit, width, request):
+    caption = unit.get('caption', '') or ''
+    if not caption:
+        return 0.0
+    return max(unit.get('caption_height', 62),
+               height(caption, request['font'], unit.get('caption_font_floor', 20), width, 2))
+
+
+def figure_picture_void(unit, box, request):
+    """Fraction of a figure box's picture area that the contain-fitted picture cannot cover.
+
+    The compiler centres the picture inside the proposed rectangle, so a rectangle that is wider or
+    taller than the picture shows a band of dead space. Sub-pixel slack is not a defect; a fifth of
+    the box being empty is.
+    """
+    width, box_height = box[2], box[3]
+    aspect = unit.get('aspect', 1.0) or 1.0
+    area_h = max(1.0, box_height-figure_caption_height(unit, width, request))
+    picture_h = min(area_h, width/aspect)
+    return 1.0-(picture_h*aspect*picture_h)/(width*area_h)
+
+
+def figure_box_height(unit, width, request, available):
+    """Height of a rectangle that holds the picture plus its caption, or None if it cannot fit.
+
+    The picture keeps its aspect, so the height follows from the width. Returning None lets the
+    caller try a narrower column instead of proposing a box the compiler would fill with empty
+    space.
+    """
+    caption = figure_caption_height(unit, width, request)
+    aspect = unit.get('aspect', 1.0) or 1.0
+    panel_floor = required_height(unit, width, request)-caption-12
+    if panel_floor >= 10000:
+        return None                      # the width cannot carry the panel floor at all
+    needed = max(width/aspect, panel_floor)+caption+12
+    return None if needed > available+.5 else needed
+
+
+def row_groups(request, boxes, tolerance=12.0):
+    """Indices of text boxes that sit side by side on one visual row."""
+    groups = []
+    for index, box in enumerate(boxes):
+        if request['units'][index]['role'] == 'figure':
+            continue
+        for group in groups:
+            if abs(box[1]-group[0]) <= tolerance:
+                group[1].append(index)
+                break
+        else:
+            groups.append((box[1], [index]))
+    return [members for _, members in groups if len(members) >= 2]
+
+
+def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
+    """Shrink text boxes to their content, align peer rows, and re-stack each column.
+
+    A proposal that fills the body region is the older behaviour, and it is what makes a box look
+    empty: the text is set at its fitted size and the rest of the rectangle stays blank. Three rules
+    replace it, and each one is a rule the compiler does not have:
+
+    * every text box is at most ``factor x content + pad`` tall;
+    * text boxes that sit side by side share one height, the tallest content in that row, so a card
+      row has one baseline instead of a staircase;
+    * boxes in one column are re-stacked at 24 px gaps from the column's own top, so the space
+      between rows is the grid gutter rather than leftover template slack.
+
+    Figures are left alone: their rectangles are already sized to the picture. Returns None when the
+    result would leave the region, so the caller can drop that candidate instead of proposing it.
+    """
+    units = request['units']
+    result = [list(box) for box in boxes]
+    for index, unit in enumerate(units):
+        if unit['role'] == 'figure':
+            continue
+        need = required_height(unit, result[index][2], request)
+        if need >= 10000:
+            return None
+        result[index][3] = min(result[index][3], need*factor+pad)
+    for group in row_groups(request, result):
+        shared = max(result[index][3] for index in group)
+        top = min(result[index][1] for index in group)
+        for index in group:
+            result[index][1] = top
+            result[index][3] = shared
+    columns = {}
+    for index, unit in enumerate(units):
+        if unit['role'] == 'figure':
+            continue
+        columns.setdefault((round(result[index][0], 1), round(result[index][2], 1)), []).append(index)
+    bottom_limit = request['region'][1]+request['region'][3]+.5
+    for members in columns.values():
+        members.sort(key=lambda index: result[index][1])
+        cursor = min(result[index][1] for index in members)
+        for index in members:
+            result[index][1] = cursor
+            cursor += result[index][3]+gap
+        if cursor-gap > bottom_limit:
+            return None
     return result
 
 
@@ -217,6 +361,8 @@ def check(request, boxes):
                                    u.get('caption_font_floor', 20), w, 2))
             if h - caption_h - 12 - w / u['aspect'] > 2:
                 errors.append(f'{u["id"]}:FIGURE_CAPTION_SLACK')
+        if u['role'] == 'figure' and figure_picture_void(u, b, request) > MAX_FIGURE_VOID:
+            errors.append(f'{u["id"]}:FIGURE_VOID')
         if u['role'] != 'figure':
             if select_text_flow(u['text'], u.get('text_flow','auto'))['mode'] == DISTRIBUTED_ARROW_LIST:
                 errors.append(f'{u["id"]}:TEXT_FLOW_REQUIRES_COMPILER')
@@ -231,9 +377,16 @@ def check(request, boxes):
         for text,box,font_path,size,floor,lines in pieces:
             if not text: continue
             try:
-                wrapped,_=fit_text(text,box,TextBoxContract(request['font_family'],size,font_path,font_floor=floor,max_lines=lines))
+                wrapped,contract=fit_text(text,box,TextBoxContract(request['font_family'],size,font_path,font_floor=floor,max_lines=lines))
                 if re.search(r'\d(?:\.\n|\n\.)\d',wrapped):
                     errors.append(f'{u["id"]}:DECIMAL_SPLIT')
+                # Two rules taken from real review: nothing below 18 pt, and a last line of one or
+                # two characters is an orphan rather than a wrap.
+                if contract.font_size < MIN_FONT_PT-.01:
+                    errors.append(f'{u["id"]}:FONT_BELOW_MINIMUM')
+                rendered=[line for line in wrapped.split('\n') if line.strip()]
+                if len(rendered)>1 and len(rendered[-1].strip()) < MIN_LINE_CHARS:
+                    errors.append(f'{u["id"]}:ORPHAN_LINE')
             except ValueError:
                 errors.append(f'{u["id"]}:COMPILER_TEXT_FIT')
         if any(intersect(b,e['bbox']) for e in request.get('frame',[])):
@@ -300,18 +453,46 @@ def templates(request):
         return
     if len(figs)==1 and texts:
         right = request['archetype']=='cover-hero'
-        for frac in (.42,.48,.54,.60,.66):
-            fw=(w-gap)*frac; tw=w-gap-fw
-            fx,tx = (x+tw+gap,x) if right else (x,x+fw+gap)
-            boxes=[None]*n; boxes[figs[0]]=[fx,y,fw,h]
+        # Whole grid columns instead of arbitrary fractions: the gutter is then exactly 24 px and
+        # the figure rectangle follows the picture's aspect. A column that cannot hold the picture
+        # plus its caption at the panel floor is skipped rather than proposed with dead space.
+        for columns in range(3, GRID_COLUMNS-1):
+            fw = span_width(w, columns)
+            tw = span_width(w, GRID_COLUMNS-columns)
+            fh = figure_box_height(units[figs[0]], fw, request, h)
+            if fh is None:
+                continue
+            fx, tx = (x+tw+GRID_GAP, x) if right else (x, x+fw+GRID_GAP)
+            boxes=[None]*n; boxes[figs[0]]=[fx,y,fw,fh]
             stack(texts,[tx,y,tw,h],boxes)
             yield boxes
+        # A single very wide picture cannot live in a column: give it the full width and put the
+        # text in one band underneath, which the grid still expresses exactly.
+        k = len(texts)
+        if 1 <= k <= 4:
+            tw = (w-GRID_GAP*(k-1))/k
+            needed = max(required_height(units[i], tw, request) for i in texts)
+            fh = figure_box_height(units[figs[0]], w, request, h-needed-GRID_GAP)
+            if fh is not None:
+                boxes=[None]*n
+                boxes[figs[0]]=[x,y,w,fh]
+                for j, i in enumerate(texts):
+                    boxes[i] = [x+j*(tw+GRID_GAP), y+fh+GRID_GAP, tw, needed]
+                yield boxes
     if len(figs)==2:
+        # Two cards sharing one row: the shared height is the taller picture need, so both cards
+        # line up and neither rectangle is much larger than its picture.
+        cw = span_width(w, 6)
         for th in (64,88,112):
-            boxes=[None]*n; cw=(w-gap)/2
-            for k,i in enumerate(figs): boxes[i]=[x+k*(cw+gap),y+th+gap,cw,h-th-gap]
+            available = h-th-GRID_GAP
+            heights = [figure_box_height(units[i], cw, request, available) for i in figs]
+            if any(value is None for value in heights):
+                continue
+            shared = max(heights)
+            boxes=[None]*n
+            for k,i in enumerate(figs): boxes[i]=[x+k*(cw+GRID_GAP),y+th+GRID_GAP,cw,shared]
             if len(texts)<=2:
-                for k,i in enumerate(texts): boxes[i]=[x+k*(cw+gap),y,cw,th]
+                for k,i in enumerate(texts): boxes[i]=[x+k*(cw+GRID_GAP),y,cw,th]
                 yield boxes
         return
     if not figs:
@@ -341,25 +522,37 @@ def templates(request):
 
 
 def quality(request, boxes):
-    # Prefer larger scientific panels and balanced text slack; hard gates first.
-    score=0.
-    for u,b in zip(request['units'],boxes):
-        w,h=b[2:]
-        if u['role']=='figure':
-            ch=max(u.get('caption_height',62),height(u.get('caption',''),request['font'],u.get('caption_font_floor',20),w,2))
-            panel=min(w/u['aspect'],h-ch-12)
-            score -= min(panel,panel*u['aspect']/u.get('panel_count',1))/100
-            if u.get('caption'):
-                score += max(0, h-ch-12-w/u['aspect'])/24
+    """Lower is better: empty space inside a box, an empty band inside a figure rectangle, and a
+    page that wastes its body area.
+
+    Slack is measured against the hug target rather than the raw content height. Comparing with
+    ``required_height`` alone made the fixed 8 px pad look like emptiness, which is proportionally
+    larger on short boxes; the scorer then preferred three narrow columns of three lines over three
+    full-width single-line rows, because the tall boxes scored "tighter". Figure area carries a
+    small bonus so that, once the text boxes are equally tight, the larger panel wins.
+    """
+    score = 0.
+    figures = 0.
+    for u, b in zip(request['units'], boxes):
+        w, h = b[2:]
+        if u['role'] == 'figure':
+            score += figure_picture_void(u, b, request) * 2
+            figures += w * h
         else:
-            score += abs(h-required_height(u,w,request))/max(h,1)*.2
-    return score
+            target = required_height(u, w, request) * HUG_FACTOR + HUG_PAD
+            score += max(0., h - target) / max(h, 1) * 1.5
+    rx, ry, rw, rh = request['region']
+    return score - figures / max(rw * rh, 1) * .25
 
 
 def teacher(request):
+    """Best valid proposal for one slide, or None when nothing survives the gates."""
     valid = []
     for candidate in templates(request):
-        candidate = snap_rhythm(request, candidate)
-        if not check(request, candidate):
-            valid.append(candidate)
+        snapped = snap_rhythm(request, candidate)
+        for proposal in (snapped, tighten(request, snapped)):
+            if proposal is None or check(request, proposal):
+                continue
+            if proposal not in valid:
+                valid.append(proposal)
     return min(valid,key=lambda b:quality(request,b)) if valid else None

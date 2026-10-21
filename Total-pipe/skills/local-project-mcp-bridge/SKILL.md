@@ -33,7 +33,7 @@ ls integrations plugins
 
 - **纯标准库项目**（pyproject 的 dependencies 为空或全是 stdlib）：跳过 venv，
   `command` 直接用 managed python 的绝对路径，例如
-  `C:/Users/<user>/.workbuddy/binaries/python/versions/3.13.12/python.exe`。
+  `python`（或该环境的绝对解释器路径）。
 - **有依赖**：系统 Python 几乎总是缺包，优先用项目自带的锁文件建隔离 venv：
 
 ```bash
@@ -68,8 +68,8 @@ Node 项目同理，用 managed node 的绝对路径。
   单独捕获并把全部问题一次性回传。**只抛第一条**会把修 bug 变成慢速猜错循环。
 
 参考实现（两个已落地的外壳，结构一致，可直接抄）：
-`F:/Workbuddy/Total-pipe/paperworkflow/integrations/mcp/server.py`
-`F:/Workbuddy/pwf2rpa/integrations/mcp/server.py`
+`PaperWorkflow/integrations/mcp/server.py`
+`Total-pipe/pwf2rpa/integrations/mcp/server.py`
 
 ## 三个必踩的坑
 
@@ -95,14 +95,19 @@ Node 项目同理，用 managed node 的绝对路径。
 
 ```json
 "myproject": {
-  "command": "F:/path/.venv/Scripts/python.exe",
-  "args": ["F:/path/integrations/mcp/server.py"],
-  "cwd": "F:/path",
+  "command": "python",
+  "args": ["integrations/mcp/server.py"],
+  "cwd": "<项目根>",
   "disabled": false
 }
 ```
 
-`cwd` 要设成项目根 —— 项目里用相对路径定位资源的逻辑全靠它。
+`command` 优先写 `python` / `node` 这类走 PATH 的名字，把解释器版本交给用户环境；
+只有项目必须用自带 venv 时才写解释器的绝对路径（那是唯一合理的绝对路径，务必确认它存在）。
+
+`args` 和资源定位都用**相对项目根**的路径，`cwd` 才是唯一的锚点。`cwd` 在注册文件里必须
+是项目根的绝对路径（客户端不会以项目目录为工作目录启动进程），但不要把别人的机器路径
+抄进文档示例——写成 `<项目根>` 占位符，注册时由用户替换。
 改完用 `json.load` 校验一遍合法性，并确认其他条目没被动过。
 
 **写完配置不会自动生效**，必须告诉用户去连接器管理页对新 server 点 Trust。

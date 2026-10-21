@@ -17,16 +17,15 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).parents[1]
 def fixture():
+    """The example deck, with fonts left exactly as authored.
+
+    The theme names a bare font file, which is how a deck stays portable: the compiler resolves it
+    against the deck directory and then the platform's font directories. Patching the path here would
+    hide the resolution the tests are supposed to exercise.
+    """
     ir = json.loads((ROOT/'examples/research.deck_ir.json').read_text())
-    if not Path(ir['theme']['font_file']).exists():
-        for regular, bold in (
-                ('C:/Windows/Fonts/arial.ttf', 'C:/Windows/Fonts/arialbd.ttf'),
-                ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                 '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')):
-            if Path(regular).exists() and Path(bold).exists():
-                ir['theme']['font_file'] = regular
-                ir['theme']['bold_font_file'] = bold
-                break
+    from deck_compiler.fonts import resolve_theme_fonts
+    resolve_theme_fonts(ir['theme'], ROOT/'examples')   # raises when no font is installed at all
     return ir
 
 class InfrastructureTests(unittest.TestCase):

@@ -26,9 +26,8 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Use one deck frame; ordered figure-parameters blocks are a peer column with 24 px gaps. '
     'An explicit four-step process must pass compiler member validation; legacy method-to-result inference remains compatible. '
     'The compiler draws its numbered sequence rail and preserves original scientific text. '
-    'v26 proposals are rhythm-snapped and rechecked; figure captions follow images by 12 px. '
-    'Check layout_provider.json for exact per-slide provenance. '
-    'v26 proposes layout, compiler enforces constraints, OfficeCLI writes PPTX. '
+    'The packer proposes a body layout, the compiler enforces the geometric gates and writes the frame, OfficeCLI writes the PPTX. '
+    'A provider that fails or is rejected loses that page to the compiler templates; check layout_provider.json for per-slide provenance. '
     'Build returns a candidate and QA, not automatic final approval. '
     'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
     'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
@@ -37,7 +36,7 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
 def invoke(command, arguments):
     argv = [sys.executable, '-m', 'deck_compiler', command, '--out', arguments['out']]
     if command in ('compile', 'build'):
-        argv += ['--ir', arguments['ir'], '--layout-provider', arguments.get('layout_provider', 'v26')]
+        argv += ['--ir', arguments['ir'], '--layout-provider', arguments.get('layout_provider', 'packer')]
     if command == 'build':
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
@@ -56,15 +55,15 @@ def invoke(command, arguments):
 
 
 for name, command, description in (
-    ('totalpipe_compile', 'compile', 'Compile layout from canonical Deck IR, defaulting to v26. Returns layout and QA without rendering a PPTX.'),
-    ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from canonical Deck IR. Defaults to v26 layout.'),
+    ('totalpipe_compile', 'compile', 'Compile layout from canonical Deck IR, defaulting to the bundled packer. Returns layout and QA without rendering a PPTX.'),
+    ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from canonical Deck IR. Defaults to the bundled packer.'),
     ('totalpipe_review', 'review-officecli', 'Inspect an existing build and export slide screenshots, schema, and issues on demand. OfficeCLI Text overflow is an unreliable heuristic.'),
 ):
     properties = {'out': {'type':'string', 'description':'Absolute build directory path.'}}
     required = ['out']
     if command in ('compile', 'build'):
         properties.update({'ir':{'type':'string', 'description':'Absolute canonical deck_ir.json path.'},
-                           'layout_provider':{'type':'string','enum':['v26','deterministic'],'default':'v26'}})
+                           'layout_provider':{'type':'string','default':'packer'}})
         required.append('ir')
     if command != 'compile':
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}

@@ -9,7 +9,7 @@ description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—�
 
 ```text
 PDF → PaperWorkflow → Story Planner subagent → [DesignIntentPlanner] → pwf2rpa → RPA planning
-    → canonical deck_ir.json → v26 layout proposals + compiler fallback → OfficeCLI
+    → canonical deck_ir.json → layout provider (packer by default) + compiler fallback → OfficeCLI
     → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
     → qa_report.json → final.pptx
 ```
@@ -164,7 +164,7 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 或 `spacious`。若省略，只要某页请求 spacious，编译器整套采用 spacious；不要让短中文
 内容触发逐页随意切换。将 RPA 的同级步骤按阅读顺序放入 `figure-parameters` 的 3–4 个
 blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏契约，不需要模型写 bbox。
-v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长则保持等距并分配足够高度。
+打包器把组内间距校正为 24 px，同行按行内最高内容齐高；若文字较长则保持等距并分配足够高度。
 图注置于图像下方 12 px，所有校正后重新执行容量与碰撞检查。实际 frame 与逐页
 `MODEL_PROPOSAL / PACKING_FALLBACK / COMPILER_FALLBACK` 在 `layout.json`、
 `layout_provider.json` 和 `derived/plan_to_layout.json` 中查看。
@@ -179,7 +179,7 @@ v26 会将组内间距校正为 24 px，容量允许时等高；若文字较长�
 `members` 必须与 `composition.blocks[].id` 的实际顺序一致；`emphasis`
 可省略，存在时由 RPA `emphasis_index` 映射为真实 block ID。编译器只接受
 四个无独立 label 的 block：有一张图时用 `figure-parameters`，无图时用
-`process-flow`；其他形态以 `VISUAL_INTENT_INVALID` 阻断。v26 只建议几何；编译器决定文字适配、
+`process-flow`；其他形态以 `VISUAL_INTENT_INVALID` 阻断。布局提供方只建议几何；编译器决定文字适配、
 等距、编号连线和最终合法性。容量不足回到 Story/RPA 重规划，硬流程组不可
 自动拆页。
 
@@ -208,11 +208,11 @@ archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`�
 在本实验目录运行；MCP 入口为 `deck_compiler/mcp_server.py`，配置见根目录 `.mcp.json`。
 该服务复用 pwf2rpa 协议和原有工具，同时新增：
 
-- `totalpipe_compile(ir, out, layout_provider="v26")`：编译布局，默认 v26；返回布局与 QA，不生成 PPTX。
-- `totalpipe_build(ir, out, layout_provider="v26", officecli="officecli")`：通过 OfficeCLI 生成 PPTX 候选和 QA。
+- `totalpipe_compile(ir, out, layout_provider="packer")`：编译布局，默认 packer；返回布局与 QA，不生成 PPTX。
+- `totalpipe_build(ir, out, layout_provider="packer", officecli="officecli")`：通过 OfficeCLI 生成 PPTX 候选和 QA。
 - `totalpipe_review(out, officecli="officecli")`：按需检查现有构建并导出逐页截图、schema 与 issues。
 
-`ir` 和 `out` 使用绝对路径。默认使用 v26；模型不支持或候选不通过时由现有布局逻辑回退，详情见 `layout_provider.json`。模型只提议 bbox，不改写科研内容。
+`ir` 和 `out` 使用绝对路径。默认使用内置打包器 packer；也可传 `compiler`（仅用模板）或 `module:factory`（外部提供方）。提供方只提议 bbox，不改写科研内容；建议不通过时回退编译器模板，详情见 `layout_provider.json` 与 `docs/layout-provider.md`。
 
 MCP 未加载时，使用 `.mcp.json` 中的 Python，工作目录为本项目根目录：
 

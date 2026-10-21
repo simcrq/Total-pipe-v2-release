@@ -1,5 +1,9 @@
 # Implementation Summary: Automatic Overflow Repair
 
+> **Historical document (2026-10).** Written when the compiler recompiled through the v26
+> diffusion model after splitting a slide. That model is gone; the recompile path now goes through
+> the layout provider and the same geometric gates.
+
 ## What Was Implemented
 
 I've implemented **Solution 2: Dynamic Content Splitting and Slide Addition** to address the text overflow problem in the Total-pipe v3 PPTX generation suite.

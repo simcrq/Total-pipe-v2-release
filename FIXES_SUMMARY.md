@@ -1,5 +1,9 @@
 # Fixes Applied to Total-pipe v3 PPT Generation Suite
 
+> **Historical document (2026-10).** Parts of this log describe the v26 diffusion model, its
+> weight file and the torch install step; all three have been removed. Overflow is now prevented by
+> the geometric gates in `totalpipe_layout/contracts.py` rather than repaired afterwards.
+
 ## Status: ✅ System Fixed and Documented
 
 This document summarizes the fixes applied to address the issues found in the Total-pipe v3 research presentation generation suite.
