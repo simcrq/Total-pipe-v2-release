@@ -1,3 +1,7 @@
 acceptance/
 Test1/
 temp_markdowns/
+.v3-integration-backup/
+builds/
+artifacts/
+codex-local-marketplace/
