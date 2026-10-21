@@ -78,7 +78,6 @@
 22b0f49a2567f620372fb445cc3b19858baf5f658bcf44649789c7affa1dcae2  research-ppt-assistant/assets/layout-library/svg/RM-DECISION-03.svg
 22ea92df3cc995b3cb46fd9527eb62725fb590aaa41a702a788531765fccee55  research-ppt-assistant/assets/layout-library/svg/RM-SECTION-08.svg
 238d93b87145616f9f6364e8e69788581c70aced4b266c10ad1ffdc59944b88f  research-ppt-assistant/tests/artifact-font-units.test.mjs
-2407fd978d7f131183a31c158038d50912e5cf406bd1470eae36aa952f023faf  .gitignore
 2427856cb9103617407cf99d3c8d94018376e9b4927681305f106d8763a5146e  research-ppt-assistant/assets/layout-library/svg/RM-ERROR-01.svg
 2465d6357aebfefa7d08bfc66d56f5cb9a43e111a134ff2d2d13e316a4f585da  Total-pipe/test_quality_analysis/deck_ir.json
 24cd334d811869f1f1a6a08bdabaff3c2467ec9a12397ef5c3c65f57ddba9c1c  Total-pipe/deck_compiler/officecli_review.py
@@ -190,6 +189,7 @@
 5191a19d5209ac3f0d78a9c1229e87d0d0562ad6d3b6373fde959ac38ab31773  research-ppt-assistant/assets/layout-library/svg/RM-ERROR-03.svg
 51c79c61a089423d16b8b7bc2e6f7693a3eb4b19c94ac396b453d88acef947bb  research-ppt-assistant/server/group-fit/profile.mjs
 5260f7afddedca340157f0619adbd325cce54851fe464c68cfd767ae7fe20483  research-ppt-assistant/server/visual-quality/metrics/theme-usage.mjs
+530e84232842d5b9630276a8cc597479d079a616d853458102b393d85a67744c  .gitignore
 534ddaf894846c1746d82a07927463fe5c076d8b8d874b6a135299b37f8417ae  research-ppt-assistant/benchmarks/figure-placement-golden.json
 53859fe082eb40725571ed1d52cf621004788c369c321515cf3afd30de06fba8  PaperWorkflow/LICENSE
 53e1980814cc81f1d61888408e269bc0f7aef6864468abeaada43c4394e0e8a3  research-ppt-assistant/assets/layout-library/svg/RM-THEORY-05.svg
