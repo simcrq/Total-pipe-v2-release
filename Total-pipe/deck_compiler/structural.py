@@ -1,4 +1,5 @@
 """Read-only structural verification of the actual exported package."""
+import hashlib
 import zipfile
 from lxml import etree as ET
 from .contracts import issue
@@ -28,6 +29,22 @@ def verify(path, layout):
                     for rel in relationships(z, source).values():
                         if not rel['external'] and rel['target'] not in z.namelist():
                             add('BROKEN_RELATIONSHIP', f"{name}: {rel['target']}")
+            if layout.get('background_image'):
+                # The picture is one part on the slide master; check the bytes actually landed.
+                expected = layout['assets'].get('@background', {}).get('sha256')
+                master = next((name for name in z.namelist()
+                               if name.startswith('ppt/slideMasters/slideMaster')
+                               and name.endswith('.xml')), None)
+                target = None
+                if master:
+                    blip = ET.fromstring(z.read(master)).find('.//p:bg//a:blip', NS)
+                    if blip is not None:
+                        target = relationships(z, master).get(
+                            blip.get('{' + NS['r'] + '}embed'), {}).get('target')
+                if not target or target not in z.namelist() or hashlib.sha256(
+                        z.read(target)).hexdigest() != expected:
+                    add('BACKGROUND_IMAGE_MISSING',
+                        'The declared background picture is not on the slide master')
             parts = slide_parts(z)
             if len(parts) != len(layout['slides']):
                 add('SLIDE_COUNT_MISMATCH', 'Slide count differs from IR')
@@ -37,11 +54,14 @@ def verify(path, layout):
                 add('CANVAS_MISMATCH', 'Canvas differs from compiled layout')
             for n, (part, slide) in enumerate(zip(parts, layout['slides']), 1):
                 root = ET.fromstring(z.read(part))
-                bg, source = background(z, part)
-                if bg is None:
-                    add('BACKGROUND_UNRESOLVED', source, n, severity='REVIEW', confidence='LOW')
-                elif bg.upper() != slide['background'].upper():
-                    add('BACKGROUND_MISMATCH', f'{bg} != {slide["background"]}', n)
+                # A full-bleed picture lives on the master, once, so every slide inherits it
+                # without carrying a copy of the image. The colour comparison does not apply.
+                if not layout.get('background_image'):
+                    bg, source = background(z, part)
+                    if bg is None:
+                        add('BACKGROUND_UNRESOLVED', source, n, severity='REVIEW', confidence='LOW')
+                    elif bg.upper() != slide['background'].upper():
+                        add('BACKGROUND_MISMATCH', f'{bg} != {slide["background"]}', n)
                 notes_part = next((rel['target'] for rel in relationships(z, part).values()
                                    if rel['type'] == 'notesSlide' and not rel['external']), None)
                 if notes_part not in z.namelist():
@@ -100,10 +120,14 @@ def verify(path, layout):
                     for p in tx.findall('a:p', NS):
                         paragraphs.append(''.join('\n' if el.tag == A+'br' else (el.text or '')
                                                   for el in p.iter() if el.tag in (A+'t', A+'br')))
+                    # A hard break (\n) starts a paragraph; a soft break (\v) is a a:br inside the
+                    # paragraph. Comparing flattened text kept the footer's two-line soft break
+                    # looking like a text change, so the paragraph structure is compared as written.
                     expected = ([''.join(line if i == 0 else '\n' + line
                                          for i, line in enumerate(item_lines))
                                  for item_lines in e['items']] if e['kind'] == 'list'
-                                else e['text'].split('\n'))
+                                else [paragraph.replace('\v', '\n')
+                                      for paragraph in e['text'].split('\n')])
                     if paragraphs != expected:
                         add('TEXT_MISMATCH', 'Export changed text or line breaks', n, e['id'])
                     if e['kind'] == 'list':
@@ -152,12 +176,15 @@ def verify(path, layout):
                 for pic, e in zip(pics, planned_pics):
                     blip = pic.find('.//a:blip', NS)
                     target = relationships(z, part).get(blip.get('{'+NS['r']+'}embed'), {}).get('target')
-                    import hashlib
                     if target not in z.namelist() or hashlib.sha256(z.read(target)).hexdigest() != layout['assets'][e['asset_id']]['sha256']:
                         add('IMAGE_CONTENT_MISMATCH', 'Evidence image bytes differ from source', n, e['id'])
                     xf = pic.find('p:spPr/a:xfrm', NS)
                     off, ext = xf.find('a:off', NS), xf.find('a:ext', NS)
                     box = [int(off.get('x'))/EMU,int(off.get('y'))/EMU,int(ext.get('cx'))/EMU,int(ext.get('cy'))/EMU]
+                    if e.get('role') == 'background':
+                        # A full-bleed picture is supposed to sit under everything; counting it as a
+                        # collision would reject every page that has a background.
+                        continue
                     boxes.append((e['id'], box))
                     if any(abs(a-b) > .2 for a,b in zip(box, e['bbox'])):
                         add('GEOMETRY_MISMATCH', 'Image geometry differs from compiler', n, e['id'])

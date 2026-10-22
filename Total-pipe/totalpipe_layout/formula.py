@@ -29,6 +29,7 @@ GREEK = {
 OPERATORS = {
     'times': '×', 'cdot': '·', 'pm': '±', 'mp': '∓', 'leq': '≤', 'le': '≤', 'geq': '≥',
     'ge': '≥', 'neq': '≠', 'ne': '≠', 'approx': '≈', 'infty': '∞', 'partial': '∂',
+    'propto': '∝', 'sim': '∼', 'll': '≪', 'gg': '≫', 'degree': '°',
     'nabla': '∇', 'rightarrow': '→', 'to': '→', 'Rightarrow': '⇒', 'in': '∈',
     'sum': '∑', 'prod': '∏', 'int': '∫', 'oint': '∮', 'lim': 'lim',
 }

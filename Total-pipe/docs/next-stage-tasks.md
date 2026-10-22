@@ -299,3 +299,93 @@ html 截图只用于检查非公式区域。
 3. 任务 3 建议与任务 2 并行设计、串行实现：先只做"独立公式单位 + OMML 直写 + 精确测量"，
    行内公式留到第二迭代（它要动断行器，风险最高）。
 4. 三条都完成后，再回头统一跑一次 `tools/layout_quality_report.py` 与人工逐页复核，更新基线数字。
+
+---
+
+# 第四轮：测试 deck 复盘后的修复（2026-10-22）
+
+对象是 `F:\Workbuddy\ppt-generator\outputs\nn_device_test_guide_v2`：10 页、0 FAIL、61 REVIEW，
+其中约 50 条是同一个字体问题；打包器只在 3/10 页生效；交付的 2.28 MB 文件与 QA 报告的 0.44 MB
+哈希不一致。逐项修复如下，全部有测试与重建证据。
+
+## 1. 打包器与编译器共用一套度量
+
+`totalpipe_layout.contracts` 之前用 1.4 行高、额外 12 px 和 `width-16` 估文本高度，而编译器契约是
+1.25 行高、零额外内边距。352 px 的正文区里，同一个块前者要 85 px、后者只要 70 px，于是
+`CONTENT_CAPACITY` 在所有文本单元上触发，打包器无候选。
+
+- `height()`/`required_height()` 改为编译器契约（1.25、无 padding、按 18 pt 取最小高度）；
+- `figure_box_height()` 改为 contain-fit：图高取 `min(宽/宽高比, 可用高-图注-12)`，
+  允许图比列窄（编译器本来就这样画），闸门从"空带 ≤15%"改为"面板短边 ≥ min_panel_extent"；
+- 图注高度实测（22 px 折行数 ×1.25 + 8，下限 34），不再固定 62；一行图注省下 26 px；
+- `body_bottom()` 统一了双图页 618 px 的正文下界（此前打包器按 588 请求，编译器按 618 画）；
+- 双图模板的调用带 `th` 由文本实测高度决定，不再猜 64/88/112。
+
+结果：同一份 deck 的 PACKED 页从 **3/10 → 7/10**，剩下 3 页分别是一页示意图、两页公式，
+按设计归编译器（`SCHEMATIC_REQUIRES_COMPILER` / `FORMULA_REQUIRES_COMPILER`）。
+
+## 2. 公式：锚定 + 容量预算
+
+诊断：页 4 的块序是 `公式/指标/公式/注意`，两个公式各占一整行；`20log10(2.04×10⁴)≈86.2`
+在 440 px 列里按 18 pt 需要 520 px，交付版被压到约 13 pt。
+
+- 无标签公式**锚定**到上一块（显式 `anchor` 字段可覆盖），文本在上、公式在下，间距 10 px；
+  有标签公式变成"标签在左、公式在右"的一行，不再header独占 40 px；
+- 公式页的正文列宽由公式实测宽度反推（`formula_column_width`，上限 616 px，图列保底 520 px），
+  公式按能放下的最大字号排（30/28/26/24 px），绝不低于 24 px（18 pt）；
+- 新闸门（`deck_compiler/capacity.py`）：
+
+| 规则 | 限值 | 行为 |
+|---|---|---|
+| `FORMULA_BUDGET` | 每页 ≤ 2 个公式 | FAIL |
+| `FORMULA_MAX_HEIGHT_SHARE` | 单个公式 ≤ 正文高 32% | FAIL |
+| `FORMULA_MAX_TOTAL_SHARE` | 全部公式 ≤ 正文高 50% | FAIL |
+| `FORMULA_GROUP_SHARE_MAX` | 锚定组里公式 ≤ 45% | FAIL |
+| `FORMULA_CAPACITY` | 公式在该槽位放不下 | FAIL，带 `suggested_fix=widen_text_column_or_split_slide` |
+| `FORMULA_TEXT_FLOOR` | 整页只有公式、没有一句正文 | REVIEW（人工确认，不阻断） |
+| `FORMULA_ANCHOR_INVALID` | 锚点不是本页的非公式块 | FAIL |
+
+失败信息里写明"需要多少 px、槽位多少 px、应拆分或加宽"，并且**不会**通过缩小字号或删正文来满足。
+另外 `compile_deck` 不再把 REVIEW 当作致命错误（此前任何 REVIEW 都会让整份 deck 编译失败）。
+
+## 3. 字号：一套声明出来的比例
+
+旧代码里正文 18 pt、caveat 15 pt、footer 13.5 pt，`MIN_FONT_PT` 只在打包器侧生效且把 px 当 pt 比较。
+现在：
+
+- 正文/标题/标签 ≥ 18 pt（24 px），图注/caveat/证据号/序号 ≥ 15 pt（20 px），
+  由 `BODY_MIN_PT`/`ANNOTATION_MIN_PT` 声明，`text()` 按 role 检查，越界则 `TYPOGRAPHY_FLOOR` FAIL；
+- footer 从 18 px 提到 20 px（13.5 → 15 pt），证据号过多时折成两行（1100 px 折行宽度，
+  给渲染器留 68 px 余量），不再缩字号；
+- 打包器的 `FONT_BELOW_MINIMUM` 也改成 px→pt 的正确比较（此前 22 px 的图注被判为"≥18 pt"）。
+
+## 4. 背景图进入 IR
+
+`theme.background_image` 声明一张铺满页面的图，编译器在写入前测量它：
+
+- `BACKGROUND_CONTRAST`：文字色与背景最暗/最亮处的 WCAG 对比度，< 3:1 FAIL，< 4.5:1 REVIEW；
+- `BACKGROUND_BUSY`：亮度标准差 > 0.075 REVIEW；
+- `BACKGROUND_ASSET_LARGE`：> 600 KB REVIEW；
+- 写入时只在 **母版** 上放一次（`/slidemaster[1]` 的 image fill），不再逐页插图——
+  逐页插图会让 1.7 MB 的背景复制 10 份（实测 17 MB），母版方案整份 2.09 MB。
+
+这样"QA 之后再用脚本往母版塞背景"的动机消失了。
+
+## 5. 交付件校验
+
+新增 `totalpipe verify <pptx> --build <build_dir>`：把交付文件的 sha256 与 `qa_report.json`
+的 `artifact_sha256`、`staging.pptx` 比对。对这次测试文件的实际输出：
+
+```
+[FAIL] The delivered file is not the file QA inspected:
+    delivered 7487fedea6a73c40  2087527 bytes
+    QA/staging 73b032e5c00067da
+```
+
+## 结果与未做
+
+- 重建同一份 `deck_ir.json`：**0 FAIL / 0 WARNING / 13 REVIEW**，PACKED 7/10，
+  页 3/4 的公式按 30/26 px 排版，页 4 的公式在"作者报告"下方。
+- 13 条 REVIEW = 1 字体逐字回退 + 11 张论文面板 + 1 条"未做 PowerPoint 原生渲染"。
+- 未做：行内 `$...$` 公式（要动断行器）；论文图裁切仍带相邻面板残片（PaperWorkflow 侧）；
+  背景繁复度只报 REVIEW，需人工看渲染；macOS PowerPoint 原生验收在本机无法完成。

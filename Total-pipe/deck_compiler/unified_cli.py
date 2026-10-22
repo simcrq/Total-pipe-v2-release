@@ -222,6 +222,39 @@ def validate_inputs(
     }
 
 
+def verify_artifact(pptx_path: Path, build_dir: Path) -> Dict[str, Any]:
+    """Prove that a delivered file is the file the QA report describes.
+
+    The pipeline binds every finding to the staging bytes, but a deck can still leave the build
+    directory by copy: the test deck that motivated this shipped a 2.28 MB file while its QA report
+    described a 0.44 MB one, because a patch script rewrote the master after the report.
+    """
+    from .contracts import file_hash
+
+    pptx_path, build_dir = Path(pptx_path), Path(build_dir)
+    qa_path = build_dir / 'qa_report.json'
+    if not pptx_path.is_file():
+        return {'match': False, 'error': f'delivered file not found: {pptx_path}'}
+    if not qa_path.is_file():
+        return {'match': False, 'error': f'build has no qa_report.json: {build_dir}'}
+    qa = json.loads(qa_path.read_text(encoding='utf-8'))
+    staging = build_dir / 'staging.pptx'
+    delivered_sha = file_hash(pptx_path)
+    staging_sha = file_hash(staging) if staging.is_file() else None
+    return {
+        'match': delivered_sha == qa.get('artifact_sha256') == staging_sha,
+        'delivered': str(pptx_path.resolve()),
+        'delivered_sha256': delivered_sha,
+        'delivered_bytes': pptx_path.stat().st_size,
+        'staging_sha256': staging_sha,
+        'qa_artifact_sha256': qa.get('artifact_sha256'),
+        'qa_status': qa.get('status'),
+        'qa_counts': qa.get('counts'),
+        'advice': ('Rebuild and publish staging.pptx, or re-run the build with the change in the '
+                   'IR. A deck edited after QA has no findings that describe it.'),
+    }
+
+
 def generate_preview(
     build_dir: Path,
     officecli: str = "officecli",
@@ -251,19 +284,24 @@ def generate_preview(
     output_dir.mkdir(exist_ok=True)
 
     try:
-        result = review(build_dir, officecli, format)
+        # ``format`` is the file the caller wants (png); the renderer is OfficeCLI's native
+        # screenshot or its HTML preview. Passing 'png' straight through used to fail here.
+        result = review(build_dir, officecli, 'native' if format == 'png' else 'html')
 
-        # Move/copy screenshots to preview directory
+        # Move/copy screenshots to preview directory. The review writes them to
+        # ``officecli-review/`` and records the path of each page; the old code looked for a name
+        # the review never produced, so a successful render reported zero previews.
         previews = []
-        for page in result.get('pages', []):
-            slide_num = page.get('page')
-            if format == 'png':
-                src = build_dir / f"officecli-slide-{slide_num}.png"
-                if src.exists():
-                    dest = output_dir / f"slide-{slide_num}.png"
-                    import shutil
-                    shutil.copy2(src, dest)
-                    previews.append({'slide': slide_num, 'path': str(dest)})
+        for number, page in enumerate(result.get('pages', []), 1):
+            source = Path(page.get('path') or '')
+            if not source.is_file():
+                continue
+            import shutil
+            suffix = '.png' if format == 'png' else '.html'
+            destination = output_dir / f"slide-{number}{suffix}"
+            shutil.copy2(source, destination)
+            previews.append({'slide': number, 'slide_id': page.get('slide_id'),
+                             'path': str(destination)})
 
         return {
             'status': 'success',
@@ -337,6 +375,12 @@ Examples:
     qual.add_argument('build_dir', type=Path, help='Build directory')
     qual.add_argument('--json', action='store_true', help='Output as JSON')
     qual.add_argument('--detailed', action='store_true', help='Include detailed analysis')
+
+    # Verify command
+    ver = subparsers.add_parser('verify', help='Check a delivered PPTX against its build report')
+    ver.add_argument('pptx', type=Path, help='Delivered .pptx file')
+    ver.add_argument('--build', type=Path, required=True, help='Build directory with qa_report.json')
+    ver.add_argument('--json', action='store_true', help='Output as JSON')
 
     args = parser.parse_args()
 
@@ -433,6 +477,22 @@ Examples:
                 print(report.to_summary())
 
             return 0
+
+        elif args.command == 'verify':
+            result = verify_artifact(args.pptx, args.build)
+            if args.json:
+                print(json.dumps(result, indent=2))
+            elif result.get('error'):
+                print(f"[FAIL] {result['error']}")
+            elif result['match']:
+                print(f"[OK] {args.pptx.name} is the artifact the QA report describes "
+                      f"({result['qa_status']}, {result['delivered_bytes']} bytes)")
+            else:
+                print("[FAIL] The delivered file is not the file QA inspected:")
+                print(f"    delivered {result['delivered_sha256'][:16]}  {result['delivered_bytes']} bytes")
+                print(f"    QA/staging {str(result['qa_artifact_sha256'])[:16]}")
+                print(f"    {result['advice']}")
+            return 0 if result.get('match') else 1
 
     except RecoverableError as e:
         print(f"\n[ERROR] {e.message}", file=sys.stderr)

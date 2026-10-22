@@ -35,12 +35,19 @@ GRID_GAP = 24.0
 # at or above 18 pt, and a trailing line of one or two characters is a typographic defect.
 MIN_FONT_PT = 18.0
 MIN_LINE_CHARS = 3
+# The compiler's own text model, so the packer measures what the compiler will actually set:
+# ``lines x size x 1.25`` with no padding. The old packer used 1.4 line spacing and added 12 px,
+# which demanded 85 px for a block the compiler sets in 70 px; on a 352 px body that difference
+# alone rejected pages the templates lay out comfortably.
+LINE_HEIGHT = 1.25
+BODY_SIZE = 24.0            # 18 pt, the floor every body element has to reach
 # A text box may exceed its content by this much before it reads as empty space. The pad covers
 # descenders and pixel rounding; the factor covers a last line that just misses fitting.
 HUG_FACTOR = 1.05
 HUG_PAD = 8.0
-# A figure box that is much larger than its picture leaves a visible empty band. The packer sizes
-# the box to the picture, so anything above this is a real defect, not a stylistic preference.
+# A figure rectangle that is much larger than its picture leaves a visible empty band. Only the
+# scorer weights this now: the gate is the panel extent, because the compiler itself centres a
+# height-limited picture inside its column and that is a legitimate layout.
 MAX_FIGURE_VOID = 0.15
 
 
@@ -84,25 +91,27 @@ def font(path, size):
 
 @lru_cache(maxsize=65536)
 def height(text, path, size, width, max_lines=10):
-    # Extra width/height allowance is intentionally conservative. It is not a
-    # substitute for OfficeCLI's diagnostics or PowerPoint's text renderer.
+    # The same measurement the compiler's contract performs: explicit line breaks at ``width``,
+    # line height 1.25, no padding. A caller's ``max_lines`` is a capacity answer, not a metric.
     from deck_compiler.layout import break_lines
-    lines = break_lines(text, font(path, size), max(1, width - 16))
+    lines = break_lines(text, font(path, size), max(1, width))
     if len(lines) > max_lines:
         return 10000.0
-    return len(lines) * size * 1.4 + 12
+    return len(lines) * size * LINE_HEIGHT
+
+
+def figure_min_height(unit):
+    """Smallest picture area that can still reach the panel floor at any width."""
+    e = unit.get('min_panel_extent', 220)
+    return max(e, e * unit.get('panel_count', 1) / (unit.get('aspect', 1.0) or 1.0))
 
 
 def required_height(unit, width, request):
     if unit['role'] == 'figure':
         caption = unit.get('caption', '')
-        ch = max(unit.get('caption_height', 62), height(caption, request['font'],
-            unit.get('caption_font_floor', 20), width, 2)) if caption else 0
-        e = unit.get('min_panel_extent', 220)
-        aspect, panels = unit['aspect'], unit.get('panel_count', 1)
-        # Contain scaling, retaining the original image aspect and panel count.
-        min_h = max(e, e * panels / aspect)
-        if width < min_h * aspect:
+        ch = figure_caption_height(unit, width, request) if caption else 0
+        min_h = figure_min_height(unit)
+        if width < min_h * (unit.get('aspect', 1.0) or 1.0):
             return 10000.0
         return min_h + ch + 12
     if request.get('sequence_flow'):
@@ -110,7 +119,7 @@ def required_height(unit, width, request):
     label = unit.get('label', '')
     label_box = 40 if request['archetype'] == 'figure-parameters' else 44
     lh = max(label_box, height(label, request['bold_font'], 24, width, 1)) if label else 0
-    return lh + height(unit['text'], request['font'], 24, width)
+    return lh + height(unit['text'], request['font'], BODY_SIZE, width)
 
 
 def features(request):
@@ -138,11 +147,33 @@ def span_width(region_width, columns):
 
 
 def figure_caption_height(unit, width, request):
+    """The caption strip, measured the same way the compiler will draw it.
+
+    A declared ``caption_height`` still wins; otherwise the strip follows the actual line count at
+    the size the caption is set in, with a 34 px floor. Reserving a fixed 62 px for every caption
+    is what made a one-line caption cost its picture 26 px.
+    """
     caption = unit.get('caption', '') or ''
     if not caption:
         return 0.0
-    return max(unit.get('caption_height', 62),
-               height(caption, request['font'], unit.get('caption_font_floor', 20), width, 2))
+    if unit.get('caption_height'):
+        return float(unit['caption_height'])
+    from deck_compiler.layout import caption_height
+    return caption_height(caption, width, request['font'], unit.get('caption_font_size', 22))
+
+
+def figure_picture_size(unit, box, request):
+    """The contain-fitted picture inside ``box``: (width, height, extent)."""
+    width, box_height = box[2], box[3]
+    aspect = unit.get('aspect', 1.0) or 1.0
+    area_h = max(1.0, box_height - figure_caption_height(unit, width, request) - 12)
+    picture_h = min(area_h, width / aspect)
+    picture_w = picture_h * aspect
+    return picture_w, picture_h, min(picture_w / unit.get('panel_count', 1), picture_h)
+
+
+def figure_extent(unit, box, request):
+    return figure_picture_size(unit, box, request)[2]
 
 
 def figure_picture_void(unit, box, request):
@@ -150,29 +181,45 @@ def figure_picture_void(unit, box, request):
 
     The compiler centres the picture inside the proposed rectangle, so a rectangle that is wider or
     taller than the picture shows a band of dead space. Sub-pixel slack is not a defect; a fifth of
-    the box being empty is.
+    the box being empty is. It is a score, not a gate: a height-limited picture in its full column
+    is how the compiler's own dual template draws a two-up page.
     """
     width, box_height = box[2], box[3]
-    aspect = unit.get('aspect', 1.0) or 1.0
-    area_h = max(1.0, box_height-figure_caption_height(unit, width, request))
-    picture_h = min(area_h, width/aspect)
-    return 1.0-(picture_h*aspect*picture_h)/(width*area_h)
+    area_h = max(1.0, box_height - figure_caption_height(unit, width, request) - 12)
+    picture_w, picture_h, _ = figure_picture_size(unit, box, request)
+    return 1.0 - (picture_w * picture_h) / (max(width, 1.0) * area_h)
 
 
 def figure_box_height(unit, width, request, available):
     """Height of a rectangle that holds the picture plus its caption, or None if it cannot fit.
 
-    The picture keeps its aspect, so the height follows from the width. Returning None lets the
-    caller try a narrower column instead of proposing a box the compiler would fill with empty
-    space.
+    The picture keeps its aspect and is contain-fitted, so the height is
+    ``min(width / aspect, available - caption - 12)``. A picture that is limited by the available
+    height is narrower than its column: that is exactly what the compiler does, and rejecting it
+    was why a 1.31-aspect panel with a two-line caption had no candidate at any column width.
     """
+    if required_height(unit, width, request) >= 10000:
+        return None                  # the width cannot carry the panel floor at all
     caption = figure_caption_height(unit, width, request)
     aspect = unit.get('aspect', 1.0) or 1.0
-    panel_floor = required_height(unit, width, request)-caption-12
-    if panel_floor >= 10000:
-        return None                      # the width cannot carry the panel floor at all
-    needed = max(width/aspect, panel_floor)+caption+12
-    return None if needed > available+.5 else needed
+    area = available - caption - 12
+    if area <= 0:
+        return None
+    picture_h = min(width / aspect, area)
+    extent = min(picture_h * aspect / unit.get('panel_count', 1), picture_h)
+    if extent + .5 < unit.get('min_panel_extent', 220):
+        return None
+    return picture_h + caption + 12
+
+
+def hug_target(need):
+    """How tall a text box may be before the leftover starts reading as empty space.
+
+    The allowance is the larger of a fixed pad (descenders, pixel rounding) and five percent. A
+    proportion alone made a one-line box 27% taller than its text; a pad alone was meaningless on a
+    ten-line box.
+    """
+    return need + max(HUG_PAD, need * (HUG_FACTOR - 1))
 
 
 def row_groups(request, boxes, tolerance=12.0):
@@ -214,7 +261,7 @@ def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
         need = required_height(unit, result[index][2], request)
         if need >= 10000:
             return None
-        result[index][3] = min(result[index][3], need*factor+pad)
+        result[index][3] = min(result[index][3], hug_target(need))
     for group in row_groups(request, result):
         shared = max(result[index][3] for index in group)
         top = min(result[index][1] for index in group)
@@ -262,7 +309,8 @@ def read_requests(path, root=None):
                 'schematic': (asset.get('origin') or 'paper') == 'generated',
                 'member_ids': [f'figure-{index}', f'figure-{index}:caption']})
         top = 236 if spacious else 260
-        bottom = 588 if slide['semantic']['caveats'] else 640
+        bottom = module.body_bottom(slide, module.ARCHETYPES[slide['composition']['archetype']]['layout'],
+                                    spacious)
         frames = [e for e in layout['slides'][number-1]['elements']
                   if e['id'] in ('title', 'takeaway', 'footer', 'caveats',
                                  'direct-evidence:heading', 'hypothesis:heading')]
@@ -360,14 +408,14 @@ def check(request, boxes):
         if h + .1 < required_height(u, w, request):
             errors.append(f'{u["id"]}:CONTENT_CAPACITY')
             continue
-        if u['role'] == 'figure' and u.get('caption'):
-            caption_h = max(u.get('caption_height', 62),
-                            height(u['caption'], request['font'],
-                                   u.get('caption_font_floor', 20), w, 2))
-            if h - caption_h - 12 - w / u['aspect'] > 2:
+        if u['role'] == 'figure':
+            caption_h = figure_caption_height(u, w, request)
+            if caption_h and h - caption_h - 12 - w / u['aspect'] > 2:
                 errors.append(f'{u["id"]}:FIGURE_CAPTION_SLACK')
-        if u['role'] == 'figure' and figure_picture_void(u, b, request) > MAX_FIGURE_VOID:
-            errors.append(f'{u["id"]}:FIGURE_VOID')
+            # What can be judged about a scientific figure is whether its panel is still readable;
+            # the empty band the picture leaves in its column is a score, not a defect.
+            if figure_extent(u, b, request) + .5 < u.get('min_panel_extent', 220):
+                errors.append(f'{u["id"]}:FIGURE_BELOW_MINIMUM')
         if u['role'] != 'figure':
             if u['role'] == 'formula' or u.get('component') == 'formula':
                 # A bbox provider cannot size a formula: its height comes from the typeset math, not
@@ -381,7 +429,7 @@ def check(request, boxes):
             pieces=[(u['text'],[x+inset,y+lh,w-inset,h-lh],request['font'],28,24,10)]
             if label: pieces.append((label,[x,y,w,lh],request['bold_font'],28,24,1))
         else:
-            ch=max(u.get('caption_height',62),height(u.get('caption',''),request['font'],u.get('caption_font_floor',20),w,2))
+            ch=figure_caption_height(u,w,request)
             pieces=[(u.get('caption',''),[x,y+h-ch,w,ch],request['font'],u.get('caption_font_size',22),u.get('caption_font_floor',20),2)]
         for text,box,font_path,size,floor,lines in pieces:
             if not text: continue
@@ -389,9 +437,11 @@ def check(request, boxes):
                 wrapped,contract=fit_text(text,box,TextBoxContract(request['font_family'],size,font_path,font_floor=floor,max_lines=lines))
                 if re.search(r'\d(?:\.\n|\n\.)\d',wrapped):
                     errors.append(f'{u["id"]}:DECIMAL_SPLIT')
-                # Two rules taken from real review: nothing below 18 pt, and a last line of one or
+                # Two rules taken from real review: nothing below the declared floor (18 pt for
+                # body text = 24 px, 15 pt for a figure caption = 20 px), and a last line of one or
                 # two characters is an orphan rather than a wrap.
-                if contract.font_size < MIN_FONT_PT-.01:
+                minimum_px = 20.0 if u['role'] == 'figure' else 24.0
+                if contract.font_size < minimum_px -.01:
                     errors.append(f'{u["id"]}:FONT_BELOW_MINIMUM')
                 rendered=[line for line in wrapped.split('\n') if line.strip()]
                 if len(rendered)>1 and len(rendered[-1].strip()) < MIN_LINE_CHARS:
@@ -490,9 +540,11 @@ def templates(request):
                 yield boxes
     if len(figs)==2:
         # Two cards sharing one row: the shared height is the taller picture need, so both cards
-        # line up and neither rectangle is much larger than its picture.
+        # line up and neither rectangle is much larger than its picture. The callout band is the
+        # height its own text needs, instead of a guess that made the boxes too short.
         cw = span_width(w, 6)
-        for th in (64,88,112):
+        text_need = max([required_height(units[i], cw, request) for i in texts] or [56])
+        for th in sorted({round(max(56., min(text_need, h*.45)), 1), 64., 88.}):
             available = h-th-GRID_GAP
             heights = [figure_box_height(units[i], cw, request, available) for i in figs]
             if any(value is None for value in heights):
@@ -548,7 +600,7 @@ def quality(request, boxes):
             score += figure_picture_void(u, b, request) * 2
             figures += w * h
         else:
-            target = required_height(u, w, request) * HUG_FACTOR + HUG_PAD
+            target = hug_target(required_height(u, w, request))
             score += max(0., h - target) / max(h, 1) * 1.5
     rx, ry, rw, rh = request['region']
     return score - figures / max(rw * rh, 1) * .25

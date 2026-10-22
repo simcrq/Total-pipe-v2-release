@@ -34,7 +34,9 @@
         "foreground": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
         "background": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
         "accent": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
-                   "description": "List markers, step badges and emphasis. Defaults to #C2410C."}
+                   "description": "List markers, step badges and emphasis. Defaults to #C2410C."},
+        "background_image": {"type": "string", "minLength": 1,
+                             "description": "Full-bleed picture drawn under every slide, relative to deck_ir.json. Its contrast against the text colour is measured before the build."}
       }
     },
     "assets": {
@@ -108,7 +110,9 @@
                   },
                   "label": {"type": "string"},
                   "text": {"type": "string", "minLength": 1, "maxLength": 600},
-                  "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]}
+                  "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
+                  "anchor": {"type": "string", "minLength": 1,
+                             "description": "Formula only: id of the block this equation explains. The compiler places an unlabelled equation under the block above it and never as a peer row."}
                 }
               }
             },

@@ -2,6 +2,7 @@
 import re
 
 from .catalog import ARCHETYPES, COMPONENTS
+from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
 
 
@@ -19,9 +20,9 @@ def caption_figure_ids(caption):
 
 def validate(ir):
     errors = []
-    def check(ok, message, slide=None, rule="IR_INVALID"):
+    def check(ok, message, slide=None, rule="IR_INVALID", severity="FAIL"):
         if not ok:
-            errors.append(issue(rule, "FAIL", message, slide))
+            errors.append(issue(rule, severity, message, slide))
     check(isinstance(ir, dict), "Deck IR must be an object")
     if errors:
         return errors
@@ -48,6 +49,10 @@ def validate(ir):
     if isinstance(theme, dict) and "accent" in theme:
         check(isinstance(theme["accent"], str) and ACCENT.fullmatch(theme["accent"]),
               "theme.accent must look like #C2410C")
+    if isinstance(theme, dict) and "background_image" in theme:
+        check(isinstance(theme["background_image"], str) and bool(theme["background_image"].strip()),
+              "theme.background_image must be a file path relative to deck_ir.json",
+              rule="BACKGROUND_INVALID")
     slides = ir.get("slides")
     check(isinstance(slides, list) and bool(slides), "slides must be a nonempty list")
     if not isinstance(slides, list):
@@ -94,6 +99,7 @@ def validate(ir):
             check(False, "composition.blocks/figure_refs must be lists", n)
             continue
         ids = set()
+        formulas = []
         for b in blocks:
             if not isinstance(b, dict):
                 check(False, "Block must be an object", n)
@@ -105,14 +111,44 @@ def validate(ir):
             check(b.get("component") in COMPONENTS, "Unknown component", n)
             check(isinstance(b.get("text"), str) and bool(b["text"].strip()), "Block text required", n)
             if b.get("component") == "formula":
+                formulas.append(b)
                 from totalpipe_layout.formula import FormulaError, parse as parse_formula
                 try:
                     parse_formula(b.get("text", ""))
                 except FormulaError as error:
                     check(False, f"block {b.get('id')}: {error}", n, rule="FORMULA_SYNTAX")
+            elif "anchor" in b:
+                check(False, f"block {b.get('id')}: only a formula block may carry an anchor", n,
+                      rule="FORMULA_ANCHOR_INVALID")
             check(b.get("text_flow", "auto") in ("auto", "plain", "distributed_arrow_list"),
                   "Unknown block text_flow", n)
             check(not any(k in b for k in ("bbox", "x", "y", "w", "h")), "Geometry belongs to compiled layout", n)
+        # A page can hold a couple of displayed equations, not a list of them, and it still has to
+        # carry the prose they belong to. These are the content half of the capacity budget; the
+        # measured half (width/height at 18 pt) is enforced by the compiler.
+        if len(formulas) > FORMULA_MAX_PER_SLIDE:
+            check(False, f"{len(formulas)} displayed equations; at most {FORMULA_MAX_PER_SLIDE} "
+                         "fit one page -- move the rest to their own slide", n, "FORMULA_BUDGET")
+        if formulas:
+            prose = sum(len(b.get("text", "")) for b in blocks
+                        if isinstance(b, dict) and b.get("component") != "formula")
+            check(prose >= FORMULA_MIN_TEXT_CHARS,
+                  "this page is an equation with no prose beside it: confirm the sentence it "
+                  "belongs to was not moved or cut to make room for it",
+                  n, "FORMULA_TEXT_FLOOR", severity="REVIEW")
+            for b in formulas:
+                anchor = b.get("anchor")
+                if anchor is None:
+                    continue
+                target = next((other for other in blocks
+                               if isinstance(other, dict) and other.get("id") == anchor), None)
+                check(target is not None and target.get("component") != "formula",
+                      f"block {b.get('id')}: anchor must name a non-formula block on this slide", n,
+                      "FORMULA_ANCHOR_INVALID")
+                if target is not None and target.get("component") != "formula":
+                    check(len(target.get("text", "").strip()) >= FORMULA_MIN_ANCHOR_CHARS,
+                          f"block {b.get('id')}: the block it is anchored to carries no text to "
+                          "explain", n, "FORMULA_ANCHOR_INVALID")
         visual_intent = comp.get("visual_intent")
         if visual_intent is not None:
             valid_shape = isinstance(visual_intent, dict)

@@ -86,11 +86,19 @@ def commands(layout):
     width, height = layout['slide_size']
     result = [{'command': 'set', 'path': '/', 'props': {
         'slideWidth': _px(width), 'slideHeight': _px(height)}}]
+    background_image = layout.get('background_image')
+    if background_image:
+        # Once, on the master: a per-slide image fill embeds a copy of the picture for every slide
+        # (1.7 MB x 10), which is how a 0.4 MB deck became a 17 MB one in testing.
+        result.append({'command': 'set', 'path': '/slidemaster[1]',
+                       'props': {'background': f'image:{background_image}'}})
     for index, slide in enumerate(layout['slides'], 1):
         parent = f'/slide[{index}]'
         has_text = False
-        result.append({'command': 'add', 'parent': '/', 'type': 'slide',
-                       'props': {'layout': 'blank', 'background': _color(slide['background'])}})
+        slide_props = {'layout': 'blank'}
+        if not background_image:
+            slide_props['background'] = _color(slide['background'])
+        result.append({'command': 'add', 'parent': '/', 'type': 'slide', 'props': slide_props})
         for element in slide['elements']:
             x, y, w, h = element['bbox']
             props = {'x': _px(x), 'y': _px(y), 'width': _px(w), 'height': _px(h)}

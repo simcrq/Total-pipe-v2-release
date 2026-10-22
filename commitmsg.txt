@@ -1,0 +1,26 @@
+复盘测试 deck：度量对齐、公式容量、字号声明、背景进 IR、交付校验
+
+测试产物 nn_device_test_guide_v2 暴露的五层问题，逐条修复并有测试：
+
+1. 打包器与编译器共用一套度量。文本高度改按契约 1.25 行高、无额外 padding、18 pt 取最小值；
+   图框改 contain-fit（允许图比列窄），闸门由“空带 ≤15%”改为“面板短边 ≥ min_panel_extent”；
+   图注高度按折行实测（一行 36 px 而非固定 62）；dual 页正文下界统一为 618。
+   同一 deck 的 PACKED 页 3/10 → 7/10，其余 3 页是示意图/公式页，按设计归编译器。
+
+2. 公式锚定与容量预算（deck_compiler/capacity.py）。无标签公式锚在上一块下方，有标签公式
+   标签左置一行；公式页正文列宽由公式实测宽度反推（≤616），公式取能放下的最大字号且不低于
+   24 px。新闸门：每页 ≤2 个公式、单个 ≤32% 正文高、合计 ≤50%、锚定组 ≤45%；
+   放不下时 FORMULA_CAPACITY 带 widen_text_column_or_split_slide，绝不靠缩小字号或删正文。
+   compile_deck 不再把 REVIEW 当致命错误。
+
+3. 字号比例声明并强制执行：正文 ≥18 pt，图注/caveat/证据号 ≥15 pt（TYPOGRAPHY_FLOOR）；
+   footer 13.5 → 15 pt，证据号过多时折行而不是缩字号；打包器的字号闸门改对 px/pt 做换算。
+
+4. 背景图进入 IR（theme.background_image），编译前测量对比度/繁复度/体积，
+   写入时只在母版放一次（逐页插图会让 1.7 MB 背景复制 10 份，实测 17 MB；母版方案 2.09 MB）。
+
+5. 新增 totalpipe verify：把交付文件哈希与 qa_report/staging 比对；对本次测试文件命中
+   delivered 7487fede vs QA 73b032e5。
+
+重建同一份 deck：0 FAIL / 0 WARNING / 13 REVIEW（1 字体回退 + 11 张论文面板 + 1 原生验收）。
+测试 96 → 110 条全绿。

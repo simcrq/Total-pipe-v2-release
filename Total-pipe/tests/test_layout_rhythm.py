@@ -36,10 +36,16 @@ class LayoutRhythmTests(unittest.TestCase):
 
         # Longer peers may need different heights; the shared 24 px gaps remain.
         request['region'][3] = 352
-        request['units'][1]['text'] = ('Scientific observation with an extended '
-                                      'explanation that crosses the column width.')
-        request['units'][2]['text'] = ('Independent evidence with an extended '
-                                      'explanation that crosses the column width.')
+        # Longer peers need more height than an equal split can give them; the 24 px gaps remain.
+        # The texts are long enough to need three lines at the 18 pt floor, which is what makes the
+        # equal split infeasible now that required height measures the compiler's own line height.
+        request['region'][3] = 352
+        request['units'][1]['text'] = (
+            'Scientific observation with an extended explanation that crosses the column width '
+            'and keeps going until the row genuinely needs a third line of type at the floor size.')
+        request['units'][2]['text'] = (
+            'Independent evidence with an extended explanation that crosses the column width '
+            'and keeps going until the row genuinely needs a third line of type at the floor size.')
         boxes[3] = [575, 530, 649, 58]
         corrected = snap_rhythm(request, boxes)
         self.assertEqual(check(request, corrected), [])

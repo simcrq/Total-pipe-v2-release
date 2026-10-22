@@ -22,6 +22,9 @@ python totalpipe.py quality build/
 
 # 4. Generate preview images (no PowerPoint required)
 python totalpipe.py preview build/ --format png
+
+# 5. Check that a delivered .pptx is the file the QA report describes
+python totalpipe.py verify build/final.pptx --build build/
 ```
 
 **Key Features**:

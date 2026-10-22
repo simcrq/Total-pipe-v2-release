@@ -88,10 +88,16 @@ class FormulaDeckTests(unittest.TestCase):
         self.assertGreaterEqual(element['font_size_px'], 24, '18 pt is 24 px at 96 dpi')
         self.assertFalse([i for i in issues if i['severity'] == 'FAIL'])
 
-    def test_an_over_wide_formula_asks_for_a_split_instead_of_shrinking(self):
+    def test_an_over_wide_formula_is_a_capacity_failure_not_a_smaller_equation(self):
         long_formula = ' + '.join([r'\frac{1}{1+e^{-t}}'] * 4)
         _, issues = compile_deck(self.formulas_deck(long_formula), ROOT)
-        self.assertIn('SPLIT_REQUIRED', [i['rule'] for i in issues])
+        rules = [i['rule'] for i in issues]
+        self.assertIn('FORMULA_CAPACITY', rules)
+        failure = next(i for i in issues if i['rule'] == 'FORMULA_CAPACITY')
+        self.assertEqual(failure['source'].get('suggested_fix'),
+                         'widen_text_column_or_split_slide')
+        self.assertNotIn('SPLIT_REQUIRED', rules,
+                         'a formula that cannot fit is a budget problem, not a generic split')
 
 
 if __name__ == '__main__':

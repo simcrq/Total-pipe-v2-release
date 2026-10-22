@@ -4,6 +4,10 @@ from pathlib import Path
 import re
 from PIL import Image, ImageFont
 from .catalog import ARCHETYPES
+from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
+                       FORMULA_MAX_HEIGHT_SHARE, FORMULA_MAX_PER_SLIDE,
+                       FORMULA_MAX_TOTAL_SHARE, FORMULA_MIN_TEXT_CHARS, FORMULA_SIZES,
+                       budget as formula_budget)
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
@@ -25,6 +29,39 @@ DEFAULT_LIST_GAP = 0.45
 # not the body colour: a marker in the same ink as the sentence reads as a typo, and a step badge in
 # the same ink as its label disappears into it. Decks override it with theme.accent.
 DEFAULT_ACCENT = "#C2410C"
+
+# A caption strip is measured from the caption, not reserved at a fixed 62 px. A one-line caption in
+# a 692 px column needs 36 px; reserving 62 for it costs the picture 26 px on every page and was one
+# half of the "figure + caveat does not fit" dead end in the packer.
+CAPTION_FONT_SIZE = 22
+
+# One typographic scale, enforced instead of implied. Body copy, headings and labels are never set
+# below 18 pt; the annotation roles that support them (figure captions, caveats, evidence ids, step
+# badges) are never below 15 pt. The compiler used to carry body floors and annotation floors with
+# nothing that said which role was which, so a 13.5 pt footer and a 15 pt caveat sat next to 18 pt
+# body text without a finding.
+BODY_MIN_PT = 18.0
+ANNOTATION_MIN_PT = 15.0
+ANNOTATION_ROLES = {"caption", "caveat", "footer", "badge"}
+
+
+def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
+    """Height of a caption strip: the wrapped line count at the size it is set in."""
+    lines = break_lines(caption, ImageFont.truetype(font_file, size), max(1, width))
+    return max(34.0, len(lines) * size * 1.25 + 8)
+
+
+def body_bottom(slide, family, spacious):
+    """Where the body region ends on this page.
+
+    The dual-figure template has always used the strip between the body bottom and the compact caveat
+    row at y=622; the packer's requests said 588, so the two disagreed by 30 px and no two-up figure
+    could ever satisfy the panel floor. One function now answers for both.
+    """
+    bottom = 588 if slide["semantic"]["caveats"] else 640
+    if family == "dual" and slide["semantic"]["caveats"]:
+        bottom = 618
+    return bottom
 
 # Which marker a deck gets when it does not say. A deck keeps one style, so this is decided once
 # from the dominant list semantics: a procedure reads as arrows, a set of claims as open squares,
@@ -62,6 +99,77 @@ def fit_list_items(items, width, font_file, size, floor, max_lines):
         if all(len(item_lines) <= max_lines for item_lines in lines):
             return lines, candidate
     return None
+
+
+def text_floor_height(text, width, font_file, floor=24, max_lines=10):
+    """Height of ``text`` at the 18 pt floor, or None when it cannot fit in ``max_lines``."""
+    face = ImageFont.truetype(font_file, floor)
+    lines = break_lines(text, face, max(1, width))
+    if len(lines) > max_lines:
+        return None
+    return len(lines) * floor * 1.25
+
+
+def formula_label_width(label, bold_font_file, size=24):
+    """Width of the label that sits to the left of an equation, capped."""
+    if not label:
+        return 0.0
+    face = ImageFont.truetype(bold_font_file, size)
+    return min(FORMULA_LABEL_MAX, max(56.0, float(face.getlength(label)) + 12))
+
+
+def formula_widths(text):
+    """Measured metrics at every allowed size, widest (the floor) last."""
+    from totalpipe_layout.formula import measure, parse
+    ast = parse(text)
+    return {size: measure(ast, size) for size in FORMULA_SIZES}
+
+
+def formula_fit(text, width):
+    """Metrics of the largest allowed size whose measured width fits ``width``, else None."""
+    widths = formula_widths(text)
+    for size in FORMULA_SIZES:
+        if widths[size].width <= width:
+            return widths[size]
+    return None
+
+
+def formula_column_width(blocks, bold_font_file, base, limit):
+    """The text column a formula page needs: inline label + equation at 18 pt, else ``base``.
+
+    An equation is the one element that cannot be re-wrapped, so on a formula page the column is
+    derived from the equation instead of the equation being squeezed into the default column. The
+    figure keeps the rest of the width.
+    """
+    need = base
+    for block in blocks:
+        if block.get("component") != "formula":
+            continue
+        label_w = formula_label_width(block.get("label", ""), bold_font_file)
+        gaps = (label_w + 12) if label_w else 0
+        widths = formula_widths(block["text"])
+        # The largest size the column can carry: an equation is the reason the page exists, so it
+        # is set as large as the figure allows instead of at the 18 pt floor by default.
+        chosen = next((widths[size] for size in FORMULA_SIZES
+                       if gaps + widths[size].width + 24 <= limit), widths[FORMULA_SIZES[-1]])
+        need = max(need, gaps + chosen.width + 24)
+    return min(limit, need)
+
+
+def formula_groups(blocks):
+    """An unlabelled equation belongs to the block above it; a labelled one is its own row.
+
+    The alternative is what the delivered test deck did: an equation that sits on its own peer row,
+    reading as a caption-less block between two paragraphs. Grouping keeps the equation attached to
+    the sentence it explains, and it also gives the page one row back.
+    """
+    groups = []
+    for block in blocks:
+        if (block.get("component") == "formula" and not block.get("label") and groups):
+            groups[-1][1].append(block)
+        else:
+            groups.append((block, []))
+    return groups
 
 
 
@@ -178,7 +286,9 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
 
 def compile_deck(ir, base, _retry=True, proposals=None):
     issues = validate(ir)
-    if issues:
+    # A REVIEW is something a human confirms later; only a FAIL stops compilation. Treating every
+    # finding as fatal meant an equation-only page could not even be laid out to be reviewed.
+    if any(issue["severity"] == "FAIL" for issue in issues):
         return None, issues
     base = Path(base)
     theme = ir["theme"]
@@ -232,6 +342,25 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             issues.append(issue("ASSET_INVALID", "FAIL", f"{key}: {e}", detector="geometric-preflight"))
     if any(i["severity"] == "FAIL" for i in issues):
         return None, issues
+    # A full-bleed background is declared by the theme and drawn by the compiler beneath every
+    # element. It used to be stamped into the slide master by a script that ran after QA, which is
+    # how a delivered deck ended up with bytes no report had inspected.
+    background_key = None
+    background_image = theme.get("background_image")
+    if background_image:
+        from . import background as background_layer
+        path = (base / background_image).resolve()
+        try:
+            stats, findings = background_layer.review(
+                path, theme.get("foreground", "#142735"), path.stat().st_size)
+            issues += findings
+            assets["@background"] = {"path": str(path), "width": WIDTH, "height": HEIGHT,
+                                     "sha256": file_hash(path), "content_type": "image/png"}
+            background_key = "@background"
+        except (OSError, ValueError) as error:
+            issues.append(issue("BACKGROUND_INVALID", "FAIL", f"{background_image}: {error}",
+                                detector="geometric-preflight"))
+            return None, issues
     deck_frame = frame_variant(ir)
     slides = []
     for n, slide in enumerate(ir["slides"], 1):
@@ -241,6 +370,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         visual_intent = comp.get("visual_intent") or {}
         family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
+        slide_formulas = []
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
                  anchor="top", color=None, flow=None):
             if not content:
@@ -263,6 +393,21 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 issues.append(issue("FONT_COVERAGE_REVIEW", "REVIEW", "Possible missing glyphs; verify in PowerPoint",
                                     n, eid, detector="geometric-preflight", confidence="LOW",
                                     font_metrics="pillow", characters=''.join(sorted(gaps))[:20]))
+            # The declared scale, checked on the fitted size: an annotation may be 15 pt, body copy
+            # may not. This is the rule the old code implied with two different floors and never
+            # stated, which is how a 13.5 pt footer shipped beside 18 pt body text.
+            minimum_pt = ANNOTATION_MIN_PT if role in ANNOTATION_ROLES else BODY_MIN_PT
+            if fitted.font_size * .75 < minimum_pt - .01:
+                issues.append(issue("TYPOGRAPHY_FLOOR", "FAIL",
+                                    f"{eid} is set at {fitted.font_size*.75:.1f} pt; the {role} "
+                                    f"floor is {minimum_pt:.0f} pt",
+                                    n, eid, detector="geometric-preflight", confidence="HIGH",
+                                    role=role, font_pt=round(fitted.font_size*.75, 1),
+                                    floor_pt=minimum_pt))
+            if role == "footer" and "\n" in output:
+                # A soft break, not a new paragraph: OfficeCLI's overflow estimator counts every
+                # paragraph of a pre-broken footer as one line more than the renderer draws.
+                output = output.replace("\n", "\v")
             elements.append({"id": eid, "kind": "text", "role": role, "text": output,
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),
@@ -275,7 +420,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
         text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
         footer = " · ".join(sem["evidence_refs"])
-        footer_y, footer_h = 658, 44
+        # Evidence ids are an annotation, so they are set at 15 pt like a caveat. A page with a
+        # dozen ids wraps, and a wrapped footer needs a second line instead of a smaller face.
+        # The box is narrower than the page on purpose: a line measured at exactly 1168 px wraps
+        # into a third line in OfficeCLI, whose face resolves a little wider than Pillow's.
+        footer_width = 1100
+        footer_lines = len(break_lines(footer, ImageFont.truetype(font_paths["font_file"], 20),
+                                       footer_width))
+        footer_y, footer_h = (662, 54) if footer_lines > 1 else (658, 44)
         caveat_y, caveat_h = 604, 46
         if slide["id"] == "s05-anneal":
             footer_y, footer_h = 666, 36
@@ -284,17 +436,17 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # dual-evidence slides, while keeping caveats and evidence ids clear.
             caveat_y, caveat_h = 622, 36
             footer_y, footer_h = 670, 32
-        text("footer", footer, [56, footer_y, 1168, footer_h], "footer", 18, 16, 2)
+        text("footer", footer, [56, footer_y, footer_width, footer_h], "footer", 20, 20, 2)
         if sem["caveats"]:
-            text("caveats", "；".join(sem["caveats"]), [56, caveat_y, 1168, caveat_h], "caveat", 20, 18, 2)
-        bottom = 588 if sem["caveats"] else 640
+            text("caveats", "；".join(sem["caveats"]), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
+        bottom = body_bottom(slide, family, spacious)
         top = 236 if spacious else 260
         bh = bottom-top
         def block(b, box):
             label = b.get("label", "")
             if b.get("component") == "formula":
-                # A formula is its own unit: measured by the formula layer, written as OMML, and
-                # never fed through the text wrapper (which cannot typeset it).
+                # A formula is a measured unit: it cannot wrap, it is never fed through the text
+                # wrapper, and it is never silently set below 18 pt to make a page fit.
                 from totalpipe_layout.formula import (FormulaError, measure, parse,
                                                       to_omml_paragraph, to_plain)
                 try:
@@ -303,20 +455,48 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     issues.append(issue("FORMULA_SYNTAX", "FAIL", f"{b['id']}: {error}",
                                         n, b["id"], detector="geometric-preflight"))
                     return
-                inner = [box[0]+16, box[1]+8, box[2]-32, box[3]-16]
+                # A label sits to the left of the equation on its centre line. A heading above it
+                # would cost the row 40 px, and on a dense page that is the whole difference.
+                label_w = formula_label_width(label, font_paths["bold_font_file"])
+                gaps = (label_w + 12) if label_w else 0
+                inner = [box[0]+gaps, box[1]+6, box[2]-gaps-20 if label_w else box[2]-20,
+                         box[3]-12]
                 chosen = None
-                for size_px in (30, 28, 26, 24):
+                for size_px in FORMULA_SIZES:
                     metrics = measure(ast, size_px)
-                    if metrics.width <= inner[2] and metrics.height <= inner[3]:
+                    if metrics.width <= inner[2]+.5 and metrics.height <= inner[3]+.5:
                         chosen = (size_px, metrics)
                         break
                 if chosen is None:
-                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
-                                        f"{b['id']} formula does not fit its box at 18 pt",
-                                        n, b["id"], detector="geometric-preflight",
-                                        textbox_contract="deck_ir"))
+                    widest = measure(ast, FORMULA_SIZES[-1])
+                    issues.append(issue(
+                        "FORMULA_CAPACITY", "FAIL",
+                        f"{b['id']} needs {widest.width:.0f} px at 18 pt but its slot is "
+                        f"{max(inner[2], 0):.0f} px wide. Widen the slot or move the equation to "
+                        "its own slide: the compiler will not shrink the body text, or the "
+                        "equation below 18 pt, to make it fit.",
+                        n, b["id"], detector="geometric-preflight",
+                        formula_width_px=round(widest.width, 1),
+                        slot_width_px=round(max(inner[2], 0), 1),
+                        suggested_fix="widen_text_column_or_split_slide"))
                     return
+                if label_w:
+                    text(b["id"]+":label", label,
+                         [box[0], box[1]+(box[3]-30)/2, label_w, 30], "heading", 24, 24, 1)
                 size_px, metrics = chosen
+                slide_formulas.append((b["id"], metrics.height))
+                limits = formula_budget(bottom-top)
+                if (metrics.height > limits['max_height_px'] or
+                        sum(h for _, h in slide_formulas) > limits['max_total_px']):
+                    issues.append(issue(
+                        "FORMULA_CAPACITY", "FAIL",
+                        f"{b['id']} would take {sum(h for _, h in slide_formulas):.0f} px of the "
+                        f"{bottom-top} px body (limit {limits['max_total_px']:.0f} px; one "
+                        f"equation {limits['max_height_px']:.0f} px). The page is carrying more "
+                        "typeset math than it has room for: split the slide rather than trimming "
+                        "the prose around it.",
+                        n, b["id"], detector="geometric-preflight", confidence="HIGH",
+                        formula_height_px=round(metrics.height, 1), **limits))
                 bbox = [inner[0]+(inner[2]-metrics.width)/2,
                         inner[1]+(inner[3]-metrics.height)/2,
                         metrics.width, metrics.height]
@@ -423,20 +603,105 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if not bs:
                 return
             gap = 24 if comp["archetype"] == "figure-parameters" else 18
-            h = (box[3]-gap*(len(bs)-1))/len(bs)
-            for k, b in enumerate(bs):
-                block(b, [box[0], box[1]+k*(h+gap), box[2], h])
+            if not any(b.get("component") == "formula" for b in bs):
+                h = (box[3]-gap*(len(bs)-1))/len(bs)
+                for k, b in enumerate(bs):
+                    block(b, [box[0], box[1]+k*(h+gap), box[2], h])
+                return
+            # A formula page stacks groups, not blocks: an unlabelled equation shares its anchor's
+            # row (text above, equation at its measured size below). That is one row fewer than
+            # treating the equation as a peer, which is what pays for the equation's own height.
+            plan = []
+            for anchor, formulas in formula_groups(bs):
+                card = anchor.get("component") == "formula"
+                if card:
+                    # A labelled equation is its own row: label on the left, equation on its centre
+                    # line. Its height is the measured equation, not a share of the column.
+                    label_w = formula_label_width(anchor.get("label", ""),
+                                                  font_paths["bold_font_file"])
+                    metrics = formula_fit(anchor["text"],
+                                          box[2]-(label_w+12 if label_w else 0)-20)
+                    if metrics is None:
+                        issues.append(issue(
+                            "FORMULA_CAPACITY", "FAIL",
+                            f"{anchor['id']} does not fit its column at 18 pt even with the label "
+                            "on its own line; widen the column or split the slide",
+                            n, anchor["id"], detector="geometric-preflight", confidence="HIGH",
+                            suggested_fix="widen_text_column_or_split_slide"))
+                        return
+                    plan.append([anchor, [], metrics.height+12, 0.0])
+                    continue
+                label_h = ((40 if comp["archetype"] == "figure-parameters" else 44)
+                           if anchor.get("label") else 0)
+                text_h = text_floor_height(anchor["text"], box[2], font_paths["font_file"])
+                if text_h is None:
+                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                        f"{anchor['id']} cannot fit its column above the 18 pt floor",
+                                        n, anchor["id"], detector="geometric-preflight",
+                                        textbox_contract="deck_ir"))
+                    return
+                formula_h = 0.0
+                placed = []
+                for f in formulas:
+                    metrics = formula_fit(f["text"], box[2]-20)
+                    if metrics is None:
+                        issues.append(issue(
+                            "FORMULA_CAPACITY", "FAIL",
+                            f"{f['id']} needs "
+                            f"{formula_widths(f['text'])[FORMULA_SIZES[-1]].width:.0f} px at 18 pt "
+                            f"but its column is {box[2]-20:.0f} px wide; widen the column or split "
+                            "the slide", n, f["id"], detector="geometric-preflight",
+                            confidence="HIGH", suggested_fix="widen_text_column_or_split_slide"))
+                        return
+                    placed.append((f, metrics))
+                    formula_h += FORMULA_GAP + metrics.height + 12
+                plan.append([anchor, placed, label_h+text_h+formula_h, formula_h])
+            available = box[3] - gap*(len(plan)-1)
+            total = sum(entry[2] for entry in plan)
+            if total > available + .5:
+                issues.append(issue(
+                    "FORMULA_CAPACITY", "FAIL",
+                    f"{box[2]:.0f} px column needs {total:.0f} px for text and equations, the page "
+                    f"gives {available:.0f} px. Move one equation to its own slide instead of "
+                    "trimming the text it belongs to.",
+                    n, None, detector="geometric-preflight", confidence="HIGH",
+                    required_px=round(total, 1), available_px=round(available, 1),
+                    suggested_fix="split_slide"))
+                return
+            extra = (available - total)/len(plan)
+            cursor = box[1]
+            for anchor, placed, need, formula_h in plan:
+                group_h = need + extra
+                if not placed:
+                    # A labelled equation row: its own height, its label drawn inline.
+                    block(anchor, [box[0], cursor, box[2], group_h])
+                    cursor += group_h + gap
+                    continue
+                if formula_h / max(group_h, 1) > FORMULA_GROUP_SHARE_MAX:
+                    issues.append(issue(
+                        "FORMULA_CAPACITY", "FAIL",
+                        f"{anchor['id']}'s equation needs {formula_h:.0f} px of a {group_h:.0f} px "
+                        f"row (limit {FORMULA_GROUP_SHARE_MAX:.0%}). An equation may not crowd out "
+                        "the text it belongs to: give the row its own slide.",
+                        n, anchor["id"], detector="geometric-preflight", confidence="HIGH",
+                        formula_height_px=round(formula_h, 1), group_height_px=round(group_h, 1),
+                        suggested_fix="split_slide"))
+                block(anchor, [box[0], cursor, box[2], group_h-formula_h])
+                cursor += group_h - formula_h
+                for f, metrics in placed:
+                    block(f, [box[0], cursor+FORMULA_GAP, box[2], metrics.height+12])
+                    cursor += FORMULA_GAP + metrics.height + 12
+                cursor += gap
         def figure(f, box, k):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
-            caption_h = f.get("caption_height", 62) if f["caption"] else 0
-            if schematic and f["caption"] and "caption_height" not in f:
-                # A drawn schematic usually carries a one-line caption; reserving the scientific
-                # 62 px strip would push the picture under the panel floor for no reason.
-                caption_face = ImageFont.truetype(font_paths["font_file"],
-                                                  f.get("caption_font_size", 22))
-                caption_lines = len(break_lines(f["caption"], caption_face, box[2]))
-                caption_h = max(34, caption_lines * f.get("caption_font_size", 22) * 1.25 + 8)
+            caption_h = 0
+            if f["caption"]:
+                # Declared height wins; otherwise the strip follows the actual line count. A drawn
+                # schematic and a one-line paper caption need the same thing: enough room for the
+                # lines they have, not the two-line scientific default.
+                caption_h = f.get("caption_height") or caption_height(
+                    f["caption"], box[2], font_paths["font_file"], f.get("caption_font_size", 22))
             h = box[3] - caption_h - 12
             scale = min(box[2]/asset["width"], h/asset["height"])
             w, h = asset["width"]*scale, asset["height"]*scale
@@ -515,7 +780,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 block(b, supplied[b['id']]['bbox'])
             for k, f in enumerate(figs, 1):
                 group = supplied[f'figure-{k}']
-                figure({**f, 'caption_height': group.get('caption_height', f.get('caption_height', 62))},
+                declared = group.get('caption_height', f.get('caption_height'))
+                figure({**f, **({'caption_height': declared} if declared else {})},
                        group['bbox'], k)
             adaptations.append({'action': 'layout_provider',
                                 'provider': proposal.get('provider', 'provider'),
@@ -523,8 +789,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         elif schematic_only:
             schematic_band(blocks, figs[0])
         elif family in ("figure-left", "figure-right") and figs:
-            fig_x, txt_x = (56, 784) if family == "figure-left" else (552, 56)
-            fig_w, txt_w = (692, 440) if family == "figure-left" else (672, 460)
+            base_text = 440 if family == "figure-left" else 460
+            txt_w = formula_column_width(blocks, font_paths["bold_font_file"], base_text, 616)
+            fig_w = 1168 - 32 - txt_w
+            if family == "figure-left":
+                fig_x, txt_x = 56, 56 + fig_w + 32
+            else:
+                txt_x, fig_x = 56, 56 + txt_w + 32
             figure(figs[0], [fig_x, top, fig_w, bh], 1)
             stack(blocks, [txt_x, top, txt_w, bh])
         elif show_sequence and not figs:
@@ -538,9 +809,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             for k, b in enumerate(blocks[:4]):
                 y = top + k * (row_h + row_gap)
                 text(b["id"]+":label", b.get("label", ""), [left_x, y, left_w, 32],
-                     "heading", 24, 22, 1)
+                     "heading", 24, 24, 1)
                 text(b["id"], b["text"], [left_x, y+32, left_w, row_h-32],
-                     "body", 22, 20, 1)
+                     "body", 24, 24, 1)
             figure(figs[0], [650, top, 574, bh], 1)
         elif slide["id"] == "s07-contact" and figs:
             # Keep the two numeric callouts compact so the two original Fig.3e/f
@@ -548,24 +819,24 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             for k, b in enumerate(blocks[:2]):
                 x = 56 + k * 600
                 text(b["id"]+":label", b.get("label", ""), [x, top, 568, 32],
-                     "heading", 24, 22, 1)
+                     "heading", 24, 24, 1)
                 text(b["id"], b["text"], [x, top+32, 568, 38],
                      "body", 26, 22, 1)
             fw = (1168-32*(len(figs)-1))/len(figs)
             for k, f in enumerate(figs):
-                figure(f, [56+k*(fw+32), top+70, fw, bh-40], k+1)
+                figure(f, [56+k*(fw+32), top+70, fw, bottom-(top+70)], k+1)
         elif family == "dual" and figs:
             # Dual scientific figures get compact native callouts and a hard
             # 240px evidence band. This avoids the former 154px thumbnails.
             for k, b in enumerate(blocks[:2]):
                 x = 56 + k * 600
                 text(b["id"]+":label", b.get("label", ""), [x, top, 568, 30],
-                     "heading", 24, 22, 1)
+                     "heading", 24, 24, 1)
                 text(b["id"], b["text"], [x, top+30, 568, 34],
-                     "body", 22, 20, 1)
+                     "body", 24, 24, 1)
             fw = (1168-32*(len(figs)-1))/len(figs)
             for k, f in enumerate(figs):
-                figure(f, [56+k*(fw+32), top+70, fw, bh-40], k+1)
+                figure(f, [56+k*(fw+32), top+70, fw, bottom-(top+70)], k+1)
         elif family == "evidence":
             for col, role in enumerate(("direct-evidence", "hypothesis")):
                 x = 56 + col*600
@@ -628,4 +899,5 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             "frame_variant_overrides": {str(n): deck_frame for n, slide in enumerate(ir["slides"], 1)
                 if slide["presentation"].get("variant", "default") != deck_frame},
             "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in font_paths.values()},
+            "background_image": (assets[background_key]["path"] if background_key else None),
             "slides": slides}, issues
