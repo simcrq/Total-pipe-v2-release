@@ -314,4 +314,32 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'PowerPoint UI review'):
                 promote(out)
 
+class AudienceTests(unittest.TestCase):
+    """The page is read by a room; provenance goes to the speaker notes."""
+
+    def test_evidence_ids_leave_the_page(self):
+        ir = fixture()
+        layout, _issues = compile_deck(ir, ROOT)
+        for source, slide in zip(ir['slides'], layout['slides']):
+            self.assertFalse([e for e in slide['elements'] if e.get('role') == 'footer'])
+            if source['semantic']['evidence_refs']:
+                self.assertIn('Evidence: ' + ' · '.join(source['semantic']['evidence_refs']),
+                              slide['notes'])
+
+    def test_run_state_caveat_reaches_notes_not_page(self):
+        ir = fixture()
+        ir['slides'][0]['semantic']['caveats'] = ['样本只有三个器件；本次没有 SI 可供独立核查。']
+        layout, issues = compile_deck(ir, ROOT)
+        caveats = [e['text'] for e in layout['slides'][0]['elements'] if e.get('role') == 'caveat']
+        self.assertEqual(caveats, ['样本只有三个器件'])
+        self.assertIn('本次没有 SI 可供独立核查', layout['slides'][0]['notes'])
+        self.assertIn('RUN_STATE_CAVEAT', [i['rule'] for i in issues])
+
+    def test_reviewer_traces_on_a_page_are_reviewed(self):
+        ir = fixture()
+        ir['slides'][0]['composition']['blocks'][0]['text'] = '见 docs/report.md 与 EV0014。'
+        _layout, issues = compile_deck(ir, ROOT)
+        self.assertIn('AUDIENCE_TEXT', [i['rule'] for i in issues])
+
+
 if __name__=='__main__': unittest.main()

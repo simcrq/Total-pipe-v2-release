@@ -78,6 +78,7 @@
             "takeaway": {"type": "string", "minLength": 1, "maxLength": 180},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
             "caveats": {"type": "array", "items": {"type": "string"}},
+            "run_notes": {"type": "array", "items": {"type": "string"}},
             "speaker_notes": {"type": "string", "minLength": 1}
           }
         },

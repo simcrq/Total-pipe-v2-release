@@ -1,6 +1,7 @@
 """Canonical input validation and read-only derived views."""
 import re
 
+from . import audience
 from .catalog import ARCHETYPES, COMPONENTS
 from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
@@ -92,6 +93,10 @@ def validate(ir):
             check(isinstance(sem.get(key), str) and bool(sem.get(key, "").strip()), f"semantic.{key} required", n)
         for key in ("evidence_refs", "caveats"):
             check(isinstance(sem.get(key), list) and all(isinstance(v, str) for v in sem[key]), f"semantic.{key} list required", n)
+        if "run_notes" in sem:
+            check(isinstance(sem["run_notes"], list)
+                  and all(isinstance(v, str) for v in sem["run_notes"]),
+                  "semantic.run_notes must be a list of strings", n, "IR_INVALID")
         archetype = comp.get("archetype")
         check(archetype in ARCHETYPES, f"Unknown archetype: {archetype}", n)
         blocks, figures = comp.get("blocks"), comp.get("figure_refs")
@@ -224,6 +229,28 @@ def validate(ir):
         check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 180 and
                   isinstance(f.get("panel_count", 1), int) and 1 <= f.get("panel_count", 1) <= 6 for f in figures),
               "Caption/panel capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
+        # The page is read by an audience, not by the person auditing the build. Evidence ids,
+        # repository paths and notes about which files this run happened to have are real
+        # provenance, but they belong in the speaker notes. The compiler moves run-state caveats
+        # there; this gate names every string that reads as a work log so it cannot ship silently.
+        caveats = sem.get("caveats") if isinstance(sem.get("caveats"), list) else []
+        visible_text = [("semantic.title", sem.get("title", "")),
+                        ("semantic.takeaway", sem.get("takeaway", ""))]
+        visible_text += [(f"semantic.caveats[{i}]", caveat) for i, caveat in enumerate(caveats)
+                         if not audience.is_run_state(caveat)]
+        visible_text += [(f"block {b.get('id')}", b.get("text", ""))
+                         for b in blocks if isinstance(b, dict)]
+        visible_text += [(f"block {b.get('id')}.label", b.get("label", ""))
+                         for b in blocks if isinstance(b, dict) and b.get("label")]
+        for field, text in visible_text:
+            found = audience.hits(text)
+            if found:
+                check(False, f"{field}: " + "; ".join(f"{kind} {value}" for kind, value in found),
+                      n, "AUDIENCE_TEXT", severity="REVIEW")
+        _, moved = audience.split_caveats(caveats)
+        for clause in moved:
+            check(False, "caveat clause moves to the speaker notes: " + clause[:70],
+                  n, "RUN_STATE_CAVEAT", severity="REVIEW")
         check(not pres.get("optional_overrides"), "Geometry overrides unsupported in v2.0; choose a variant", n)
         check(pres.get("variant", "default") in ("default", "spacious"), "Unknown component variant", n)
     return errors

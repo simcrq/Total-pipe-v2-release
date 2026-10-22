@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import re
 from PIL import Image, ImageFont
+from . import audience
 from .catalog import ARCHETYPES
 from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
                        FORMULA_MAX_HEIGHT_SHARE, FORMULA_MAX_PER_SLIDE,
@@ -36,10 +37,10 @@ DEFAULT_ACCENT = "#C2410C"
 CAPTION_FONT_SIZE = 22
 
 # One typographic scale, enforced instead of implied. Body copy, headings and labels are never set
-# below 18 pt; the annotation roles that support them (figure captions, caveats, evidence ids, step
-# badges) are never below 15 pt. The compiler used to carry body floors and annotation floors with
-# nothing that said which role was which, so a 13.5 pt footer and a 15 pt caveat sat next to 18 pt
-# body text without a finding.
+# below 18 pt; the annotation roles that support them (figure captions, caveats, step badges) are
+# never below 15 pt. The compiler used to carry body floors and annotation floors with nothing that
+# said which role was which, so a 13.5 pt footer and a 15 pt caveat sat next to 18 pt body text
+# without a finding. Evidence ids no longer have a role here: they are notes, not page furniture.
 BODY_MIN_PT = 18.0
 ANNOTATION_MIN_PT = 15.0
 ANNOTATION_ROLES = {"caption", "caveat", "footer", "badge"}
@@ -58,8 +59,8 @@ def body_bottom(slide, family, spacious):
     row at y=622; the packer's requests said 588, so the two disagreed by 30 px and no two-up figure
     could ever satisfy the panel floor. One function now answers for both.
     """
-    bottom = 588 if slide["semantic"]["caveats"] else 640
-    if family == "dual" and slide["semantic"]["caveats"]:
+    bottom = 588 if audience.visible_caveats(slide) else 640
+    if family == "dual" and audience.visible_caveats(slide):
         bottom = 618
     return bottom
 
@@ -72,7 +73,7 @@ def body_region(slide, family, frame):
     y=686), so a content page gains about 150 px of body height.
     """
     if frame == "template":
-        return 132, (632 if slide["semantic"]["caveats"] else 672)
+        return 132, (632 if audience.visible_caveats(slide) else 672)
     spacious = frame == "spacious"
     return (236 if spacious else 260), body_bottom(slide, family, spacious)
 
@@ -428,18 +429,17 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         spacious = deck_frame == "spacious"
         templated = deck_frame == "template"
         footer = " · ".join(sem["evidence_refs"])
+        visible_caveats, moved_caveats = audience.split_caveats(sem["caveats"])
         if templated:
             # A lab template owns the page frame: its own title slot, its own footer band, its own
             # white page. The compiler keeps the body grid but hands the title, takeaway and caveat
-            # to the template's geometry, and drops the evidence-id footer because the template's
-            # footer band is fixed (the ids stay in the speaker notes).
+            # to the template's geometry.
             # The template's title slot ends at its red rule (y=78), so the title is set to fit
             # above it and the takeaway opens the body underneath.
             text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A")
             text("takeaway", sem["takeaway"], [88, 84, 1104, 42], "takeaway", 24, 24, 2,
                  color="#333333")
             caveat_y, caveat_h = 640, 36
-            footer_width, footer_y, footer_h = 0, 0, 0
         else:
             text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
             # These two evidence-heavy slides use a single-line takeaway; reclaiming
@@ -447,25 +447,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # larger without colliding with the title block.
             takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
             text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
-            # Evidence ids are an annotation, so they are set at 15 pt like a caveat. A page with a
-            # dozen ids wraps, and a wrapped footer needs a second line instead of a smaller face.
-            # The box is narrower than the page on purpose: a line measured at exactly 1168 px wraps
-            # into a third line in OfficeCLI, whose face resolves a little wider than Pillow's.
-            footer_width = 1100
-            footer_lines = len(break_lines(footer, ImageFont.truetype(font_paths["font_file"], 20),
-                                           footer_width))
-            footer_y, footer_h = (662, 54) if footer_lines > 1 else (658, 44)
+            # No footer element on any frame. The evidence ids used to be set at 15 pt under every
+            # page, which meant a dozen EV numbers shared the bottom strip with the caveat. They are
+            # traceability keys: the notes carry them, the room does not need them.
             caveat_y, caveat_h = 604, 46
-            if slide["id"] == "s05-anneal":
-                footer_y, footer_h = 666, 36
-            elif family == "dual":
+            if family == "dual":
                 # Compact callouts and larger scientific panels extend lower on
-                # dual-evidence slides, while keeping caveats and evidence ids clear.
+                # dual-evidence slides, while keeping the caveat clear.
                 caveat_y, caveat_h = 622, 36
-                footer_y, footer_h = 670, 32
-            text("footer", footer, [56, footer_y, footer_width, footer_h], "footer", 20, 20, 2)
-        if sem["caveats"]:
-            text("caveats", "；".join(sem["caveats"]), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
+        if visible_caveats:
+            text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
         top, bottom = body_region(slide, family, deck_frame)
         bh = bottom-top
         def block(b, box):
@@ -894,7 +885,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 adaptations.append({"action": "sequence_rail",
                     "source": "visual_intent" if visual_intent else "legacy_roles",
                     "block_ids": [b["id"] for b in blocks]})
-        if family == "columns" and not figs and not sem["caveats"] and len(blocks) >= 3:
+        if family == "columns" and not figs and not visible_caveats and len(blocks) >= 3:
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)
@@ -908,9 +899,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     continue
                 if intersect(e["bbox"], other["bbox"]):
                     issues.append(issue("CRITICAL_COLLISION", "FAIL", f"Overlaps {other['id']}", n, e["id"], detector="geometric-preflight"))
+        notes = sem["speaker_notes"]
+        notes_only = [*(sem.get("run_notes") or []), *moved_caveats]
+        if notes_only:
+            # Provenance stays with the deck; it just stops being projected.
+            notes += "\n\n备注（不投屏）：" + "；".join(notes_only)
+        if footer:
+            notes += "\nEvidence: " + footer
         slides.append({"id": slide["id"],
                        "background": "#FFFFFF" if templated else theme.get("background", "#FFFFFF"),
-                       "notes": sem["speaker_notes"] + "\nEvidence: " + footer,
+                       "notes": notes,
                        "elements": elements, "adaptation_log": adaptations})
     if _retry and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
         import copy
