@@ -60,6 +60,27 @@ def verify(path, layout):
                 actual = {s.find('p:nvSpPr/p:cNvPr', NS).get('name'): s for s in shapes}
                 boxes = []
                 for e in slide['elements']:
+                    if e['kind'] == 'math':
+                        shape = actual.get(e['id'])
+                        if shape is None:
+                            add('MISSING_SHAPE', 'Expected equation shape absent', n, e['id'])
+                            continue
+                        xf = shape.find('p:spPr/a:xfrm', NS)
+                        off, ext = xf.find('a:off', NS), xf.find('a:ext', NS)
+                        box = [int(off.get('x'))/EMU, int(off.get('y'))/EMU,
+                               int(ext.get('cx'))/EMU, int(ext.get('cy'))/EMU]
+                        if any(abs(a-b) > .2 for a, b in zip(box, e['bbox'])):
+                            add('GEOMETRY_MISMATCH', 'Equation box differs from compiled layout',
+                                n, e['id'])
+                        boxes.append((e['id'], box))
+                        xml = ET.tostring(shape, encoding='unicode')
+                        if 'oMathPara' not in xml or 'mc:AlternateContent' not in xml:
+                            add('FORMULA_MISSING', 'Equation shape carries no OMML payload', n, e['id'])
+                        fallback = ''.join(text.text or '' for text in shape.iter(A+'t')).strip()
+                        if fallback and fallback != e['plain'].strip():
+                            add('FORMULA_FALLBACK_MISMATCH',
+                                'Plain fallback differs from the parsed formula', n, e['id'])
+                        continue
                     if e['kind'] not in ('text', 'list'):
                         continue
                     shape = actual.get(e['id'])

@@ -119,6 +119,30 @@ declares `origin: "generated"` and a `generator` string; the compiler then:
 The spec file and the script are committed next to the PNG, which is what makes the picture
 reproducible. `examples/schematic.deck_ir.json` is the reference page.
 
+### Formulas (`component: "formula"`)
+
+A block whose component is `formula` carries a LaTeX-subset expression in `text` instead of prose.
+The compiler never typesets it as text:
+
+- IR validation parses it and reports `FORMULA_SYNTAX` with the character offset of the offending
+  token (`totalpipe_layout/formula.py`, the only place that knows the grammar);
+- the AST is measured at 30/28/26/24 css px and the largest size that fits the box wins; a formula
+  that cannot fit at 24 px (18 pt) returns `SPLIT_REQUIRED` rather than shrinking below the floor;
+- the writer receives one `a:p` holding `mc:AlternateContent` → `a14:m` → `m:oMathPara`, plus an
+  `mc:Fallback` run with the Unicode text, so a reader without OMML still sees the formula;
+- structural verification rejects a shape without an OMML payload (`FORMULA_MISSING`) and a fallback
+  that disagrees with the parsed formula (`FORMULA_FALLBACK_MISMATCH`).
+
+Measurement uses matplotlib's mathtext, the same offline metric source as the text layout. A formula
+that carries CJK inside `\text{}` cannot be measured there, so it is measured heuristically and
+reported as `FORMULA_MEASURE_APPROXIMATE` (REVIEW) instead of being silently trusted.
+
+Bbox providers are not allowed to place formulas (`FORMULA_REQUIRES_COMPILER`): a formula's height
+comes from the typeset math, not from character advances, so the page stays with the compiler's
+templates. `examples/formula.deck_ir.json` is the reference deck. Note that
+`officecli view screenshot --render html` shows the fallback text; use `--render native` to see the
+typeset formula.
+
 For text-only column slides with at least three blocks, geometric preflight estimates the
 visible bottom of the laid-out text rather than treating the full reserved textbox as occupied.
 When the empty lower band is at least 160 CSS px and 40% of the body area, it emits

@@ -105,6 +105,11 @@ def commands(layout):
                               'fill': _color(element['fill']), 'line': _color(element['line']),
                               'lineWidth': _pt(element.get('line_width', 1))})
                 typ = 'shape'
+            elif kind == 'math':
+                # A display equation: an empty shape whose text body is replaced with OMML below.
+                props.update({'name': element['id'], 'fill': 'none', 'line': 'none',
+                              'margin': '0px'})
+                typ = 'shape'
             elif kind in ('text', 'list'):
                 has_text = True
                 contract = element['contract']
@@ -138,6 +143,14 @@ def commands(layout):
                         'action': 'replace',
                         'xml': list_paragraph_properties(contract, element['bullet'],
                                                          number - 1, len(element['items']))})
+            if kind == 'math':
+                # Replace the placeholder paragraph with the equation paragraph (mc:AlternateContent
+                # + a14:m + m:oMathPara, plus the plain fallback the file already carries).
+                result.append({
+                    'command': 'raw-set', 'part': parent,
+                    'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]"
+                              "/p:txBody/a:p[1]"),
+                    'action': 'replace', 'xml': element['omml']})
         if has_text:
             # OfficeCLI has typed line spacing and insets, but no typed bodyPr.wrap yet.
             result.append({'command': 'raw-set', 'part': parent,

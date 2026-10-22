@@ -156,6 +156,15 @@
 
 ## 任务 3：数学公式（OOXML 直写 OMML）+ 公式抽象层
 
+> **状态：第一迭代已实现（独立公式单位）。** `totalpipe_layout/formula.py` 是抽象层：
+> 解析 LaTeX 子集 → AST，再投影为 OMML / Unicode 降级 / 尺寸测量。编译器把
+> `component: "formula"` 的 block 排成 `kind: "math"` 元素，写入
+> `mc:AlternateContent + a14:m + m:oMathPara`（带 `mc:Fallback` 纯文本），结构校验新增
+> `FORMULA_MISSING` / `FORMULA_FALLBACK_MISMATCH`，提供方遇到公式页直接
+> `FORMULA_REQUIRES_COMPILER` 回退编译器。行内公式（`$...$`）按计划留到第二迭代。
+> 目前只验证了本机的 native 渲染（PowerPoint 排版正确），公式编号、cases 多行、Deck IR 行内
+> 语法都还没做。
+
 ### 现状
 
 - Deck IR 的 `blocks[].text` 是纯字符串，编译器按字符宽度断行（`break_lines` → `fit_text`），

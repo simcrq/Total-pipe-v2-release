@@ -278,6 +278,48 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         bh = bottom-top
         def block(b, box):
             label = b.get("label", "")
+            if b.get("component") == "formula":
+                # A formula is its own unit: measured by the formula layer, written as OMML, and
+                # never fed through the text wrapper (which cannot typeset it).
+                from totalpipe_layout.formula import (FormulaError, measure, parse,
+                                                      to_omml_paragraph, to_plain)
+                try:
+                    ast = parse(b["text"])
+                except FormulaError as error:
+                    issues.append(issue("FORMULA_SYNTAX", "FAIL", f"{b['id']}: {error}",
+                                        n, b["id"], detector="geometric-preflight"))
+                    return
+                inner = [box[0]+16, box[1]+8, box[2]-32, box[3]-16]
+                chosen = None
+                for size_px in (30, 28, 26, 24):
+                    metrics = measure(ast, size_px)
+                    if metrics.width <= inner[2] and metrics.height <= inner[3]:
+                        chosen = (size_px, metrics)
+                        break
+                if chosen is None:
+                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                        f"{b['id']} formula does not fit its box at 18 pt",
+                                        n, b["id"], detector="geometric-preflight",
+                                        textbox_contract="deck_ir"))
+                    return
+                size_px, metrics = chosen
+                bbox = [inner[0]+(inner[2]-metrics.width)/2,
+                        inner[1]+(inner[3]-metrics.height)/2,
+                        metrics.width, metrics.height]
+                colour = theme.get("foreground", "#142735")
+                elements.append({
+                    "id": b["id"], "kind": "math", "role": "formula", "bbox": bbox,
+                    "omml": to_omml_paragraph(ast, size_px, colour),
+                    "plain": to_plain(ast), "font_size_px": size_px,
+                    "measured_exact": metrics.exact, "source_text": b["text"],
+                    "color": colour})
+                if not metrics.exact:
+                    issues.append(issue("FORMULA_MEASURE_APPROXIMATE", "REVIEW",
+                                        f"{b['id']} carries text mathtext cannot measure; "
+                                        "verify the rendered width in PowerPoint",
+                                        n, b["id"], detector="geometric-preflight",
+                                        confidence="LOW", font_metrics="heuristic"))
+                return
             if show_sequence:
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))

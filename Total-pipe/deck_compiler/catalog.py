@@ -13,5 +13,5 @@ ARCHETYPES = {
 COMPONENTS = {
     "body", "metric", "parameter", "process-step", "direct-evidence", "hypothesis",
     "limitation", "conclusion", "callout", "comparison", "definition", "observation",
-    "method", "result", "question", "source", "caveat",
+    "method", "result", "question", "source", "caveat", "formula",
 }

@@ -364,6 +364,10 @@ def check(request, boxes):
         if u['role'] == 'figure' and figure_picture_void(u, b, request) > MAX_FIGURE_VOID:
             errors.append(f'{u["id"]}:FIGURE_VOID')
         if u['role'] != 'figure':
+            if u['role'] == 'formula' or u.get('component') == 'formula':
+                # A bbox provider cannot size a formula: its height comes from the typeset math, not
+                # from character advances, so formula pages stay with the compiler.
+                errors.append(f'{u["id"]}:FORMULA_REQUIRES_COMPILER')
             if select_text_flow(u['text'], u.get('text_flow','auto'))['mode'] == DISTRIBUTED_ARROW_LIST:
                 errors.append(f'{u["id"]}:TEXT_FLOW_REQUIRES_COMPILER')
             label=u.get('label','')

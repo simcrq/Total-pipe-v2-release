@@ -99,6 +99,12 @@ def validate(ir):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
             check(isinstance(b.get("text"), str) and bool(b["text"].strip()), "Block text required", n)
+            if b.get("component") == "formula":
+                from totalpipe_layout.formula import FormulaError, parse as parse_formula
+                try:
+                    parse_formula(b.get("text", ""))
+                except FormulaError as error:
+                    check(False, f"block {b.get('id')}: {error}", n, rule="FORMULA_SYNTAX")
             check(b.get("text_flow", "auto") in ("auto", "plain", "distributed_arrow_list"),
                   "Unknown block text_flow", n)
             check(not any(k in b for k in ("bbox", "x", "y", "w", "h")), "Geometry belongs to compiled layout", n)

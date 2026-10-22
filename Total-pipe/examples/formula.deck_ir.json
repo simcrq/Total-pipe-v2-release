@@ -1,0 +1,61 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "formula-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "formulas",
+      "semantic": {
+        "title": "公式直接写进 PPTX",
+        "purpose": "证明公式是可编辑的原生对象，而不是图片",
+        "takeaway": "公式由 LaTeX 子集解析成 AST，再直写 OMML；在 PowerPoint 里能点开、能改、能重新排版。",
+        "evidence_refs": ["Total-pipe/docs/next-stage-tasks.md"],
+        "caveats": ["字形尺寸由 matplotlib 的 mathtext 测量，最终渲染以 PowerPoint 为准。"],
+        "speaker_notes": "这页的两个公式都是 OMML，不是图片；选中后会出现公式编辑器。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {"id": "f1", "component": "formula",
+           "text": "\\frac{\\partial c}{\\partial t} = D \\nabla^2 c"},
+          {"id": "f2", "component": "formula",
+           "text": "P(t) = \\frac{1}{1+e^{-t}}"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "why",
+      "semantic": {
+        "title": "为什么不用图片",
+        "purpose": "说清公式对象与截图/位图的差别",
+        "takeaway": "公式是文本对象：可搜索、可改字号、可跟随主题字体，也能被 PowerPoint 的公式编辑器直接打开。",
+        "evidence_refs": ["totalpipe_layout/formula.py"],
+        "caveats": [],
+        "speaker_notes": "位图公式一改就得重画，OMML 公式改源码重编即可。"
+      },
+      "composition": {
+        "archetype": "three-conclusions",
+        "blocks": [
+          {"id": "w1", "component": "conclusion",
+           "text": "可编辑：在 PowerPoint 里双击就进公式编辑器，改完仍是原生对象。"},
+          {"id": "w2", "component": "conclusion",
+           "text": "可测量：宽度与高度在编译期算出，排版与门禁都按真实尺寸判断。"},
+          {"id": "w3", "component": "conclusion",
+           "text": "有降级：不认 OMML 的阅读器看到的是同一份公式的 Unicode 文本。"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}
