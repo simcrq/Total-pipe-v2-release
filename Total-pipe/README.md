@@ -8,6 +8,12 @@ Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
 [docs/layout-provider.md](docs/layout-provider.md)）、校验约束并生成 PPTX。
 原 v26 扩散模型已移除，模型接口保留。
 
+现已支持原生可编辑流程图：3–4 个横向节点、五种形状、独立文字，以及绑定节点的原生连接符。
+见 [使用说明](docs/native-graphics.md) 和 [可运行示例](examples/native-graphic.deck_ir.json)。
+
+`type: "dag"` 支持确定性分层、分支/汇合与原生正交连接符；见
+[DAG 示例](examples/native-dag.deck_ir.json)。线性 `process` 的 v2 行为保持兼容。
+
 ## 🚀 Quick Start (New Unified CLI)
 
 ```bash

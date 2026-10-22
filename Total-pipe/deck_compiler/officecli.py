@@ -21,7 +21,7 @@ def _color(value):
     return value.lstrip('#') if value and value != 'none' else 'none'
 
 
-def preflight(executable='officecli'):
+def preflight(executable='officecli', connectors=False):
     """Pin the minimum tested CLI and verify its schema before writing a deck."""
     version = subprocess.run([executable, '--version'], capture_output=True, text=True,
                              encoding='utf-8', errors='replace', timeout=15)
@@ -32,11 +32,16 @@ def preflight(executable='officecli'):
         'presentation': {'slideWidth': 'set', 'slideHeight': 'set'},
         'slide': {'layout': 'add', 'background': 'add'},
         'shape': {key: 'add' for key in ('x', 'y', 'width', 'height', 'name', 'text',
+                                       'geometry', 'lineWidth', 'align',
                                        'font', 'font.ea', 'size', 'lineSpacing', 'bold',
                                        'color', 'fill', 'line', 'autoFit', 'margin', 'valign')},
         'picture': {key: 'add' for key in ('x', 'y', 'width', 'height', 'name', 'src', 'alt')},
         'notes': {'text': 'add'},
     }
+    if connectors:
+        required['connector'] = {key: 'add' for key in (
+            'x', 'y', 'width', 'height', 'name', 'shape', 'from', 'to',
+            'fromIdx', 'toIdx', 'color', 'lineWidth', 'headEnd', 'tailEnd')}
     schemas = {}
     for element, props in required.items():
         response = subprocess.run([executable, 'help', 'pptx', element, '--json'],
@@ -100,6 +105,8 @@ def commands(layout):
             slide_props['background'] = _color(slide['background'])
         result.append({'command': 'add', 'parent': '/', 'type': 'slide', 'props': slide_props})
         for element in slide['elements']:
+            if element['kind'] == 'connector':
+                continue  # All referenced nodes must exist before OfficeCLI binds the endpoints.
             x, y, w, h = element['bbox']
             props = {'x': _px(x), 'y': _px(y), 'width': _px(w), 'height': _px(h)}
             kind = element['kind']
@@ -132,6 +139,8 @@ def commands(layout):
                               'valign': 'center' if contract['vertical_anchor'] == 'middle'
                                         else contract['vertical_anchor']})
                 typ = 'shape'
+                if 'align' in element:
+                    props['align'] = element['align']
             else:
                 raise ValueError(f'Unsupported compiled element kind: {kind}')
             result.append({'command': 'add', 'parent': parent, 'type': typ, 'props': props})
@@ -164,6 +173,30 @@ def commands(layout):
             result.append({'command': 'raw-set', 'part': parent,
                            'xpath': '//p:sp[p:txBody]/p:txBody/a:bodyPr',
                            'action': 'setattr', 'xml': 'wrap=none'})
+        for element in slide['elements']:
+            if element['kind'] != 'connector':
+                continue
+            x, y, w, h = element['bbox']
+            props = {
+                'name': element['id'], 'shape': element['geometry'],
+                'x': _px(x), 'y': _px(y), 'width': _px(w), 'height': _px(h),
+                'from': f"{parent}/shape[@name={element['source_id']}]",
+                'to': f"{parent}/shape[@name={element['target_id']}]",
+                'fromIdx': str(element['start_site']), 'toIdx': str(element['end_site']),
+                'color': _color(element['line']), 'lineWidth': _pt(element['line_width']),
+                'headEnd': element['head_end'], 'tailEnd': element['tail_end']}
+            result.append({'command': 'add', 'parent': parent, 'type': 'connector', 'props': props})
+            if 'route' in element:
+                selector = f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr"
+                result.append({'command': 'raw-set', 'part': parent, 'xpath': selector+'/a:xfrm',
+                               'action': 'setattr', 'xml': f"flipV={int(element['flip_v'])}"})
+                if element['adjustments']:
+                    xml = (f'<a:avLst xmlns:a="{_A_NS}">' + ''.join(
+                        f'<a:gd name="{key}" fmla="val {value}" />'
+                        for key, value in element['adjustments'].items()) + '</a:avLst>')
+                    result.append({'command': 'raw-set', 'part': parent,
+                                   'xpath': selector+'/a:prstGeom/a:avLst',
+                                   'action': 'replace', 'xml': xml})
         result.append({'command': 'add', 'parent': parent, 'type': 'notes',
                        'props': {'text': slide['notes']}})
     return result

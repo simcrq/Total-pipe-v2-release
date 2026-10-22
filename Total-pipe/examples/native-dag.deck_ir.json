@@ -1,0 +1,290 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-dag-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#2563A6"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "three-node-process",
+      "semantic": {
+        "title": "从数据输入到结果输出",
+        "purpose": "用三节点示意图说明数据处理顺序",
+        "takeaway": "先检查数据质量，再分析和汇总结果。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是流程示意图，用来说明输入、质量检查和输出的顺序，不表示实际实验结果。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "data-process",
+            "type": "process",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "shape": "ellipse",
+                "title": "数据输入",
+                "body": "采集原始信号"
+              },
+              {
+                "id": "check",
+                "shape": "diamond",
+                "title": "质量检查",
+                "body": "核对信噪比"
+              },
+              {
+                "id": "output",
+                "shape": "rounded-rect",
+                "title": "结果输出",
+                "body": "汇总有效数据"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "check",
+                "kind": "arrow"
+              },
+              {
+                "from": "check",
+                "to": "output",
+                "kind": "arrow"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "branch",
+      "semantic": {
+        "title": "一个输入分成三条路径",
+        "purpose": "展示明确声明的有向无环关系",
+        "takeaway": "三个分支分别保留原生连接关系。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "此页为关系示意图，用于验证原生图形布局与连接，不代表论文实验结果。所有边均由图形 IR 显式声明。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "branch",
+            "type": "dag",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "shape": "ellipse",
+                "title": "输入"
+              },
+              {
+                "id": "a",
+                "shape": "rounded-rect",
+                "title": "条件 A",
+                "body": "温度处理"
+              },
+              {
+                "id": "b",
+                "shape": "rect",
+                "title": "条件 B",
+                "body": "压力处理"
+              },
+              {
+                "id": "c",
+                "shape": "hexagon",
+                "title": "条件 C",
+                "body": "时间处理"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "a"
+              },
+              {
+                "from": "input",
+                "to": "b"
+              },
+              {
+                "from": "input",
+                "to": "c"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "merge",
+      "semantic": {
+        "title": "三条路径汇合到同一节点",
+        "purpose": "展示明确声明的有向无环关系",
+        "takeaway": "汇合关系由三条独立的边明确表示。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "此页为关系示意图，用于验证原生图形布局与连接，不代表论文实验结果。所有边均由图形 IR 显式声明。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "merge",
+            "type": "dag",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "a",
+                "shape": "rect",
+                "title": "路径 A",
+                "body": "电学测量"
+              },
+              {
+                "id": "b",
+                "shape": "rounded-rect",
+                "title": "路径 B",
+                "body": "结构表征"
+              },
+              {
+                "id": "c",
+                "shape": "hexagon",
+                "title": "路径 C",
+                "body": "光学测量"
+              },
+              {
+                "id": "result",
+                "shape": "ellipse",
+                "title": "汇合",
+                "body": "联合比较"
+              }
+            ],
+            "edges": [
+              {
+                "from": "a",
+                "to": "result"
+              },
+              {
+                "from": "b",
+                "to": "result"
+              },
+              {
+                "from": "c",
+                "to": "result"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "multilevel",
+      "semantic": {
+        "title": "分支、并行处理与跨层汇合",
+        "purpose": "展示明确声明的有向无环关系",
+        "takeaway": "绕行路径避开中间节点；仅保留明确声明的关系。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "此页为关系示意图，用于验证原生图形布局与连接，不代表论文实验结果。所有边均由图形 IR 显式声明。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "multilevel",
+            "type": "dag",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "shape": "ellipse",
+                "title": "输入",
+                "body": "实验数据"
+              },
+              {
+                "id": "a",
+                "shape": "rect",
+                "title": "条件 A",
+                "body": "温度处理"
+              },
+              {
+                "id": "b",
+                "shape": "rounded-rect",
+                "title": "条件 B",
+                "body": "压力处理"
+              },
+              {
+                "id": "testa",
+                "shape": "diamond",
+                "title": "检测 A",
+                "body": "电学测量"
+              },
+              {
+                "id": "testb",
+                "shape": "hexagon",
+                "title": "检测 B",
+                "body": "结构测量"
+              },
+              {
+                "id": "result",
+                "shape": "ellipse",
+                "title": "汇合",
+                "body": "联合比较"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "a"
+              },
+              {
+                "from": "input",
+                "to": "b"
+              },
+              {
+                "from": "a",
+                "to": "testa"
+              },
+              {
+                "from": "b",
+                "to": "testb"
+              },
+              {
+                "from": "testa",
+                "to": "result"
+              },
+              {
+                "from": "testb",
+                "to": "result"
+              },
+              {
+                "from": "input",
+                "to": "result"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

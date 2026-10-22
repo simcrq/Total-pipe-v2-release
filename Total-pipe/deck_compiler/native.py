@@ -1,4 +1,5 @@
-"""Golden renderer: PowerPoint on macOS. No fallback can masquerade as golden."""
+"""PowerPoint PDF evidence on Windows/macOS. No substitute renderer is called native."""
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,16 +21,45 @@ tell application "Microsoft PowerPoint"
 end tell
 end run'''
 
+# Paths are data passed through the child environment, never interpolated into PowerShell code.
+WINDOWS_SCRIPT = r'''
+$ErrorActionPreference = 'Stop'
+$application = $null
+$presentation = $null
+$wasRunning = @(Get-Process -Name POWERPNT -ErrorAction SilentlyContinue).Count -gt 0
+try {
+    $application = New-Object -ComObject PowerPoint.Application
+    $presentation = $application.Presentations.Open($env:TOTALPIPE_NATIVE_INPUT, -1, 0, 0)
+    $presentation.SaveAs($env:TOTALPIPE_NATIVE_PDF, 32)
+} finally {
+    if ($null -ne $presentation) {
+        $presentation.Close()
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($presentation)
+    }
+    if ($null -ne $application) {
+        if (-not $wasRunning -and $application.Presentations.Count -eq 0) { $application.Quit() }
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($application)
+    }
+}
+'''
+
 
 def render(pptx, pdf):
-    if sys.platform != 'darwin':
-        return None, [issue('NATIVE_RENDER_UNAVAILABLE', 'REVIEW', 'PowerPoint golden renderer requires macOS',
+    if sys.platform not in ('darwin', 'win32'):
+        return None, [issue('NATIVE_RENDER_UNAVAILABLE', 'REVIEW', 'PowerPoint native PDF export requires Windows or macOS',
                            detector='native-visual', confidence='LOW', renderer='powerpoint')]
     if pdf.exists():
         pdf.unlink()
     try:
-        subprocess.run(['osascript', '-e', SCRIPT, str(pptx.resolve()), str(pdf.resolve())],
-                       check=True, capture_output=True, text=True, timeout=55)
+        if sys.platform == 'win32':
+            command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT]
+            environment = {**os.environ, 'TOTALPIPE_NATIVE_INPUT': str(pptx.resolve()),
+                           'TOTALPIPE_NATIVE_PDF': str(pdf.resolve())}
+        else:
+            command = ['osascript', '-e', SCRIPT, str(pptx.resolve()), str(pdf.resolve())]
+            environment = None
+        subprocess.run(command, check=True, capture_output=True, text=True,
+                       encoding='utf-8', errors='replace', timeout=55, env=environment)
         if not pdf.exists() or not pdf.read_bytes().startswith(b'%PDF'):
             raise ValueError('PowerPoint did not produce a PDF')
         return {'renderer': 'powerpoint', 'artifact_sha256': file_hash(pptx),

@@ -140,6 +140,9 @@ class CompilerTests(unittest.TestCase):
             with self.subTest(archetype=archetype):
                 s=copy.deepcopy(ir['slides'][0]); s['composition']['archetype']=archetype
                 s['composition']['blocks']=[{'id':'b','component':'direct-evidence' if archetype=='evidence-hypothesis' else 'body','text':'A different finding.'}]
+                if archetype == 'native-graphic':
+                    example = json.loads((ROOT/'examples/native-graphic.deck_ir.json').read_text(encoding='utf-8'))
+                    s['composition'] = example['slides'][0]['composition']
                 layout, items=compile_deck({**ir,'slides':[s]},ROOT)
                 self.assertIsNotNone(layout); self.assertFalse([i for i in items if i['severity']=='FAIL'])
     def test_capacity_excess(self):

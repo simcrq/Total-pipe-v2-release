@@ -62,6 +62,46 @@
     }
   },
   "$defs": {
+    "graphic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "direction", "nodes", "edges"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+        "type": {"enum": ["process", "dag"]},
+        "direction": {"const": "horizontal"},
+        "nodes": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "title"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+              "shape": {"enum": ["rect", "rounded-rect", "ellipse", "diamond", "hexagon"]},
+              "title": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+              "body": {"type": "string", "maxLength": 180}
+            }
+          }
+        },
+        "edges": {
+          "type": "array", "maxItems": 64,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["from", "to"],
+            "properties": {
+              "from": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+              "to": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+              "kind": {"const": "arrow"}
+            }
+          }
+        }
+      },
+      "allOf": [{
+        "if": {"properties": {"type": {"const": "process"}}},
+        "then": {"properties": {"nodes": {"minItems": 3, "maxItems": 4},
+                                "edges": {"minItems": 2, "maxItems": 3}}}
+      }]
+    },
     "slide": {
       "type": "object",
       "additionalProperties": false,
@@ -89,10 +129,15 @@
           "properties": {
             "archetype": {
               "enum": [
-                "cover-hero", "metric-comparison", "process-flow", "figure-parameters",
+                "native-graphic", "cover-hero", "metric-comparison", "process-flow", "figure-parameters",
                 "hero-dual-evidence", "evidence-hypothesis", "dual-demonstration",
                 "three-limitations", "three-conclusions"
               ]
+            },
+            "graphics": {
+              "type": "array", "maxItems": 1,
+              "items": {"$ref": "#/$defs/graphic"},
+              "description": "One editable horizontal process or layered DAG on a native-graphic page; omit on other archetypes."
             },
             "blocks": {
               "type": "array",
@@ -150,7 +195,16 @@
                 }
               }
             }
-          }
+          },
+          "allOf": [{
+            "if": {"properties": {"archetype": {"const": "native-graphic"}}},
+            "then": {
+              "required": ["graphics"],
+              "properties": {"graphics": {"minItems": 1}, "blocks": {"maxItems": 0},
+                             "figure_refs": {"maxItems": 0}}
+            },
+            "else": {"properties": {"graphics": {"maxItems": 0}}}
+          }]
         },
         "presentation": {
           "type": "object",

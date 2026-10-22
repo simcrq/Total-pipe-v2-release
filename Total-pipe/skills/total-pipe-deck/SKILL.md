@@ -162,6 +162,21 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 
 ## 4. Canonical Deck IR
 
+需要可编辑的流程示意图时，使用 `native-graphic` archetype 和
+`composition.graphics`：首版一页一个 3–4 节点的横向流程，五种预设形状、
+独立文本框和绑定节点的直线连接符均输出为 PowerPoint 原生对象。节点只描述内容与形状，不写
+坐标；连接必须与声明的节点顺序一致。字段、限制与可运行样例见
+`docs/native-graphics.md`、`examples/native-graphic.deck_ir.json`。
+原有正文或论文图页保持原 archetype；本版不要把 `graphics` 塞进这些页面，
+移动节点时原生连接符随之调整；文字仍可独立修改。尚不支持自由路径或 SVG 导入。
+
+需要分支、并行或汇合时，同一 `native-graphic` 页面可显式使用 `type: "dag"`、
+`direction: "horizontal"`。只声明节点与真实关系边；编译器执行确定性分层、文字测量、
+正交路由及碰撞检查，不补写关系。最多 16 节点、64 边，实际容量不足或无法无冲突路由
+时必须拆图或重规划。`process` 保留原有 3–4 节点线性行为。用
+`examples/native-dag.deck_ir.json` 测试，字段与限制见 `docs/native-graphics.md` 的 DAG 部分。
+生成图仍保留 `SCHEMATIC_REVIEW`；结构通过不能代替科学解释核对。
+
 把通过的 Story/RPA 规划映射到 `schemas/deck-ir.schema.json`。Deck IR 分为：
 
 - `semantic`：title、purpose、takeaway、evidence_refs、caveats、speaker_notes。

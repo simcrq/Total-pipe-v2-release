@@ -11,6 +11,7 @@ from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
                        budget as formula_budget)
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
+from .graphic_layout import compile_graphic, intentional_overlap
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
 
 WIDTH, HEIGHT = 1280, 720
@@ -323,7 +324,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         + [block.get("text", "")+block.get("label", "") for slide in ir["slides"]
            for block in slide["composition"]["blocks"]]
         + [figure.get("caption", "") for slide in ir["slides"]
-           for figure in slide["composition"]["figure_refs"]])
+           for figure in slide["composition"]["figure_refs"]]
+        + [node.get("title", "") + node.get("body", "") for slide in ir["slides"]
+           for graphic in slide["composition"].get("graphics", []) for node in graphic["nodes"]])
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
@@ -386,7 +389,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         elements = []
         slide_formulas = []
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
-                 anchor="top", color=None, flow=None):
+                 anchor="top", color=None, flow=None, align=None):
             if not content:
                 return
             contract = TextBoxContract(theme["font_family"], size,
@@ -425,6 +428,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             elements.append({"id": eid, "kind": "text", "role": role, "text": output,
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),
+                             **({"align": align} if align else {}),
                              **({"text_flow": flow} if flow else {})})
         spacious = deck_frame == "spacious"
         templated = deck_frame == "template"
@@ -784,7 +788,33 @@ def compile_deck(ir, base, _retry=True, proposals=None):
 
         adaptations = []
         proposal = None if schematic_only else (proposals or {}).get(slide['id'])
-        if proposal:
+        if family == "graphic":
+            graphic = comp["graphics"][0]
+            region = [56, top, 1168, bh]
+            try:
+                graphic_elements = compile_graphic(graphic, region, theme, font_paths)
+            except ValueError as error:
+                graphic_elements = []
+                issues.append(issue(getattr(error, "rule", "GRAPHIC_CAPACITY"), "FAIL", str(error), n, graphic["id"],
+                                    detector="geometric-preflight"))
+            for element in graphic_elements:
+                if element["kind"] in ("shape", "connector"):
+                    elements.append(element)
+                    continue
+                before = len(elements)
+                text(element["id"], element["text"], element["bbox"], element["role"],
+                     element["font_size"], 24, element["max_lines"], "middle",
+                     element["color"], align="center")
+                if len(elements) > before:
+                    elements[-1].update({key: element[key] for key in ("graphic_id", "node_id")})
+            adaptations.append({"action": "native_graphic", "graphic_id": graphic["id"],
+                                "region": region, "node_count": len(graphic["nodes"]),
+                                "edge_count": len(graphic["edges"])})
+            issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
+                                "Confirm the process order and labels match the scientific explanation; "
+                                "this is a generated schematic, not a paper figure",
+                                n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
+        elif proposal:
             supplied = proposal['units']
             expected = [b['id'] for b in blocks] + [f'figure-{k+1}' for k in range(len(figs))]
             if len(expected) != len(set(expected)) or set(supplied) != set(expected):
@@ -892,11 +922,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         # Detect errors before emitting any PPTX, including title/footer collisions.
         for idx, e in enumerate(elements):
             x, y, w, h = e["bbox"]
-            if x < 0 or y < 0 or w <= 0 or h <= 0 or x+w > WIDTH+.1 or y+h > HEIGHT+.1:
+            invalid_size = (w < 0 or h < 0 or w+h <= 0) if e["kind"] == "connector" else (w <= 0 or h <= 0)
+            if x < 0 or y < 0 or invalid_size or x+w > WIDTH+.1 or y+h > HEIGHT+.1:
                 issues.append(issue("SHAPE_OUT_OF_BOUNDS", "FAIL", "Invalid element geometry", n, e["id"], detector="geometric-preflight"))
             for other in elements[:idx]:
                 if e.get("collision_mode") == "container" or other.get("collision_mode") == "container":
                     continue
+                if intentional_overlap(e, other):
+                    continue
+                if e.get("route") or other.get("route"):
+                    continue  # DAG paths were checked segment by segment, not as filled rectangles.
                 if intersect(e["bbox"], other["bbox"]):
                     issues.append(issue("CRITICAL_COLLISION", "FAIL", f"Overlaps {other['id']}", n, e["id"], detector="geometric-preflight"))
         notes = sem["speaker_notes"]

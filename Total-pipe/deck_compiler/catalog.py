@@ -1,5 +1,6 @@
 """Small stable archetype catalog; semantic slots, not agent-authored bboxes."""
 ARCHETYPES = {
+    "native-graphic": {"blocks": 0, "figures": 0, "layout": "graphic"},
     "cover-hero": {"blocks": 2, "figures": 1, "layout": "figure-right"},
     "metric-comparison": {"blocks": 4, "figures": 0, "layout": "columns"},
     "process-flow": {"blocks": 4, "figures": 1, "layout": "process"},

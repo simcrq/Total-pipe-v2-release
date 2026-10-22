@@ -5,6 +5,7 @@ from . import audience
 from .catalog import ARCHETYPES, COMPONENTS
 from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
+from .graphic_layout import validate_graphics
 
 
 SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
@@ -103,6 +104,8 @@ def validate(ir):
         if not isinstance(blocks, list) or not isinstance(figures, list):
             check(False, "composition.blocks/figure_refs must be lists", n)
             continue
+        for message in validate_graphics(comp.get("graphics", []), archetype):
+            check(False, message, n, "GRAPHIC_INVALID")
         ids = set()
         formulas = []
         for b in blocks:
@@ -242,6 +245,14 @@ def validate(ir):
                          for b in blocks if isinstance(b, dict)]
         visible_text += [(f"block {b.get('id')}.label", b.get("label", ""))
                          for b in blocks if isinstance(b, dict) and b.get("label")]
+        graphics = comp.get("graphics")
+        if isinstance(graphics, list):
+            for graphic in graphics:
+                nodes = graphic.get("nodes", []) if isinstance(graphic, dict) else []
+                if isinstance(nodes, list):
+                    visible_text += [(f"graphic node {node.get('id')}.{key}", node.get(key, ""))
+                                     for node in nodes if isinstance(node, dict)
+                                     for key in ("title", "body") if isinstance(node.get(key, ""), str)]
         for field, text in visible_text:
             found = audience.hits(text)
             if found:
@@ -264,7 +275,9 @@ def derive(ir, layout):
             "title": s["semantic"]["title"], "layout_id": s["composition"]["archetype"],
             "evidence_ids": s["semantic"]["evidence_refs"]} for n, s in enumerate(ir["slides"], 1)]},
         "visual_manifest.json": {**provenance, "visuals": [{"slide_id": s["id"], **f}
-            for s in ir["slides"] for f in s["composition"]["figure_refs"]]},
+            for s in ir["slides"] for f in s["composition"]["figure_refs"]],
+            "graphics": [{"slide_id": s["id"], **g} for s in ir["slides"]
+                         for g in s["composition"].get("graphics", [])]},
         "plan_to_layout.json": {**provenance, "deck_frame_variant": layout.get("deck_frame_variant"),
             "slides": [{"slide_id": s["id"], "elements": s["elements"],
                         "layout_provider_status": next((entry.get("status") for entry in

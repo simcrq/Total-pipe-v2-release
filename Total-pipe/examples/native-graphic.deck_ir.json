@@ -1,0 +1,79 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-process-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#2563A6"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "three-node-process",
+      "semantic": {
+        "title": "从数据输入到结果输出",
+        "purpose": "用三节点示意图说明数据处理顺序",
+        "takeaway": "先检查数据质量，再分析和汇总结果。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是流程示意图，用来说明输入、质量检查和输出的顺序，不表示实际实验结果。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [{
+          "id": "data-process",
+          "type": "process",
+          "direction": "horizontal",
+          "nodes": [
+            {"id": "input", "shape": "ellipse", "title": "数据输入", "body": "采集原始信号"},
+            {"id": "check", "shape": "diamond", "title": "质量检查", "body": "核对信噪比"},
+            {"id": "output", "shape": "rounded-rect", "title": "结果输出", "body": "汇总有效数据"}
+          ],
+          "edges": [
+            {"from": "input", "to": "check", "kind": "arrow"},
+            {"from": "check", "to": "output", "kind": "arrow"}
+          ]
+        }]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "four-node-process",
+      "semantic": {
+        "title": "用独立验证约束结论",
+        "purpose": "用四节点示意图说明研究步骤",
+        "takeaway": "观测、分析、验证和结论各自承担不同任务。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是四步研究流程示意图。验证环节需要独立样品；结论应说明适用范围。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [{
+          "id": "research-process",
+          "type": "process",
+          "direction": "horizontal",
+          "nodes": [
+            {"id": "observe", "shape": "rect", "title": "观测", "body": "记录实验信号"},
+            {"id": "analyze", "shape": "rounded-rect", "title": "分析", "body": "提取关键参数"},
+            {"id": "validate", "shape": "hexagon", "title": "验证", "body": "独立样品检验"},
+            {"id": "conclude", "shape": "ellipse", "title": "结论", "body": "报告适用范围"}
+          ],
+          "edges": [
+            {"from": "observe", "to": "analyze"},
+            {"from": "analyze", "to": "validate"},
+            {"from": "validate", "to": "conclude"}
+          ]
+        }]
+      },
+      "presentation": {}
+    }
+  ]
+}
