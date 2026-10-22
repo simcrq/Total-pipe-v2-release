@@ -1,0 +1,47 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "schematic-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {
+    "flow": {
+      "path": "schematic/flow.png",
+      "origin": "generated",
+      "generator": "tools/make_schematic.py/flow"
+    }
+  },
+  "slides": [
+    {
+      "id": "schematic",
+      "semantic": {
+        "title": "缺图时，先画一张示意图",
+        "purpose": "说明自绘图与论文图的边界",
+        "takeaway": "原文没有可用的图时，流程图由脚本生成，并明确标注为示意图，而不是留下一块空白。",
+        "evidence_refs": ["examples/schematic/flow.json", "tools/make_schematic.py"],
+        "caveats": ["示意图不是论文证据，不能替代实验结果。"],
+        "speaker_notes": "这一页演示的是：没有论文插图时，用脚本画一张结构图并标注来源。"
+      },
+      "composition": {
+        "archetype": "cover-hero",
+        "blocks": [
+          {"id": "c1", "component": "body",
+           "text": "触发条件：本页没有可引用插图，或按原图裁切后仍会留下大面积空白。"},
+          {"id": "c2", "component": "source",
+           "text": "生成方式：python tools/make_schematic.py --spec flow.json --out flow.png"}
+        ],
+        "figure_refs": [
+          {"asset_id": "flow", "panel_count": 1,
+           "caption": "示意图 A. 从论文到 PPTX 的四个交接点（自绘，不是论文插图）。",
+           "alt": "流水线示意图"}
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

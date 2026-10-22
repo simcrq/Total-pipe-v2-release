@@ -102,6 +102,23 @@ contain two to six rows and fit the component box above the font floor.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer
 new scientific claims or split prose at punctuation merely to fill space.
 
+### Drawn schematics (`origin: generated`)
+
+A page with no usable paper figure may use a diagram drawn by `tools/make_schematic.py` (flow strip,
+trend chart, or a mermaid source rendered through `mermaid-cli` when `mmdc` is installed). The asset
+declares `origin: "generated"` and a `generator` string; the compiler then:
+
+- forbids `source_figure` on both the asset and the figure reference (`FIGURE_PROVENANCE_FORBIDDEN`),
+  so a drawn diagram can never borrow a paper figure number;
+- requires the caption to say 示意图 / schematic / diagram (`SCHEMATIC_CAPTION_REQUIRED`);
+- keeps the same size and caption gates, but reports `SCHEMATIC_TOO_SMALL` and `SCHEMATIC_REVIEW`
+  instead of `SCIENTIFIC_PANEL_TOO_SMALL` / `SCIENTIFIC_PANEL_REVIEW`;
+- writes `schematic.generator` onto the compiled image element, so `layout.json` and the QA report
+  distinguish drawn material from evidence.
+
+The spec file and the script are committed next to the PNG, which is what makes the picture
+reproducible. `examples/schematic.deck_ir.json` is the reference page.
+
 For text-only column slides with at least three blocks, geometric preflight estimates the
 visible bottom of the laid-out text rather than treating the full reserved textbox as occupied.
 When the empty lower band is at least 160 CSS px and 40% of the body area, it emits

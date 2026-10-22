@@ -41,7 +41,11 @@
         "required": ["path"],
         "properties": {
           "path": {"type": "string", "minLength": 1},
-          "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$"}
+          "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$"},
+          "origin": {"enum": ["paper", "generated"],
+                     "description": "paper (default) = cropped from the paper; generated = drawn by the pipeline."},
+          "generator": {"type": "string", "minLength": 1,
+                        "description": "Required when origin is generated: tool and version, e.g. make_schematic.py/flow."}
         }
       }
     },
@@ -122,13 +126,14 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["asset_id", "caption", "source_figure"],
+                "required": ["asset_id", "caption"],
                 "properties": {
                   "asset_id": {"type": "string", "minLength": 1},
                   "caption": {"type": "string", "maxLength": 180},
                   "alt": {"type": "string"},
                   "panel_count": {"type": "integer", "minimum": 1, "maximum": 6},
-                "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$"},
+                  "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$",
+                                    "description": "Paper figure id. Required for paper assets, forbidden for generated ones."},
                   "min_panel_extent": {"type": "number", "minimum": 140, "maximum": 500},
                   "caption_height": {"type": "number", "minimum": 24, "maximum": 96},
                   "caption_font_size": {"type": "number", "minimum": 12, "maximum": 28},

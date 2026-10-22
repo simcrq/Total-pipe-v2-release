@@ -90,6 +90,14 @@
 
 ## 任务 2：缺图/留白时，用 SVG / mermaid 先画结构化示意图再插入
 
+> **状态：已实现（mermaid 后端需要 `mmdc`）。** `assets.origin: paper|generated` 与 `generator`
+> 进入 schema；`origin=generated` 时禁止 `source_figure`（`FIGURE_PROVENANCE_FORBIDDEN`）、
+> 要求 generator（`SCHEMATIC_GENERATOR_REQUIRED`）、图注必须含"示意图"（`SCHEMATIC_CAPTION_REQUIRED`）；
+> 尺寸与图注门禁不放宽，但报 `SCHEMATIC_TOO_SMALL` / `SCHEMATIC_REVIEW` 以区别于论文图。
+> 生成器为 `tools/make_schematic.py`（flow / trend 用 matplotlib，mermaid 走 `mmdc`），
+> 参考页 `examples/schematic.deck_ir.json`。本机没有 `mmdc`，所以 mermaid 路径只验证了
+> "缺工具时明确报错"，实际渲染待装了 mermaid-cli 的机器复核。
+
 ### 现状
 
 - `figure_refs` 必须带 `source_figure`，且图注必须写出 `Fig.N`，否则

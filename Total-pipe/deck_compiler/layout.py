@@ -83,7 +83,7 @@ def sequence_flow(composition):
             blocks[-1]["component"] == "result")
 
 
-TOKEN = re.compile(r"[A-Za-z0-9_]+(?:[.,][0-9]+)*(?:%|[×x])?|[^\S\n]+|.")
+TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.:/\\-]*(?:%|[×x])?|[^\S\n]+|.")
 # Kinsoku: a line may not begin with closing punctuation or a unit suffix. When the break would
 # land there, the previous character travels down with it instead. Two real review findings drove
 # this: a wrapped "1." / "19×" (the DECIMAL_SPLIT rule) and a line that consisted of "。" alone.
@@ -372,6 +372,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 block(b, [box[0], box[1]+k*(h+gap), box[2], h])
         def figure(f, box, k):
             asset = assets[f["asset_id"]]
+            schematic = (asset.get("origin") or "paper") == "generated"
             caption_h = f.get("caption_height", 62) if f["caption"] else 0
             h = box[3] - caption_h - 12
             scale = min(box[2]/asset["width"], h/asset["height"])
@@ -380,20 +381,36 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             eid = f"figure-{k}"
             min_extent = f.get("min_panel_extent", 220)
             actual_extent = min(w / f.get("panel_count", 1), h)
-            elements.append({"id": eid, "kind": "image", "role": "evidence", "bbox": bbox,
-                             "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
-                             "source_figure": f["source_figure"],
-                             "min_panel_extent": min_extent,
-                             "actual_panel_extent": actual_extent})
+            element = {"id": eid, "kind": "image", "role": "evidence", "bbox": bbox,
+                       "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
+                       "min_panel_extent": min_extent,
+                       "actual_panel_extent": actual_extent}
+            if schematic:
+                element["schematic"] = {"generator": asset.get("generator")}
+            else:
+                element["source_figure"] = f["source_figure"]
+            elements.append(element)
             if actual_extent < min_extent:
-                issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
-                                    f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
-                                    n, eid, detector="geometric-preflight", confidence="HIGH",
-                                    source_figure=f["source_figure"]))
+                if schematic:
+                    issues.append(issue("SCHEMATIC_TOO_SMALL", "FAIL",
+                                        f"Schematic extent {actual_extent:.1f}px is below {min_extent}px",
+                                        n, eid, detector="geometric-preflight", confidence="HIGH"))
+                else:
+                    issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
+                                        f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
+                                        n, eid, detector="geometric-preflight", confidence="HIGH",
+                                        source_figure=f["source_figure"]))
             text(eid+":caption", f["caption"], [box[0], bbox[1]+bbox[3]+12, box[2], caption_h],
                  "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20), 2)
-            issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW", "Confirm scientific panel labels and evidence fidelity",
-                                n, eid, detector="scientific-review", confidence="MEDIUM"))
+            if schematic:
+                issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
+                                    "Confirm the drawn schematic matches the text it illustrates; "
+                                    "it is not a paper figure",
+                                    n, eid, detector="scientific-review", confidence="MEDIUM"))
+            else:
+                issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW",
+                                    "Confirm scientific panel labels and evidence fidelity",
+                                    n, eid, detector="scientific-review", confidence="MEDIUM"))
         adaptations = []
         proposal = (proposals or {}).get(slide['id'])
         if proposal:

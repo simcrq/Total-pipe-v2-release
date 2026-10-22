@@ -8,6 +8,8 @@ from .contracts import digest, issue
 SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
 CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
 ACCENT = re.compile(r"^#[0-9A-Fa-f]{6}$")
+# A schematic drawn by the pipeline is not a paper figure, so its caption has to say so.
+SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
 
 
 def caption_figure_ids(caption):
@@ -55,6 +57,14 @@ def validate(ir):
             check(isinstance(asset.get("source_figure"), str) and
                   bool(SOURCE_FIGURE.fullmatch(asset["source_figure"])),
                   f"asset {key}: source_figure must look like 3 or 3a", rule="FIGURE_PROVENANCE_INVALID")
+        if isinstance(asset, dict):
+            origin = asset.get("origin", "paper")
+            check(origin in ("paper", "generated"),
+                  f"asset {key}: origin must be paper or generated", rule="FIGURE_PROVENANCE_INVALID")
+            if origin == "generated":
+                check(isinstance(asset.get("generator"), str) and bool(asset["generator"].strip()),
+                      f"asset {key}: a generated schematic records its generator",
+                      rule="SCHEMATIC_GENERATOR_REQUIRED")
     seen = set()
     for n, s in enumerate(slides, 1):
         if not isinstance(s, dict):
@@ -122,8 +132,21 @@ def validate(ir):
             if not isinstance(f, dict) or f.get("asset_id") not in assets:
                 continue
             asset = assets[f["asset_id"]]
+            asset = asset if isinstance(asset, dict) else {}
+            origin = asset.get("origin", "paper")
+            if origin == "generated":
+                # A drawn schematic must be recognisable as one: no paper figure number, and a
+                # caption that says so. Everything else about it (size, caption height) is checked
+                # like any other picture.
+                check("source_figure" not in f and "source_figure" not in asset,
+                      f"{f['asset_id']}: a generated schematic must not claim a paper figure number",
+                      n, "FIGURE_PROVENANCE_FORBIDDEN")
+                check(any(marker in f.get("caption", "").lower() for marker in SCHEMATIC_MARKERS),
+                      "A generated schematic caption must say it is a schematic (示意图)",
+                      n, "SCHEMATIC_CAPTION_REQUIRED")
+                continue
             expected = f.get("source_figure")
-            actual = asset.get("source_figure") if isinstance(asset, dict) else None
+            actual = asset.get("source_figure")
             check(isinstance(expected, str) and bool(SOURCE_FIGURE.fullmatch(expected)),
                   "Figure reference requires source_figure such as 3 or 3a", n,
                   "FIGURE_PROVENANCE_REQUIRED")
