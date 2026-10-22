@@ -206,6 +206,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(error), detector="geometric-preflight"))
         return None, issues
     font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
+    # Characters the deck-level font note already covers: repeating them per text element turns one
+    # real finding into fifty identical REVIEWs and buries everything else in the report.
+    deck_gap = set()
+    for note in font_notes:
+        if note['rule'] in ('FONT_SUBSTITUTED', 'FONT_GLYPH_FALLBACK'):
+            deck_gap.update(note.get('detail', {}).get('unsupported_characters', ''))
     bullet_style = choose_bullet_style(ir)
     bullet_glyph, bullet_face = resolve_bullet(bullet_style, theme["font_family"], regular_font)
     list_gap_ratio = float((ir.get("presentation") or {}).get("list_gap", DEFAULT_LIST_GAP))
@@ -252,9 +258,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # Missing-glyph comparison is a conservative signal, not full shaping coverage.
             font = ImageFont.truetype(fitted.font_file, int(fitted.font_size))
             missing = bytes(font.getmask(chr(0x10FFFF)))
-            if any(bytes(font.getmask(c)) == missing for c in set(content) if not c.isspace()):
+            gaps = {c for c in set(content) if not c.isspace() and bytes(font.getmask(c)) == missing}
+            if gaps and not gaps <= deck_gap:
                 issues.append(issue("FONT_COVERAGE_REVIEW", "REVIEW", "Possible missing glyphs; verify in PowerPoint",
-                                    n, eid, detector="geometric-preflight", confidence="LOW", font_metrics="pillow"))
+                                    n, eid, detector="geometric-preflight", confidence="LOW",
+                                    font_metrics="pillow", characters=''.join(sorted(gaps))[:20]))
             elements.append({"id": eid, "kind": "text", "role": role, "text": output,
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),

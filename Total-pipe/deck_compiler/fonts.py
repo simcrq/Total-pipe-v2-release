@@ -157,17 +157,37 @@ def resolve_bullet(style, family, font_file):
     return BULLET_STYLES['bullet'], family
 
 
+def coverage_is_fatal(missing, text_sample):
+    """Whether a face's gaps justify replacing the whole deck's typeface.
+
+    Three exotic glyphs (``10⁻⁶``, ``cm⁻²``, ``WSe₂``) used to flip an entire Chinese deck from a
+    sans face to SimSun, because any gap at all triggered substitution. A gap is fatal only when it
+    is a script mismatch: the face cannot draw a large share of the text, or it misses many distinct
+    characters. Otherwise the declared face stays and the few gaps are reported once, which is what
+    PowerPoint does anyway with per-character fallback.
+    """
+    if not missing:
+        return False
+    visible = [character for character in text_sample if not character.isspace()]
+    if not visible:
+        return False
+    cjk = sum(1 for character in visible if '\u3400' <= character <= '\u9fff')
+    cjk_missing = sum(1 for character in missing if '\u3400' <= character <= '\u9fff')
+    if cjk >= len(visible) * .2 and cjk_missing:
+        return True
+    return len(missing) > 8 or len(missing) >= len(visible) * .02
+
+
 def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
     """Resolve the two theme fonts. Returns ``(regular, bold, notes)``; notes drive REVIEW issues."""
     notes = []
     regular = find_font_file(theme.get('font_file'), base_dir)
     bold = find_font_file(theme.get('bold_font_file'), base_dir)
     discovered = discover_fonts()
-    # Glyph coverage outranks the declared face: a deck whose body is Chinese cannot be set in a
-    # Latin-only face, and substituting is better than emitting tofu boxes. Coverage is scored
-    # rather than required to be perfect, because some glyphs (a decorative arrow, a symbol) may be
-    # missing from every installed face; the best face wins and the remainder is reported.
-    if text_sample and (regular is None or missing_glyphs(regular, text_sample)):
+    # Coverage outranks the declared face only when the gap is a script mismatch; a handful of
+    # symbols stay with the declared face and are reported once (see coverage_is_fatal).
+    declared_gap = missing_glyphs(regular, text_sample) if (regular and text_sample) else set(text_sample)
+    if text_sample and (regular is None or coverage_is_fatal(declared_gap, text_sample)):
         declared = theme.get('font_family')
         preference = [declared] + [n for n in FALLBACK_FAMILIES if n != declared] + list(discovered)
         best = None
@@ -195,6 +215,15 @@ def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
                                          'unsupported_characters': ''.join(sorted(missing))[:40],
                                          'declared_unsupported_sample': ''.join(sorted(declared_missing))[:40]}})
                 return candidate['regular'], candidate.get('bold', candidate['regular']), notes
+    if regular and declared_gap:
+        # Keep the declared face and say which characters PowerPoint will have to borrow.
+        notes.append({'rule': 'FONT_GLYPH_FALLBACK', 'severity': 'REVIEW',
+                      'message': f"theme font {Path(regular).name} cannot draw "
+                                 f"{len(declared_gap)} character(s) ({''.join(sorted(declared_gap))[:20]}); "
+                                 "kept it and left those glyphs to PowerPoint's fallback",
+                      'detail': {'reason': 'partial_coverage', 'declared': theme.get('font_file'),
+                                 'family': theme.get('font_family'),
+                                 'unsupported_characters': ''.join(sorted(declared_gap))[:40]}})
     if regular and bold:
         return regular, bold, notes
     family = theme.get('font_family') or ''
