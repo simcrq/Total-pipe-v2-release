@@ -16,6 +16,10 @@
         "bullet_style": {
           "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash"],
           "description": "Native list marker used on every list page of this deck."
+        },
+        "list_gap": {
+          "type": "number", "minimum": 0.1, "maximum": 1.5,
+          "description": "Space between list items as a fraction of the line height (default 0.45)."
         }
       }
     },

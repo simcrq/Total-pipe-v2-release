@@ -259,6 +259,7 @@ def read_requests(path, root=None):
             asset = layout['assets'][ref['asset_id']]
             units.append({**copy.deepcopy(ref), 'id': f'figure-{index}', 'role': 'figure',
                 'aspect': asset['width']/asset['height'], 'asset_sha256': asset['sha256'],
+                'schematic': (asset.get('origin') or 'paper') == 'generated',
                 'member_ids': [f'figure-{index}', f'figure-{index}:caption']})
         top = 236 if spacious else 260
         bottom = 588 if slide['semantic']['caveats'] else 640
@@ -342,6 +343,10 @@ def check(request, boxes):
     if request.get('frame_failures'):
         errors.append('FRAME_REQUIRES_COMPILER_REPAIR')
     rx, ry, rw, rh = request['region']
+    if any(unit.get('schematic') for unit in units):
+        # A drawn schematic is laid out as a centred band (text above, diagram below), which a bbox
+        # proposal cannot express; the compiler owns these pages.
+        errors.append('SCHEMATIC_REQUIRES_COMPILER')
     from deck_compiler.layout import fit_text, intersect
     from deck_compiler.contracts import TextBoxContract
     from deck_compiler.text_flow import select_text_flow, DISTRIBUTED_ARROW_LIST

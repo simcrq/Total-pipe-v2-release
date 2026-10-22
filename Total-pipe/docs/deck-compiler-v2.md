@@ -93,7 +93,10 @@ PowerPoint draw the marker: each paragraph carries `a:buChar` + `a:buClr` and a 
 Tab changes the level and the bullet menu reflects the style. The deck picks a single marker style —
 `theme.accent` colours it, `presentation.bullet_style` selects it (`bullet`, `square`,
 `open_square`, `diamond`, `arrow`, `check`, `dash`); the default is derived from the dominant row
-semantics (procedure → arrow, claims → open square, otherwise square). It does not split a single
+semantics (procedure → arrow, claims → open square, otherwise square). Item spacing is a fraction of
+the line height (`0.45`, override with `presentation.list_gap`) rather than the leftover panel height,
+and the card hugs the list instead of stretching across the body area; a row may wrap to four lines
+before the page is asked to split. It does not split a single
 paragraph, tables, code, or formula-like content into invented bullets. The applied choice is
 recorded in the slide's `adaptation_log`; an explicit `distributed_arrow_list` request still has to
 contain two to six rows and fit the component box above the font floor.
@@ -115,6 +118,11 @@ declares `origin: "generated"` and a `generator` string; the compiler then:
   instead of `SCIENTIFIC_PANEL_TOO_SMALL` / `SCIENTIFIC_PANEL_REVIEW`;
 - writes `schematic.generator` onto the compiled image element, so `layout.json` and the QA report
   distinguish drawn material from evidence.
+
+Schematic pages are laid out as a centred band, not as text-beside-figure: the context lines run
+across the top (two short blocks share one row), the diagram is centred across the page width, and the
+caption sits under it. A bbox provider cannot express that arrangement, so schematic pages report
+`SCHEMATIC_REQUIRES_COMPILER` and stay with the compiler templates.
 
 The spec file and the script are committed next to the PNG, which is what makes the picture
 reproducible. `examples/schematic.deck_ir.json` is the reference page.

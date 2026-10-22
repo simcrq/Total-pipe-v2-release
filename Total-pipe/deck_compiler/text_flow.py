@@ -34,7 +34,9 @@ def select_text_flow(value, requested="auto"):
         raise ValueError(f"Unknown text_flow: {mode}")
     items = split_parallel_items(value)
     total = sum(_display_units(item) for item in items)
-    safe_items = 3 <= len(items) <= 5 and max((_display_units(item) for item in items), default=0) <= 120
+    # Long rows are allowed: a three-to-five paragraph block whose rows wrap to several lines
+    # is exactly the case where a native list reads better than one wall of text.
+    safe_items = 3 <= len(items) <= 5 and max((_display_units(item) for item in items), default=0) <= 240
     explicit = mode == DISTRIBUTED_ARROW_LIST
     automatic = mode == "auto" and safe_items and total >= 72 and not _EXCLUDED.search(str(value or ""))
     selected = explicit or automatic

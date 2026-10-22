@@ -16,6 +16,10 @@
 > `theme.accent` 进入 schema，deck 级只用一个符号样式；结构校验新增 `LIST_BULLET_MISMATCH`。
 > 与计划的差异：段间距用 `a:spcAft` 而不是每行单独居中（一个文本框里无法逐段居中）；
 > 符号默认色改为 `#C2410C`（新增 `DEFAULT_ACCENT`），不再跟随正文色。
+>
+> 迭代 2（看渲染后的修正）：段间距不再"填满面板"，改为行高的固定比例
+> （`DEFAULT_LIST_GAP = 0.45`，可用 `presentation.list_gap` 覆盖）；卡片本身也按内容收高，
+> 不再拉满正文区；条目允许折到 4 行，长多段正文同样能成为原生列表。
 
 ### 现状
 
@@ -97,6 +101,9 @@
 > 生成器为 `tools/make_schematic.py`（flow / trend 用 matplotlib，mermaid 走 `mmdc`），
 > 参考页 `examples/schematic.deck_ir.json`。本机没有 `mmdc`，所以 mermaid 路径只验证了
 > "缺工具时明确报错"，实际渲染待装了 mermaid-cli 的机器复核。
+>
+> 迭代 2：示意图页改为"上下文在上、流程图居中、图注在下"的整幅版式（两个短 block 并排成一行），
+> 不再左右分栏；提供方对这类页面统一报 `SCHEMATIC_REQUIRES_COMPILER` 回退编译器。
 
 ### 现状
 

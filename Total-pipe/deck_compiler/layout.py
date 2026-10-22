@@ -15,6 +15,11 @@ WIDTH, HEIGHT = 1280, 720
 # row carries the marker. The catalogue lives in fonts.BULLET_STYLES and is resolved to a face that
 # can actually draw the glyph, so a deck never depends on a symbol font being installed.
 BULLET_GUTTER = 42.0            # px reserved for the marker, text starts on the gutter edge
+LIST_ITEM_LINES = 4             # a list item may wrap to four lines before the page must split
+# Space between list items as a fraction of the line height. It is relative on purpose: an absolute
+# gap stops matching when the font shrinks, and filling the panel instead is what made three short
+# items drift apart. A deck may override it with presentation.list_gap.
+DEFAULT_LIST_GAP = 0.45
 
 # One accent colour per deck, used by list markers, sequence badges and emphasis. It is deliberately
 # not the body colour: a marker in the same ink as the sentence reads as a typo, and a step badge in
@@ -203,6 +208,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
     bullet_style = choose_bullet_style(ir)
     bullet_glyph, bullet_face = resolve_bullet(bullet_style, theme["font_family"], regular_font)
+    list_gap_ratio = float((ir.get("presentation") or {}).get("list_gap", DEFAULT_LIST_GAP))
     for note in font_notes:
         issues.append(issue(note["rule"], note["severity"], note["message"],
                             detector="font-resolution", detail=note.get("detail")))
@@ -324,33 +330,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
             if flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520 and box[3] >= 220:
-                panel_id = b["id"] + ":panel"
-                elements.append({
-                    "id": panel_id,
-                    "kind": "shape",
-                    "role": "decoration",
-                    "bbox": box,
-                    "geometry": "rect",
-                    "fill": theme.get("panel_fill", "none"),
-                    "line": theme.get("panel_line", "#142735"),
-                    "line_width": 1,
-                    "collision_mode": "container",
-                })
                 pad_x, pad_y = 28, 18
                 label_h = 44 if label else 0
-                if label:
-                    text(b["id"]+":label", label,
-                         [box[0]+pad_x, box[1]+pad_y, box[2]-2*pad_x, label_h],
-                         "heading", 28, 24, 1)
                 items = flow["items"]
-                items_box = [box[0]+pad_x, box[1]+pad_y+label_h,
-                             box[2]-2*pad_x, box[3]-2*pad_y-label_h]
                 # One text object, one paragraph per item, marker set by the paragraph itself.
                 # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
-                style = {"id": b["id"], "kind": "list", "role": "body",
-                         "bbox": items_box, "color": theme.get("foreground", "#142735")}
-                fitted = fit_list_items(items, items_box[2]-BULLET_GUTTER,
-                                        font_paths["font_file"], 24, 22, 2)
+                fitted = fit_list_items(items, box[2]-2*pad_x-BULLET_GUTTER,
+                                        font_paths["font_file"], 24, 22, LIST_ITEM_LINES)
                 if fitted is None:
                     issues.append(issue("SPLIT_REQUIRED", "FAIL",
                                         f"{b['id']} list items cannot fit above their font floor",
@@ -358,15 +344,35 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                         textbox_contract="deck_ir"))
                     return
                 lines, size = fitted
-                content_h = sum(len(item_lines) for item_lines in lines) * size * 1.25
-                if content_h > items_box[3] + .5:
+                line_h = size * 1.25
+                gaps = len(lines) - 1
+                # Item spacing is a typographic value, not leftover space: filling the panel is what
+                # pushed three short items a hundred pixels apart. The ratio is relative to the line
+                # height (so it follows the font), and the deck may override it.
+                space_after = round(line_h * list_gap_ratio, 2) if gaps else 0.0
+                content_h = sum(len(item_lines) for item_lines in lines) * line_h + space_after * gaps
+                panel_h = 2*pad_y + label_h + content_h
+                if panel_h > box[3] + .5:
                     issues.append(issue("SPLIT_REQUIRED", "FAIL",
                                         f"{b['id']} list needs {content_h:.0f}px but the panel gives "
-                                        f"{items_box[3]:.0f}px", n, b["id"],
+                                        f"{box[3]-2*pad_y-label_h:.0f}px", n, b["id"],
                                         detector="geometric-preflight", textbox_contract="deck_ir"))
                     return
-                gaps = len(lines) - 1
-                space_after = (items_box[3] - content_h) / gaps if gaps else 0.0
+                # The card hugs the list instead of stretching to the page: a panel with 150 px of
+                # empty space under three rows reads as a layout mistake, not as breathing room.
+                elements.append({
+                    "id": b["id"] + ":panel", "kind": "shape", "role": "decoration",
+                    "bbox": [box[0], box[1], box[2], panel_h],
+                    "geometry": "rect", "fill": theme.get("panel_fill", "none"),
+                    "line": theme.get("panel_line", "#142735"), "line_width": 1,
+                    "collision_mode": "container"})
+                if label:
+                    text(b["id"]+":label", label,
+                         [box[0]+pad_x, box[1]+pad_y, box[2]-2*pad_x, label_h],
+                         "heading", 28, 24, 1)
+                style = {"id": b["id"], "kind": "list", "role": "body",
+                         "bbox": [box[0]+pad_x, box[1]+pad_y+label_h, box[2]-2*pad_x, content_h],
+                         "color": theme.get("foreground", "#142735")}
                 contract = TextBoxContract(theme["font_family"], size, font_paths["font_file"],
                                            font_weight=400, font_floor=22,
                                            max_lines=max(len(item_lines) for item_lines in lines),
@@ -416,6 +422,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
             caption_h = f.get("caption_height", 62) if f["caption"] else 0
+            if schematic and f["caption"] and "caption_height" not in f:
+                # A drawn schematic usually carries a one-line caption; reserving the scientific
+                # 62 px strip would push the picture under the panel floor for no reason.
+                caption_face = ImageFont.truetype(font_paths["font_file"],
+                                                  f.get("caption_font_size", 22))
+                caption_lines = len(break_lines(f["caption"], caption_face, box[2]))
+                caption_h = max(34, caption_lines * f.get("caption_font_size", 22) * 1.25 + 8)
             h = box[3] - caption_h - 12
             scale = min(box[2]/asset["width"], h/asset["height"])
             w, h = asset["width"]*scale, asset["height"]*scale
@@ -453,8 +466,34 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW",
                                     "Confirm scientific panel labels and evidence fidelity",
                                     n, eid, detector="scientific-review", confidence="MEDIUM"))
+        # A drawn schematic is not evidence that has to sit beside its text: it gets the width of
+        # the page and the reader's eye goes text -> diagram -> caption, top to bottom.
+        schematic_only = (len(figs) == 1 and
+                          (assets[figs[0]["asset_id"]].get("origin") or "paper") == "generated")
+        def schematic_band(bs, f):
+            face = ImageFont.truetype(font_paths["font_file"], 28)
+            if len(bs) == 2:
+                # Two short paragraphs read as one line each of context: side by side they leave the
+                # height to the diagram instead of stacking into a wall above it.
+                rows = [break_lines(item["text"], face, 568) for item in bs]
+                band = max((len(lines) for lines in rows), default=0) * 35
+                for k, (item, _) in enumerate(zip(bs, rows)):
+                    block(item, [56 + k * 600, top, 568, band])
+                cursor = top + band + 18
+            else:
+                rows = [break_lines(item["text"], face, 1168) for item in bs]
+                natural = sum(len(lines) for lines in rows) * 35 + 18 * max(len(bs) - 1, 0)
+                band = min(natural, bh * .45)
+                cursor = top
+                total = max(sum(len(lines) for lines in rows), 1)
+                for item, lines in zip(bs, rows):
+                    height = band * len(lines) / total
+                    block(item, [56, cursor, 1168, height])
+                    cursor += height + 18
+            figure(f, [56, cursor, 1168, bottom - cursor], 1)
+
         adaptations = []
-        proposal = (proposals or {}).get(slide['id'])
+        proposal = None if schematic_only else (proposals or {}).get(slide['id'])
         if proposal:
             supplied = proposal['units']
             expected = [b['id'] for b in blocks] + [f'figure-{k+1}' for k in range(len(figs))]
@@ -473,6 +512,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             adaptations.append({'action': 'layout_provider',
                                 'provider': proposal.get('provider', 'provider'),
                                 'status': proposal['status']})
+        elif schematic_only:
+            schematic_band(blocks, figs[0])
         elif family in ("figure-left", "figure-right") and figs:
             fig_x, txt_x = (56, 784) if family == "figure-left" else (552, 56)
             fig_w, txt_w = (692, 440) if family == "figure-left" else (672, 460)

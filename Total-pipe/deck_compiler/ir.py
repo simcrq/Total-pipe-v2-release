@@ -37,6 +37,11 @@ def validate(ir):
             check(deck_presentation["bullet_style"] in BULLET_STYLES,
                   f"Unknown bullet_style; expected one of {sorted(BULLET_STYLES)}",
                   rule="BULLET_STYLE_INVALID")
+        if "list_gap" in deck_presentation:
+            gap = deck_presentation["list_gap"]
+            check(isinstance(gap, (int, float)) and not isinstance(gap, bool)
+                  and .1 <= float(gap) <= 1.5,
+                  "presentation.list_gap must be between 0.1 and 1.5", rule="LIST_GAP_INVALID")
     theme = ir.get("theme", {})
     check(isinstance(theme, dict) and all(isinstance(theme.get(k), str) and theme[k]
           for k in ("font_family", "font_file", "bold_font_file")), "Explicit theme fonts required")
