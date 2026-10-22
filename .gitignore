@@ -8,3 +8,4 @@ codex-local-marketplace/
 .DS_Store
 __pycache__/
 *.pyc
+commitmsg.txt
