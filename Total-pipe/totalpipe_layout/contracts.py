@@ -308,9 +308,9 @@ def read_requests(path, root=None):
                 'aspect': asset['width']/asset['height'], 'asset_sha256': asset['sha256'],
                 'schematic': (asset.get('origin') or 'paper') == 'generated',
                 'member_ids': [f'figure-{index}', f'figure-{index}:caption']})
-        top = 236 if spacious else 260
-        bottom = module.body_bottom(slide, module.ARCHETYPES[slide['composition']['archetype']]['layout'],
-                                    spacious)
+        top, bottom = module.body_region(
+            slide, module.ARCHETYPES[slide['composition']['archetype']]['layout'],
+            module.frame_variant(ir))
         frames = [e for e in layout['slides'][number-1]['elements']
                   if e['id'] in ('title', 'takeaway', 'footer', 'caveats',
                                  'direct-evidence:heading', 'hypothesis:heading')]
@@ -515,9 +515,13 @@ def templates(request):
         # Whole grid columns instead of arbitrary fractions: the gutter is then exactly 24 px and
         # the figure rectangle follows the picture's aspect. A column that cannot hold the picture
         # plus its caption at the panel floor is skipped rather than proposed with dead space.
-        for columns in range(3, GRID_COLUMNS-1):
+        for columns in range(3, GRID_COLUMNS-3):
             fw = span_width(w, columns)
             tw = span_width(w, GRID_COLUMNS-columns)
+            # A three-column strip is 218 px wide: a figure that hogs nine columns leaves the text
+            # at three or four characters a line. Readability bounds the figure, not the score.
+            if tw < span_width(w, 4):
+                continue
             fh = figure_box_height(units[figs[0]], fw, request, h)
             if fh is None:
                 continue

@@ -63,6 +63,19 @@ def body_bottom(slide, family, spacious):
         bottom = 618
     return bottom
 
+
+def body_region(slide, family, frame):
+    """The body rectangle's vertical bounds for a frame variant, in the compiler's own units.
+
+    The lab-template frame is tighter above (a 40 pt title and a one-line takeaway instead of the
+    compass frame's 120 px title block) and lower below (the template's footer band starts at
+    y=686), so a content page gains about 150 px of body height.
+    """
+    if frame == "template":
+        return 132, (632 if slide["semantic"]["caveats"] else 672)
+    spacious = frame == "spacious"
+    return (236 if spacious else 260), body_bottom(slide, family, spacious)
+
 # Which marker a deck gets when it does not say. A deck keeps one style, so this is decided once
 # from the dominant list semantics: a procedure reads as arrows, a set of claims as open squares,
 # settled points as filled squares, and anything mixed falls back to the square PowerPoint itself
@@ -413,34 +426,47 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                              "color": color or theme.get("foreground", "#142735"),
                              **({"text_flow": flow} if flow else {})})
         spacious = deck_frame == "spacious"
-        text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
-        # These two evidence-heavy slides use a single-line takeaway; reclaiming
-        # the unused vertical room lets the original scientific panels render
-        # larger without colliding with the title block.
-        takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
-        text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
+        templated = deck_frame == "template"
         footer = " · ".join(sem["evidence_refs"])
-        # Evidence ids are an annotation, so they are set at 15 pt like a caveat. A page with a
-        # dozen ids wraps, and a wrapped footer needs a second line instead of a smaller face.
-        # The box is narrower than the page on purpose: a line measured at exactly 1168 px wraps
-        # into a third line in OfficeCLI, whose face resolves a little wider than Pillow's.
-        footer_width = 1100
-        footer_lines = len(break_lines(footer, ImageFont.truetype(font_paths["font_file"], 20),
-                                       footer_width))
-        footer_y, footer_h = (662, 54) if footer_lines > 1 else (658, 44)
-        caveat_y, caveat_h = 604, 46
-        if slide["id"] == "s05-anneal":
-            footer_y, footer_h = 666, 36
-        elif family == "dual":
-            # Compact callouts and larger scientific panels extend lower on
-            # dual-evidence slides, while keeping caveats and evidence ids clear.
-            caveat_y, caveat_h = 622, 36
-            footer_y, footer_h = 670, 32
-        text("footer", footer, [56, footer_y, footer_width, footer_h], "footer", 20, 20, 2)
+        if templated:
+            # A lab template owns the page frame: its own title slot, its own footer band, its own
+            # white page. The compiler keeps the body grid but hands the title, takeaway and caveat
+            # to the template's geometry, and drops the evidence-id footer because the template's
+            # footer band is fixed (the ids stay in the speaker notes).
+            # The template's title slot ends at its red rule (y=78), so the title is set to fit
+            # above it and the takeaway opens the body underneath.
+            text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A")
+            text("takeaway", sem["takeaway"], [88, 84, 1104, 42], "takeaway", 24, 24, 2,
+                 color="#333333")
+            caveat_y, caveat_h = 640, 36
+            footer_width, footer_y, footer_h = 0, 0, 0
+        else:
+            text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
+            # These two evidence-heavy slides use a single-line takeaway; reclaiming
+            # the unused vertical room lets the original scientific panels render
+            # larger without colliding with the title block.
+            takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
+            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
+            # Evidence ids are an annotation, so they are set at 15 pt like a caveat. A page with a
+            # dozen ids wraps, and a wrapped footer needs a second line instead of a smaller face.
+            # The box is narrower than the page on purpose: a line measured at exactly 1168 px wraps
+            # into a third line in OfficeCLI, whose face resolves a little wider than Pillow's.
+            footer_width = 1100
+            footer_lines = len(break_lines(footer, ImageFont.truetype(font_paths["font_file"], 20),
+                                           footer_width))
+            footer_y, footer_h = (662, 54) if footer_lines > 1 else (658, 44)
+            caveat_y, caveat_h = 604, 46
+            if slide["id"] == "s05-anneal":
+                footer_y, footer_h = 666, 36
+            elif family == "dual":
+                # Compact callouts and larger scientific panels extend lower on
+                # dual-evidence slides, while keeping caveats and evidence ids clear.
+                caveat_y, caveat_h = 622, 36
+                footer_y, footer_h = 670, 32
+            text("footer", footer, [56, footer_y, footer_width, footer_h], "footer", 20, 20, 2)
         if sem["caveats"]:
             text("caveats", "；".join(sem["caveats"]), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
-        bottom = body_bottom(slide, family, spacious)
-        top = 236 if spacious else 260
+        top, bottom = body_region(slide, family, deck_frame)
         bh = bottom-top
         def block(b, box):
             label = b.get("label", "")
@@ -882,7 +908,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     continue
                 if intersect(e["bbox"], other["bbox"]):
                     issues.append(issue("CRITICAL_COLLISION", "FAIL", f"Overlaps {other['id']}", n, e["id"], detector="geometric-preflight"))
-        slides.append({"id": slide["id"], "background": theme.get("background", "#FFFFFF"),
+        slides.append({"id": slide["id"],
+                       "background": "#FFFFFF" if templated else theme.get("background", "#FFFFFF"),
                        "notes": sem["speaker_notes"] + "\nEvidence: " + footer,
                        "elements": elements, "adaptation_log": adaptations})
     if _retry and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):

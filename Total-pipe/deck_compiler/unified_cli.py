@@ -376,6 +376,17 @@ Examples:
     qual.add_argument('--json', action='store_true', help='Output as JSON')
     qual.add_argument('--detailed', action='store_true', help='Include detailed analysis')
 
+    # Template command
+    tpl = subparsers.add_parser('template-merge', help='Insert a compiled deck into a lab template')
+    tpl.add_argument('template', type=Path, help='Template .pptx (master, logo, footer)')
+    tpl.add_argument('deck', type=Path, help='Compiled staging.pptx')
+    tpl.add_argument('out', type=Path, help='Output .pptx')
+    tpl.add_argument('--keep', default='1,9',
+                     help='Template slide numbers to keep, 1-based, e.g. 1,2,9 (default: 1,9)')
+    tpl.add_argument('--layout', default='标题和内容',
+                     help='Template layout name for the inserted slides')
+    tpl.add_argument('--json', action='store_true', help='Output the merge manifest as JSON')
+
     # Verify command
     ver = subparsers.add_parser('verify', help='Check a delivered PPTX against its build report')
     ver.add_argument('pptx', type=Path, help='Delivered .pptx file')
@@ -476,6 +487,18 @@ Examples:
             else:
                 print(report.to_summary())
 
+            return 0
+
+        elif args.command == 'template-merge':
+            from .template_merge import merge
+            keep = tuple(int(value) for value in args.keep.split(',') if value.strip())
+            result = merge(args.template, args.deck, args.out, keep=keep, layout_name=args.layout)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"[OK] {result['slide_count']} slides -> {args.out}")
+                print(f"    kept template slides: {result['kept_template_slides']}")
+                print(f"    inserted: {len(result['inserted'])}, layout: {result['layout']}")
             return 0
 
         elif args.command == 'verify':

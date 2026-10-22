@@ -31,7 +31,7 @@ def validate(ir):
     deck_presentation = ir.get("presentation", {})
     check(isinstance(deck_presentation, dict), "presentation must be an object")
     if isinstance(deck_presentation, dict):
-        check(deck_presentation.get("frame_variant", "default") in ("default", "spacious"),
+        check(deck_presentation.get("frame_variant", "default") in ("default", "spacious", "template"),
               "Unknown deck frame variant")
         if "bullet_style" in deck_presentation:
             from .fonts import BULLET_STYLES
