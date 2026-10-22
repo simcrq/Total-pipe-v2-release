@@ -191,9 +191,12 @@ blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏�
 从 RPA 映射到 Deck IR 时，保留这些段落边界，并把
 `design_ir.text_flow.mode` 复制到对应 block 的 `text_flow`。block 也可使用 `auto`：
 编译器只把 3–5 个明确段落、总显示长度不少于 72 单位且单段不超过 120 单位的正文
-排为浅色矩形容器中的等高 `➢` 条目（汉字按 2 单位计）。单个长段落、公式、表格、
-图注和参考文献保持原样；用 `plain` 禁止转换，用 `distributed_arrow_list` 显式请求。
-实际触发结果写入编译后 slide 的 `adaptation_log`。
+排为一个原生无序列表（汉字按 2 单位计）：一个文本框、每段一个段落、符号由段落属性
+（`a:buChar` / `a:buClr`）绘制，因此 Tab 可升降级、右键能改样式、复制单条自带符号。
+整份 deck 只用一个符号样式（`presentation.bullet_style` 可显式指定，默认按段落语义推导：
+流程→箭头、主张→空心方框、其余→实心方框），符号颜色取 `theme.accent`，与正文不同色。
+单个长段落、公式、表格、图注和参考文献保持原样；用 `plain` 禁止转换，用
+`distributed_arrow_list` 显式请求。实际触发结果写入编译后 slide 的 `adaptation_log`。
 
 映射前逐条核对 `rpa_input.json` 中的 `key_points`。对应科学内容必须按原顺序
 进入 Deck IR 的 `composition.blocks[].text` 或 `semantic.speaker_notes`，不能只留下

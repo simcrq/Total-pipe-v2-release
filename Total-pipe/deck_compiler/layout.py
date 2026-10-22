@@ -10,6 +10,55 @@ from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
 
 WIDTH, HEIGHT = 1280, 720
 
+# Native list markers. The glyph is a *paragraph* property (a:buChar + a:buClr), so an item stays a
+# real list item in PowerPoint: Tab changes its level, the bullet menu reflects it, and copying one
+# row carries the marker. The catalogue lives in fonts.BULLET_STYLES and is resolved to a face that
+# can actually draw the glyph, so a deck never depends on a symbol font being installed.
+BULLET_GUTTER = 42.0            # px reserved for the marker, text starts on the gutter edge
+
+# One accent colour per deck, used by list markers, sequence badges and emphasis. It is deliberately
+# not the body colour: a marker in the same ink as the sentence reads as a typo, and a step badge in
+# the same ink as its label disappears into it. Decks override it with theme.accent.
+DEFAULT_ACCENT = "#C2410C"
+
+# Which marker a deck gets when it does not say. A deck keeps one style, so this is decided once
+# from the dominant list semantics: a procedure reads as arrows, a set of claims as open squares,
+# settled points as filled squares, and anything mixed falls back to the square PowerPoint itself
+# uses as its second list style.
+BULLET_COMPONENT_STYLE = {
+    "process-step": "arrow", "method": "arrow",
+    "conclusion": "square", "result": "square",
+    "hypothesis": "open_square", "caveat": "open_square", "comparison": "open_square",
+}
+
+
+def choose_bullet_style(ir):
+    """One list-marker style for the whole deck: explicit, else the dominant list semantics."""
+    explicit = (ir.get("presentation") or {}).get("bullet_style")
+    if explicit:
+        return explicit
+    counts = {}
+    for slide in ir["slides"]:
+        for block in slide["composition"]["blocks"]:
+            if select_text_flow(block["text"], block.get("text_flow", "auto"))["mode"] == DISTRIBUTED_ARROW_LIST:
+                component = block.get("component", "body")
+                counts[component] = counts.get(component, 0) + 1
+    if not counts:
+        return "square"
+    top = max(sorted(counts), key=lambda component: counts[component])
+    return BULLET_COMPONENT_STYLE.get(top, "square")
+
+
+def fit_list_items(items, width, font_file, size, floor, max_lines):
+    """Break every item at one shared font size; ``None`` when the markers cannot fit the box."""
+    for candidate in range(int(size), int(floor) - 1, -1):
+        face = ImageFont.truetype(font_file, candidate)
+        lines = [break_lines(item, face, width) for item in items]
+        if all(len(item_lines) <= max_lines for item_lines in lines):
+            return lines, candidate
+    return None
+
+
 
 def frame_variant(ir):
     """Use one title/takeaway/body grid for the whole deck."""
@@ -131,12 +180,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
     # another operating system, and a deck that cannot find its declared face is still deliverable in
     # a substituted one. Only "no font anywhere" is a FAIL.
-    from .fonts import resolve_theme_fonts
+    from .fonts import resolve_bullet, resolve_theme_fonts
     # Every character the deck will set, so the resolver can reject a face that cannot draw them.
     # The compiler's own strings count too: the evidence family draws 直接证据 / 假设（未证实） and the
-    # header separator ·, none of which appear in the Deck IR. The ➢ bullet is left out of the sample
-    # on purpose: it is one decorative glyph, and letting it decide the face would push a Chinese deck
-    # from a sans face to a serif one. Its own element still reports a coverage REVIEW.
+    # header separator ·, none of which appear in the Deck IR. The list marker is left out of the
+    # sample on purpose: it has its own face (a:buFont) and letting it decide the body face would
+    # push a Chinese deck from a sans face to a symbol one.
     compiler_strings = '直接证据假设（未证实）·0123456789'
     text_sample = compiler_strings + "".join(
         [str(value) for slide in ir["slides"]
@@ -152,6 +201,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(error), detector="geometric-preflight"))
         return None, issues
     font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
+    bullet_style = choose_bullet_style(ir)
+    bullet_glyph, bullet_face = resolve_bullet(bullet_style, theme["font_family"], regular_font)
     for note in font_notes:
         issues.append(issue(note["rule"], note["severity"], note["message"],
                             detector="font-resolution", detail=note.get("detail")))
@@ -250,23 +301,51 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                          [box[0]+pad_x, box[1]+pad_y, box[2]-2*pad_x, label_h],
                          "heading", 28, 24, 1)
                 items = flow["items"]
-                row_top = box[1] + pad_y + label_h
-                row_height = (box[3] - 2*pad_y - label_h) / len(items)
-                for item_index, item in enumerate(items):
-                    y = row_top + item_index * row_height
-                    arrow_box = [box[0]+pad_x, y, 42, row_height]
-                    item_box = [box[0]+pad_x+54, y, box[2]-2*pad_x-54, row_height]
-                    item_flow = {**flow, "item_index": item_index, "item_count": len(items)}
-                    text(f"{b['id']}:arrow:{item_index+1}", flow["bullet_glyph"], arrow_box,
-                         "bullet", 28, 24, 1, "middle", theme.get("accent", "#142735"), item_flow)
-                    text(f"{b['id']}:item:{item_index+1}", item, item_box,
-                         "body", 24, 22, 2, "middle", None, item_flow)
+                items_box = [box[0]+pad_x, box[1]+pad_y+label_h,
+                             box[2]-2*pad_x, box[3]-2*pad_y-label_h]
+                # One text object, one paragraph per item, marker set by the paragraph itself.
+                # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
+                style = {"id": b["id"], "kind": "list", "role": "body",
+                         "bbox": items_box, "color": theme.get("foreground", "#142735")}
+                fitted = fit_list_items(items, items_box[2]-BULLET_GUTTER,
+                                        font_paths["font_file"], 24, 22, 2)
+                if fitted is None:
+                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                        f"{b['id']} list items cannot fit above their font floor",
+                                        n, b["id"], detector="geometric-preflight",
+                                        textbox_contract="deck_ir"))
+                    return
+                lines, size = fitted
+                content_h = sum(len(item_lines) for item_lines in lines) * size * 1.25
+                if content_h > items_box[3] + .5:
+                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                        f"{b['id']} list needs {content_h:.0f}px but the panel gives "
+                                        f"{items_box[3]:.0f}px", n, b["id"],
+                                        detector="geometric-preflight", textbox_contract="deck_ir"))
+                    return
+                gaps = len(lines) - 1
+                space_after = (items_box[3] - content_h) / gaps if gaps else 0.0
+                contract = TextBoxContract(theme["font_family"], size, font_paths["font_file"],
+                                           font_weight=400, font_floor=22,
+                                           max_lines=max(len(item_lines) for item_lines in lines),
+                                           vertical_anchor="top")
+                elements.append({**style, "items": lines,
+                                 "text": "\n".join("\v".join(item_lines) for item_lines in lines),
+                                 "source_text": b["text"], "contract": contract.to_dict(),
+                                 "bullet": {"style": bullet_style, "char": bullet_glyph,
+                                            "face": bullet_face,
+                                            "color": theme.get("accent", DEFAULT_ACCENT),
+                                            "gutter": BULLET_GUTTER,
+                                            "space_after": round(space_after, 2)},
+                                 "text_flow": flow})
                 adaptations.append({
                     "block_id": b["id"],
                     "action": DISTRIBUTED_ARROW_LIST,
                     "source": flow["source"],
-                    "item_count": len(items),
-                    "bullet_glyph": flow["bullet_glyph"],
+                    "item_count": len(lines),
+                    "bullet_style": bullet_style,
+                    "bullet_glyph": bullet_glyph,
+                    "bullet_face": bullet_face,
                     "distribution": flow["distribution"],
                 })
                 return
@@ -282,7 +361,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                     n, b["id"], detector="geometric-preflight"))
             label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
-            emphasis_color = theme.get("accent", "#142735") if b["id"] == visual_intent.get("emphasis") else None
+            emphasis_color = theme.get("accent", DEFAULT_ACCENT) if b["id"] == visual_intent.get("emphasis") else None
             text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color)
         def stack(bs, box):
             if not bs:
@@ -395,7 +474,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if all(rows):
                 rail_x = rows[0]["bbox"][0] - 56
                 centers = [row["bbox"][1] + 18 for row in rows]
-                accent = theme.get("accent", theme.get("foreground", "#17324D"))
+                accent = theme.get("accent", DEFAULT_ACCENT)
                 elements.append({"id": "sequence:spine", "kind": "shape",
                     "role": "decoration", "bbox": [rail_x+25, centers[0], 2, centers[-1]-centers[0]],
                     "geometry": "rect", "fill": "#B9CCD8", "line": "none",

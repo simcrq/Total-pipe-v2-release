@@ -88,11 +88,15 @@ the original blocks and reserves its width during text fitting.
 Blocks may set `text_flow` to `plain`, `auto`, or `distributed_arrow_list`. In `auto` mode,
 the compiler recognizes three to five explicit prose/list rows (72 or more display units;
 CJK characters count as two),
-places them in one low-contrast panel, distributes equal-height rows vertically, and prefixes
-each row with the outlined `➢` arrowhead. It does not split a single paragraph, tables, code,
-or formula-like content into invented bullets. The applied choice is recorded in the slide's
-`adaptation_log`; an explicit `distributed_arrow_list` request still has to contain two to six
-rows and fit the component box above the font floor.
+places them in one low-contrast panel as **one text object with one paragraph per row**, and lets
+PowerPoint draw the marker: each paragraph carries `a:buChar` + `a:buClr` and a hanging indent, so
+Tab changes the level and the bullet menu reflects the style. The deck picks a single marker style —
+`theme.accent` colours it, `presentation.bullet_style` selects it (`bullet`, `square`,
+`open_square`, `diamond`, `arrow`, `check`, `dash`); the default is derived from the dominant row
+semantics (procedure → arrow, claims → open square, otherwise square). It does not split a single
+paragraph, tables, code, or formula-like content into invented bullets. The applied choice is
+recorded in the slide's `adaptation_log`; an explicit `distributed_arrow_list` request still has to
+contain two to six rows and fit the component box above the font floor.
 
 `examples/distributed-arrow-list.deck_ir.json` is the canonical model/compiler reference.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer

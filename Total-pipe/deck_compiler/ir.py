@@ -7,6 +7,7 @@ from .contracts import digest, issue
 
 SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
 CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
+ACCENT = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
 def caption_figure_ids(caption):
@@ -29,9 +30,17 @@ def validate(ir):
     if isinstance(deck_presentation, dict):
         check(deck_presentation.get("frame_variant", "default") in ("default", "spacious"),
               "Unknown deck frame variant")
+        if "bullet_style" in deck_presentation:
+            from .fonts import BULLET_STYLES
+            check(deck_presentation["bullet_style"] in BULLET_STYLES,
+                  f"Unknown bullet_style; expected one of {sorted(BULLET_STYLES)}",
+                  rule="BULLET_STYLE_INVALID")
     theme = ir.get("theme", {})
     check(isinstance(theme, dict) and all(isinstance(theme.get(k), str) and theme[k]
           for k in ("font_family", "font_file", "bold_font_file")), "Explicit theme fonts required")
+    if isinstance(theme, dict) and "accent" in theme:
+        check(isinstance(theme["accent"], str) and ACCENT.fullmatch(theme["accent"]),
+              "theme.accent must look like #C2410C")
     slides = ir.get("slides")
     check(isinstance(slides, list) and bool(slides), "slides must be a nonempty list")
     if not isinstance(slides, list):

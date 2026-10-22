@@ -206,8 +206,9 @@ RPA 会优先选择 `structured_text / distributed_list_panel`，但不会绘制
 2. 将条目合并到对应 Deck IR block 的 `text`；
 3. 将 `design_ir.text_flow.mode` 复制到 block 的 `text_flow`。
 
-Deck Compiler 才会生成浅色矩形、等高纵向条目和 `➢` 标记。空间不足时编译器保持
-普通正文，并记录 `TEXT_FLOW_FALLBACK` / `adaptation_log`。
+Deck Compiler 才会把它排成浅色容器里的**原生无序列表**：一个文本框、每段一个条目、符号由
+段落属性（`a:buChar` / `a:buClr`）绘制并单独着色。空间不足时编译器保持普通正文，并记录
+`TEXT_FLOW_FALLBACK` / `adaptation_log`。
 
 ## 5. 渲染前检查
 

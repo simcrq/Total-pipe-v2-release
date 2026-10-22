@@ -216,7 +216,7 @@ def analyze_readability(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
 
     for slide_layout in layout.get('slides', []):
         for element in slide_layout.get('elements', []):
-            if element.get('kind') == 'text':
+            if element.get('kind') in ('text', 'list'):
                 contract = element.get('contract', {})
                 font_size = contract.get('font_size', 0)
                 if font_size > 0:
@@ -331,7 +331,7 @@ def analyze_consistency(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
 
         # Collect font sizes by role
         for element in elements:
-            if element.get('kind') == 'text':
+            if element.get('kind') in ('text', 'list'):
                 role = element.get('role', 'unknown')
                 font_size = element.get('contract', {}).get('font_size', 0)
                 if font_size > 0:
@@ -586,7 +586,7 @@ def analyze_accessibility(qa_report: Dict, layout: Optional[Dict], deck_ir: Opti
         small_fonts = 0
         for slide_layout in layout.get('slides', []):
             for element in slide_layout.get('elements', []):
-                if element.get('kind') == 'text':
+                if element.get('kind') in ('text', 'list'):
                     font_size = element.get('contract', {}).get('font_size', 0)
                     if font_size < 18:
                         small_fonts += 1

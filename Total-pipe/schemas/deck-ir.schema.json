@@ -11,7 +11,13 @@
     "presentation": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"frame_variant": {"enum": ["default", "spacious"]}}
+      "properties": {
+        "frame_variant": {"enum": ["default", "spacious"]},
+        "bullet_style": {
+          "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash"],
+          "description": "Native list marker used on every list page of this deck."
+        }
+      }
     },
     "theme": {
       "type": "object",
@@ -22,7 +28,9 @@
         "font_file": {"type": "string", "minLength": 1},
         "bold_font_file": {"type": "string", "minLength": 1},
         "foreground": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
-        "background": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+        "background": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+        "accent": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
+                   "description": "List markers, step badges and emphasis. Defaults to #C2410C."}
       }
     },
     "assets": {

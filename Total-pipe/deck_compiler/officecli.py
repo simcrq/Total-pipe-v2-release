@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import subprocess
 
+_A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
 
 def _px(value):
     return (f'{value:.6f}'.rstrip('0').rstrip('.') or '0') + 'px'
@@ -53,6 +55,32 @@ def preflight(executable='officecli'):
     return {'version': match.group(0), 'schema_sha256': fingerprint}
 
 
+def _xml_attribute(value):
+    return (str(value).replace('&', '&amp;').replace('<', '&lt;')
+            .replace('>', '&gt;').replace('"', '&quot;'))
+
+
+def list_paragraph_properties(contract, bullet, index, count):
+    """One ``a:pPr`` for a native list item: exact line spacing, coloured marker, hanging indent.
+
+    Written as raw XML because the typed OfficeCLI paragraph API has no bullet colour and no
+    before/after paragraph spacing; the element order below is the order DrawingML requires
+    (lnSpc → spcAft → buClr → buFont → buChar).
+    """
+    gutter = round(float(bullet['gutter']) * 9525)          # css px → EMU
+    spacing = round(contract['font_size'] * contract['line_height'] * 75)   # px → 1/100 pt
+    parts = [f'<a:pPr xmlns:a="{_A_NS}" marL="{gutter}" indent="-{gutter}">',
+             f'<a:lnSpc><a:spcPts val="{spacing}" /></a:lnSpc>']
+    gap = float(bullet.get('space_after') or 0)
+    if index < count - 1 and gap > 0:
+        parts.append(f'<a:spcAft><a:spcPts val="{round(gap * 75)}" /></a:spcAft>')
+    parts.append(f'<a:buClr><a:srgbClr val="{_color(bullet["color"])}" /></a:buClr>')
+    parts.append(f'<a:buFont typeface="{_xml_attribute(bullet["face"])}" />')
+    parts.append(f'<a:buChar char="{_xml_attribute(bullet["char"])}" />')
+    parts.append('</a:pPr>')
+    return ''.join(parts)
+
+
 def commands(layout):
     """Translate only compiled geometry; Deck IR remains the sole content source."""
     width, height = layout['slide_size']
@@ -77,7 +105,7 @@ def commands(layout):
                               'fill': _color(element['fill']), 'line': _color(element['line']),
                               'lineWidth': _pt(element.get('line_width', 1))})
                 typ = 'shape'
-            elif kind == 'text':
+            elif kind in ('text', 'list'):
                 has_text = True
                 contract = element['contract']
                 props.update({'name': element['id'], 'text': element['text'],
@@ -94,11 +122,22 @@ def commands(layout):
             else:
                 raise ValueError(f'Unsupported compiled element kind: {kind}')
             result.append({'command': 'add', 'parent': parent, 'type': typ, 'props': props})
-            if kind == 'text' and any(contract['inset'].values()):
+            if kind in ('text', 'list') and any(contract['inset'].values()):
                 inset = contract['inset']
                 margin = ','.join(_px(inset[side]) for side in ('left', 'top', 'right', 'bottom'))
                 result.append({'command': 'set', 'path': f'{parent}/shape[@name={element["id"]}]',
                                'props': {'margin': margin}})
+            if kind == 'list':
+                # The typed API has no bullet colour, so each item's paragraph properties are
+                # replaced whole; the run properties written by `add` stay untouched.
+                for number in range(1, len(element['items']) + 1):
+                    result.append({
+                        'command': 'raw-set', 'part': parent,
+                        'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]"
+                                  f"/p:txBody/a:p[{number}]/a:pPr"),
+                        'action': 'replace',
+                        'xml': list_paragraph_properties(contract, element['bullet'],
+                                                         number - 1, len(element['items']))})
         if has_text:
             # OfficeCLI has typed line spacing and insets, but no typed bodyPr.wrap yet.
             result.append({'command': 'raw-set', 'part': parent,

@@ -116,6 +116,47 @@ def missing_glyphs(font_path, text) -> set:
     return missing
 
 
+# PowerPoint's list styles are (glyph, face) pairs: round, square and open-square markers live in
+# ordinary text faces, while diamond, check and arrow come from a symbol face. A deck keeps one
+# style throughout, so the marker reads as a system instead of a decoration.
+BULLET_STYLES = {
+    'bullet': '\u2022',       # •
+    'square': '\u25aa',       # ▪
+    'open_square': '\u25a1',  # □
+    'diamond': '\u25c6',      # ◆
+    'arrow': '\u2192',        # →
+    'check': '\u2713',        # ✓
+    'dash': '\u2013',         # –
+}
+# (family, candidate file names) for the faces PowerPoint itself uses for these markers.
+BULLET_SYMBOL_FACES = (
+    ('Segoe UI Symbol', ('seguisym.ttf',)),
+    ('Arial Unicode MS', ('arialuni.ttf', 'Arial Unicode MS.ttf')),
+    ('DejaVu Sans', ('DejaVuSans.ttf', 'dejavu/DejaVuSans.ttf')),
+    ('Apple Symbols', ('Apple Symbols.ttf',)),
+    ('Cambria Math', ('cambria.ttc', 'Cambria Math.ttf')),
+)
+
+
+def resolve_bullet(style, family, font_file):
+    """Return ``(glyph, face)`` for a bullet style, choosing a face that can actually draw it.
+
+    The declared text face wins when it covers the glyph; otherwise a symbol face is searched for,
+    and if none is installed the marker degrades to the round bullet every text face has. ``face``
+    is what the writer puts in ``a:buFont``, so the stored style survives on another machine as
+    long as either face is installed.
+    """
+    glyph = BULLET_STYLES.get(style) or BULLET_STYLES['square']
+    if font_file and glyph not in missing_glyphs(font_file, glyph):
+        return glyph, family
+    for face, names in BULLET_SYMBOL_FACES:
+        for name in names:
+            path = find_font_file(name)
+            if path and glyph not in missing_glyphs(path, glyph):
+                return glyph, face
+    return BULLET_STYLES['bullet'], family
+
+
 def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
     """Resolve the two theme fonts. Returns ``(regular, bold, notes)``; notes drive REVIEW issues."""
     notes = []

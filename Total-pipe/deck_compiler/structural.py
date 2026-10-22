@@ -60,7 +60,7 @@ def verify(path, layout):
                 actual = {s.find('p:nvSpPr/p:cNvPr', NS).get('name'): s for s in shapes}
                 boxes = []
                 for e in slide['elements']:
-                    if e['kind'] != 'text':
+                    if e['kind'] not in ('text', 'list'):
                         continue
                     shape = actual.get(e['id'])
                     if shape is None:
@@ -79,8 +79,27 @@ def verify(path, layout):
                     for p in tx.findall('a:p', NS):
                         paragraphs.append(''.join('\n' if el.tag == A+'br' else (el.text or '')
                                                   for el in p.iter() if el.tag in (A+'t', A+'br')))
-                    if '\n'.join(paragraphs) != e['text']:
+                    expected = ([''.join(line if i == 0 else '\n' + line
+                                         for i, line in enumerate(item_lines))
+                                 for item_lines in e['items']] if e['kind'] == 'list'
+                                else e['text'].split('\n'))
+                    if paragraphs != expected:
                         add('TEXT_MISMATCH', 'Export changed text or line breaks', n, e['id'])
+                    if e['kind'] == 'list':
+                        marker = e['bullet']
+                        gutter = str(round(marker['gutter'] * EMU))
+                        for p in tx.findall('a:p', NS):
+                            ppr = p.find('a:pPr', NS)
+                            char = None if ppr is None else ppr.find('a:buChar', NS)
+                            colour = None if ppr is None else ppr.find('a:buClr/a:srgbClr', NS)
+                            face = None if ppr is None else ppr.find('a:buFont', NS)
+                            if (ppr is None or char is None or char.get('char') != marker['char']
+                                    or face is None or face.get('typeface') != marker['face']
+                                    or colour is None or colour.get('val') != marker['color'].lstrip('#').upper()
+                                    or ppr.get('marL') != gutter or ppr.get('indent') != '-' + gutter):
+                                add('LIST_BULLET_MISMATCH', 'Native bullet differs from compiled layout',
+                                    n, e['id'])
+                                break
                     attrs = {'wrap': 'none', 'anchor': {'top':'t','middle':'ctr','bottom':'b'}[c['vertical_anchor']]}
                     attrs.update({k: str(round(c['inset'][v]*EMU)) for k,v in
                                   [('lIns','left'),('rIns','right'),('tIns','top'),('bIns','bottom')]})
