@@ -17,6 +17,7 @@ CONNECTION_SITES = {
     'diamond': {'right': 3, 'left': 1},
     'hexagon': {'right': 0, 'left': 3},
 }
+EMBEDDED_ARCHETYPES = frozenset({'process-flow', 'figure-parameters'})
 
 
 class GraphicLayoutError(ValueError):
@@ -29,10 +30,12 @@ def validate_graphics(graphics, archetype):
     """Return actionable errors; unsupported graphic content must never disappear."""
     if not isinstance(graphics, list):
         return ['composition.graphics must be a list']
-    if archetype != 'native-graphic':
-        return ['graphics currently require the native-graphic archetype'] if graphics else []
+    if archetype != 'native-graphic' and not graphics:
+        return []
+    if archetype != 'native-graphic' and archetype not in EMBEDDED_ARCHETYPES:
+        return ['graphics require native-graphic, process-flow or figure-parameters']
     if len(graphics) != 1:
-        return ['native-graphic requires exactly one process graphic']
+        return ['Declare exactly one process or DAG graphic on this page']
     errors = []
     graphic = graphics[0]
     if not isinstance(graphic, dict):
@@ -111,6 +114,21 @@ def intentional_overlap(first, second):
             first.get('graphic_id') == second.get('graphic_id') and
             bool(first.get('node_id')) and first.get('node_id') == second.get('node_id') and
             {first['kind'], second['kind']} == {'shape', 'text'})
+
+
+def graphic_obstacle_collisions(connectors, elements):
+    """Check actual line segments against page content outside their own graphic."""
+    from .dag_layout import segment_hits_node
+    findings = []
+    for edge in connectors:
+        route = edge.get('route') or [edge['start'], edge['end']]
+        for other in elements:
+            if (other['kind'] == 'connector' or other.get('collision_mode') == 'container' or
+                    other.get('graphic_id') == edge.get('graphic_id')):
+                continue
+            if any(segment_hits_node(a, b, other['bbox']) for a, b in zip(route, route[1:])):
+                findings.append((edge['id'], other['id']))
+    return findings
 
 
 def node_elements(graphic_id, node, bbox, theme, text_heights=None):

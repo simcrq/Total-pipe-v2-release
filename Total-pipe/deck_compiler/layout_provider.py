@@ -77,7 +77,7 @@ class PackerProvider:
         from totalpipe_layout.contracts import check, teacher
         proposals = {}
         for request in requests:
-            if not request.get('units'):
+            if not request.get('units') or request.get('compiler_owned'):
                 continue
             boxes = teacher(request)
             if boxes is None or check(request, boxes):
@@ -149,7 +149,7 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
     records = []
     warnings = []
     try:
-        proposed = provider.propose(copy.deepcopy(requests)) or {}
+        proposed = provider.propose(copy.deepcopy([r for r in requests if not r.get('compiler_owned')])) or {}
     except Exception as error:                       # a provider must not break the build
         proposed = {}
         warnings.append(issue('LAYOUT_PROVIDER_FAILED', 'WARNING', f'{type(error).__name__}: {error}',
@@ -158,6 +158,10 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
         proposal = proposed.get(request['slide_id'])
         record = {'slide_id': request['slide_id'], 'request_sha256': request_digest(request),
                   'status': 'COMPILER_FALLBACK'}
+        if request.get('compiler_owned'):
+            record['reason'] = request['compiler_owned']
+            records.append(record)
+            continue
         if request.get('units') and proposal:
             units = proposal.get('units') or {}
             expected = [unit['id'] for unit in request['units']]

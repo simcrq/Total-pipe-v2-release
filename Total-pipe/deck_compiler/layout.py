@@ -11,7 +11,7 @@ from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
                        budget as formula_budget)
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
-from .graphic_layout import compile_graphic, intentional_overlap
+from .graphic_layout import compile_graphic, graphic_obstacle_collisions, intentional_overlap
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
 
 WIDTH, HEIGHT = 1280, 720
@@ -200,6 +200,8 @@ def frame_variant(ir):
 def sequence_flow(composition):
     """Render an explicit process intent, retaining the legacy role heuristic."""
     blocks = composition["blocks"]
+    if composition.get("graphics"):
+        return False  # The declared graphic edges own the process topology.
     intent = composition.get("visual_intent")
     if intent is not None:
         return intent.get("relation") == "process"
@@ -297,6 +299,76 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  body_top_px=body_top, body_bottom_px=body_bottom,
                  content_bottom_px=round(content_bottom), empty_lower_px=round(gap),
                  empty_share=round(share, 3))
+
+
+def graphic_page_regions(composition, region, assets, font_paths):
+    """Finite page-level candidates; graph internals stay with compile_graphic.
+
+    Measure context at the existing font floor and keep each image with its caption.
+    The real block/figure/graphic emitters still make the final capacity decision.
+    """
+    x, y, width, height = region
+    blocks, figures = composition['blocks'], composition['figure_refs']
+    gap = 24.0
+
+    def need(block, w):
+        label = block.get('label', '')
+        if block.get('component') == 'formula':
+            label_w = formula_label_width(label, font_paths['bold_font_file'])
+            metrics = formula_fit(block['text'], w-20-(label_w+12 if label_w else 0))
+            return max(30 if label else 0, metrics.height+12) if metrics else 10000
+        label_h = (40 if composition['archetype'] == 'figure-parameters' else 44) if label else 0
+        return label_h + (text_floor_height(block['text'], w, font_paths['font_file']) or 10000)
+
+    def rows(w, bx, by):
+        boxes = []
+        for b in blocks:
+            h = need(b, w)
+            boxes.append([bx, by, w, h])
+            by += h+gap
+        return boxes, sum(b[3] for b in boxes)+gap*max(0, len(boxes)-1)
+
+    band_w = (width-gap*max(0, len(blocks)-1))/max(1, len(blocks))
+    band_h = max((need(b, band_w) for b in blocks), default=0)
+    band = [[x+i*(band_w+gap), y, band_w, band_h] for i in range(len(blocks))]
+    body_y = y+band_h+(gap if blocks else 0)
+    body_h = y+height-body_y
+    if not figures:
+        yield {'pattern': 'context-above-graphic', 'blocks': band, 'figures': [],
+               'graphic': [x, body_y, width, body_h]}
+        return
+
+    # Keep the familiar figure-left convention; process pages read diagram -> evidence.
+    for figure_w in (360.0, 280.0, 440.0, 224.0, 520.0):
+        graphic_w = width-gap-figure_w
+        figure_x, graphic_x = ((x, x+figure_w+gap)
+                              if composition['archetype'] == 'figure-parameters'
+                              else (x+graphic_w+gap, x))
+        yield {'pattern': 'context-above-visuals', 'blocks': band,
+               'figures': [[figure_x, body_y, figure_w, body_h]],
+               'graphic': [graphic_x, body_y, graphic_w, body_h]}
+        context, context_h = rows(figure_w, figure_x, y)
+        figure_y = y+context_h+(gap if blocks else 0)
+        yield {'pattern': 'context-with-evidence', 'blocks': context,
+               'figures': [[figure_x, figure_y, figure_w, y+height-figure_y]],
+               'graphic': [graphic_x, y, graphic_w, height]}
+
+    # Wide graphs can use a full-width upper band when the frame has enough height.
+    figure_w = (width-gap)/2 if blocks else width
+    figure_x = x if composition['archetype'] == 'figure-parameters' else x+width-figure_w
+    text_x = x+figure_w+gap if composition['archetype'] == 'figure-parameters' else x
+    context, context_h = rows(figure_w, text_x, 0)
+    ref, asset = figures[0], assets[figures[0]['asset_id']]
+    extent = ref.get('min_panel_extent', 220)
+    image_h = max(extent, extent*ref.get('panel_count', 1)*asset['height']/asset['width'])
+    ch = (ref.get('caption_height') or caption_height(ref['caption'], figure_w,
+          font_paths['font_file'], ref.get('caption_font_size', 22))) if ref['caption'] else 0
+    lower_h = max(context_h, image_h+ch+12)
+    lower_y = y+height-lower_h
+    yield {'pattern': 'graphic-above-evidence',
+           'blocks': [[bx, lower_y+by, bw, bh] for bx, by, bw, bh in context],
+           'figures': [[figure_x, lower_y, figure_w, lower_h]],
+           'graphic': [x, y, width, height-lower_h-gap]}
 
 
 def compile_deck(ir, base, _retry=True, proposals=None):
@@ -787,10 +859,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             figure(f, [56, cursor, 1168, bottom - cursor], 1)
 
         adaptations = []
-        proposal = None if schematic_only else (proposals or {}).get(slide['id'])
-        if family == "graphic":
+        def native_graphic(region):
             graphic = comp["graphics"][0]
-            region = [56, top, 1168, bh]
             try:
                 graphic_elements = compile_graphic(graphic, region, theme, font_paths)
             except ValueError as error:
@@ -814,6 +884,47 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 "Confirm the process order and labels match the scientific explanation; "
                                 "this is a generated schematic, not a paper figure",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
+        proposal = None if schematic_only or comp.get('graphics') else (proposals or {}).get(slide['id'])
+        if family == "graphic":
+            native_graphic([56, top, 1168, bh])
+        elif comp.get('graphics'):
+            # Try a small set of whole-page compositions using the existing emitters. Failed
+            # attempts never leak partial content, warnings or text adaptations into the result.
+            best_failures, attempted = [], 0
+            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths):
+                boxes = [plan['graphic'], *plan['blocks'], *plan['figures']]
+                if any(min(box[2:]) <= 0 for box in boxes):
+                    continue
+                attempted += 1
+                checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
+                for b, box in zip(blocks, plan['blocks']):
+                    block(b, box)
+                for k, (f, box) in enumerate(zip(figs, plan['figures']), 1):
+                    figure(f, box, k)
+                native_graphic(plan['graphic'])
+                failures = [finding for finding in issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
+                if not failures:
+                    adaptations.append({'action': 'graphic_composition', 'pattern': plan['pattern'],
+                                        'block_ids': [b['id'] for b in blocks],
+                                        'figure_ids': [f'figure-{k+1}' for k in range(len(figs))],
+                                        'graphic_id': comp['graphics'][0]['id']})
+                    adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                        'status': 'COMPILER_FALLBACK', 'reason': 'native_graphic_composition'})
+                    break
+                if not best_failures or len(failures) < len(best_failures):
+                    best_failures = failures
+                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
+                    del values[checkpoint:]
+            else:
+                issues.extend(best_failures)
+                issues.append(issue('GRAPHIC_PAGE_CAPACITY', 'FAIL',
+                    'The graphic, context and source figure/caption cannot share this page above '
+                    'their size floors. Split or replan the page; no content was shortened or dropped.',
+                    n, comp['graphics'][0]['id'], detector='geometric-preflight',
+                    attempted_compositions=attempted))
+                issues.append(issue('SCHEMATIC_REVIEW', 'REVIEW',
+                    'Confirm the declared graphic relationships match the scientific evidence.',
+                    n, comp['graphics'][0]['id'], detector='scientific-review', confidence='MEDIUM'))
         elif proposal:
             supplied = proposal['units']
             expected = [b['id'] for b in blocks] + [f'figure-{k+1}' for k in range(len(figs))]
@@ -919,6 +1030,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)
+        if comp.get('graphics') and len({e['id'] for e in elements}) != len(elements):
+            issues.append(issue('GRAPHIC_ID_COLLISION', 'FAIL', 'Page object names must be unique',
+                                n, detector='geometric-preflight'))
+        for edge_id, obstacle_id in graphic_obstacle_collisions(
+                [e for e in elements if e['kind'] == 'connector'], elements):
+            issues.append(issue('GRAPHIC_ROUTE_THROUGH_CONTENT', 'FAIL',
+                                f'Connector crosses page content {obstacle_id}', n, edge_id,
+                                detector='geometric-preflight'))
         # Detect errors before emitting any PPTX, including title/footer collisions.
         for idx, e in enumerate(elements):
             x, y, w, h = e["bbox"]

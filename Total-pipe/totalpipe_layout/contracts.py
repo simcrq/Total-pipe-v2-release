@@ -324,6 +324,8 @@ def read_requests(path, root=None):
             'bold_font': str((path.parent/ir['theme']['bold_font_file']).resolve()),
             'font_family': ir['theme']['font_family'], 'frame': frames,
             'frame_failures': frame_failures}
+        if slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
+            request['compiler_owned'] = 'native_graphic_composition'
         if len(units) > MAX_UNITS or len({u['id'] for u in units}) != len(units):
             raise ValueError('CAPACITY_OR_ID_COLLISION: no units may be truncated')
         requests.append(request)
@@ -384,6 +386,8 @@ def snap_rhythm(request, boxes):
 
 
 def check(request, boxes):
+    if request.get('compiler_owned') == 'native_graphic_composition':
+        return ['NATIVE_GRAPHIC_REQUIRES_COMPILER']
     errors = []
     units = request['units']
     if len(boxes) != len(units):

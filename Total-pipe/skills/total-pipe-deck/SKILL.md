@@ -167,8 +167,16 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 独立文本框和绑定节点的直线连接符均输出为 PowerPoint 原生对象。节点只描述内容与形状，不写
 坐标；连接必须与声明的节点顺序一致。字段、限制与可运行样例见
 `docs/native-graphics.md`、`examples/native-graphic.deck_ir.json`。
-原有正文或论文图页保持原 archetype；本版不要把 `graphics` 塞进这些页面，
-移动节点时原生连接符随之调整；文字仍可独立修改。尚不支持自由路径或 SVG 导入。
+原有正文或论文图页可保持 `process-flow` / `figure-parameters` archetype，并声明
+可选的 `composition.graphics`，与完整 blocks、原图和图注共存。只声明一张图形的
+内容和显式关系，不写节点坐标；页面编译器分配整图区域，图形布局器计算节点与连接符。
+原图的 asset、source_figure、caption、最小 panel 尺寸、结论和讲稿保留。
+`GRAPHIC_PAGE_CAPACITY` 必须回到规划调整页面，不可缩小证据下限、截断文字或静默删图。
+混排页当前由编译器排版；提供方报告记为 `COMPILER_FALLBACK`，原因为
+`native_graphic_composition`。不要与旧 `composition.visual_intent` 同页声明；
+流程关系统一由图形显式边表达，不从普通 blocks 推断。
+字段、混排边界和开发样例见 `docs/native-graphics.md`、
+`examples/native-research.deck_ir.json`。尚不支持自由路径或 SVG 导入。
 
 需要分支、并行或汇合时，同一 `native-graphic` 页面可显式使用 `type: "dag"`、
 `direction: "horizontal"`。只声明节点与真实关系边；编译器执行确定性分层、文字测量、
@@ -180,7 +188,7 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 把通过的 Story/RPA 规划映射到 `schemas/deck-ir.schema.json`。Deck IR 分为：
 
 - `semantic`：title、purpose、takeaway、evidence_refs、caveats、speaker_notes。
-- `composition`：archetype、blocks、figure_refs。
+- `composition`：archetype、blocks、figure_refs，以及受支持页面上可选的 graphics。
 - `presentation`：theme tokens 与稳定组件变体。
 
 整套先选择同一 frame：可在 Deck IR 顶层写 `presentation.frame_variant` 为 `default`
@@ -222,7 +230,7 @@ blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏�
 `distributed_arrow_list` 显式请求。实际触发结果写入编译后 slide 的 `adaptation_log`。
 
 映射前逐条核对 `rpa_input.json` 中的 `key_points`。对应科学内容必须按原顺序
-进入 Deck IR 的 `composition.blocks[].text` 或 `semantic.speaker_notes`，不能只留下
+进入 Deck IR 的 `composition.blocks[].text`、图形节点完整 title/body 或 `semantic.speaker_notes`，不能只留下
 `takeaway`、缩写后的 slot 文本或 `design_ir.message.secondary`。如果普通页面容量不足，拆页并保留全部细节；硬流程组先重规划，不能静默拆散；改写科学内容需先明确修订 Story/Brief，再重新运行 RPA。
 
 禁止在 IR 中写最终 `x/y/w/h`。首代目录只使用 `deck_compiler/catalog.py` 中的稳定

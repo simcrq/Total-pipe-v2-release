@@ -69,7 +69,7 @@ class GraphicTests(unittest.TestCase):
             ir['slides'][0]['composition']['graphics'] = value
             self.assertTrue(any(i['rule'] == 'GRAPHIC_INVALID' for i in validate(ir)))
         ir = fixture()
-        ir['slides'][0]['composition']['archetype'] = 'process-flow'
+        ir['slides'][0]['composition']['archetype'] = 'cover-hero'
         self.assertTrue(any(i['rule'] == 'GRAPHIC_INVALID' for i in validate(ir)))
         ir = fixture()
         ir['slides'][0]['composition']['blocks'] = [{'id': 'body', 'component': 'body', 'text': 'extra'}]

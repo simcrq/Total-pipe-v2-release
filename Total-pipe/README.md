@@ -14,6 +14,10 @@ Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
 `type: "dag"` 支持确定性分层、分支/汇合与原生正交连接符；见
 [DAG 示例](examples/native-dag.deck_ir.json)。线性 `process` 的 v2 行为保持兼容。
 
+`process-flow` 和 `figure-parameters` 现可选用 `composition.graphics`，与正文、
+证据原图、图注和讲稿共存；区域由编译器分配，图形内部仍使用现有布局器。
+见 [混排说明](docs/native-graphics.md#科研页面混排) 和 [开发示例](examples/native-research.deck_ir.json)。
+
 ## 🚀 Quick Start (New Unified CLI)
 
 ```bash

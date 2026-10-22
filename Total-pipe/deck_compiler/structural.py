@@ -5,7 +5,7 @@ from lxml import etree as ET
 from .contracts import issue
 from .layout import intersect
 from .ooxml import NS, slide_parts, relationships, background, fill
-from .graphic_layout import intentional_overlap
+from .graphic_layout import graphic_obstacle_collisions, intentional_overlap
 from .dag_layout import audit_scene, connector_points
 
 A = '{' + NS['a'] + '}'
@@ -98,7 +98,7 @@ def verify(path, layout):
                     if len(set(numeric_ids)) != len(numeric_ids):
                         add('GRAPHIC_ID_COLLISION', 'PowerPoint shape ids must be unique on each slide', n)
                 boxes = []
-                routed, native_nodes = [], []
+                routed, native_nodes, native_paths = [], [], []
                 for e in slide['elements']:
                     if e['kind'] == 'connector':
                         connector = actual_connectors.get(e['id'])
@@ -153,8 +153,11 @@ def verify(path, layout):
                                                                                           for a, b in zip(p, q)):
                                     add('CONNECTOR_ROUTE_MISMATCH', 'Native orthogonal path differs from layout', n, e['id'])
                                 routed.append({**e, 'bbox': box, 'route': route})
+                                native_paths.append({**e, 'route': route})
                             except (KeyError, ValueError, TypeError) as error:
                                 add('CONNECTOR_ROUTE_MISMATCH', str(error), n, e['id'])
+                        elif preset is not None and preset.get('prst') == 'straightConnector1':
+                            native_paths.append({**e, 'route': connector_points(box, 'straightConnector1', flip_v=flip_v)})
                         line = props.find('a:ln', NS)
                         if (line is None or fill(line) != e['line'].upper() or
                                 abs(int(line.get('w', '0'))/EMU-e['line_width']) > .1):
@@ -314,6 +317,9 @@ def verify(path, layout):
                     boxes.append((e['id'], box))
                     if any(abs(a-b) > .2 for a,b in zip(box, e['bbox'])):
                         add('GEOMETRY_MISMATCH', 'Image geometry differs from compiler', n, e['id'])
+                actual_elements = [{**planned[name], 'bbox': box} for name, box in boxes if name in planned]
+                for edge_id, obstacle_id in graphic_obstacle_collisions(native_paths, actual_elements):
+                    add('GRAPHIC_ROUTE_THROUGH_CONTENT', f'Connector crosses page content {obstacle_id}', n, edge_id)
                 for idx, (name, box) in enumerate(boxes):
                     x,y,w,h = box
                     if x < -.1 or y < -.1 or x+w > 1280.1 or y+h > 720.1:

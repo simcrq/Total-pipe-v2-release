@@ -161,6 +161,11 @@ def repair_overflow(ir: Dict, layout: Dict, qa_report: Dict,
     slides_added = 0
 
     for original_idx, original_slide in enumerate(ir['slides'], 1):
+        if original_slide['composition'].get('graphics'):
+            # A graphic and its evidence form one scientific page. Replanning must be explicit;
+            # cloning its graph while splitting a context paragraph changes that relationship.
+            new_slides.append(copy.deepcopy(original_slide))
+            continue
         if original_idx not in slides_to_repair:
             # No overflow, keep as-is
             new_slides.append(copy.deepcopy(original_slide))

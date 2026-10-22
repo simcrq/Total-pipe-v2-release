@@ -137,7 +137,7 @@
             "graphics": {
               "type": "array", "maxItems": 1,
               "items": {"$ref": "#/$defs/graphic"},
-              "description": "One editable horizontal process or layered DAG on a native-graphic page; omit on other archetypes."
+              "description": "One editable process or DAG. Optional on process-flow and figure-parameters alongside blocks and source figures; required on native-graphic. Geometry is compiler-owned."
             },
             "blocks": {
               "type": "array",
@@ -203,7 +203,13 @@
               "properties": {"graphics": {"minItems": 1}, "blocks": {"maxItems": 0},
                              "figure_refs": {"maxItems": 0}}
             },
-            "else": {"properties": {"graphics": {"maxItems": 0}}}
+            "else": {
+              "if": {"properties": {"archetype": {"enum": ["process-flow", "figure-parameters"]}}},
+              "else": {"properties": {"graphics": {"maxItems": 0}}}
+            }
+          }, {
+            "if": {"required": ["graphics"], "properties": {"graphics": {"minItems": 1}}},
+            "then": {"not": {"required": ["visual_intent"]}}
           }]
         },
         "presentation": {

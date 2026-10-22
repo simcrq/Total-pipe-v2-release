@@ -60,7 +60,8 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
   节点 ID 在图内唯一；编译后对象名包含图形和节点 ID，可在选择窗格中定位。
 - 字体继承 deck theme，描边与箭头使用 `theme.accent`。文字独立测量并居中，
   不低于 18 pt；装不下时返回 `SPLIT_REQUIRED`，保留原文。
-- 不写 `x/y/w/h/bbox`。首版一页一图，普通 blocks 和论文图片放在相邻页面。
+- 不写 `x/y/w/h/bbox`。一页最多一张原生图形；独立页使用 `native-graphic`。
+  `process-flow`、`figure-parameters` 可与 blocks 和论文图片混排，见下文。
   其他 archetype 下的非空 `graphics` 会明确报错，避免内容被忽略。
 
 节点是 `p:sp` 预设形状，文字是独立文本框，边是 `p:cxnSp` 直线连接符。
@@ -95,7 +96,7 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
 python -m deck_compiler build --ir examples/native-dag.deck_ir.json --out builds/native-dag --layout-provider packer
 ```
 
-页面继续使用 `native-graphic`，`blocks` 和 `figure_refs` 留空。只改变图形类型与
+独立图形页继续使用 `native-graphic`，`blocks` 和 `figure_refs` 留空。只改变图形类型与
 显式节点/边；不写布局坐标。例如：
 
 ```json
@@ -138,3 +139,39 @@ python -m deck_compiler build --ir examples/native-dag.deck_ir.json --out builds
 无法避开的冲突会明确失败，需拆图或调整内容结构。路由不是任意图的全局最优求解器。
 PowerPoint 手动编辑后会调整连接符；大幅移动后需要重新检查布局。
 本版不提供循环图、编组、自由曲线编辑器或 SVG 导入。
+
+## 科研页面混排
+
+在已有 `process-flow` 或 `figure-parameters` 的 `composition` 中增加可选的
+`graphics: [<同上 process 或 dag>]` 即可；原有 `blocks`、`figure_refs`、
+`semantic.takeaway`、`evidence_refs`、`caveats` 和 `speaker_notes` 完整保留。
+不含 `graphics` 的旧页及独立图形页保持原有行为。
+
+页面编译器测量正文和图注，尝试上下文在视觉上方、上下文与证据同列，以及图形在
+证据上方的有限区域方案。`figure-parameters` 优先保留原图在左的阅读顺序。
+只分配整个图形的 bbox，再交给 `graphic_layout.py` / DAG 布局器计算内部节点和连线。
+本版混排页由编译器直接排版，packer / 外部提供方不接管节点或覆盖混排区域；
+`layout_provider.json` 记录 `COMPILER_FALLBACK` 与
+`reason: native_graphic_composition`。普通页面仍使用已选布局提供方。
+
+原图仍使用原来的 `assets` / `figure_refs` 来源契约、原始图片字节和最小 panel 尺寸，
+图注不属于原生图形。原生节点和文字继续继承 theme、保持字号下限；连接线按线段检查，
+不得穿越正文、原图或图注。图文无法共存时返回 `GRAPHIC_PAGE_CAPACITY` 及具体原因，
+不能为了放下图形而缩小证据下限、截断文字或丢掉一项内容。普通 overflow repair
+不会自动拆分含图形的页面，需显式重规划。
+
+只把证据支持的实体、关系写入节点和边；节点详细文字可以替代原来的流程正文，
+未进入节点的原始要点必须留在其他 blocks 或讲稿中。编译器不从正文推断关系，也不
+自动将旧 `visual_intent` 转为图形；同一页不可同时声明这两种流程结构。
+最多一张原生图形、4 个普通 blocks、1 张插图；实际容量由 frame、文字和原图比例决定。
+生成图保留 `SCHEMATIC_REVIEW`，原始科研插图继续保留 `SCIENTIFIC_PANEL_REVIEW`。
+
+`examples/native-research.deck_ir.json` 是可编译的混排开发示例，复用仓库生成的指标插图，
+明确标为示意图，不作为真实论文证据或科学验收结果：
+
+```powershell
+python -m deck_compiler compile --ir examples/native-research.deck_ir.json --out builds/native-research --layout-provider packer
+```
+
+用于实际科研页面时保留已有论文 asset 和 `source_figure`，只加入显式的图形描述。
+本轮实现未执行真实科研页面的 PowerPoint 验收。

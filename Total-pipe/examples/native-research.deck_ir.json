@@ -1,0 +1,162 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-research-development-example",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#2563A6"
+  },
+  "assets": {
+    "layout-metrics": {
+      "path": "demo_deck/figures/fig1_quality.png",
+      "origin": "generated",
+      "generator": "examples/demo_deck/make_figures.py"
+    }
+  },
+  "slides": [
+    {
+      "id": "method-with-context",
+      "semantic": {
+        "title": "流程图与科研上下文共存",
+        "purpose": "演示现有科研页面中的原生流程图",
+        "takeaway": "流程以原生节点和连接符表达，正文与讲稿仍完整保留。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是混排功能的开发示例，不表示实际实验。真实使用时将有证据支持的步骤完整写入节点；未进入图形的细节保留在正文或讲稿中。"
+      },
+      "composition": {
+        "archetype": "process-flow",
+        "blocks": [
+          {
+            "id": "conditions",
+            "component": "parameter",
+            "text": "对照条件、测量范围与不确定性保留为独立的科研上下文。"
+          }
+        ],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "workflow",
+            "type": "process",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "shape": "ellipse",
+                "title": "输入",
+                "body": "原始数据"
+              },
+              {
+                "id": "check",
+                "shape": "rounded-rect",
+                "title": "检查",
+                "body": "质量核对"
+              },
+              {
+                "id": "output",
+                "shape": "rect",
+                "title": "输出",
+                "body": "结果汇总"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "check",
+                "kind": "arrow"
+              },
+              {
+                "from": "check",
+                "to": "output",
+                "kind": "arrow"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "graph-with-evidence-region",
+      "semantic": {
+        "title": "原生分支图与插图、图注共存",
+        "purpose": "演示正文、原生 DAG 与插图的空间协调",
+        "takeaway": "原生图形不替代原始插图；此页的指标图仅为开发示意。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是混排结构的开发示例，插图由仓库脚本生成，不是论文原图或科学证据。实际科研页应保留已有论文 asset、来源图号、图注和证据引用，只加入明确声明的实体与关系。"
+      },
+      "composition": {
+        "archetype": "figure-parameters",
+        "blocks": [
+          {
+            "id": "context",
+            "component": "body",
+            "text": "科学结论需由证据支持；图形只表达明确声明的关系。"
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "layout-metrics",
+            "panel_count": 1,
+            "caption": "示意图：仓库布局指标示例（非论文证据）。",
+            "alt": "开发用布局指标示意插图"
+          }
+        ],
+        "graphics": [
+          {
+            "id": "branches",
+            "type": "dag",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "shape": "ellipse",
+                "title": "输入",
+                "body": "同源数据"
+              },
+              {
+                "id": "a",
+                "shape": "rounded-rect",
+                "title": "路径 A"
+              },
+              {
+                "id": "b",
+                "shape": "rect",
+                "title": "路径 B"
+              },
+              {
+                "id": "result",
+                "shape": "hexagon",
+                "title": "汇合",
+                "body": "分别核对"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "a"
+              },
+              {
+                "from": "input",
+                "to": "b"
+              },
+              {
+                "from": "a",
+                "to": "result"
+              },
+              {
+                "from": "b",
+                "to": "result"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

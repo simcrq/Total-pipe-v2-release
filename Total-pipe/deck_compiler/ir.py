@@ -106,6 +106,13 @@ def validate(ir):
             continue
         for message in validate_graphics(comp.get("graphics", []), archetype):
             check(False, message, n, "GRAPHIC_INVALID")
+        if comp.get("graphics"):
+            check(comp.get("visual_intent") is None,
+                  "Use explicit graphic edges instead of combining graphics with a block visual_intent",
+                  n, "GRAPHIC_INVALID")
+            check(all(not str(b.get("id", "")).startswith("graphic:")
+                      for b in blocks if isinstance(b, dict)),
+                  "Block ids must not use the reserved graphic: object namespace", n, "GRAPHIC_INVALID")
         ids = set()
         formulas = []
         for b in blocks:
