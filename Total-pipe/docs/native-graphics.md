@@ -68,7 +68,8 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
 布局器输出源/目标节点、端点和形状专属连接点索引；OfficeCLI 在所有节点创建后，
 通过 `from/to` 解析实际的 PowerPoint 形状 ID，再写入 `a:stCxn` / `a:endCxn`。
 箭头在目标端；在 PowerPoint 中移动节点，连接符随之调整。文字仍是独立对象，
-分支与汇合使用下文的 DAG 类型；本版尚不提供编组、自由曲线或 SVG 路径导入。
+分支与汇合使用下文的 DAG 类型；v5 的自由形状使用
+[Path IR](native-components.md)，尚不提供 PowerPoint 编组或 SVG 导入。
 
 连接点使用 DrawingML 的零基索引，见
 [预设形状定义](https://github.com/apache/poi/blob/trunk/poi/src/main/resources/org/apache/poi/sl/draw/geom/presetShapeDefinitions.xml)：
@@ -137,8 +138,11 @@ python -m deck_compiler build --ir examples/native-dag.deck_ir.json --out builds
 本阶段限制：每图最多 16 节点、64 条显式边，一页一图，方向为从左到右。
 实际容量由页面区域、形状内框和文字决定；过多层、过多同层节点，或有限路由通道内
 无法避开的冲突会明确失败，需拆图或调整内容结构。路由不是任意图的全局最优求解器。
-PowerPoint 手动编辑后会调整连接符；大幅移动后需要重新检查布局。
-本版不提供循环图、编组、自由曲线编辑器或 SVG 导入。
+PowerPoint 手动移动节点后，连接符端点仍会跟随，但应用可能重新布线；跨层
+`bentConnector5` 在编辑后可能穿过中间节点。编译器的避障检查只保证编译时的布局，
+不保证手动编辑后自动避障；编辑后需重新检查并调整连线路径。
+DAG 不支持循环；v5 机制组件可以显式声明返回前层的反馈边。
+尚不提供 PowerPoint 编组、独立自由曲线编辑器或 SVG 导入。
 
 ## 科研页面混排
 
@@ -174,4 +178,12 @@ python -m deck_compiler compile --ir examples/native-research.deck_ir.json --out
 ```
 
 用于实际科研页面时保留已有论文 asset 和 `source_figure`，只加入显式的图形描述。
-本轮实现未执行真实科研页面的 PowerPoint 验收。
+2026-10-23 已对该开发示例在 Windows PowerPoint 中逐页检查，并实际移动混排页节点，
+确认连接符跟随、插图和图注保持独立。真实论文证据页面的全链路科学验收仍未执行。
+
+## 科研组件和 Path IR
+
+v5 在同一 `composition.graphics` 入口增加 `mechanism`、`architecture`、`funnel`、
+`path` 和 `composite`。这些类型可用于独立页和上述科研混排页；原有 `process` / `dag`
+接口保持兼容。组件参数、明确的关系语义、局部路径坐标及限制见
+[native-components.md](native-components.md)。

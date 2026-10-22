@@ -11,7 +11,8 @@ from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
                        budget as formula_budget)
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
-from .graphic_layout import compile_graphic, graphic_obstacle_collisions, intentional_overlap
+from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
+                             graphic_texts, intentional_overlap)
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
 
 WIDTH, HEIGHT = 1280, 720
@@ -397,8 +398,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
            for block in slide["composition"]["blocks"]]
         + [figure.get("caption", "") for slide in ir["slides"]
            for figure in slide["composition"]["figure_refs"]]
-        + [node.get("title", "") + node.get("body", "") for slide in ir["slides"]
-           for graphic in slide["composition"].get("graphics", []) for node in graphic["nodes"]])
+        + [value for slide in ir["slides"] for graphic in slide["composition"].get("graphics", [])
+           for _, value in graphic_texts(graphic)])
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
@@ -876,13 +877,19 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                      element["font_size"], 24, element["max_lines"], "middle",
                      element["color"], align="center")
                 if len(elements) > before:
-                    elements[-1].update({key: element[key] for key in ("graphic_id", "node_id")})
+                    elements[-1].update({key: element[key] for key in
+                        ("graphic_id", "node_id", "container_id", "overlap_group", "graphic_region", "edge_id")
+                        if key in element})
+            node_count, edge_count = graphic_counts(graphic)
             adaptations.append({"action": "native_graphic", "graphic_id": graphic["id"],
-                                "region": region, "node_count": len(graphic["nodes"]),
-                                "edge_count": len(graphic["edges"])})
+                                "region": region, "node_count": node_count,
+                                "edge_count": edge_count})
             issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
-                                "Confirm the process order and labels match the scientific explanation; "
-                                "this is a generated schematic, not a paper figure",
+                                ("Confirm the process order and labels match the scientific explanation; "
+                                 "this is a generated schematic, not a paper figure")
+                                if graphic['type'] in ('process', 'dag') else
+                                "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
+                                "generated graphics do not establish scientific correctness",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
         proposal = None if schematic_only or comp.get('graphics') else (proposals or {}).get(slide['id'])
         if family == "graphic":

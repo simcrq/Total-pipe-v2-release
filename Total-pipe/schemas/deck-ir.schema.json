@@ -63,6 +63,14 @@
   },
   "$defs": {
     "graphic": {
+      "oneOf": [
+        {"$ref": "#/$defs/process-graphic"}, {"$ref": "#/$defs/mechanism-graphic"},
+        {"$ref": "#/$defs/architecture-graphic"}, {"$ref": "#/$defs/funnel-graphic"},
+        {"$ref": "#/$defs/path-graphic"}, {"$ref": "#/$defs/composite-graphic"}
+      ]
+    },
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+    "process-graphic": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "type", "direction", "nodes", "edges"],
@@ -102,6 +110,126 @@
                                 "edges": {"minItems": 2, "maxItems": 3}}}
       }]
     },
+    "mechanism-graphic": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "nodes", "edges"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "mechanism"},
+        "direction": {"const": "horizontal"},
+        "nodes": {"$ref": "#/$defs/process-graphic/properties/nodes"},
+        "edges": {
+          "type": "array", "maxItems": 64,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["from", "to", "kind", "basis"],
+            "properties": {
+              "from": {"$ref": "#/$defs/identifier"}, "to": {"$ref": "#/$defs/identifier"},
+              "kind": {"enum": ["activate", "inhibit", "associate"]},
+              "basis": {"enum": ["evidence", "hypothesis"]}, "feedback": {"type": "boolean"},
+              "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1, "pattern": "\\S"}},
+              "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"}
+            },
+            "allOf": [{"if": {"properties": {"basis": {"const": "evidence"}}},
+                       "then": {"required": ["evidence_refs"], "properties": {"evidence_refs": {"minItems": 1}}}}]
+          }
+        }
+      }
+    },
+    "architecture-graphic": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "layers", "edges"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "architecture"},
+        "direction": {"const": "horizontal"}, "edges": {"$ref": "#/$defs/process-graphic/properties/edges"},
+        "layers": {
+          "type": "array", "minItems": 1, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "title", "nodes"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "title": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+              "nodes": {"type": "array", "minItems": 1, "maxItems": 4,
+                        "items": {"$ref": "#/$defs/process-graphic/properties/nodes/items"}}
+            }
+          }
+        }
+      }
+    },
+    "funnel-graphic": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "levels"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "funnel"},
+        "variant": {"enum": ["funnel", "pyramid"]}, "end_width": {"type": "number", "minimum": 0, "maximum": 1},
+        "levels": {
+          "type": "array", "minItems": 2, "maxItems": 8,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "title"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "title": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+              "body": {"type": "string", "maxLength": 180}
+            }
+          }
+        }
+      },
+      "allOf": [{"if": {"not": {"required": ["variant"], "properties": {"variant": {"const": "pyramid"}}}},
+                 "then": {"properties": {"end_width": {"minimum": 0.2}}}}]
+    },
+    "path-command": {
+      "oneOf": [
+        {"type": "array", "prefixItems": [{"const": "M"}], "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        {"type": "array", "prefixItems": [{"const": "L"}], "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        {"type": "array", "prefixItems": [{"const": "C"}], "items": {"type": "number"}, "minItems": 7, "maxItems": 7},
+        {"type": "array", "prefixItems": [{"const": "Q"}], "items": {"type": "number"}, "minItems": 5, "maxItems": 5},
+        {"type": "array", "prefixItems": [{"const": "Z"}], "minItems": 1, "maxItems": 1}
+      ]
+    },
+    "local-box": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"},
+                  {"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 0}],
+                  "minItems": 4, "maxItems": 4},
+    "path-color": {"type": "string", "pattern": "^(accent|foreground|background|none|#[0-9A-Fa-f]{6})$"},
+    "path-graphic": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "view_box", "paths"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "path"}, "view_box": {"$ref": "#/$defs/local-box"},
+        "paths": {
+          "type": "array", "minItems": 1, "maxItems": 32,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "commands": {"type": "array", "minItems": 2, "maxItems": 512, "items": {"$ref": "#/$defs/path-command"}},
+              "d": {"type": "string", "minLength": 1, "maxLength": 32000},
+              "fill": {"$ref": "#/$defs/path-color"}, "stroke": {"$ref": "#/$defs/path-color"},
+              "line_width": {"type": "number", "minimum": 0.5, "maximum": 6}
+            },
+            "oneOf": [{"required": ["commands"], "not": {"required": ["d"]}},
+                      {"required": ["d"], "not": {"required": ["commands"]}}]
+          }
+        },
+        "labels": {
+          "type": "array", "maxItems": 32,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "text", "box"],
+            "properties": {"id": {"$ref": "#/$defs/identifier"}, "box": {"$ref": "#/$defs/local-box"},
+                           "text": {"type": "string", "minLength": 1, "maxLength": 180, "pattern": "\\S"}}
+          }
+        }
+      }
+    },
+    "composite-graphic": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "components"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "composite"},
+        "arrangement": {"enum": ["columns", "rows"]},
+        "weights": {"type": "array", "minItems": 2, "maxItems": 4,
+                    "items": {"type": "number", "minimum": 0.01, "maximum": 100}},
+        "components": {
+          "type": "array", "minItems": 2, "maxItems": 4,
+          "items": {"oneOf": [
+            {"$ref": "#/$defs/process-graphic"}, {"$ref": "#/$defs/mechanism-graphic"},
+            {"$ref": "#/$defs/architecture-graphic"}, {"$ref": "#/$defs/funnel-graphic"}, {"$ref": "#/$defs/path-graphic"}
+          ]}
+        }
+      }
+    },
     "slide": {
       "type": "object",
       "additionalProperties": false,
@@ -137,7 +265,7 @@
             "graphics": {
               "type": "array", "maxItems": 1,
               "items": {"$ref": "#/$defs/graphic"},
-              "description": "One editable process or DAG. Optional on process-flow and figure-parameters alongside blocks and source figures; required on native-graphic. Geometry is compiler-owned."
+              "description": "One editable process/DAG, scientific component, Path IR scene or composite. Optional on process-flow and figure-parameters; required on native-graphic. Only Path IR uses local coordinates; page geometry is compiler-owned."
             },
             "blocks": {
               "type": "array",

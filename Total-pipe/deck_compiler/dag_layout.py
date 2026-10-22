@@ -49,7 +49,7 @@ def layered_order(ids, pairs):
     return layers, ranks
 
 
-def connector_points(bbox, geometry, adjustments=None, flip_v=False):
+def connector_points(bbox, geometry, adjustments=None, flip_v=False, flip_h=False):
     """Evaluate the small native preset subset used here, including external doglegs."""
     x, y, w, h = bbox
     a = adjustments or {}
@@ -65,7 +65,7 @@ def connector_points(bbox, geometry, adjustments=None, flip_v=False):
         raise GraphicLayoutError('GRAPHIC_ROUTE_INVALID', f'Unsupported connector geometry {geometry}')
     result = []
     for px, py in local:
-        point = [x+px, y+h-py if flip_v else y+py]
+        point = [x+w-px if flip_h else x+px, y+h-py if flip_v else y+py]
         if not result or any(abs(a-b) > EPS for a, b in zip(point, result[-1])):
             result.append(point)
     return result
@@ -165,7 +165,7 @@ def _connector(graphic_id, source, target, bend_x, bus_y=None, last_x=None):
     return edge
 
 
-def compile_dag(graphic, region, theme, font_paths=None):
+def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None, column_gap=72.0):
     from .layout import break_lines
     if font_paths is None:
         from .fonts import resolve_theme_fonts
@@ -174,9 +174,16 @@ def compile_dag(graphic, region, theme, font_paths=None):
     ids = [n['id'] for n in graphic['nodes']]
     pairs = [(e['from'], e['to']) for e in graphic['edges']]
     layers, ranks = layered_order(ids, pairs)
+    if layers_override is not None:
+        layers = layers_override
+        if sorted(n for layer in layers for n in layer) != sorted(ids) or any(not layer for layer in layers):
+            raise GraphicLayoutError('GRAPHIC_INVALID', 'Declared layers must contain every node exactly once')
+        ranks = {nid: rank for rank, layer in enumerate(layers) for nid in layer}
+        if any(ranks[s] >= ranks[t] for s, t in pairs):
+            raise GraphicLayoutError('GRAPHIC_INVALID', 'Architecture edges must advance through the declared layers')
     by_id = {n['id']: n for n in graphic['nodes']}
     x, y, width, height = region
-    columns, gap = len(layers), 72.0
+    columns, gap = len(layers), float(column_gap)
     node_width = min(320.0, (width-gap*(columns-1))/columns)
     if node_width < 176:
         raise GraphicLayoutError('GRAPHIC_CAPACITY', f'{columns} DAG layers leave less than 176 px per node; split the diagram')

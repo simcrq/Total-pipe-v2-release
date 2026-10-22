@@ -18,6 +18,10 @@ Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
 证据原图、图注和讲稿共存；区域由编译器分配，图形内部仍使用现有布局器。
 见 [混排说明](docs/native-graphics.md#科研页面混排) 和 [开发示例](examples/native-research.deck_ir.json)。
 
+v5 增加机制、分层架构、漏斗/金字塔组件及可组合的区域接口；Path IR 的
+`M/L/C/Q/Z` 编译为原生 `a:custGeom`，保持独立标签和对象身份。
+见 [组件与路径说明](docs/native-components.md) 和 [六页开发示例](examples/native-components.deck_ir.json)。
+
 ## 🚀 Quick Start (New Unified CLI)
 
 ```bash

@@ -176,7 +176,7 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 `native_graphic_composition`。不要与旧 `composition.visual_intent` 同页声明；
 流程关系统一由图形显式边表达，不从普通 blocks 推断。
 字段、混排边界和开发样例见 `docs/native-graphics.md`、
-`examples/native-research.deck_ir.json`。尚不支持自由路径或 SVG 导入。
+`examples/native-research.deck_ir.json`。SVG 导入仍不支持。
 
 需要分支、并行或汇合时，同一 `native-graphic` 页面可显式使用 `type: "dag"`、
 `direction: "horizontal"`。只声明节点与真实关系边；编译器执行确定性分层、文字测量、
@@ -184,6 +184,18 @@ RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
 时必须拆图或重规划。`process` 保留原有 3–4 节点线性行为。用
 `examples/native-dag.deck_ir.json` 测试，字段与限制见 `docs/native-graphics.md` 的 DAG 部分。
 生成图仍保留 `SCHEMATIC_REVIEW`；结构通过不能代替科学解释核对。
+
+需要机制、架构、漏斗或自定义曲线时，使用同一 graphics 入口的 v5 组件：
+`mechanism`、`architecture`、`funnel`、`path`；`composite` 可按 rows/columns 与可选
+weights 组合 2–4 个独立组件，不自动添加跨组件关系。完整字段见
+`docs/native-components.md`、`examples/native-components.deck_ir.json`。
+机制边必须声明 `kind: activate/inhibit/associate` 和 `basis: evidence/hypothesis`；
+证据关系的 evidence_refs 必须来自本页 semantic.evidence_refs，假设显示虚线和“假设”标签。
+只有显式 `feedback: true` 可以返回前层；不得通过反馈标记绕过未澄清的科学关系。
+架构 layers 明确声明容器成员和边；漏斗宽度默认只是视觉层级，不可当作数据比例。
+Path IR 只接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；局部路径坐标
+不是页面 bbox，不能借此写标题、原图等页面坐标。渐变、滤镜、遮罩、SVG/XML 输入不支持。
+所有标签完整保留，容量错误须重规划；继续保留 SCHEMATIC_REVIEW。
 
 把通过的 Story/RPA 规划映射到 `schemas/deck-ir.schema.json`。Deck IR 分为：
 

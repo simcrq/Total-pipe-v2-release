@@ -5,7 +5,7 @@ from . import audience
 from .catalog import ARCHETYPES, COMPONENTS
 from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
-from .graphic_layout import validate_graphics
+from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
 
 
 SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
@@ -106,6 +106,14 @@ def validate(ir):
             continue
         for message in validate_graphics(comp.get("graphics", []), archetype):
             check(False, message, n, "GRAPHIC_INVALID")
+        if isinstance(comp.get('graphics'), list):
+            for graphic in comp['graphics']:
+                for edge in mechanism_edges(graphic):
+                    refs = edge.get('evidence_refs', [])
+                    if isinstance(refs, list) and isinstance(sem.get('evidence_refs'), list):
+                        check(all(ref in sem['evidence_refs'] for ref in refs),
+                              'Mechanism evidence_refs must bind to this slide semantic.evidence_refs',
+                              n, 'GRAPHIC_EVIDENCE_INVALID')
         if comp.get("graphics"):
             check(comp.get("visual_intent") is None,
                   "Use explicit graphic edges instead of combining graphics with a block visual_intent",
@@ -255,11 +263,7 @@ def validate(ir):
         graphics = comp.get("graphics")
         if isinstance(graphics, list):
             for graphic in graphics:
-                nodes = graphic.get("nodes", []) if isinstance(graphic, dict) else []
-                if isinstance(nodes, list):
-                    visible_text += [(f"graphic node {node.get('id')}.{key}", node.get(key, ""))
-                                     for node in nodes if isinstance(node, dict)
-                                     for key in ("title", "body") if isinstance(node.get(key, ""), str)]
+                visible_text.extend(graphic_texts(graphic))
         for field, text in visible_text:
             found = audience.hits(text)
             if found:

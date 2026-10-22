@@ -35,11 +35,14 @@ def validate_graphics(graphics, archetype):
     if archetype != 'native-graphic' and archetype not in EMBEDDED_ARCHETYPES:
         return ['graphics require native-graphic, process-flow or figure-parameters']
     if len(graphics) != 1:
-        return ['Declare exactly one process or DAG graphic on this page']
+        return ['Declare exactly one graphic or composite on this page']
     errors = []
     graphic = graphics[0]
     if not isinstance(graphic, dict):
         return ['A graphic must be an object']
+    if graphic.get('type') in ('mechanism', 'architecture', 'funnel', 'path', 'composite'):
+        from .graphic_components import validate_component
+        return validate_component(graphic)
     if set(graphic) - {'id', 'type', 'direction', 'nodes', 'edges'}:
         errors.append('Unknown graphic fields; geometry is computed by the compiler')
     if not isinstance(graphic.get('id'), str) or not IDENTIFIER.fullmatch(graphic['id']):
@@ -110,21 +113,82 @@ def validate_graphics(graphics, archetype):
 
 def intentional_overlap(first, second):
     """A node's background may contain its own labels, but no unrelated object."""
+    same_graphic = bool(first.get('graphic_id')) and first.get('graphic_id') == second.get('graphic_id')
+    if same_graphic:
+        if first.get('overlap_group') and first.get('overlap_group') == second.get('overlap_group'):
+            return True  # Explicit paths/labels in one authored local coordinate scene.
+        for container, child in ((first, second), (second, first)):
+            if container.get('role') == 'graphic-container' and child.get('container_id') == container['id']:
+                return True
     return (bool(first.get('graphic_id')) and
             first.get('graphic_id') == second.get('graphic_id') and
             bool(first.get('node_id')) and first.get('node_id') == second.get('node_id') and
             {first['kind'], second['kind']} == {'shape', 'text'})
 
 
+def graphic_texts(graphic):
+    """Visible component strings for font coverage and the existing audience-text gate."""
+    if not isinstance(graphic, dict):
+        return
+    for child in graphic.get('components', []) if isinstance(graphic.get('components'), list) else []:
+        if isinstance(child, dict) and child.get('type') != 'composite':
+            yield from graphic_texts(child)
+    layers = graphic.get('layers', [])
+    layers = layers if isinstance(layers, list) else []
+    for layer in layers:
+        if isinstance(layer, dict) and isinstance(layer.get('title'), str):
+            yield f"graphic layer {layer.get('id')}.title", layer['title']
+    nodes = graphic.get('nodes', graphic.get('levels', []))
+    nodes = nodes if isinstance(nodes, list) else []
+    nodes = nodes + [node for layer in layers if isinstance(layer, dict)
+                     and isinstance(layer.get('nodes'), list) for node in layer['nodes']]
+    for node in nodes:
+        if isinstance(node, dict):
+            for key in ('title', 'body'):
+                if isinstance(node.get(key, ''), str):
+                    yield f"graphic node {node.get('id')}.{key}", node.get(key, '')
+    for key in ('labels', 'edges'):
+        values = graphic.get(key, [])
+        for value in values if isinstance(values, list) else []:
+            if isinstance(value, dict):
+                field = 'text' if key == 'labels' else 'label'
+                if isinstance(value.get(field), str):
+                    yield f"graphic {key} {value.get('id', '')}.{field}", value[field]
+
+
+def mechanism_edges(graphic):
+    if isinstance(graphic, dict):
+        if graphic.get('type') == 'mechanism' and isinstance(graphic.get('edges'), list):
+            yield from (edge for edge in graphic['edges'] if isinstance(edge, dict))
+        if graphic.get('type') == 'composite' and isinstance(graphic.get('components'), list):
+            for child in graphic['components']:
+                if isinstance(child, dict) and child.get('type') == 'mechanism':
+                    yield from mechanism_edges(child)
+
+
+def graphic_counts(graphic):
+    if graphic.get('type') == 'composite':
+        counts = [graphic_counts(c) for c in graphic['components']]
+        return sum(c[0] for c in counts), sum(c[1] for c in counts)
+    if graphic.get('type') == 'architecture':
+        nodes = [n for layer in graphic['layers'] for n in layer['nodes']]
+    else:
+        nodes = graphic.get('nodes', graphic.get('levels', graphic.get('paths', [])))
+    return len(nodes), len(graphic.get('edges', []))
+
+
 def graphic_obstacle_collisions(connectors, elements):
-    """Check actual line segments against page content outside their own graphic."""
+    """Check actual segments against labels, nodes and page content, including zero-height lines."""
     from .dag_layout import segment_hits_node
     findings = []
     for edge in connectors:
         route = edge.get('route') or [edge['start'], edge['end']]
         for other in elements:
-            if (other['kind'] == 'connector' or other.get('collision_mode') == 'container' or
-                    other.get('graphic_id') == edge.get('graphic_id')):
+            if other['kind'] == 'connector' or other.get('collision_mode') == 'container':
+                continue
+            if other.get('graphic_id') == edge.get('graphic_id') and (
+                    other.get('role') == 'graphic-container' or
+                    (other.get('role') == 'graphic-mark' and other.get('edge_id') == edge['id'])):
                 continue
             if any(segment_hits_node(a, b, other['bbox']) for a, b in zip(route, route[1:])):
                 findings.append((edge['id'], other['id']))
@@ -170,7 +234,10 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None):
 
 
 def compile_graphic(graphic, region, theme, font_paths=None):
-    """Keep v2 process geometry intact; only explicit DAGs use layered layout."""
+    """Preserve v2/v3 layouts and lower explicit v5 components through the same protocol."""
+    if graphic.get('type') not in ('process', 'dag'):
+        from .graphic_components import render_component
+        return render_component(graphic, theme, region, font_paths)
     if graphic.get('type') == 'dag':
         from .dag_layout import compile_dag
         return compile_dag(graphic, region, theme, font_paths)

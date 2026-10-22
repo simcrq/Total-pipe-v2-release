@@ -144,6 +144,10 @@ def commands(layout):
             else:
                 raise ValueError(f'Unsupported compiled element kind: {kind}')
             result.append({'command': 'add', 'parent': parent, 'type': typ, 'props': props})
+            if kind == 'shape' and element.get('custom_geometry'):
+                result.append({'command': 'raw-set', 'part': parent,
+                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr/a:prstGeom",
+                    'action': 'replace', 'xml': element['custom_geometry']})
             if kind in ('text', 'list') and any(contract['inset'].values()):
                 inset = contract['inset']
                 margin = ','.join(_px(inset[side]) for side in ('left', 'top', 'right', 'bottom'))
@@ -190,6 +194,9 @@ def commands(layout):
                 selector = f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr"
                 result.append({'command': 'raw-set', 'part': parent, 'xpath': selector+'/a:xfrm',
                                'action': 'setattr', 'xml': f"flipV={int(element['flip_v'])}"})
+                if 'flip_h' in element:
+                    result.append({'command': 'raw-set', 'part': parent, 'xpath': selector+'/a:xfrm',
+                                   'action': 'setattr', 'xml': f"flipH={int(element['flip_h'])}"})
                 if element['adjustments']:
                     xml = (f'<a:avLst xmlns:a="{_A_NS}">' + ''.join(
                         f'<a:gd name="{key}" fmla="val {value}" />'
@@ -197,6 +204,15 @@ def commands(layout):
                     result.append({'command': 'raw-set', 'part': parent,
                                    'xpath': selector+'/a:prstGeom/a:avLst',
                                    'action': 'replace', 'xml': xml})
+            if element.get('line_dash'):
+                xml = (f'<a:ln xmlns:a="{_A_NS}" w="{round(element["line_width"]*9525)}">'
+                       f'<a:solidFill><a:srgbClr val="{_color(element["line"])}"/></a:solidFill>'
+                       f'<a:prstDash val="{element["line_dash"]}"/>'
+                       f'<a:headEnd type="{element["head_end"]}"/><a:tailEnd type="{element["tail_end"]}"/>'
+                       '</a:ln>')
+                result.append({'command': 'raw-set', 'part': parent,
+                    'xpath': f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr/a:ln",
+                    'action': 'replace', 'xml': xml})
         result.append({'command': 'add', 'parent': parent, 'type': 'notes',
                        'props': {'text': slide['notes']}})
     return result

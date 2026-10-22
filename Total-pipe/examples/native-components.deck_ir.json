@@ -1,0 +1,432 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-components-development-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#2563A6"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "mechanism",
+      "semantic": {
+        "title": "激活、抑制与显式反馈（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "signals",
+            "type": "mechanism",
+            "nodes": [
+              {
+                "id": "A",
+                "title": "A"
+              },
+              {
+                "id": "B",
+                "title": "B"
+              },
+              {
+                "id": "C",
+                "title": "C"
+              }
+            ],
+            "edges": [
+              {
+                "from": "A",
+                "to": "B",
+                "kind": "activate",
+                "basis": "hypothesis"
+              },
+              {
+                "from": "B",
+                "to": "C",
+                "kind": "inhibit",
+                "basis": "hypothesis"
+              },
+              {
+                "from": "C",
+                "to": "A",
+                "kind": "inhibit",
+                "basis": "hypothesis",
+                "feedback": true
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "architecture",
+      "semantic": {
+        "title": "分层容器与显式连线（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "system",
+            "type": "architecture",
+            "layers": [
+              {
+                "id": "input",
+                "title": "输入层",
+                "nodes": [
+                  {
+                    "id": "collect",
+                    "title": "采集"
+                  },
+                  {
+                    "id": "check",
+                    "title": "校验"
+                  }
+                ]
+              },
+              {
+                "id": "compute",
+                "title": "处理层",
+                "nodes": [
+                  {
+                    "id": "analyze",
+                    "title": "分析"
+                  },
+                  {
+                    "id": "compare",
+                    "title": "对照"
+                  }
+                ]
+              },
+              {
+                "id": "output",
+                "title": "输出层",
+                "nodes": [
+                  {
+                    "id": "report",
+                    "title": "汇总"
+                  }
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "from": "collect",
+                "to": "analyze"
+              },
+              {
+                "from": "check",
+                "to": "compare"
+              },
+              {
+                "from": "analyze",
+                "to": "report"
+              },
+              {
+                "from": "compare",
+                "to": "report"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "funnel",
+      "semantic": {
+        "title": "漏斗组件（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "selection",
+            "type": "funnel",
+            "levels": [
+              {
+                "id": "0",
+                "title": "候选样本"
+              },
+              {
+                "id": "1",
+                "title": "质量筛选"
+              },
+              {
+                "id": "2",
+                "title": "条件匹配"
+              },
+              {
+                "id": "3",
+                "title": "最终集合"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "pyramid",
+      "semantic": {
+        "title": "金字塔组件（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "hierarchy",
+            "type": "funnel",
+            "levels": [
+              {
+                "id": "0",
+                "title": "候选样本"
+              },
+              {
+                "id": "1",
+                "title": "质量筛选"
+              },
+              {
+                "id": "2",
+                "title": "条件匹配"
+              },
+              {
+                "id": "3",
+                "title": "最终集合"
+              }
+            ],
+            "variant": "pyramid"
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "path",
+      "semantic": {
+        "title": "原生自由路径（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "regions",
+            "type": "path",
+            "view_box": [
+              0,
+              0,
+              300,
+              180
+            ],
+            "paths": [
+              {
+                "id": "zone",
+                "commands": [
+                  [
+                    "M",
+                    20,
+                    100
+                  ],
+                  [
+                    "Q",
+                    70,
+                    20,
+                    120,
+                    100
+                  ],
+                  [
+                    "C",
+                    170,
+                    170,
+                    230,
+                    20,
+                    280,
+                    100
+                  ],
+                  [
+                    "L",
+                    280,
+                    160
+                  ],
+                  [
+                    "L",
+                    20,
+                    160
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "background"
+              }
+            ],
+            "labels": [
+              {
+                "id": "name",
+                "text": "曲线分区",
+                "box": [
+                  70,
+                  112,
+                  160,
+                  36
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    },
+    {
+      "id": "composite",
+      "semantic": {
+        "title": "科研图形组件组合（开发示例）",
+        "purpose": "演示参数化原生图形组件",
+        "takeaway": "图形是可编辑的示意表达，不能替代科学证据或科学正确性审查。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "这是开发用的虚构示意内容，不对应真实论文或测量结果。机制关系均显式标为假设；漏斗宽度只编码视觉层次，不代表数据比例。"
+      },
+      "composition": {
+        "archetype": "native-graphic",
+        "blocks": [],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "combined",
+            "type": "composite",
+            "arrangement": "columns",
+            "components": [
+              {
+                "id": "selection",
+                "type": "funnel",
+                "levels": [
+                  {
+                    "id": "0",
+                    "title": "候选样本"
+                  },
+                  {
+                    "id": "1",
+                    "title": "质量筛选"
+                  },
+                  {
+                    "id": "2",
+                    "title": "条件匹配"
+                  },
+                  {
+                    "id": "3",
+                    "title": "最终集合"
+                  }
+                ]
+              },
+              {
+                "id": "regions",
+                "type": "path",
+                "view_box": [
+                  0,
+                  0,
+                  300,
+                  180
+                ],
+                "paths": [
+                  {
+                    "id": "zone",
+                    "commands": [
+                      [
+                        "M",
+                        20,
+                        100
+                      ],
+                      [
+                        "Q",
+                        70,
+                        20,
+                        120,
+                        100
+                      ],
+                      [
+                        "C",
+                        170,
+                        170,
+                        230,
+                        20,
+                        280,
+                        100
+                      ],
+                      [
+                        "L",
+                        280,
+                        160
+                      ],
+                      [
+                        "L",
+                        20,
+                        160
+                      ],
+                      [
+                        "Z"
+                      ]
+                    ],
+                    "fill": "background"
+                  }
+                ],
+                "labels": [
+                  {
+                    "id": "name",
+                    "text": "曲线分区",
+                    "box": [
+                      70,
+                      112,
+                      160,
+                      36
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

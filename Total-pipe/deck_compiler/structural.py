@@ -7,6 +7,7 @@ from .layout import intersect
 from .ooxml import NS, slide_parts, relationships, background, fill
 from .graphic_layout import graphic_obstacle_collisions, intentional_overlap
 from .dag_layout import audit_scene, connector_points
+from .graphic_paths import geometry_signature
 
 A = '{' + NS['a'] + '}'
 EMU = 9525
@@ -130,8 +131,9 @@ def verify(path, layout):
                         box = [int(off.get('x'))/EMU, int(off.get('y'))/EMU,
                                int(ext.get('cx'))/EMU, int(ext.get('cy'))/EMU]
                         flip_v = xf.get('flipV', '0') in ('1', 'true')
+                        flip_h = xf.get('flipH', '0') in ('1', 'true')
                         if (any(abs(a-b) > .2 for a, b in zip(box, e['bbox'])) or
-                                xf.get('rot', '0') != '0' or xf.get('flipH', '0') not in ('0', 'false') or
+                                xf.get('rot', '0') != '0' or flip_h != e.get('flip_h', False) or
                                 flip_v != e.get('flip_v', False)):
                             add('GEOMETRY_MISMATCH', 'Connector endpoints differ from layout', n, e['id'])
                         preset = props.find('a:prstGeom', NS)
@@ -148,7 +150,7 @@ def verify(path, layout):
                                     adjustments[guide.get('name')] = int(formula[1])
                                 if len(guides) != len(adjustments) or adjustments != e['adjustments']:
                                     add('CONNECTOR_ROUTE_MISMATCH', 'Native routing adjustments differ from layout', n, e['id'])
-                                route = connector_points(box, preset.get('prst'), adjustments, flip_v)
+                                route = connector_points(box, preset.get('prst'), adjustments, flip_v, flip_h)
                                 if len(route) != len(e['route']) or any(abs(a-b) > .2 for p, q in zip(route, e['route'])
                                                                                           for a, b in zip(p, q)):
                                     add('CONNECTOR_ROUTE_MISMATCH', 'Native orthogonal path differs from layout', n, e['id'])
@@ -157,11 +159,14 @@ def verify(path, layout):
                             except (KeyError, ValueError, TypeError) as error:
                                 add('CONNECTOR_ROUTE_MISMATCH', str(error), n, e['id'])
                         elif preset is not None and preset.get('prst') == 'straightConnector1':
-                            native_paths.append({**e, 'route': connector_points(box, 'straightConnector1', flip_v=flip_v)})
+                            native_paths.append({**e, 'route': connector_points(box, 'straightConnector1', flip_v=flip_v, flip_h=flip_h)})
                         line = props.find('a:ln', NS)
                         if (line is None or fill(line) != e['line'].upper() or
                                 abs(int(line.get('w', '0'))/EMU-e['line_width']) > .1):
                             add('CONNECTOR_STYLE_MISMATCH', 'Connector line differs from layout', n, e['id'])
+                        dash = None if line is None else line.find('a:prstDash', NS)
+                        if (dash.get('val') if dash is not None else 'solid') != e.get('line_dash', 'solid'):
+                            add('CONNECTOR_STYLE_MISMATCH', 'Connector evidence/hypothesis dash differs from layout', n, e['id'])
                         for tag, key in (('headEnd', 'head_end'), ('tailEnd', 'tail_end')):
                             arrow = None if line is None else line.find('a:'+tag, NS)
                             if arrow is None or arrow.get('type') != e[key]:
@@ -185,7 +190,12 @@ def verify(path, layout):
                                                           for k in ('flipH', 'flipV')):
                             add('GEOMETRY_MISMATCH', 'Unexpected native graphic rotation/flip', n, e['id'])
                         preset = props.find('a:prstGeom', NS)
-                        if preset is None or preset.get('prst') != e['geometry']:
+                        custom = props.find('a:custGeom', NS)
+                        if e.get('custom_geometry'):
+                            if (preset is not None or custom is None or
+                                    geometry_signature(custom) != geometry_signature(e['custom_geometry'])):
+                                add('GRAPHIC_PATH_MISMATCH', 'Native custom geometry differs from compiled Path IR', n, e['id'])
+                        elif custom is not None or preset is None or preset.get('prst') != e['geometry']:
                             add('GRAPHIC_PRESET_MISMATCH', 'Native preset differs from graphic shape', n, e['id'])
                         line = props.find('a:ln', NS)
                         for element, expected in ((props, e['fill']), (line, e['line'])):
@@ -294,10 +304,14 @@ def verify(path, layout):
                                 if east_asian is None or east_asian.get('typeface') != c['font_family']:
                                     add('EAST_ASIAN_FONT_MISMATCH', 'East Asian font slot differs from contract', n, e['id'])
                 if routed:
-                    region = next((a['region'] for a in slide.get('adaptation_log', [])
-                                   if a.get('action') == 'native_graphic'), [0, 0, *layout['slide_size']])
-                    for rule, message, shape in audit_scene(native_nodes, routed, region):
-                        add(rule, message, n, shape)
+                    fallback = next((a['region'] for a in slide.get('adaptation_log', [])
+                                     if a.get('action') == 'native_graphic'), [0, 0, *layout['slide_size']])
+                    for graphic_id in dict.fromkeys(e['graphic_id'] for e in routed):
+                        edges = [e for e in routed if e['graphic_id'] == graphic_id]
+                        nodes = [e for e in native_nodes if e['graphic_id'] == graphic_id]
+                        region = edges[0].get('graphic_region', fallback)
+                        for rule, message, shape in audit_scene(nodes, edges, region):
+                            add(rule, message, n, shape)
                 pics = root.findall('p:cSld/p:spTree/p:pic', NS)
                 planned_pics = [e for e in slide['elements'] if e['kind'] == 'image']
                 if len(pics) != len(planned_pics):
