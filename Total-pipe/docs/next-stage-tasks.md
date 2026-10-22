@@ -389,3 +389,23 @@ html 截图只用于检查非公式区域。
 - 13 条 REVIEW = 1 字体逐字回退 + 11 张论文面板 + 1 条"未做 PowerPoint 原生渲染"。
 - 未做：行内 `$...$` 公式（要动断行器）；论文图裁切仍带相邻面板残片（PaperWorkflow 侧）；
   背景繁复度只报 REVIEW，需人工看渲染；macOS PowerPoint 原生验收在本机无法完成。
+
+## 6. 页面语言：把工作记录请下幻灯片（2026-10-22，第五轮）
+
+评审原话：`EV…`、"证据还不够"这类东西根本不适合放在 PPT 里；带冒号的标题读起来很别扭。
+复盘后确认这不是模型跑偏，而是几处把它当成页面家具：
+
+| 入口 | 原先写入 | 处理 |
+| --- | --- | --- |
+| `layout.py` footer | `EV0008 · EV0001 · …` 每页 15 pt 页脚 | 任何 frame 都不再画；编号只进备注 |
+| `layout.py` caveats | 自由文本，含"本次输入仅有 nn.pdf 主文" | 运行状态类移到备注，页面只留科学边界 |
+| `layout.py` notes | 固定 `Evidence: …` | 保留，改为仅有 evidence_refs 时追加 |
+| `ir.py` semantic | 每页必须给 `evidence_refs`/`caveats` | 不变（可追溯性），新增 `run_notes` 只进备注 |
+| `story.py` | 标题=question、next 全节点必填、ending.limitation 必填 | 新增可选 `title`、末节点 next 可省、limitation 可省；节点 4–10 |
+
+新增 `deck_compiler/audience.py`：识别 `EV\d+`、仓库路径、"本次输入/未取得/未审阅/手头"等
+运行状态词。编译器据此拆分 caveat；IR 对页面可见文本逐字段报 `AUDIENCE_TEXT` REVIEW，
+对将被降级的 caveat 报 `RUN_STATE_CAVEAT` REVIEW。不删除任何内容，只改投递位置。
+
+标题不设风格门禁：Story Planner 可自带 `title`，完整值写入 `metadata.story_title`，
+Deck IR 优先采用它；RPA 只截短自己那份 26 字槽位。冒号拼接不再由管线制造。

@@ -56,13 +56,21 @@ python -m pwf2rpa <workflow.json> \
 提示包生成不调用模型；模型只在独立 Story Planner 子代理中使用。生成器代码位于本
 工作区的 `pwf2rpa`，插件 MCP 若已启动，需重启该服务才能读取新的工具 schema。
 
-每个节点保留以下四个必需字段：
+每个节点保留以下字段：
 
 ```json
-{"question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
+{"title":"可选，幻灯片标题","question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
 ```
 
-仅在一句 `answer` 会丢失必须保留的连续内容时，可选加 `key_points` 字符串数组；
+`question`、`answer`、`evidence` 必填；`next` 除最后一个节点外必填——最后一步是收束，
+不需要为形式补一句“下一步看什么”。`title` 可选：它是这一页给听众看的话，可以不是问句，
+也可以比 `question` 更长或更短；不写就退回 `question`。不要把标题写成“主题：结论”的拼接，
+也不要为了 26 字槽位牺牲信息——转换器会把完整标题留在 `metadata.story_title`，RPA 只截短它自己那份。
+
+节点数 4–10，由论证需要决定，不为凑页数加点。`ending.limitation` 可选，只写论文自身的边界；
+不要写本次拿到哪些文件、SI 是否取得或是否审阅，那是工作记录。
+
+仅在 `answer` 会丢失必须保留的连续内容时，可选加 `key_points` 字符串数组；
 不要求每个节点都有，也不限制条数。`answer` 是摘要，`key_points` 是要传给 RPA 的细节。
 
 顶层必须记录：

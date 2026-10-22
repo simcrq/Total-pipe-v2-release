@@ -92,6 +92,11 @@ DesignIntentPlanner 写可选文件；它只判断关系，不写 bbox、槽位�
 不需要流程意图的页面省略该文件，旧 Story 四字段与转换输出保持兼容。
 
 pwf2rpa 将 `answer` 送入 Brief 的 `takeaway`，将 `key_points` 按原顺序送入同名字段，并计入 `text_chars` 与布局容量检查。`evidence_texts` 是原始证据资料，不自动进入正文。直接提供 Brief spec 时，`body` 中的段落换行会保留。
+
+Story 节点可选 `title`：它成为 Brief 标题，完整值同时写入 `metadata.story_title`；不写时标题取
+`question`。RPA 仍按自己的标题槽截短 Brief 标题，Deck IR 应优先使用 `metadata.story_title`，
+所以标题可以比 26 字更长。节点数 4–10；`next` 除最后一个节点外必填；`ending.limitation` 可选，
+没有就只为总结页生成 takeaway，不再用“仅有主文/SI 未审阅”这类工作记录填满必填项。
 默认结尾标题根据 Story 主体语言选择：英文为 `Conclusions and scope`，中文为
 `结论与边界`；`title_chars` 由转换器根据生成标题计算。转换后检查整套标题语言，
 若需改写标题，先改 Story/规划输入再运行转换，避免标题与计数不一致。`--design-intent` 只在有流程意图时传入；对应 Brief 的 `metadata.visual_intent` 不复制要点正文，并设 `allow_auto_split=false`。容量不足时返回重规划，不能自动拆散四点硬关系。
@@ -160,7 +165,12 @@ Codex 插件的 MCP 配置在 [Total-pipe/.mcp.json](../.mcp.json)，入口是
 - 整套页面先确定顶层 `presentation.frame_variant`（`default` 或 `spacious`）；省略时，只要任一页请求 `spacious`，编译器整套采用 spacious frame；
 - 一图加 3–4 个同级步骤/参数用 `figure-parameters`，将 block 按阅读顺序放入 `composition.blocks`；编译器据此保持 24 px 纵向间距，无需新增坐标字段；
 - 对单图四步加工路径，若四个 block 无独立 `label`，从 `method` 开始、中间含 `process-step`、以 `result` 结束，编译器会加入编号与纵向连线，展示由材料/方法到结果的推进；文本保持原样，56 px 引导区计入容量检查；
-- 所有 `evidence_refs`、`caveats` 和 `speaker_notes` 必须保留。
+- 所有 `evidence_refs`、`caveats` 和 `speaker_notes` 必须保留；另外可用 `run_notes` 放只给讲者看的记录。
+  `evidence_refs` 由编译器写入备注（`Evidence: EV…`），不再出现在页面上；
+  描述本次输入（“只拿到主文/SI 未审阅”等）的 caveat 会被移到备注并报 `RUN_STATE_CAVEAT` REVIEW，
+  页面只保留论文自身的边界。页面文本里出现 EV 编号、仓库路径或这类工作记录时报 `AUDIENCE_TEXT` REVIEW。
+- 标题优先取 Brief 的 `metadata.story_title`（Story 可写独立 `title`），其次取 Brief `title`；
+  不要为了槽位字数把标题压成“主题：结论”。
 - `key_points` 的科学内容须按源 Brief 的顺序进入 block 正文或 speaker notes；
   不能只保留 `takeaway` 或压缩后的设计意图。普通页面容量不足时拆页；硬流程组须先重规划。
 

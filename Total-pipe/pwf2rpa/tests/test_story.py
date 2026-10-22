@@ -164,11 +164,12 @@ class StoryChainTests(unittest.TestCase):
         self.assertIn("STORY_NEXT_IS_SEQUENTIAL", str(caught.exception))
 
     def test_story_node_count_is_bounded(self):
-        story = make_story()
-        story["story"] = story["story"][:4]
-        with self.assertRaises(StoryError) as caught:
-            story_to_specs(story, self.workflow)
-        self.assertIn("STORY_NODE_COUNT_INVALID", str(caught.exception))
+        for count in (3, 11):
+            story = make_story()
+            story["story"] = (story["story"] * 3)[:count]
+            with self.assertRaises(StoryError) as caught:
+                story_to_specs(story, self.workflow)
+            self.assertIn("STORY_NODE_COUNT_INVALID", str(caught.exception))
 
     def test_certainty_escalation_is_reported(self):
         self.workflow.document["evidence_registry"][0]["text"] = "The change likely originates from preparation."
@@ -182,6 +183,43 @@ class StoryChainTests(unittest.TestCase):
         payload, _warnings = convert(self.workflow, story=make_story(), strict_fit=False)
         self.assertEqual(set(payload), {"paperworkflow_v4", "slide_briefs"})
         self.assertEqual(payload["slide_briefs"][1]["metadata"]["story_planner"]["mode"], "subagent")
+
+
+    def test_node_title_reaches_brief_and_metadata(self):
+        story = make_story()
+        story["story"][0]["title"] = "A plain declarative slide title"
+        specs, _warnings = story_to_specs(story, self.workflow)
+        self.assertTrue(specs[1]["title"].startswith("A plain declarative slide"))
+        self.assertEqual(specs[1]["metadata"]["story_title"], "A plain declarative slide title")
+
+    def test_title_falls_back_to_question(self):
+        specs, _warnings = story_to_specs(make_story(), self.workflow)
+        self.assertEqual(specs[1]["metadata"]["story_title"], "Scientific question 1?")
+
+    def test_last_node_needs_no_next_question(self):
+        story = make_story()
+        story["story"][-1].pop("next")
+        specs, _warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(specs[-2]["metadata"]["story_next"], "")
+
+    def test_missing_next_inside_chain_is_rejected(self):
+        story = make_story()
+        story["story"][1].pop("next")
+        with self.assertRaises(StoryError) as caught:
+            story_to_specs(story, self.workflow)
+        self.assertIn("STORY_TEXT_MISSING", str(caught.exception))
+
+    def test_limitation_is_optional(self):
+        story = make_story()
+        story["ending"].pop("limitation")
+        specs, _warnings = story_to_specs(story, self.workflow)
+        self.assertNotIn("body", specs[-1])
+
+    def test_four_node_story_is_allowed(self):
+        story = make_story()
+        story["story"] = story["story"][:4]
+        specs, _warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(len(specs), 6)
 
 
 if __name__ == "__main__":

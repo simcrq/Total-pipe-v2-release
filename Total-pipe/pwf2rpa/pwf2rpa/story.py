@@ -28,7 +28,7 @@ __all__ = [
 HIGH_REASONING_EFFORTS = frozenset({"high", "xhigh", "max", "ultra"})
 _ROOT_FIELDS = frozenset({"planner", "core_question", "main_message", "story", "ending"})
 _PLANNER_FIELDS = frozenset({"mode", "model", "reasoning_effort", "selected_by_user"})
-_NODE_FIELDS = frozenset({"question", "answer", "key_points", "evidence", "next"})
+_NODE_FIELDS = frozenset({"title", "question", "answer", "key_points", "evidence", "next"})
 _ENDING_FIELDS = frozenset({"takeaway", "limitation"})
 
 _GENERIC_NEXT = re.compile(
@@ -174,17 +174,17 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
     nodes_raw = raw.get("story")
     if not isinstance(nodes_raw, list):
         problems.append(
-            Problem("STORY_NODES_NOT_ARRAY", "story.story", "story must be an array of 5-8 reasoning nodes.")
+            Problem("STORY_NODES_NOT_ARRAY", "story.story", "story must be an array of 4-10 reasoning nodes.")
         )
         nodes_raw = []
-    elif not 5 <= len(nodes_raw) <= 8:
+    elif not 4 <= len(nodes_raw) <= 10:
         problems.append(
             Problem(
                 "STORY_NODE_COUNT_INVALID",
                 "story.story",
-                "a research talk needs 5-8 reasoning nodes; nodes are not figures or slides.",
+                "a research talk needs 4-10 reasoning nodes; nodes are not figures or slides.",
                 actual=len(nodes_raw),
-                expected="5-8",
+                expected="4-10",
             )
         )
 
@@ -197,9 +197,20 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             )
             continue
         problems.extend(_unknown_fields(node_raw, _NODE_FIELDS, path))
+        title = _text(node_raw.get("title"))
         question = _required_text(node_raw, "question", path, problems)
         answer = _required_text(node_raw, "answer", path, problems)
-        next_question = _required_text(node_raw, "next", path, problems)
+        # The last node closes the argument: it does not need a hand-off to a next question.
+        # Every other node does, because that is what makes the chain a chain.
+        next_question = _text(node_raw.get("next"))
+        if not next_question and index < len(nodes_raw) - 1:
+            problems.append(
+                Problem(
+                    "STORY_TEXT_MISSING",
+                    f"{path}.next",
+                    "next is required on every node except the last one.",
+                )
+            )
         raw_key_points = node_raw.get("key_points", [])
         if not isinstance(raw_key_points, list) or any(
             not isinstance(point, str) or not point.strip() for point in raw_key_points
@@ -276,6 +287,8 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             "evidence": resolved,
             "next": next_question,
         }
+        if title:
+            node["title"] = title
         if key_points:
             node["key_points"] = key_points
         nodes.append(node)
@@ -286,9 +299,11 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
         problems.append(Problem("STORY_ENDING_MISSING", "story.ending", "ending must contain takeaway and limitation."))
     else:
         problems.extend(_unknown_fields(ending_raw, _ENDING_FIELDS, "story.ending"))
+        # limitation is optional. Forcing it produced closing pages about which PDFs this run
+        # happened to have; the paper's own boundary should be written when there is one.
         ending = {
             "takeaway": _required_text(ending_raw, "takeaway", "story.ending", problems),
-            "limitation": _required_text(ending_raw, "limitation", "story.ending", problems),
+            "limitation": _text(ending_raw.get("limitation")),
         }
 
     errors = [problem for problem in problems if problem.severity == "error"]
@@ -382,10 +397,13 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
     for index, node in enumerate(plan["story"]):
         category = _category_for(node["question"], index)
         title_limit = max((layout.title_chars or 0) for layout in fit.CATEGORIES[category].layouts) or 34
+        # The planner may write its own slide title. RPA still needs one that fits its slot, so the
+        # brief carries the truncated form and the metadata keeps the full sentence for the Deck IR.
+        title = node.get("title") or node["question"]
         spec = {
             "slide_type": "custom",
             "category_hint": category,
-            "title": _truncate(node["question"], title_limit),
+            "title": _truncate(title, title_limit),
             "takeaway": node["answer"],
             "evidence_ids": list(node["evidence"]),
             "content_roles": ["primary_claim", "primary_evidence"],
@@ -395,6 +413,7 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
                 **common,
                 "story_role": "reasoning_node",
                 "story_node_index": index + 1,
+                "story_title": title,
                 "story_question": node["question"],
                 "story_answer": node["answer"],
                 "story_next": node["next"],
@@ -409,20 +428,20 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
         for node in plan["story"][-2:]
         for evidence_id in node["evidence"]
     ))
-    specs.append(
-        {
-            "slide_type": "summary",
-            "category_hint": "summary",
-            "title": _ending_title(plan),
-            "takeaway": plan["ending"]["takeaway"],
-            "body": plan["ending"]["limitation"],
-            "evidence_ids": final_evidence,
-            "content_roles": ["primary_claim", "supporting_evidence"],
-            "narrative_job": "summary",
-            "allow_auto_split": True,
-            "metadata": {**common, "story_role": "ending", **plan["ending"]},
-        }
-    )
+    summary = {
+        "slide_type": "summary",
+        "category_hint": "summary",
+        "title": _ending_title(plan),
+        "takeaway": plan["ending"]["takeaway"],
+        "evidence_ids": final_evidence,
+        "content_roles": ["primary_claim", "supporting_evidence"],
+        "narrative_job": "summary",
+        "allow_auto_split": True,
+        "metadata": {**common, "story_role": "ending", **plan["ending"]},
+    }
+    if plan["ending"].get("limitation"):
+        summary["body"] = plan["ending"]["limitation"]
+    specs.append(summary)
     return specs, warnings
 
 
@@ -481,22 +500,30 @@ def build_story_prompt(
         "core_question": "string",
         "main_message": "string",
         "story": [
-            {"question": "string", "answer": "string", "evidence": ["EV0001"], "next": "string"}
+            {"title": "string, optional", "question": "string", "answer": "string",
+             "evidence": ["EV0001"], "next": "string, optional on the last node"}
         ],
-        "ending": {"takeaway": "string", "limitation": "string"},
+        "ending": {"takeaway": "string", "limitation": "string, optional"},
     }
     instructions = (
         "你不是在总结论文，也不是按 Figure 顺序写大纲。你要从 Evidence Store 中选择最重要的证据，"
         "把论文重构为听众理解问题的顺序。只输出一个 JSON 对象，不要 Markdown。\n\n"
-        "硬约束：\n"
-        "1. 输出 5-8 个 story nodes；每个 node 是科研推理的一步，不是一个 Figure。\n"
-        "2. 每个 node 必须是 Question → Answer → Evidence → Next Question。\n"
-        "3. answer 只能由列出的 Evidence id 支撑；不得创造事实、因果关系或确定性。\n"
+        "结构：\n"
+        "1. 输出 4-10 个 story nodes；每个 node 是科研推理的一步，不是一个 Figure。"
+        "节点数量由论证需要决定，不要为凑页数增加节点。\n"
+        "2. 每个 node 有 question 和 answer。question 是你这一步要回答的科学问题，"
+        "answer 是回答，只能由列出的 Evidence id 支撑；不得创造事实、因果关系或确定性。\n"
+        "3. title 可选，是这一页给听众看的话。它可以不是问句，可以比 question 长或短，"
+        "由你决定怎样说清楚；不写就退回 question。"
+        "不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
         "4. 原文的 may/likely/suggest/possibly/可能/提示/推测必须保留其不确定性。\n"
-        "5. next 必须说明当前证据留下的疑问、缺口、待排除解释或待验证机制；不得写成‘然后看 Fig.4’。\n"
+        "5. next 说明当前证据留下的疑问或待验证机制，除最后一个 node 外必填；"
+        "最后一个 node 不需要为了形式补一句“下一步看什么”。不得写成‘然后看 Fig.4’。\n"
         "6. 允许删除重复、展示性或弱相关证据，目标是最短、最清晰的核心证据链。\n"
         "7. 不决定 PPT 页数、布局、配色、裁图或完整实验参数。\n"
         "8. 相邻节点应能用‘因此/但是/为了验证/为了排除/如果该解释成立’连接。\n\n"
+        "关于 ending：takeaway 必填；limitation 可选，只写论文自身的边界（样本、条件、方法假设）。"
+        "不要写你这次拿到了哪些文件、SI 是否取得或是否审阅——那是工作记录，不是科学结论。\n\n"
         "当一句 answer 会抹掉必须保留的连续内容时，可在该 node 添加 key_points 字符串数组；"
         "逐条保留证据支持的细节，不要求每个 node 都添加，也不限制条数。\n\n"
         "自检：删掉任一 node 后，下一 node 是否仍只因为论文顺序而出现？如果是，重写链条。"
