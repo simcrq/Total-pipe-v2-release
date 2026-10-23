@@ -30,7 +30,7 @@
     },
     "vertical_anchor": {"enum": ["top", "middle", "bottom"]},
     "max_lines": {"type": "integer", "minimum": 1},
-    "overflow_policy": {"const": "wrap_shrink_variant_split"},
+    "overflow_policy": {"enum": ["wrap_shrink_variant_split", "preserve_terms_review"]},
     "font_floor": {"type": "number", "exclusiveMinimum": 0}
   }
 }

@@ -14,6 +14,8 @@ from .ir import validate
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
                              graphic_texts, intentional_overlap)
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
+from .visual_design import (header_decoration, header_layout, preserve_scientific_terms,
+                            resolve_design, rule, type_sizes)
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -50,7 +52,8 @@ ANNOTATION_ROLES = {"caption", "caveat", "footer", "badge"}
 
 def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
     """Height of a caption strip: the wrapped line count at the size it is set in."""
-    lines = break_lines(caption, ImageFont.truetype(font_file, size), max(1, width))
+    from .fonts import load_font_file
+    lines = break_lines(caption, load_font_file(font_file, size), max(1, width))
     return max(34.0, len(lines) * size * 1.25 + 8)
 
 
@@ -67,13 +70,15 @@ def body_bottom(slide, family, spacious):
     return bottom
 
 
-def body_region(slide, family, frame):
+def body_region(slide, family, frame, design=None, font_paths=None, preserve_terms=False):
     """The body rectangle's vertical bounds for a frame variant, in the compiler's own units.
 
     The lab-template frame is tighter above (a 40 pt title and a one-line takeaway instead of the
     compass frame's 120 px title block) and lower below (the template's footer band starts at
     y=686), so a content page gains about 150 px of body height.
     """
+    if design:
+        return header_layout(design, slide, font_paths, preserve_terms)['body_top'], body_bottom(slide, family, False)
     if frame == "template":
         return 132, (632 if audience.visible_caveats(slide) else 672)
     spacious = frame == "spacious"
@@ -302,7 +307,7 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  empty_share=round(share, 3))
 
 
-def graphic_page_regions(composition, region, assets, font_paths):
+def graphic_page_regions(composition, region, assets, font_paths, visual_plan=None):
     """Finite page-level candidates; graph internals stay with compile_graphic.
 
     Measure context at the existing font floor and keep each image with its caption.
@@ -311,6 +316,10 @@ def graphic_page_regions(composition, region, assets, font_paths):
     x, y, width, height = region
     blocks, figures = composition['blocks'], composition['figure_refs']
     gap = 24.0
+    if visual_plan and not figures:
+        from .academic_layout import graphic_without_evidence
+        yield from graphic_without_evidence(composition, region, font_paths, visual_plan)
+        return
 
     def need(block, w):
         label = block.get('label', '')
@@ -340,19 +349,37 @@ def graphic_page_regions(composition, region, assets, font_paths):
         return
 
     # Keep the familiar figure-left convention; process pages read diagram -> evidence.
-    for figure_w in (360.0, 280.0, 440.0, 224.0, 520.0):
+    if visual_plan:
+        from .academic_layout import ratios
+        shares = ratios(visual_plan.get('graphic_width_ratio', .68), .4, .9)
+        figure_widths = [(width-gap)*(1-share) for share in shares]
+        if visual_plan['composition'] == 'graphic-top':
+            figure_widths = []
+    else:
+        figure_widths = (360.0, 280.0, 440.0, 224.0, 520.0)
+    for figure_w in figure_widths:
         graphic_w = width-gap-figure_w
+        figure_left = (visual_plan['composition'] == 'graphic-right' if visual_plan
+                       else composition['archetype'] == 'figure-parameters')
         figure_x, graphic_x = ((x, x+figure_w+gap)
-                              if composition['archetype'] == 'figure-parameters'
+                              if figure_left
                               else (x+graphic_w+gap, x))
-        yield {'pattern': 'context-above-visuals', 'blocks': band,
+        above = {'pattern': 'context-above-visuals', 'blocks': band,
                'figures': [[figure_x, body_y, figure_w, body_h]],
                'graphic': [graphic_x, body_y, graphic_w, body_h]}
         context, context_h = rows(figure_w, figure_x, y)
         figure_y = y+context_h+(gap if blocks else 0)
-        yield {'pattern': 'context-with-evidence', 'blocks': context,
+        beside = {'pattern': 'context-with-evidence', 'blocks': context,
                'figures': [[figure_x, figure_y, figure_w, y+height-figure_y]],
                'graphic': [graphic_x, y, graphic_w, height]}
+        ordered = (beside, above) if visual_plan and visual_plan.get('context_placement') == 'with-evidence' else (above, beside)
+        for candidate in ordered:
+            if visual_plan:
+                candidate['graphic_width_ratio'] = graphic_w/(width-gap)
+            yield candidate
+
+    if visual_plan and visual_plan['composition'] != 'graphic-top':
+        return
 
     # Wide graphs can use a full-width upper band when the frame has enough height.
     figure_w = (width-gap)/2 if blocks else width
@@ -366,10 +393,39 @@ def graphic_page_regions(composition, region, assets, font_paths):
           font_paths['font_file'], ref.get('caption_font_size', 22))) if ref['caption'] else 0
     lower_h = max(context_h, image_h+ch+12)
     lower_y = y+height-lower_h
-    yield {'pattern': 'graphic-above-evidence',
-           'blocks': [[bx, lower_y+by, bw, bh] for bx, by, bw, bh in context],
-           'figures': [[figure_x, lower_y, figure_w, lower_h]],
-           'graphic': [x, y, width, height-lower_h-gap]}
+    shares = ratios(visual_plan.get('graphic_width_ratio', 1.0), .4, 1.0) if visual_plan else [1.0]
+    for graphic_share in shares:
+        yield {'pattern': 'graphic-above-evidence',
+               'blocks': [[bx, lower_y+by, bw, bh] for bx, by, bw, bh in context],
+               'figures': [[figure_x, lower_y, figure_w, lower_h]],
+               'graphic': [x+(width-width*graphic_share)/2, y, width*graphic_share, height-lower_h-gap],
+               **({'graphic_width_ratio': graphic_share} if visual_plan else {})}
+
+
+def geometry_issues(elements, number):
+    """The same page gates run on every candidate and on the final composition."""
+    findings = []
+    for edge_id, obstacle_id in graphic_obstacle_collisions(
+            [e for e in elements if e['kind'] == 'connector'], elements):
+        overflow = any(e['id'] == obstacle_id and e.get('scientific_text_overflow') for e in elements)
+        findings.append(issue('GRAPHIC_ROUTE_THROUGH_CONTENT', 'REVIEW' if overflow else 'FAIL',
+            f'Connector crosses page content {obstacle_id}', number, edge_id,
+            detector='geometric-preflight'))
+    for idx, element in enumerate(elements):
+        x, y, w, h = element['bbox']
+        invalid = (w < 0 or h < 0 or w+h <= 0) if element['kind'] == 'connector' else (w <= 0 or h <= 0)
+        if x < 0 or y < 0 or invalid or x+w > WIDTH+.1 or y+h > HEIGHT+.1:
+            findings.append(issue('SHAPE_OUT_OF_BOUNDS', 'REVIEW' if element.get('scientific_text_overflow') else 'FAIL', 'Invalid element geometry',
+                                  number, element['id'], detector='geometric-preflight'))
+        for other in elements[:idx]:
+            if element.get('collision_mode') == 'container' or other.get('collision_mode') == 'container':
+                continue
+            if intentional_overlap(element, other) or element.get('route') or other.get('route'):
+                continue
+            if intersect(element['bbox'], other['bbox']):
+                findings.append(issue('CRITICAL_COLLISION', 'REVIEW' if element.get('scientific_text_overflow') or other.get('scientific_text_overflow') else 'FAIL', f"Overlaps {other['id']}",
+                                      number, element['id'], detector='geometric-preflight'))
+    return findings
 
 
 def compile_deck(ir, base, _retry=True, proposals=None):
@@ -379,7 +435,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     if any(issue["severity"] == "FAIL" for issue in issues):
         return None, issues
     base = Path(base)
-    theme = ir["theme"]
+    design = resolve_design(ir)
+    preserve_terms = preserve_scientific_terms(ir)
+    theme = {**ir['theme'], **({'accent': design['accent_color']} if design else {})}
     # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
     # another operating system, and a deck that cannot find its declared face is still deliverable in
     # a substituted one. Only "no font anywhere" is a FAIL.
@@ -455,26 +513,42 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     slides = []
     for n, slide in enumerate(ir["slides"], 1):
         sem, comp = slide["semantic"], slide["composition"]
+        visual_plan = slide['presentation'].get('visual_plan')
         blocks, figs = comp["blocks"], comp["figure_refs"]
         show_sequence = sequence_flow(comp)
         visual_intent = comp.get("visual_intent") or {}
         family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
         slide_formulas = []
+        scientific_text_ids = {'title', 'takeaway', *(b['id'] for b in blocks), *(b['id']+':label' for b in blocks)}
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
                  anchor="top", color=None, flow=None, align=None):
             if not content:
                 return
+            if design and role in type_sizes(design) and not eid.startswith('graphic:'):
+                size = min(size, type_sizes(design)[role])
             contract = TextBoxContract(theme["font_family"], size,
                 font_paths["bold_font_file" if role in ("title", "heading") else "font_file"],
                 font_weight=700 if role in ("title", "heading") else 400,
                 font_floor=floor, max_lines=lines, vertical_anchor=anchor)
+            overflow = None
             try:
                 output, fitted = fit_text(content, bbox, contract)
             except ValueError:
-                issues.append(issue("SPLIT_REQUIRED", "FAIL", f"{eid} cannot fit above its font floor",
-                                    n, eid, detector="geometric-preflight", textbox_contract="deck_ir"))
-                return
+                if preserve_terms and eid in scientific_text_ids and min(bbox[2:]) > 0:
+                    wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), bbox[2])
+                    output = '\n'.join(wrapped)
+                    overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
+                    bbox = [*bbox[:3], max(bbox[3], len(wrapped)*floor*contract.line_height)]
+                    fitted = replace(contract, font_size=floor, max_lines=max(lines, len(wrapped)),
+                                     overflow_policy='preserve_terms_review')
+                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                        f'{eid}: full scientific text retained beyond its nominal slot; inspect the candidate without abbreviating terminology.',
+                        n, eid, detector='geometric-preflight', original_bbox=overflow['original_bbox']))
+                else:
+                    issues.append(issue("SPLIT_REQUIRED", "FAIL", f"{eid} cannot fit above its font floor",
+                                        n, eid, detector="geometric-preflight", textbox_contract="deck_ir"))
+                    return
             # Missing-glyph comparison is a conservative signal, not full shaping coverage.
             font = ImageFont.truetype(fitted.font_file, int(fitted.font_size))
             missing = bytes(font.getmask(chr(0x10FFFF)))
@@ -501,13 +575,20 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             elements.append({"id": eid, "kind": "text", "role": role, "text": output,
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),
+                             **({'scientific_text_overflow': overflow} if overflow else {}),
                              **({"align": align} if align else {}),
                              **({"text_flow": flow} if flow else {})})
         spacious = deck_frame == "spacious"
         templated = deck_frame == "template"
         footer = " · ".join(sem["evidence_refs"])
         visible_caveats, moved_caveats = audience.split_caveats(sem["caveats"])
-        if templated:
+        if design:
+            header = header_layout(design, slide, font_paths, preserve_terms)
+            text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2))
+            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2))
+            elements.extend(header_decoration(design, header))
+            caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
+        elif templated:
             # A lab template owns the page frame: its own title slot, its own footer band, its own
             # white page. The compiler keeps the body grid but hands the title, takeaway and caveat
             # to the template's geometry.
@@ -534,7 +615,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 caveat_y, caveat_h = 622, 36
         if visible_caveats:
             text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
-        top, bottom = body_region(slide, family, deck_frame)
+        top, bottom = body_region(slide, family, deck_frame, design, font_paths, preserve_terms)
         bh = bottom-top
         def block(b, box):
             label = b.get("label", "")
@@ -611,8 +692,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if show_sequence:
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
+            if preserve_terms and flow['mode'] == DISTRIBUTED_ARROW_LIST:
+                # The complete prose remains editable even when a native list's item limit is too
+                # tight. Do not shorten a technical name to satisfy that presentational limit.
+                flow = {**flow, 'mode': 'plain'}
             if flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520 and box[3] >= 220:
-                pad_x, pad_y = 28, 18
+                pad_x, pad_y = (0, 0) if design else (28, 18)
                 label_h = 44 if label else 0
                 items = flow["items"]
                 # One text object, one paragraph per item, marker set by the paragraph itself.
@@ -642,7 +727,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     return
                 # The card hugs the list instead of stretching to the page: a panel with 150 px of
                 # empty space under three rows reads as a layout mistake, not as breathing room.
-                elements.append({
+                if not design:
+                    elements.append({
                     "id": b["id"] + ":panel", "kind": "shape", "role": "decoration",
                     "bbox": [box[0], box[1], box[2], panel_h],
                     "geometry": "rect", "fill": theme.get("panel_fill", "none"),
@@ -786,7 +872,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     block(f, [box[0], cursor+FORMULA_GAP, box[2], metrics.height+12])
                     cursor += FORMULA_GAP + metrics.height + 12
                 cursor += gap
-        def figure(f, box, k):
+        def figure(f, box, k, caption_top=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
             caption_h = 0
@@ -797,9 +883,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 caption_h = f.get("caption_height") or caption_height(
                     f["caption"], box[2], font_paths["font_file"], f.get("caption_font_size", 22))
             h = box[3] - caption_h - 12
+            if caption_top is not None:
+                h = min(h, caption_top-12-box[1])
             scale = min(box[2]/asset["width"], h/asset["height"])
             w, h = asset["width"]*scale, asset["height"]*scale
             bbox = [box[0]+(box[2]-w)/2, box[1], w, h]
+            if caption_top is not None:
+                bbox[1] = caption_top-12-h
             eid = f"figure-{k}"
             min_extent = f.get("min_panel_extent", 220)
             actual_extent = min(w / f.get("panel_count", 1), h)
@@ -822,7 +912,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                         f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
                                         n, eid, detector="geometric-preflight", confidence="HIGH",
                                         source_figure=f["source_figure"]))
-            text(eid+":caption", f["caption"], [box[0], bbox[1]+bbox[3]+12, box[2], caption_h],
+            caption_y = bbox[1]+bbox[3]+12
+            if design and f['caption'] and design['figure_treatment'] == 'ruled-caption':
+                elements.append(rule(eid+':caption-rule', [box[0], caption_y-6, box[2], 1], design))
+            text(eid+":caption", f["caption"], [box[0], caption_y, box[2], caption_h],
                  "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20), 2)
             if schematic:
                 issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
@@ -891,8 +984,50 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
                                 "generated graphics do not establish scientific correctness",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
-        proposal = None if schematic_only or comp.get('graphics') else (proposals or {}).get(slide['id'])
-        if family == "graphic":
+        proposal = None if visual_plan or schematic_only or comp.get('graphics') else (proposals or {}).get(slide['id'])
+        if visual_plan:
+            from .academic_layout import candidates
+            best_failures, attempts = [], []
+            for plan in candidates(slide, [56, top, 1168, bh], assets, font_paths, design):
+                boxes = [*plan['blocks'], *plan['figures']]
+                boxes += [plan[key] for key in ('graphic', 'emphasis') if plan.get(key) is not None]
+                if any(min(box[2:]) <= 0 for box in boxes):
+                    attempts.append({'pattern': plan['pattern'], 'rules': ['INVALID_REGION']})
+                    continue
+                checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
+                for b, box in zip(blocks, plan['blocks']):
+                    block(b, box)
+                for k, (f, box) in enumerate(zip(figs, plan['figures']), 1):
+                    figure(f, box, k, plan.get('caption_top'))
+                if plan.get('graphic'):
+                    native_graphic(plan['graphic'])
+                if plan.get('emphasis'):
+                    text('visual:emphasis', visual_plan['emphasis']['text'], plan['emphasis'],
+                         'body', 28, 24, 3, color=theme['accent'])
+                failures = [finding for finding in issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
+                failures += geometry_issues(elements, n)
+                if len({e['id'] for e in elements}) != len(elements):
+                    failures.append(issue('VISUAL_PLAN_ID_COLLISION', 'FAIL',
+                        'Page object names must be unique', n, detector='geometric-preflight'))
+                failures += [finding for finding in issues[:checkpoints[1]]
+                             if finding['severity'] == 'FAIL' and finding.get('slide') == n]
+                attempts.append({'pattern': plan['pattern'], 'rules': sorted({i['rule'] for i in failures})})
+                if not failures:
+                    adaptations.append({'action': 'scientific_visual_plan', 'visual_job': visual_plan['visual_job'],
+                        'requested': visual_plan, 'selected': plan, 'attempts': attempts})
+                    adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                        'status': 'COMPILER_FALLBACK', 'reason': 'scientific_visual_plan'})
+                    break
+                if not best_failures or len(failures) < len(best_failures):
+                    best_failures = failures
+                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
+                    del values[checkpoint:]
+            else:
+                issues.extend(best_failures)
+                issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
+                    'No candidate satisfies the visual plan and existing content, panel, typography and collision gates. Replan this page.',
+                    n, detector='geometric-preflight', attempted_compositions=attempts))
+        elif family == "graphic":
             native_graphic([56, top, 1168, bh])
         elif comp.get('graphics'):
             # Try a small set of whole-page compositions using the existing emitters. Failed
@@ -1037,29 +1172,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)
-        if comp.get('graphics') and len({e['id'] for e in elements}) != len(elements):
-            issues.append(issue('GRAPHIC_ID_COLLISION', 'FAIL', 'Page object names must be unique',
+        if (comp.get('graphics') or design) and len({e['id'] for e in elements}) != len(elements):
+            issues.append(issue('GRAPHIC_ID_COLLISION' if comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
+                                'FAIL', 'Page object names must be unique',
                                 n, detector='geometric-preflight'))
-        for edge_id, obstacle_id in graphic_obstacle_collisions(
-                [e for e in elements if e['kind'] == 'connector'], elements):
-            issues.append(issue('GRAPHIC_ROUTE_THROUGH_CONTENT', 'FAIL',
-                                f'Connector crosses page content {obstacle_id}', n, edge_id,
-                                detector='geometric-preflight'))
-        # Detect errors before emitting any PPTX, including title/footer collisions.
-        for idx, e in enumerate(elements):
-            x, y, w, h = e["bbox"]
-            invalid_size = (w < 0 or h < 0 or w+h <= 0) if e["kind"] == "connector" else (w <= 0 or h <= 0)
-            if x < 0 or y < 0 or invalid_size or x+w > WIDTH+.1 or y+h > HEIGHT+.1:
-                issues.append(issue("SHAPE_OUT_OF_BOUNDS", "FAIL", "Invalid element geometry", n, e["id"], detector="geometric-preflight"))
-            for other in elements[:idx]:
-                if e.get("collision_mode") == "container" or other.get("collision_mode") == "container":
-                    continue
-                if intentional_overlap(e, other):
-                    continue
-                if e.get("route") or other.get("route"):
-                    continue  # DAG paths were checked segment by segment, not as filled rectangles.
-                if intersect(e["bbox"], other["bbox"]):
-                    issues.append(issue("CRITICAL_COLLISION", "FAIL", f"Overlaps {other['id']}", n, e["id"], detector="geometric-preflight"))
+        issues.extend(geometry_issues(elements, n))
+        if visual_plan and any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues) and not any(
+                i['rule'] == 'VISUAL_PLAN_UNSATISFIABLE' and i.get('slide') == n for i in issues):
+            issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
+                'The selected visual composition failed a page gate; replan without changing scientific content.',
+                n, detector='geometric-preflight'))
         notes = sem["speaker_notes"]
         notes_only = [*(sem.get("run_notes") or []), *moved_caveats]
         if notes_only:
@@ -1071,7 +1193,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                        "background": "#FFFFFF" if templated else theme.get("background", "#FFFFFF"),
                        "notes": notes,
                        "elements": elements, "adaptation_log": adaptations})
-    if _retry and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
+    if _retry and not design and not preserve_terms and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
         import copy
         alternative = copy.deepcopy(ir)
         alternative.setdefault("presentation", {})["frame_variant"] = "spacious"
@@ -1086,4 +1208,5 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 if slide["presentation"].get("variant", "default") != deck_frame},
             "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in font_paths.values()},
             "background_image": (assets[background_key]["path"] if background_key else None),
+            **({'academic_design': design} if design else {}),
             "slides": slides}, issues

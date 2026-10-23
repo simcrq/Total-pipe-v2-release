@@ -12,6 +12,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "academic_design": {"$ref": "#/$defs/academic-design"},
+        "text_capacity_policy": {"enum": ["strict", "preserve-terms"],
+          "description": "V6 defaults to preserve-terms: title/body budgets and visible text overflow require REVIEW without rewriting terminology. Legacy IR defaults to strict."},
         "frame_variant": {"enum": ["default", "spacious"]},
         "bullet_style": {
           "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash"],
@@ -61,7 +64,90 @@
       "items": {"$ref": "#/$defs/slide"}
     }
   },
+  "allOf": [{
+    "if": {"required": ["presentation"], "properties": {"presentation": {"anyOf": [
+      {"required": ["text_capacity_policy"], "properties": {"text_capacity_policy": {"const": "preserve-terms"}}},
+      {"required": ["academic_design"], "not": {"required": ["text_capacity_policy"],
+        "properties": {"text_capacity_policy": {"const": "strict"}}}}
+    ]}}},
+    "else": {"properties": {"slides": {"items": {"properties": {
+      "semantic": {"properties": {"title": {"maxLength": 120}, "takeaway": {"maxLength": 180}}},
+      "composition": {"properties": {"blocks": {"items": {"properties": {"text": {"maxLength": 600}}}}}}
+    }}}}}
+  }],
   "$defs": {
+    "academic-design": {
+      "type": "object", "additionalProperties": false,
+      "required": ["style", "title_treatment", "density", "figure_treatment", "decoration_policy"],
+      "properties": {
+        "style": {"const": "research-seminar"},
+        "title_treatment": {"enum": ["plain", "thin-rule"]},
+        "density": {"enum": ["balanced", "compact"]},
+        "figure_treatment": {"enum": ["unframed", "ruled-caption"]},
+        "decoration_policy": {"enum": ["minimal", "none"]},
+        "header_variant": {"enum": ["standard", "compact"], "default": "compact"},
+        "type_scale": {"enum": ["standard", "compact"], "default": "standard"},
+        "accent_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+      },
+      "allOf": [{
+        "if": {"properties": {"decoration_policy": {"const": "none"}}},
+        "then": {"properties": {"title_treatment": {"const": "plain"},
+                                 "figure_treatment": {"const": "unframed"}}}
+      }]
+    },
+    "visual-plan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["visual_job", "primary", "composition"],
+      "properties": {
+        "visual_job": {"enum": ["measurement-evidence", "mechanism-explanation", "evidence-comparison"]},
+        "primary": {
+          "type": "object", "additionalProperties": false, "required": ["kind", "index"],
+          "properties": {"kind": {"enum": ["figure", "graphic"]},
+                         "index": {"type": "integer", "minimum": 0}}
+        },
+        "composition": {"enum": ["figure-left", "figure-right", "figure-top",
+          "graphic-left", "graphic-right", "graphic-top", "evidence-columns", "evidence-rows"]},
+        "figure_width_ratio": {"type": "number", "minimum": 0.35, "maximum": 0.75},
+        "graphic_width_ratio": {"type": "number", "minimum": 0.4, "maximum": 1},
+        "evidence_order": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true,
+                           "items": {"type": "integer", "minimum": 0, "maximum": 1}},
+        "context_placement": {"enum": ["above-visuals", "with-evidence"]},
+        "emphasis": {
+          "type": "object", "additionalProperties": false, "required": ["source", "text", "treatment"],
+          "properties": {
+            "source": {"type": "string", "minLength": 1},
+            "text": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+            "treatment": {"const": "inline-callout"}
+          }
+        }
+      },
+      "allOf": [{
+        "if": {"properties": {"visual_job": {"const": "measurement-evidence"}}},
+        "then": {"properties": {
+          "primary": {"properties": {"kind": {"const": "figure"}}},
+          "composition": {"enum": ["figure-left", "figure-right", "figure-top"]}},
+          "not": {"anyOf": [{"required": ["graphic_width_ratio"]}, {"required": ["context_placement"]},
+                            {"required": ["evidence_order"]}]}}
+      }, {
+        "if": {"properties": {"visual_job": {"const": "mechanism-explanation"}}},
+        "then": {"properties": {
+          "primary": {"properties": {"kind": {"const": "graphic"}}},
+          "composition": {"enum": ["graphic-left", "graphic-right", "graphic-top"]}},
+          "not": {"anyOf": [{"required": ["figure_width_ratio"]}, {"required": ["evidence_order"]}]}}
+      }, {
+        "if": {"properties": {"visual_job": {"const": "evidence-comparison"}}},
+        "then": {"properties": {
+          "primary": {"properties": {"kind": {"const": "figure"}}},
+          "composition": {"enum": ["evidence-columns", "evidence-rows"]}},
+          "not": {"anyOf": [{"required": ["graphic_width_ratio"]}, {"required": ["context_placement"]}]}}
+      }, {
+        "if": {"properties": {"composition": {"const": "evidence-rows"}}},
+        "then": {"not": {"required": ["figure_width_ratio"]}}
+      }, {
+        "if": {"properties": {"composition": {"const": "graphic-top"}}},
+        "then": {"not": {"required": ["context_placement"]}}
+      }]
+    },
     "graphic": {
       "oneOf": [
         {"$ref": "#/$defs/process-graphic"}, {"$ref": "#/$defs/mechanism-graphic"},
@@ -241,9 +327,9 @@
           "additionalProperties": false,
           "required": ["title", "purpose", "takeaway", "evidence_refs", "caveats", "speaker_notes"],
           "properties": {
-            "title": {"type": "string", "minLength": 1, "maxLength": 120},
+            "title": {"type": "string", "minLength": 1},
             "purpose": {"type": "string", "minLength": 1},
-            "takeaway": {"type": "string", "minLength": 1, "maxLength": 180},
+            "takeaway": {"type": "string", "minLength": 1},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
             "caveats": {"type": "array", "items": {"type": "string"}},
             "run_notes": {"type": "array", "items": {"type": "string"}},
@@ -283,7 +369,7 @@
                     ]
                   },
                   "label": {"type": "string"},
-                  "text": {"type": "string", "minLength": 1, "maxLength": 600},
+                  "text": {"type": "string", "minLength": 1},
                   "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
                   "anchor": {"type": "string", "minLength": 1,
                              "description": "Formula only: id of the block this equation explains. The compiler places an unlabelled equation under the block above it and never as a peer row."}
@@ -344,6 +430,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "visual_plan": {"$ref": "#/$defs/visual-plan"},
             "variant": {"enum": ["default", "spacious"]},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},

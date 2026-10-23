@@ -127,7 +127,8 @@ def repair_overflow(ir: Dict, layout: Dict, qa_report: Dict,
         and 'text overflow' in item.get('message', '')
     ]
 
-    if not overflows:
+    from .visual_design import preserve_scientific_terms
+    if not overflows or preserve_scientific_terms(ir):
         return ir, False
 
     # Group by slide number
@@ -161,7 +162,8 @@ def repair_overflow(ir: Dict, layout: Dict, qa_report: Dict,
     slides_added = 0
 
     for original_idx, original_slide in enumerate(ir['slides'], 1):
-        if original_slide['composition'].get('graphics'):
+        if (original_slide['composition'].get('graphics') or
+                original_slide.get('presentation', {}).get('visual_plan')):
             # A graphic and its evidence form one scientific page. Replanning must be explicit;
             # cloning its graph while splitting a context paragraph changes that relationship.
             new_slides.append(copy.deepcopy(original_slide))

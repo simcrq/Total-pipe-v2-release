@@ -6,6 +6,7 @@ from .catalog import ARCHETYPES, COMPONENTS
 from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
+from .visual_design import preserve_scientific_terms, validate_design, validate_plan
 
 
 SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
@@ -33,6 +34,13 @@ def validate(ir):
     deck_presentation = ir.get("presentation", {})
     check(isinstance(deck_presentation, dict), "presentation must be an object")
     if isinstance(deck_presentation, dict):
+        check(deck_presentation.get('text_capacity_policy', 'strict') in ('strict', 'preserve-terms'),
+              'text_capacity_policy must be strict or preserve-terms')
+        if 'academic_design' in deck_presentation:
+            for message in validate_design(deck_presentation['academic_design']):
+                check(False, message, rule='ACADEMIC_DESIGN_INVALID')
+        check('visual_plan' not in deck_presentation, 'visual_plan belongs to a slide',
+              rule='VISUAL_PLAN_INVALID')
         check(deck_presentation.get("frame_variant", "default") in ("default", "spacious", "template"),
               "Unknown deck frame variant")
         if "bullet_style" in deck_presentation:
@@ -104,6 +112,18 @@ def validate(ir):
         if not isinstance(blocks, list) or not isinstance(figures, list):
             check(False, "composition.blocks/figure_refs must be lists", n)
             continue
+        check('academic_design' not in pres, 'academic_design belongs to the deck', n,
+              'ACADEMIC_DESIGN_INVALID')
+        if 'visual_plan' in pres:
+            check(isinstance(deck_presentation, dict) and 'academic_design' in deck_presentation,
+                  'visual_plan requires deck presentation.academic_design', n, 'VISUAL_PLAN_INVALID')
+            if isinstance(comp.get('graphics', []), list):
+                for message in validate_plan(pres['visual_plan'], s):
+                    check(False, message, n, 'VISUAL_PLAN_INVALID')
+        if isinstance(deck_presentation, dict) and 'academic_design' in deck_presentation:
+            for key in ('theme_tokens', 'component_variants'):
+                check(not pres.get(key), f'Use deck academic_design instead of per-slide {key}',
+                      n, 'ACADEMIC_DESIGN_INVALID')
         for message in validate_graphics(comp.get("graphics", []), archetype):
             check(False, message, n, "GRAPHIC_INVALID")
         if isinstance(comp.get('graphics'), list):
@@ -241,9 +261,13 @@ def validate(ir):
                       "Evidence and hypothesis must be separate, each <= 4", n, "CONTENT_CAPACITY_EXCEEDED")
         for field, limit in (("title", 120), ("takeaway", 180)):
             check(isinstance(sem.get(field), str) and len(sem[field]) <= limit,
-                  f"{field} exceeds {limit} characters", n, "CONTENT_CAPACITY_EXCEEDED")
+                  f"{field} exceeds {limit} characters; retain complete scientific terminology", n,
+                  "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
+                  severity='REVIEW' if preserve_scientific_terms(ir) and isinstance(sem.get(field), str) else 'FAIL')
         check(all(isinstance(b, dict) and len(b.get("text", "")) <= 600 for b in blocks),
-              "Block exceeds 600 characters", n, "CONTENT_CAPACITY_EXCEEDED")
+              "Block exceeds 600 characters; retain complete scientific terminology", n,
+              "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
+              severity='REVIEW' if preserve_scientific_terms(ir) else 'FAIL')
         check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 180 and
                   isinstance(f.get("panel_count", 1), int) and 1 <= f.get("panel_count", 1) <= 6 for f in figures),
               "Caption/panel capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
@@ -290,7 +314,12 @@ def derive(ir, layout):
             "graphics": [{"slide_id": s["id"], **g} for s in ir["slides"]
                          for g in s["composition"].get("graphics", [])]},
         "plan_to_layout.json": {**provenance, "deck_frame_variant": layout.get("deck_frame_variant"),
+            **({'academic_design': layout['academic_design']} if layout.get('academic_design') else {}),
             "slides": [{"slide_id": s["id"], "elements": s["elements"],
+                        **({'visual_plan': next(entry for entry in s.get('adaptation_log', [])
+                            if entry.get('action') == 'scientific_visual_plan')}
+                           if any(entry.get('action') == 'scientific_visual_plan'
+                                  for entry in s.get('adaptation_log', [])) else {}),
                         "layout_provider_status": next((entry.get("status") for entry in
                             s.get("adaptation_log", []) if entry.get("action") == "layout_provider"),
                             "DETERMINISTIC")}

@@ -31,6 +31,9 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Mechanism edges require explicit activate/inhibit/associate kind and evidence/hypothesis basis; '
     'evidence refs must bind to semantic.evidence_refs, and feedback must be explicit. '
     'Path IR accepts local view_box and absolute M/L/C/Q/Z only, compiling to native custom geometry; it is not SVG import. '
+    'V6 visual design is optional after canonical IR: totalpipe_visual_prompt prepares the full-deck agent prompt, '
+    'then totalpipe_apply_visual_plan validates a SHA-bound presentation-only proposal. '
+    'Use one academic_design and source-bound visual_plan; VISUAL_PLAN_UNSATISFIABLE requires replanning. '
     'Use one deck frame; ordered figure-parameters blocks are a peer column with 24 px gaps. '
     'An explicit four-step process must pass compiler member validation; legacy method-to-result inference remains compatible. '
     'The compiler draws its numbered sequence rail and preserves original scientific text. '
@@ -88,6 +91,51 @@ for name, command, description in (
     transport.TOOLS[name] = {'description':description,
         'inputSchema':{'type':'object','properties':properties,'required':required,'additionalProperties':False},
         'handler':handler, 'timeout':570}
+
+def visual_invoke(command, arguments):
+    allowed = {'ir', 'out', 'requirements', 'slide_ids'} if command == 'visual-prompt' else {'ir', 'out', 'proposal'}
+    required = {'ir', 'out'} if command == 'visual-prompt' else {'ir', 'out', 'proposal'}
+    if set(arguments)-allowed or not required <= set(arguments):
+        raise ValueError('Missing or unknown arguments')
+    for key, value in arguments.items():
+        if key == 'slide_ids':
+            if not isinstance(value, list) or not value or not all(isinstance(sid, str) and sid for sid in value):
+                raise ValueError('slide_ids must be a nonempty list of slide ids')
+        elif not isinstance(value, str):
+            raise ValueError(f'{key} must be a string')
+    for key in ('ir', 'out', 'proposal'):
+        if key in arguments and not Path(arguments[key]).is_absolute():
+            raise ValueError(f'{key} must be an absolute path')
+    argv = [sys.executable, '-m', 'deck_compiler', command, '--ir', arguments['ir'], '--out', arguments['out']]
+    if command == 'visual-prompt':
+        argv += ['--requirements', arguments.get('requirements', '')]
+        if 'slide_ids' in arguments:
+            argv += ['--slides', *arguments['slide_ids']]
+    else:
+        argv += ['--proposal', arguments['proposal']]
+    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=60)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or result.stdout.strip())
+    return json.loads(result.stdout)
+
+
+for name, command, description in (
+    ('totalpipe_visual_prompt', 'visual-prompt', 'Prepare the complete canonical Deck IR, asset metadata and strict V6 schemas for one agent visual design pass. No model call or PPTX rendering. out is a JSON file.'),
+    ('totalpipe_apply_visual_plan', 'apply-visual-plan', 'Validate and merge a SHA-bound visual proposal into canonical Deck IR, changing presentation only. Keep output alongside source IR when it uses relative assets. out is a JSON file.'),
+):
+    properties = {'ir': {'type': 'string'}, 'out': {'type': 'string'}}
+    required = ['ir', 'out']
+    if command == 'visual-prompt':
+        properties.update({'requirements': {'type': 'string'},
+                           'slide_ids': {'type': 'array', 'minItems': 1, 'items': {'type': 'string'}}})
+    else:
+        properties['proposal'] = {'type': 'string'}
+        required.append('proposal')
+    transport.TOOLS[name] = {'description': description,
+        'inputSchema': {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False},
+        'handler': lambda arguments, command=command: visual_invoke(command, arguments), 'timeout': 65}
+
 
 if __name__ == '__main__':
     raise SystemExit(transport.main())

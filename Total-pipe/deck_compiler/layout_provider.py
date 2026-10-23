@@ -205,6 +205,7 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
     findings = warnings + findings
     if result:
         sources = [Path(__file__), ROOT/'deck_compiler/layout.py',
+                   ROOT/'deck_compiler/academic_layout.py', ROOT/'deck_compiler/visual_design.py',
                    *sorted((ROOT/'totalpipe_layout').glob('*.py'))]
         if getattr(provider, 'source_files', None):
             sources.extend(Path(path) for path in provider.source_files)

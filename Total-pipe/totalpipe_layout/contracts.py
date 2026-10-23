@@ -86,7 +86,8 @@ def compiler(root=None):
 
 @lru_cache(maxsize=64)
 def font(path, size):
-    return ImageFont.truetype(path, size)
+    from deck_compiler.fonts import load_font_file
+    return load_font_file(path, size)
 
 
 @lru_cache(maxsize=65536)
@@ -308,9 +309,14 @@ def read_requests(path, root=None):
                 'aspect': asset['width']/asset['height'], 'asset_sha256': asset['sha256'],
                 'schematic': (asset.get('origin') or 'paper') == 'generated',
                 'member_ids': [f'figure-{index}', f'figure-{index}:caption']})
+        resolved_fonts = {}
+        for key, bold in (('font_file', False), ('bold_font_file', True)):
+            resolved_fonts[key] = next((e['contract']['font_file'] for e in layout['slides'][number-1]['elements']
+                if e.get('contract') and (e['contract']['font_weight'] >= 700) == bold), ir['theme'][key])
         top, bottom = module.body_region(
             slide, module.ARCHETYPES[slide['composition']['archetype']]['layout'],
-            module.frame_variant(ir))
+            module.frame_variant(ir), module.resolve_design(ir), resolved_fonts,
+            module.preserve_scientific_terms(ir))
         frames = [e for e in layout['slides'][number-1]['elements']
                   if e['id'] in ('title', 'takeaway', 'footer', 'caveats',
                                  'direct-evidence:heading', 'hypothesis:heading')]
@@ -324,7 +330,16 @@ def read_requests(path, root=None):
             'bold_font': str((path.parent/ir['theme']['bold_font_file']).resolve()),
             'font_family': ir['theme']['font_family'], 'frame': frames,
             'frame_failures': frame_failures}
-        if slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
+        # Use the compiler's resolved faces, including its coverage fallback. Reconstructing a
+        # path from the authored filename gives the packer different metrics (or a missing file).
+        for key, bold in (('font', False), ('bold_font', True)):
+            fitted = next((e['contract']['font_file'] for e in layout['slides'][number-1]['elements']
+                           if e.get('contract') and (e['contract']['font_weight'] >= 700) == bold), None)
+            if fitted:
+                request[key] = fitted
+        if slide['presentation'].get('visual_plan'):
+            request['compiler_owned'] = 'scientific_visual_plan'
+        elif slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
             request['compiler_owned'] = 'native_graphic_composition'
         if len(units) > MAX_UNITS or len({u['id'] for u in units}) != len(units):
             raise ValueError('CAPACITY_OR_ID_COLLISION: no units may be truncated')
@@ -386,6 +401,8 @@ def snap_rhythm(request, boxes):
 
 
 def check(request, boxes):
+    if request.get('compiler_owned') == 'scientific_visual_plan':
+        return ['VISUAL_PLAN_REQUIRES_COMPILER']
     if request.get('compiler_owned') == 'native_graphic_composition':
         return ['NATIVE_GRAPHIC_REQUIRES_COMPILER']
     errors = []
@@ -438,7 +455,8 @@ def check(request, boxes):
         for text,box,font_path,size,floor,lines in pieces:
             if not text: continue
             try:
-                wrapped,contract=fit_text(text,box,TextBoxContract(request['font_family'],size,font_path,font_floor=floor,max_lines=lines))
+                resolved_path = font(font_path, int(size)).path
+                wrapped,contract=fit_text(text,box,TextBoxContract(request['font_family'],size,resolved_path,font_floor=floor,max_lines=lines))
                 if re.search(r'\d(?:\.\n|\n\.)\d',wrapped):
                     errors.append(f'{u["id"]}:DECIMAL_SPLIT')
                 # Two rules taken from real review: nothing below the declared floor (18 pt for

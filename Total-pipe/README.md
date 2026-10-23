@@ -22,6 +22,11 @@ v5 增加机制、分层架构、漏斗/金字塔组件及可组合的区域接�
 `M/L/C/Q/Z` 编译为原生 `a:custGeom`，保持独立标签和对象身份。
 见 [组件与路径说明](docs/native-components.md) 和 [六页开发示例](examples/native-components.deck_ir.json)。
 
+V6 MVP 增加可选的 Scientific Visual Planner：一次 Agent 提案选择整套科研风格和测量、机制、
+证据比较构图；严格合入 `presentation.academic_design / visual_plan` 后由现有编译器执行。
+标题和正文优先保留完整科学术语，文字超预算可带 REVIEW 生成候选。
+见 [协议、CLI/MCP 与容量策略](docs/scientific-visual-planner.md)。
+
 ## 🚀 Quick Start (New Unified CLI)
 
 ```bash

@@ -16,8 +16,17 @@ def qa_summary(qa, out):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v2')
+    parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
+    for name in ('visual-prompt', 'apply-visual-plan'):
+        p = commands.add_parser(name)
+        p.add_argument('--ir', required=True, type=Path)
+        p.add_argument('--out', required=True, type=Path, help='Output JSON file')
+        if name == 'visual-prompt':
+            p.add_argument('--requirements', default='', help='Research presentation requirements')
+            p.add_argument('--slides', nargs='+', help='Existing slide ids; full deck remains in the prompt')
+        else:
+            p.add_argument('--proposal', required=True, type=Path)
     for name in ('compile', 'build'):
         p = commands.add_parser(name)
         p.add_argument('--ir', required=True, type=Path)
@@ -47,6 +56,25 @@ def main():
     args = parser.parse_args()
     try:
         out = args.out.resolve()
+        if args.command in ('visual-prompt', 'apply-visual-plan'):
+            from .visual_planner import apply_proposal, make_prompt
+            from .pipeline import write_json
+            ir = json.loads(args.ir.read_text(encoding='utf-8'))
+            if args.command == 'visual-prompt':
+                value = make_prompt(ir, args.ir.resolve().parent, args.requirements, args.slides)
+            else:
+                proposal = json.loads(args.proposal.read_text(encoding='utf-8'))
+                value = apply_proposal(ir, proposal)
+                # A presentation-only merge never changes assets or theme to rebase paths.
+                source_base = args.ir.resolve().parent
+                paths = [asset['path'] for asset in value['assets'].values()]
+                if value['theme'].get('background_image'):
+                    paths.append(value['theme']['background_image'])
+                if out.parent != source_base and any(not Path(path).is_absolute() for path in paths):
+                    raise ValueError('Write the merged Deck IR alongside its source: relative asset paths must retain their meaning')
+            write_json(out, value)
+            print(json.dumps({'status': 'PASS', 'output': str(out)}))
+            return 0
         if args.command == 'review-officecli':
             from .officecli_review import review
             result = review(out, args.officecli, args.render)

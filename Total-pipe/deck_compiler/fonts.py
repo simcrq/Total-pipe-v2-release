@@ -85,6 +85,17 @@ def find_font_file(value, base_dir=None) -> Optional[str]:
     return None
 
 
+def load_font_file(value, size):
+    """Load a measured request font, resolving a portable filename if its old path moved."""
+    try:
+        return ImageFont.truetype(value, size)
+    except OSError:
+        resolved = find_font_file(Path(value).name)
+        if resolved is None:
+            raise
+        return ImageFont.truetype(resolved, size)
+
+
 def missing_glyphs(font_path, text) -> set:
     """Characters in ``text`` that the face cannot draw.
 

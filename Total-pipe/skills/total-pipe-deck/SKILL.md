@@ -9,7 +9,8 @@ description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—�
 
 ```text
 PDF → PaperWorkflow → Story Planner subagent → [DesignIntentPlanner] → pwf2rpa → RPA planning
-    → canonical deck_ir.json → layout provider (packer by default) + compiler fallback → OfficeCLI
+    → canonical deck_ir.json → [Scientific Visual Planner，仅 V6] → validated canonical Deck IR
+    → layout provider (packer by default) + compiler fallback → OfficeCLI
     → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
     → qa_report.json → final.pptx
 ```
@@ -65,7 +66,9 @@ python -m pwf2rpa <workflow.json> \
 `question`、`answer`、`evidence` 必填；`next` 除最后一个节点外必填——最后一步是收束，
 不需要为形式补一句“下一步看什么”。`title` 可选：它是这一页给听众看的话，可以不是问句，
 也可以比 `question` 更长或更短；不写就退回 `question`。不要把标题写成“主题：结论”的拼接，
-也不要为了 26 字槽位牺牲信息——转换器会把完整标题留在 `metadata.story_title`，RPA 只截短它自己那份。
+标题和正文优先保留完整、正确的科学术语、化学态、单位和限定词；不得为了容量强行造缩写或截断术语。
+转换器会把完整标题留在 `metadata.story_title`；映射 Canonical IR 时用完整 Story 标题，
+不能把 RPA 的短标题或摘要当成展示标题的科学真源。V6 的文字超预算按 4a 的 REVIEW 策略放行。
 
 节点数 4–10，由论证需要决定，不为凑页数加点。`ending.limitation` 可选，只写论文自身的边界；
 不要写本次拿到哪些文件、SI 是否取得或是否审阅，那是工作记录。
@@ -95,7 +98,7 @@ DesignIntentPlanner 在 Story 完成后写 `design_intent.json`：
 索引从 1 开始；`emphasis` 可省略。首版只支持恰好四条要点的纵向
 `process`。只声明关系和强调，不写 bbox、`x/y/w/h`、Layout 或 Slot，
 也不改写 Story 的 `question/answer/evidence/next`。没有明确流程关系时
-省略该文件，保留旧流程。不要新增整套 deck 风格 pass。
+省略该文件，保留旧流程。此步骤只负责 Story 流程关系；整套视觉风格仅在 4a 的可选 V6 阶段规划。
 
 ## 3. pwf2rpa 与 RPA 规划
 
@@ -248,6 +251,31 @@ blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏�
 禁止在 IR 中写最终 `x/y/w/h`。首代目录只使用 `deck_compiler/catalog.py` 中的稳定
 archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`，再回 Story/RPA
 拆页。不得无限缩字号。
+
+## 4a. Scientific Visual Planner（可选，仅 V6 设计模式）
+
+用户启用 V6 科研视觉设计时，在 Canonical Deck IR 形成后由当前 Agent 做一次整套视觉规划。
+先用 `totalpipe_visual_prompt`（CLI：`visual-prompt`）读取完整 Deck IR、资源尺寸和用户汇报要求。
+输出一个与当前完整 IR SHA-256 绑定的提案：整套 `academic_design` 与指定页的 `visual_plan`。
+Planner 不写 PPTX、不画图、不增加模型服务；不修改 Evidence、Story、正文、原图、数值或科学关系。
+DesignIntentPlanner 继续保留上游科研流程语义职责。
+
+按 `docs/scientific-visual-planner.md` 的严格协议选择测量证据、机制解释或证据比较构图，
+声明现有主视觉索引、左右/上下位置、占比和必要的原文强调。整套统一字体层级、强调色、标题和图注样式；
+使用克制的原生细线或标注。不得生成商业 KPI 卡片、Dashboard 或无科学作用的背景。
+强调文字必须精确存在于其可见原文引用中，不能从讲稿新提取科学结论。
+
+用 `totalpipe_apply_visual_plan`（CLI：`apply-visual-plan`）严格验证并合入 presentation 后再编译。
+相对资源路径要求新 IR 与源 IR 同目录。旧 IR 与没有 visual_plan 的页面保留原构图路径。
+查看 `layout.json` 的 requested/selected 和候选失败原因，确认改变提案会改变实际区域；
+机制页直接复用 v5 mechanism，实测与假设的依据、虚线和 REVIEW 不变。
+
+V6 默认 `text_capacity_policy=preserve-terms`：标题和正文超字符预算或文字槽位容量时保留全文，
+允许生成候选并记录 `SCIENTIFIC_TEXT_CAPACITY_REVIEW / SCIENTIFIC_TEXT_OVERFLOW`。
+优先增加标题行数和调整区域；不得为了消除容量提示而改错专业术语，也不自动拆分或缩写正文。
+文字溢出的越界/碰撞仍保留为 REVIEW，供原生检查；原图尺寸、图形容量和科学关系硬门禁继续生效。
+`VISUAL_PLAN_UNSATISFIABLE` 需要修改设计提案；不能删改科学内容、降低原图下限或静默忽略规划。
+没有用户要求时不额外运行本阶段。正式 final 仍执行原有 PowerPoint 原生验收与科学审核。
 
 ## 5. Agent 直接调用 v3
 

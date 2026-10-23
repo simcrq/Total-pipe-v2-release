@@ -174,7 +174,7 @@ def verify(path, layout):
                                     'Arrow must point from the declared source to target', n, e['id'])
                         boxes.append((e['id'], box))
                         continue
-                    if e['kind'] == 'shape' and e.get('graphic_id'):
+                    if e['kind'] == 'shape' and (e.get('graphic_id') or e.get('visual_decoration')):
                         shape = actual.get(e['id'])
                         if shape is None:
                             add('MISSING_SHAPE', 'Expected native graphic shape absent', n, e['id'])
@@ -333,18 +333,22 @@ def verify(path, layout):
                         add('GEOMETRY_MISMATCH', 'Image geometry differs from compiler', n, e['id'])
                 actual_elements = [{**planned[name], 'bbox': box} for name, box in boxes if name in planned]
                 for edge_id, obstacle_id in graphic_obstacle_collisions(native_paths, actual_elements):
-                    add('GRAPHIC_ROUTE_THROUGH_CONTENT', f'Connector crosses page content {obstacle_id}', n, edge_id)
+                    add('GRAPHIC_ROUTE_THROUGH_CONTENT', f'Connector crosses page content {obstacle_id}', n, edge_id,
+                        severity='REVIEW' if planned.get(obstacle_id, {}).get('scientific_text_overflow') else 'FAIL')
                 for idx, (name, box) in enumerate(boxes):
                     x,y,w,h = box
                     if x < -.1 or y < -.1 or x+w > 1280.1 or y+h > 720.1:
-                        add('SHAPE_OUT_OF_BOUNDS', 'Actual shape outside slide', n, name)
+                        add('SHAPE_OUT_OF_BOUNDS', 'Actual shape outside slide', n, name,
+                            severity='REVIEW' if planned.get(name, {}).get('scientific_text_overflow') else 'FAIL')
                     for other, obox in boxes[:idx]:
                         if planned.get(name, {}).get('route') or planned.get(other, {}).get('route'):
                             continue
                         if intentional_overlap(planned.get(name, {}), planned.get(other, {})):
                             continue
                         if intersect(box, obox):
-                            add('CRITICAL_COLLISION', f'Actual shape overlaps {other}', n, name)
+                            add('CRITICAL_COLLISION', f'Actual shape overlaps {other}', n, name,
+                                severity='REVIEW' if planned.get(name, {}).get('scientific_text_overflow') or
+                                planned.get(other, {}).get('scientific_text_overflow') else 'FAIL')
     except (ValueError, KeyError, AttributeError, zipfile.BadZipFile, ET.XMLSyntaxError) as e:
         add('FILE_INTEGRITY', str(e))
     return items
