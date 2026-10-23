@@ -147,10 +147,35 @@ Greek, sums/integrals, `\left` / `\right`, `\exp` / `\log` / `\ln` and common tr
 functions, plus `\text` / `\mathrm` / `\mathbf` / `\mathit`. Optional outer `$…$`, `$$…$$`,
 `\(…\)` and `\[…\]` are accepted on a **formula block**. Backslashes must be doubled in JSON.
 Ordinary prose blocks do not support inline math. Unknown commands, empty/missing operands and
-unclosed groups return `FORMULA_SYNTAX`; matrices and cases remain unsupported.
+unclosed groups return `FORMULA_SYNTAX`; `array` and `cases` remain unsupported.
+
+Matrix environments `matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix` produce editable
+`m:m` → `m:mr` → `m:e` structures, with native delimiters for the selected brackets.
+Use `&` between cells and `\\` between rows (double each backslash again in JSON).
+Rows must have equal column counts. Blank cells stay blank; no cell is silently padded or dropped.
+Fractions, roots, scripts, nested matrices and external transposes retain their structure.
+`\quad/\qquad` insert explicit space between parallel expressions. Matrix metrics use measured
+cell widths, per-column maxima, row baselines and delimiter allowance, with native spacing REVIEW.
+See [Office matrix structure](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.matrix?view=openxml-3.0.1).
+
+Dense derivations may use `archetype: "equation-derivation"`. There is no two-equation count
+limit or a global sum-of-heights percentage: actual column regions must fit every complete group
+at the font floor. Ordinary context block limits still apply. The compiler tries shared formula
+sizes of 30/28/26/24 CSS px and one/two columns, splitting only between groups. Explicit anchors
+bind preceding explanations and equations in the same column. Consecutive unanchored equations
+remain independent rows, preserving all content and allowing a column break.
+Explanation boxes keep their measured height; spare space is not stretched between explanation
+and equation. `formula_flow` adaptations record columns, font size, reading order, boxes and failed
+capacity candidates. A real shortage reports `FORMULA_CAPACITY` with the measured diagnostics.
+With `preserve-terms`, over-capacity prose is retained for REVIEW; equation geometry still must fit.
+The [4×4 regression deck](../examples/matrix-derivation.deck_ir.json) covers matrix factors,
+ten equations on one slide, and cell-local fractions/roots/scripts.
 
 The measurement projection preserves braces around the entire script base and uses mathtext's
 math mode (`$…$`), so it measures the typeset expression instead of the length of literal LaTeX.
+Native display fractions, radicals and sums also use conservative structural bounds: PowerPoint
+may render them taller than mathtext, especially full-size fractions in matrix cells and radicals
+around sums. These bounds retain `FORMULA_MEASURE_APPROXIMATE` REVIEW for native inspection.
 For example, a stacked `\frac{a}{b}` is narrow; a long source string is not automatically a wide equation.
 `MathTextParser` height already includes depth; the compiler does not add the descent twice.
 See [Matplotlib mathtext](https://matplotlib.org/stable/api/mathtext_api.html) and

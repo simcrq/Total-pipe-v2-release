@@ -1,0 +1,291 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "matrix-derivation-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none"
+    }
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "system",
+      "semantic": {
+        "title": "贯穿例题：系数矩阵与右端向量",
+        "purpose": "贯穿例题：系数矩阵与右端向量",
+        "takeaway": "保留 4×4 系数矩阵与列向量的每个元素，目标是求解 Ax=b。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {
+            "id": "a",
+            "component": "formula",
+            "text": "A=\\begin{bmatrix}4&2&0&0\\\\2&5&2&0\\\\0&2&5&2\\\\0&0&2&2\\end{bmatrix}"
+          },
+          {
+            "id": "b",
+            "component": "formula",
+            "text": "b=\\begin{bmatrix}2\\\\1\\\\10\\\\6\\end{bmatrix}"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "cholesky",
+      "semantic": {
+        "title": "平方根法：Cholesky 因子",
+        "purpose": "平方根法：Cholesky 因子",
+        "takeaway": "A=LLᵀ，L 的对角元为正。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "equation-derivation",
+        "blocks": [
+          {
+            "id": "l",
+            "component": "formula",
+            "text": "L=\\begin{bmatrix}2&0&0&0\\\\1&2&0&0\\\\0&1&2&0\\\\0&0&1&1\\end{bmatrix}"
+          },
+          {
+            "id": "identity",
+            "component": "formula",
+            "text": "A=LL^{T}"
+          },
+          {
+            "id": "diag",
+            "component": "body",
+            "text": "本例 L 的对角元为 2、2、2、1。"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "ldlt",
+      "semantic": {
+        "title": "改进平方根法：单位下三角因子与对角矩阵",
+        "purpose": "改进平方根法：单位下三角因子与对角矩阵",
+        "takeaway": "单位下三角因子保留分数元素，对角尺度单独放入 D。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {
+            "id": "l0",
+            "component": "formula",
+            "text": "L_0=\\begin{bmatrix}1&0&0&0\\\\\\frac{1}{2}&1&0&0\\\\0&\\frac{1}{2}&1&0\\\\0&0&\\frac{1}{2}&1\\end{bmatrix}"
+          },
+          {
+            "id": "d",
+            "component": "formula",
+            "text": "D=\\begin{bmatrix}4&0&0&0\\\\0&4&0&0\\\\0&0&4&0\\\\0&0&0&1\\end{bmatrix}"
+          },
+          {
+            "id": "identity",
+            "component": "formula",
+            "text": "A=L_0DL_0^{T}"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "solve",
+      "semantic": {
+        "title": "平方根法：前代，再回代",
+        "purpose": "平方根法：前代，再回代",
+        "takeaway": "前代得到中间向量 y，回代得到 x=(1,−1,2,1)ᵀ。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "equation-derivation",
+        "blocks": [
+          {
+            "id": "forward",
+            "component": "body",
+            "text": "前代求解 Ly=b。"
+          },
+          {
+            "id": "forward0",
+            "component": "formula",
+            "text": "2y_1=2\\Rightarrow y_1=1",
+            "anchor": "forward"
+          },
+          {
+            "id": "forward1",
+            "component": "formula",
+            "text": "y_1+2y_2=1\\Rightarrow y_2=0",
+            "anchor": "forward"
+          },
+          {
+            "id": "forward2",
+            "component": "formula",
+            "text": "y_2+2y_3=10\\Rightarrow y_3=5",
+            "anchor": "forward"
+          },
+          {
+            "id": "forward3",
+            "component": "formula",
+            "text": "y_3+y_4=6\\Rightarrow y_4=1",
+            "anchor": "forward"
+          },
+          {
+            "id": "forward4",
+            "component": "formula",
+            "text": "y=(1,0,5,1)^{T}",
+            "anchor": "forward"
+          },
+          {
+            "id": "back",
+            "component": "body",
+            "text": "回代求解 Lᵀx=y。"
+          },
+          {
+            "id": "back0",
+            "component": "formula",
+            "text": "x_4=1",
+            "anchor": "back"
+          },
+          {
+            "id": "back1",
+            "component": "formula",
+            "text": "2x_3+x_4=5\\Rightarrow x_3=2",
+            "anchor": "back"
+          },
+          {
+            "id": "back2",
+            "component": "formula",
+            "text": "2x_2+x_3=0\\Rightarrow x_2=-1",
+            "anchor": "back"
+          },
+          {
+            "id": "back3",
+            "component": "formula",
+            "text": "2x_1+x_2=1\\Rightarrow x_1=1",
+            "anchor": "back"
+          },
+          {
+            "id": "back4",
+            "component": "formula",
+            "text": "x=(1,-1,2,1)^{T}",
+            "anchor": "back"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "recurrences",
+      "semantic": {
+        "title": "平方根法的递推公式",
+        "purpose": "平方根法的递推公式",
+        "takeaway": "先修正主元并取正平方根，再更新下三角元素。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "equation-derivation",
+        "blocks": [
+          {
+            "id": "diagonal",
+            "component": "body",
+            "text": "对角主元采用正平方根。"
+          },
+          {
+            "id": "diagonal-formula",
+            "component": "formula",
+            "text": "l_{jj}=\\sqrt{a_{jj}-\\sum_{k=1}^{j-1}l_{jk}^{2}}",
+            "anchor": "diagonal"
+          },
+          {
+            "id": "off-diagonal",
+            "component": "body",
+            "text": "对非对角元素，先减去前序贡献，再除以已得到的对角元。"
+          },
+          {
+            "id": "off-diagonal-formula",
+            "component": "formula",
+            "text": "l_{ij}=\\frac{a_{ij}-\\sum_{k=1}^{j-1}l_{ik}l_{jk}}{l_{jj}},\\quad i>j",
+            "anchor": "off-diagonal"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "matrix-variants",
+      "semantic": {
+        "title": "矩阵单元格中的根号、分式与上下标",
+        "purpose": "矩阵单元格中的根号、分式与上下标",
+        "takeaway": "括号、单元格边界和外部转置都保留为独立数学结构。",
+        "evidence_refs": [
+          "fixture:4x4-square-root-methods"
+        ],
+        "caveats": [],
+        "speaker_notes": "数值矩阵和求解结果来自用户提供的平方根法与改进平方根法 4×4 算例；此页用于矩阵与密集公式排版回归。"
+      },
+      "composition": {
+        "archetype": "equation-derivation",
+        "blocks": [
+          {
+            "id": "nested",
+            "component": "formula",
+            "text": "Q=\\begin{pmatrix}\\sqrt{1+x^2}&\\frac{1}{2}\\\\y_{i+1}&e^{-t}\\end{pmatrix}^{T}"
+          },
+          {
+            "id": "blank",
+            "component": "formula",
+            "text": "T=\\begin{bmatrix}1&&\\\\a&1&\\\\b&c&1\\end{bmatrix}"
+          },
+          {
+            "id": "scope",
+            "component": "body",
+            "text": "此页为结构回归表达式；空单元格保持为空，不自动补零。"
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

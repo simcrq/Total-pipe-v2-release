@@ -16,12 +16,12 @@ from pathlib import Path
 
 from PIL import Image, ImageFont
 
-ARCHETYPES = ('cover-hero', 'metric-comparison', 'process-flow', 'figure-parameters',
+ARCHETYPES = ('cover-hero', 'metric-comparison', 'equation-derivation', 'process-flow', 'figure-parameters',
               'hero-dual-evidence', 'evidence-hypothesis', 'dual-demonstration',
               'three-limitations', 'three-conclusions')
 ROLES = ('body', 'metric', 'parameter', 'process-step', 'direct-evidence', 'hypothesis',
          'limitation', 'conclusion', 'callout', 'comparison', 'definition', 'observation',
-         'method', 'result', 'question', 'source', 'caveat', 'figure')
+         'method', 'result', 'question', 'source', 'caveat', 'figure', 'formula')
 WIDTHS = (180, 280, 440, 700, 1168)
 MAX_UNITS = 16
 FEATURES = 17
@@ -339,9 +339,11 @@ def read_requests(path, root=None):
                 request[key] = fitted
         if slide['presentation'].get('visual_plan'):
             request['compiler_owned'] = 'scientific_visual_plan'
+        elif any(b.get('component') == 'formula' for b in slide['composition']['blocks']):
+            request['compiler_owned'] = 'measured_formula_flow'
         elif slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
             request['compiler_owned'] = 'native_graphic_composition'
-        if len(units) > MAX_UNITS or len({u['id'] for u in units}) != len(units):
+        if (len(units) > MAX_UNITS and not request.get('compiler_owned')) or len({u['id'] for u in units}) != len(units):
             raise ValueError('CAPACITY_OR_ID_COLLISION: no units may be truncated')
         requests.append(request)
     return requests, {'ir_sha256': digest(ir), 'compiler_issues': compile_issues,
@@ -405,6 +407,9 @@ def check(request, boxes):
         return ['VISUAL_PLAN_REQUIRES_COMPILER']
     if request.get('compiler_owned') == 'native_graphic_composition':
         return ['NATIVE_GRAPHIC_REQUIRES_COMPILER']
+    if request.get('compiler_owned') == 'measured_formula_flow':
+        return [f"{u['id']}:FORMULA_REQUIRES_COMPILER" for u in request['units']
+                if u.get('component') == 'formula']
     errors = []
     units = request['units']
     if len(boxes) != len(units):

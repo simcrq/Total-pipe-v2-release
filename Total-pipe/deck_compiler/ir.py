@@ -3,7 +3,7 @@ import re
 
 from . import audience
 from .catalog import ARCHETYPES, COMPONENTS
-from .capacity import FORMULA_MAX_PER_SLIDE, FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
+from .capacity import FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
@@ -166,12 +166,8 @@ def validate(ir):
             check(b.get("text_flow", "auto") in ("auto", "plain", "distributed_arrow_list"),
                   "Unknown block text_flow", n)
             check(not any(k in b for k in ("bbox", "x", "y", "w", "h")), "Geometry belongs to compiled layout", n)
-        # A page can hold a couple of displayed equations, not a list of them, and it still has to
-        # carry the prose they belong to. These are the content half of the capacity budget; the
-        # measured half (width/height at 18 pt) is enforced by the compiler.
-        if len(formulas) > FORMULA_MAX_PER_SLIDE:
-            check(False, f"{len(formulas)} displayed equations; at most {FORMULA_MAX_PER_SLIDE} "
-                         "fit one page -- move the rest to their own slide", n, "FORMULA_BUDGET")
+        # Formula count is not a capacity measure. Complete equations and explanations must fit
+        # actual regions, including independent columns and tall matrices.
         if formulas:
             prose = sum(len(b.get("text", "")) for b in blocks
                         if isinstance(b, dict) and b.get("component") != "formula")
@@ -189,6 +185,9 @@ def validate(ir):
                       f"block {b.get('id')}: anchor must name a non-formula block on this slide", n,
                       "FORMULA_ANCHOR_INVALID")
                 if target is not None and target.get("component") != "formula":
+                    check(blocks.index(target) < blocks.index(b),
+                          f"block {b.get('id')}: anchor must precede its equation", n,
+                          "FORMULA_ANCHOR_INVALID")
                     check(len(target.get("text", "").strip()) >= FORMULA_MIN_ANCHOR_CHARS,
                           f"block {b.get('id')}: the block it is anchored to carries no text to "
                           "explain", n, "FORMULA_ANCHOR_INVALID")
@@ -252,7 +251,9 @@ def validate(ir):
                       "FIGURE_CAPTION_MISMATCH")
         if archetype in ARCHETYPES:
             cap = ARCHETYPES[archetype]
-            check(len(blocks) <= cap["blocks"] and len(figures) <= cap["figures"],
+            context_count = sum(b.get('component') != 'formula' for b in blocks if isinstance(b, dict))
+            check((len(blocks) if cap['blocks'] == 0 else context_count) <= cap["blocks"]
+                  and len(figures) <= cap["figures"],
                   "Archetype block/figure capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
             if archetype == "evidence-hypothesis":
                 check(all(b.get("component") in ("direct-evidence", "hypothesis") for b in blocks)

@@ -333,17 +333,14 @@ html 截图只用于检查非公式区域。
   有标签公式变成"标签在左、公式在右"的一行，不再header独占 40 px；
 - 公式页的正文列宽由公式实测宽度反推（`formula_column_width`，上限 616 px，图列保底 520 px），
   公式按能放下的最大字号排（30/28/26/24 px），绝不低于 24 px（18 pt）；
-- 新闸门（`deck_compiler/capacity.py`）：
+- 当前闸门（2026-10-23 更新）：原先“每页两条”和 32%/50%/45% 的高度比例已移除。
+  矩阵及密集推导使用完整公式组的实测宽高，分别检查单双栏；不把独立栏的高度相加。
 
 | 规则 | 限值 | 行为 |
 |---|---|---|
-| `FORMULA_BUDGET` | 每页 ≤ 2 个公式 | FAIL |
-| `FORMULA_MAX_HEIGHT_SHARE` | 单个公式 ≤ 正文高 32% | FAIL |
-| `FORMULA_MAX_TOTAL_SHARE` | 全部公式 ≤ 正文高 50% | FAIL |
-| `FORMULA_GROUP_SHARE_MAX` | 锚定组里公式 ≤ 45% | FAIL |
 | `FORMULA_CAPACITY` | 公式在该槽位放不下 | FAIL，带 `suggested_fix=widen_text_column_or_split_slide` |
 | `FORMULA_TEXT_FLOOR` | 整页只有公式、没有一句正文 | REVIEW（人工确认，不阻断） |
-| `FORMULA_ANCHOR_INVALID` | 锚点不是本页的非公式块 | FAIL |
+| `FORMULA_ANCHOR_INVALID` | 锚点不是本页前方的非公式块 | FAIL |
 
 失败信息里写明"需要多少 px、槽位多少 px、应拆分或加宽"，并且**不会**通过缩小字号或删正文来满足。
 另外 `compile_deck` 不再把 REVIEW 当作致命错误（此前任何 REVIEW 都会让整份 deck 编译失败）。

@@ -178,14 +178,34 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
 支持分式、`\sqrt{…}` / `\sqrt[3]{…}`、上下标和嵌套分组、Greek、求和/积分、
 `\left/\right`、`\exp/\log/\ln`、常用三角函数与 `\text/\mathrm/\mathbf/\mathit`。
 底数和多项指数写清分组，例如 `{xy}^{a^{2}}`。公式块可带外层 `$…$/$$…$$/\(…\)/\[…\]`。
-未知命令、空参数与缺失括号返回带字符位置的 `FORMULA_SYNTAX`；matrix/cases 等尚不支持。
+未知命令、空参数与缺失括号返回带字符位置的 `FORMULA_SYNTAX`；array/cases 等尚不支持。
 不要用错误表达式、普通文本或截图掩盖解析失败。
 
+矩阵支持 `matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix` 六种环境：`&` 分列，`\\` 分行。
+JSON 示例：
+
+```json
+{"id":"matrix","component":"formula","text":"A=\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}"}
+```
+
+输出为原生 `m:m/m:mr/m:e` 结构，矩阵括号是原生 delimiter。保留空单元格、不自动补零；
+各行列数须一致，支持单元格中的根号、分式、上下标和外部转置。裸 matrix 可由 `\left/\right`
+加括号，`\quad/\qquad` 可分隔并列公式。矩阵尺寸按列宽最大值和实际行高计算，原生间距仍保留 REVIEW。
+分式、根号和求和另计算原生展示公式的保守高度，避免把 mathtext 的较小排版尺寸直接当作 PowerPoint 尺寸。
+
 AST 统一投影到尺寸、Unicode fallback 和 OMML；数学模式测量实际排版，原生结构保留根指数、
-被开方项和所有上下标。每页最多两条展示公式，字号不低于 24 CSS px（18 pt）。放不下返回
+被开方项和所有上下标。公式不再按“每页两条”限制，字号不低于 24 CSS px（18 pt）。放不下返回
 `FORMULA_CAPACITY`，先加宽或拆页；`FORMULA_MEASURE_APPROXIMATE` 保留 REVIEW。
 HTML 截图仅显示 fallback，实际根号、分式线和指数用 PowerPoint 原生视图核对。
 见 [公式协议](deck-compiler-v2.md#formulas-component-formula) 和 [可运行示例](../examples/formula.deck_ir.json)。
+
+密集推导使用 `archetype: "equation-derivation"`，按阅读顺序保留 blocks。
+编译器按完整内容的实测高度尝试单双栏，阅读顺序为左栏从上到下，再读右栏。
+显式 anchor 的说明与公式成组，不能拆散；无 anchor 的连续公式分别保留，不会只输出第一条。
+说明文本框与公式行保持实际内容高度，不吸收整列剩余留白；独立两栏的公式高度分别检查，
+不相加套用单栏比例。实际列数、字号、阅读顺序与容量候选记入 `layout.json` 的 `formula_flow`。
+启用 `preserve-terms` 时，说明文字仍超出真实容量也保留全文并标记 REVIEW；公式本身的真实宽高不足仍会报告失败。
+原有页面的普通正文数量限制仍生效，公式由几何容量判断。见 [4×4 矩阵与密集推导示例](../examples/matrix-derivation.deck_ir.json)。
 
 ## 4. Design 阶段：默认执行视觉规划
 

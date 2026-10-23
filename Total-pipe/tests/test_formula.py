@@ -46,9 +46,11 @@ class FormulaParseTests(unittest.TestCase):
         self.assertIn('unsupported command', str(caught.exception))
 
     def test_measure_is_exact_for_math_and_flagged_for_text(self):
-        latin = F.measure(F.parse(r'\frac{a}{b}'), 24)
+        latin = F.measure(F.parse(r'a^2+b^2'), 24)
         self.assertTrue(latin.exact)
         self.assertGreater(latin.width, 0)
+        self.assertFalse(F.measure(F.parse(r'\frac{a}{b}'), 24).exact,
+                         'native display fractions need a conservative structural bound')
         mixed = F.measure(F.parse(r'\text{当 } x > 0'), 24)
         self.assertFalse(mixed.exact, 'CJK inside math cannot be measured by mathtext')
 
@@ -86,7 +88,7 @@ class FormulaParseTests(unittest.TestCase):
         expected = F.parse(source)
         for left, right in (('$', '$'), ('$$', '$$'), (r'\(', r'\)'), (r'\[', r'\]')):
             self.assertEqual(F.parse(left+source+right), expected)
-        self.assertTrue(F.measure(expected).exact)
+        self.assertFalse(F.measure(expected).exact)
         self.assertTrue(F.measure(F.parse(r'\mathrm{MoO}_{x}')).exact)
         self.assertIsNotNone(ET.fromstring(F.to_omml(expected)).find('.//m:d', MATH_NS))
 
@@ -106,8 +108,13 @@ class FormulaParseTests(unittest.TestCase):
                 ast = F.parse(source)
                 expected = parser.parse('$'+F.to_latex(ast)+'$', dpi=96, prop=FontProperties(size=18))
                 actual = F.measure(ast, 24)
-                self.assertTrue(actual.exact)
-                self.assertEqual((actual.width, actual.height), (expected.width, expected.height))
+                if source == r'x^{a^{2}}':
+                    self.assertTrue(actual.exact)
+                    self.assertEqual((actual.width, actual.height), (expected.width, expected.height))
+                else:
+                    self.assertFalse(actual.exact)
+                    self.assertGreaterEqual(actual.width, expected.width)
+                    self.assertGreaterEqual(actual.height, expected.height)
         fraction = F.measure(F.parse(r'\frac{a}{b}'), 24)
         literal = parser.parse(r'\frac{a}{b}', dpi=96, prop=FontProperties(size=18))
         self.assertLess(fraction.width, literal.width/3)
@@ -178,7 +185,8 @@ class FormulaDeckTests(unittest.TestCase):
                 self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
                 equation = next(e for e in layout['slides'][0]['elements'] if e['kind'] == 'math')
                 self.assertEqual(equation['source_text'], source)
-                self.assertTrue(equation['measured_exact'])
+                self.assertFalse(equation['measured_exact'])
+                self.assertIn('FORMULA_MEASURE_APPROXIMATE', {i['rule'] for i in issues})
 
     @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI executable required')
     def test_officecli_inserts_native_roots_and_powers_and_verifier_detects_corruption(self):

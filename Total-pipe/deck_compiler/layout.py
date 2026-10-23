@@ -5,10 +5,8 @@ import re
 from PIL import Image, ImageFont
 from . import audience
 from .catalog import ARCHETYPES
-from .capacity import (FORMULA_GAP, FORMULA_GROUP_SHARE_MAX, FORMULA_LABEL_MAX,
-                       FORMULA_MAX_HEIGHT_SHARE, FORMULA_MAX_PER_SLIDE,
-                       FORMULA_MAX_TOTAL_SHARE, FORMULA_MIN_TEXT_CHARS, FORMULA_SIZES,
-                       budget as formula_budget)
+from .capacity import FORMULA_GAP, FORMULA_LABEL_MAX, FORMULA_SIZES
+from .formula_layout import formula_groups, plan_formula_flow, FormulaCapacityError
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
@@ -177,23 +175,6 @@ def formula_column_width(blocks, bold_font_file, base, limit):
     return min(limit, need)
 
 
-def formula_groups(blocks):
-    """An unlabelled equation belongs to the block above it; a labelled one is its own row.
-
-    The alternative is what the delivered test deck did: an equation that sits on its own peer row,
-    reading as a caption-less block between two paragraphs. Grouping keeps the equation attached to
-    the sentence it explains, and it also gives the page one row back.
-    """
-    groups = []
-    for block in blocks:
-        if (block.get("component") == "formula" and not block.get("label") and groups):
-            groups[-1][1].append(block)
-        else:
-            groups.append((block, []))
-    return groups
-
-
-
 def frame_variant(ir):
     """Use one title/takeaway/body grid for the whole deck."""
     explicit = (ir.get("presentation") or {}).get("frame_variant")
@@ -288,17 +269,19 @@ def text_visible_bottom(element):
 def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
     """Notify on a large empty lower band in a text-only column layout."""
     content = [element for element in elements
-               if element["kind"] == "text" and element["role"] in ("heading", "body")
+               if element["kind"] in ('text', 'list', 'math') and element["role"] in ("heading", "body", 'formula')
                and body_top <= element["bbox"][1] < body_bottom]
     if not content:
         return None
-    content_bottom = max(text_visible_bottom(element) for element in content)
+    content_bottom = max((element['bbox'][1]+element['bbox'][3] if element['kind'] == 'math'
+                          else text_visible_bottom(element)) for element in content)
     gap = body_bottom - content_bottom
     share = gap / (body_bottom - body_top)
     if gap < 160 or share < .40:
         return None
-    return issue("TEXT_ONLY_LOWER_WHITESPACE", "WARNING",
-                 f"Text content ends near y={content_bottom:.0f}px; the lower {gap:.0f}px "
+    return issue('CONTENT_LOWER_WHITESPACE' if any(e['kind'] == 'math' for e in content)
+                 else "TEXT_ONLY_LOWER_WHITESPACE", "WARNING",
+                 f"Page content ends near y={content_bottom:.0f}px; the lower {gap:.0f}px "
                  f"({share:.0%} of the body area) is empty. Review vertical balance or "
                  "choose a layout that uses the available space.",
                  slide_number, detector="design-preflight", confidence="MEDIUM",
@@ -617,7 +600,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
         top, bottom = body_region(slide, family, deck_frame, design, font_paths, preserve_terms)
         bh = bottom-top
-        def block(b, box):
+        def block(b, box, formula_size=None, formula_align='center'):
             label = b.get("label", "")
             if b.get("component") == "formula":
                 # A formula is a measured unit: it cannot wrap, it is never fed through the text
@@ -637,7 +620,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 inner = [box[0]+gaps, box[1]+6, box[2]-gaps-20 if label_w else box[2]-20,
                          box[3]-12]
                 chosen = None
-                for size_px in FORMULA_SIZES:
+                for size_px in ([formula_size] if formula_size is not None else FORMULA_SIZES):
                     metrics = measure(ast, size_px)
                     if metrics.width <= inner[2]+.5 and metrics.height <= inner[3]+.5:
                         chosen = (size_px, metrics)
@@ -646,13 +629,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     widest = measure(ast, FORMULA_SIZES[-1])
                     issues.append(issue(
                         "FORMULA_CAPACITY", "FAIL",
-                        f"{b['id']} needs {widest.width:.0f} px at 18 pt but its slot is "
-                        f"{max(inner[2], 0):.0f} px wide. Widen the slot or move the equation to "
+                        f"{b['id']} needs {widest.width:.0f} × {widest.height:.0f} px at 18 pt but its slot is "
+                        f"{max(inner[2], 0):.0f} × {max(inner[3], 0):.0f} px. Widen the slot or move the equation to "
                         "its own slide: the compiler will not shrink the body text, or the "
                         "equation below 18 pt, to make it fit.",
                         n, b["id"], detector="geometric-preflight",
                         formula_width_px=round(widest.width, 1),
+                        formula_height_px=round(widest.height, 1),
                         slot_width_px=round(max(inner[2], 0), 1),
+                        slot_height_px=round(max(inner[3], 0), 1),
                         suggested_fix="widen_text_column_or_split_slide"))
                     return
                 if label_w:
@@ -660,19 +645,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                          [box[0], box[1]+(box[3]-30)/2, label_w, 30], "heading", 24, 24, 1)
                 size_px, metrics = chosen
                 slide_formulas.append((b["id"], metrics.height))
-                limits = formula_budget(bottom-top)
-                if (metrics.height > limits['max_height_px'] or
-                        sum(h for _, h in slide_formulas) > limits['max_total_px']):
-                    issues.append(issue(
-                        "FORMULA_CAPACITY", "FAIL",
-                        f"{b['id']} would take {sum(h for _, h in slide_formulas):.0f} px of the "
-                        f"{bottom-top} px body (limit {limits['max_total_px']:.0f} px; one "
-                        f"equation {limits['max_height_px']:.0f} px). The page is carrying more "
-                        "typeset math than it has room for: split the slide rather than trimming "
-                        "the prose around it.",
-                        n, b["id"], detector="geometric-preflight", confidence="HIGH",
-                        formula_height_px=round(metrics.height, 1), **limits))
-                bbox = [inner[0]+(inner[2]-metrics.width)/2,
+                bbox = [inner[0]+((inner[2]-metrics.width)/2 if formula_align == 'center' else 0),
                         inner[1]+(inner[3]-metrics.height)/2,
                         metrics.width, metrics.height]
                 colour = theme.get("foreground", "#142735")
@@ -684,8 +657,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     "color": colour})
                 if not metrics.exact:
                     issues.append(issue("FORMULA_MEASURE_APPROXIMATE", "REVIEW",
-                                        f"{b['id']} carries text mathtext cannot measure; "
-                                        "verify the rendered width in PowerPoint",
+                                        f"{b['id']} uses conservative structural or fallback metrics; "
+                                        "verify the rendered formula width and height in PowerPoint",
                                         n, b["id"], detector="geometric-preflight",
                                         confidence="LOW", font_metrics="heuristic"))
                 return
@@ -779,99 +752,34 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
             emphasis_color = theme.get("accent", DEFAULT_ACCENT) if b["id"] == visual_intent.get("emphasis") else None
             text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color)
+        def formula_flow(bs, box, max_columns=1, preferred_columns=1):
+            try:
+                plan = plan_formula_flow(bs, box, font_paths, comp['archetype'],
+                    max_columns=max_columns, preferred_columns=preferred_columns,
+                    body_size=type_sizes(design)['body'] if design else 28,
+                    text_inset=56 if show_sequence else 0, preserve_terms=preserve_terms,
+                    gap=24 if comp['archetype'] == 'figure-parameters' else 18)
+            except FormulaCapacityError as error:
+                issues.append(issue('FORMULA_CAPACITY', 'FAIL', str(error), n,
+                    detector='geometric-preflight', confidence='HIGH',
+                    suggested_fix='widen_text_column_or_split_slide', attempts=error.attempts,
+                    available_width_px=box[2], available_height_px=box[3]))
+                return
+            by_id = {b['id']: b for b in bs}
+            for bid in plan['reading_order']:
+                block(by_id[bid], plan['boxes'][bid], plan['font_size_px'], 'left')
+            adaptations.append({'action': 'formula_flow', 'region': list(box), **plan})
+
         def stack(bs, box):
             if not bs:
                 return
-            gap = 24 if comp["archetype"] == "figure-parameters" else 18
-            if not any(b.get("component") == "formula" for b in bs):
-                h = (box[3]-gap*(len(bs)-1))/len(bs)
-                for k, b in enumerate(bs):
-                    block(b, [box[0], box[1]+k*(h+gap), box[2], h])
+            if any(b.get('component') == 'formula' for b in bs):
+                formula_flow(bs, box)
                 return
-            # A formula page stacks groups, not blocks: an unlabelled equation shares its anchor's
-            # row (text above, equation at its measured size below). That is one row fewer than
-            # treating the equation as a peer, which is what pays for the equation's own height.
-            plan = []
-            for anchor, formulas in formula_groups(bs):
-                card = anchor.get("component") == "formula"
-                if card:
-                    # A labelled equation is its own row: label on the left, equation on its centre
-                    # line. Its height is the measured equation, not a share of the column.
-                    label_w = formula_label_width(anchor.get("label", ""),
-                                                  font_paths["bold_font_file"])
-                    metrics = formula_fit(anchor["text"],
-                                          box[2]-(label_w+12 if label_w else 0)-20)
-                    if metrics is None:
-                        issues.append(issue(
-                            "FORMULA_CAPACITY", "FAIL",
-                            f"{anchor['id']} does not fit its column at 18 pt even with the label "
-                            "on its own line; widen the column or split the slide",
-                            n, anchor["id"], detector="geometric-preflight", confidence="HIGH",
-                            suggested_fix="widen_text_column_or_split_slide"))
-                        return
-                    plan.append([anchor, [], metrics.height+12, 0.0])
-                    continue
-                label_h = ((40 if comp["archetype"] == "figure-parameters" else 44)
-                           if anchor.get("label") else 0)
-                text_h = text_floor_height(anchor["text"], box[2], font_paths["font_file"])
-                if text_h is None:
-                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
-                                        f"{anchor['id']} cannot fit its column above the 18 pt floor",
-                                        n, anchor["id"], detector="geometric-preflight",
-                                        textbox_contract="deck_ir"))
-                    return
-                formula_h = 0.0
-                placed = []
-                for f in formulas:
-                    metrics = formula_fit(f["text"], box[2]-20)
-                    if metrics is None:
-                        issues.append(issue(
-                            "FORMULA_CAPACITY", "FAIL",
-                            f"{f['id']} needs "
-                            f"{formula_widths(f['text'])[FORMULA_SIZES[-1]].width:.0f} px at 18 pt "
-                            f"but its column is {box[2]-20:.0f} px wide; widen the column or split "
-                            "the slide", n, f["id"], detector="geometric-preflight",
-                            confidence="HIGH", suggested_fix="widen_text_column_or_split_slide"))
-                        return
-                    placed.append((f, metrics))
-                    formula_h += FORMULA_GAP + metrics.height + 12
-                plan.append([anchor, placed, label_h+text_h+formula_h, formula_h])
-            available = box[3] - gap*(len(plan)-1)
-            total = sum(entry[2] for entry in plan)
-            if total > available + .5:
-                issues.append(issue(
-                    "FORMULA_CAPACITY", "FAIL",
-                    f"{box[2]:.0f} px column needs {total:.0f} px for text and equations, the page "
-                    f"gives {available:.0f} px. Move one equation to its own slide instead of "
-                    "trimming the text it belongs to.",
-                    n, None, detector="geometric-preflight", confidence="HIGH",
-                    required_px=round(total, 1), available_px=round(available, 1),
-                    suggested_fix="split_slide"))
-                return
-            extra = (available - total)/len(plan)
-            cursor = box[1]
-            for anchor, placed, need, formula_h in plan:
-                group_h = need + extra
-                if not placed:
-                    # A labelled equation row: its own height, its label drawn inline.
-                    block(anchor, [box[0], cursor, box[2], group_h])
-                    cursor += group_h + gap
-                    continue
-                if formula_h / max(group_h, 1) > FORMULA_GROUP_SHARE_MAX:
-                    issues.append(issue(
-                        "FORMULA_CAPACITY", "FAIL",
-                        f"{anchor['id']}'s equation needs {formula_h:.0f} px of a {group_h:.0f} px "
-                        f"row (limit {FORMULA_GROUP_SHARE_MAX:.0%}). An equation may not crowd out "
-                        "the text it belongs to: give the row its own slide.",
-                        n, anchor["id"], detector="geometric-preflight", confidence="HIGH",
-                        formula_height_px=round(formula_h, 1), group_height_px=round(group_h, 1),
-                        suggested_fix="split_slide"))
-                block(anchor, [box[0], cursor, box[2], group_h-formula_h])
-                cursor += group_h - formula_h
-                for f, metrics in placed:
-                    block(f, [box[0], cursor+FORMULA_GAP, box[2], metrics.height+12])
-                    cursor += FORMULA_GAP + metrics.height + 12
-                cursor += gap
+            gap = 24 if comp['archetype'] == 'figure-parameters' else 18
+            h = (box[3]-gap*(len(bs)-1))/len(bs)
+            for k, b in enumerate(bs):
+                block(b, [box[0], box[1]+k*(h+gap), box[2], h])
         def figure(f, box, k, caption_top=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
@@ -984,7 +892,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
                                 "generated graphics do not establish scientific correctness",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
-        proposal = None if visual_plan or schematic_only or comp.get('graphics') else (proposals or {}).get(slide['id'])
+        has_formulas = any(b.get('component') == 'formula' for b in blocks)
+        proposal = None if visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
         if visual_plan:
             from .academic_layout import candidates
             best_failures, attempts = [], []
@@ -1088,6 +997,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 'status': proposal['status']})
         elif schematic_only:
             schematic_band(blocks, figs[0])
+        elif not figs and not show_sequence and family != 'evidence' and (has_formulas or family == 'equations'):
+            formula_flow(blocks, [56, top, 1168, bh], max_columns=2,
+                         preferred_columns=2 if comp['archetype'] == 'metric-comparison' else 1)
         elif family in ("figure-left", "figure-right") and figs:
             base_text = 440 if family == "figure-left" else 460
             txt_w = formula_column_width(blocks, font_paths["bold_font_file"], base_text, 616)
@@ -1168,7 +1080,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 adaptations.append({"action": "sequence_rail",
                     "source": "visual_intent" if visual_intent else "legacy_roles",
                     "block_ids": [b["id"] for b in blocks]})
-        if family == "columns" and not figs and not visible_caveats and len(blocks) >= 3:
+        if family in ('columns', 'equations') and not figs and not visible_caveats and len(blocks) >= 3:
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)

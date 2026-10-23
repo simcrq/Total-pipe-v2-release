@@ -32,6 +32,9 @@ CLI/MCP 的 compile、build 和统一 generate 入口漏做设计时返回 `VISU
 
 公式使用 `component: "formula"`，支持分式、根号/带次数根号、上下标、嵌套指数和常用函数。
 AST 按数学模式测量后写入可编辑 OMML；普通文本中的 `$...$` 不会自动排成公式。
+矩阵支持六种常用 matrix 环境与单元格内的分式、根号、上下标。密集推导页用
+`equation-derivation`，按实际行列尺寸尝试单双栏，保留每条公式与解释；不再用两条公式上限
+或跨栏高度之和判定容量。见 [4×4 矩阵与密集公式回归样例](examples/matrix-derivation.deck_ir.json)。
 见 [公式协议](docs/deck-compiler-v2.md#formulas-component-formula) 与
 [回归样例](examples/formula.deck_ir.json)。
 
@@ -66,8 +69,8 @@ python totalpipe.py verify build/final.pptx --build build/
 **Documentation**:
 - [Complete Implementation Guide](IMPLEMENTATION_COMPLETE.md) - Full feature documentation
 - [Quality Metrics Guide](docs/QUALITY_METRICS.md) - Visual quality analysis system
-- [AI Usage Guide](AI_USAGE_GUIDE.md) - For AI agents
-- [Quick Start Guide](QUICKSTART.md) - 5-minute introduction
+- [AI Usage Guide](../AI_USAGE_GUIDE.md) - For AI agents
+- [Quick Start Guide](../QUICKSTART.md) - 5-minute introduction
 
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → Research PPT Assistant

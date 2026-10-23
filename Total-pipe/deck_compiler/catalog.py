@@ -3,6 +3,7 @@ ARCHETYPES = {
     "native-graphic": {"blocks": 0, "figures": 0, "layout": "graphic"},
     "cover-hero": {"blocks": 2, "figures": 1, "layout": "figure-right"},
     "metric-comparison": {"blocks": 4, "figures": 0, "layout": "columns"},
+    "equation-derivation": {"blocks": 16, "figures": 0, "layout": "equations"},
     "process-flow": {"blocks": 4, "figures": 1, "layout": "process"},
     "figure-parameters": {"blocks": 4, "figures": 1, "layout": "figure-left"},
     "hero-dual-evidence": {"blocks": 2, "figures": 2, "layout": "dual"},

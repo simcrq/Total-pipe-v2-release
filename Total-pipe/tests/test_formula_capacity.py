@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from deck_compiler.capacity import FORMULA_GAP, FORMULA_MAX_PER_SLIDE
+from deck_compiler.capacity import FORMULA_GAP
 from deck_compiler.ir import validate
 from deck_compiler.layout import compile_deck
 
@@ -45,11 +45,14 @@ def rules(issues, severity='FAIL'):
 
 
 class FormulaBudgetTests(unittest.TestCase):
-    def test_a_page_holds_two_equations_and_reports_the_third(self):
+    def test_equation_count_is_not_a_capacity_budget(self):
         blocks = [{'id': f'f{k}', 'component': 'formula', 'text': 'x = %d' % k} for k in range(1, 4)]
         blocks.append({'id': 'c1', 'component': 'conclusion', 'text': '一条说明文字。'})
-        self.assertIn('FORMULA_BUDGET', rules(validate(formulas_deck(blocks))))
-        self.assertLessEqual(FORMULA_MAX_PER_SLIDE, 2)
+        ir = formulas_deck(blocks)
+        self.assertFalse(rules(validate(ir)))
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse(rules(issues), issues)
+        self.assertEqual(len([e for e in layout['slides'][0]['elements'] if e['kind'] == 'math']), 3)
 
     def test_an_unlabelled_equation_sits_under_the_block_it_explains(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -76,7 +79,7 @@ class FormulaBudgetTests(unittest.TestCase):
         ir = formulas_deck([
             {'id': 'c1', 'component': 'conclusion', 'text': '读者复算与作者报告的差异。'},
             {'id': 'f1', 'component': 'formula',
-             'text': r'20\,\text{log}_{10}(2.04\times10^{4})\approx86.2 + 12 + 33 + 44 + 55 + 66'}])
+             'text': r'20\,\text{log}_{10}(2.04\times10^{4})\approx86.2' + ' + 123456789'*12}])
         layout, issues = compile_deck(ir, ROOT)
         capacity = [i for i in issues if i['rule'] == 'FORMULA_CAPACITY']
         self.assertTrue(capacity)

@@ -343,7 +343,7 @@
           "properties": {
             "archetype": {
               "enum": [
-                "native-graphic", "cover-hero", "metric-comparison", "process-flow", "figure-parameters",
+                "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
                 "hero-dual-evidence", "evidence-hypothesis", "dual-demonstration",
                 "three-limitations", "three-conclusions"
               ]
@@ -372,7 +372,7 @@
                   "text": {"type": "string", "minLength": 1},
                   "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
                   "anchor": {"type": "string", "minLength": 1,
-                             "description": "Formula only: id of the block this equation explains. The compiler places an unlabelled equation under the block above it and never as a peer row."}
+                             "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."}
                 }
               }
             },

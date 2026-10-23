@@ -172,10 +172,22 @@ Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不�
 嵌套分组、`\left/\right`、Greek、求和/积分、`\exp/\log/\ln`、常用三角函数、
 `\text/\mathrm/\mathbf/\mathit`。多项底数和指数写完整分组，如 `{xy}^{a^{2}}`。
 
-先核对 `FORMULA_SYNTAX` 的字符位置；不支持的宏、matrix/cases 等不能硬塞给写入器。
+矩阵使用 `\begin{bmatrix}…\end{bmatrix}`，单元格以 `&` 分列、`\\` 分行；
+支持 `matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix`，也可用 `\left/\right` 包住裸 matrix。
+保留所有行列、空单元格、分数、根号、上下标与外部转置，不能用普通文本拼方括号。
+例如 2×2 矩阵的 JSON 为 `"\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}"`。
+矩阵按单元格和行列测量并写成原生 OMML，Office 的间距仍保留原生核对 REVIEW。
+
+先核对 `FORMULA_SYNTAX` 的字符位置；不支持的宏、array/cases 等不能硬塞给写入器。
 保留表达式的数学含义，使用支持的等价形式或回到规划调整，不把公式降成错误的 Unicode 文本或位图。
-每页最多两条展示公式，字号不低于 24 CSS px（18 pt）；容量不够用宽槽或拆页。
-详见 `Total-pipe/docs/deck-compiler-v2.md` 的 Formulas 和 `Total-pipe/examples/formula.deck_ir.json`。
+密集推导页使用 `equation-derivation`，保留完整公式及说明，编译器按实测行高尝试单双栏。
+公式没有“每页两条”的数量门禁，也不把双栏公式高度相加当成单栏容量；字号仍不低于
+24 CSS px（18 pt）。显式 anchor 的公式组留在同一栏；后续无 anchor 的连续公式可独立成行。
+不拉高说明文本框吸收留白；查看 `formula_flow` 的实际列数、字号、阅读顺序和候选容量。
+超出真实区域时再用宽槽或拆页，不删公式或压缩科学术语。
+`preserve-terms` 下，说明文字容量不足也保留完整术语并标记 REVIEW；公式本身须满足真实宽高。
+详见 `Total-pipe/docs/deck-compiler-v2.md` 的 Formulas，以及
+`Total-pipe/examples/formula.deck_ir.json` 与 `Total-pipe/examples/matrix-derivation.deck_ir.json`。
 数学表达式按 AST 测量并写成原生 OMML；近似测量保留 REVIEW。HTML 截图仅显示 fallback，
 根号、分式线和指数的实际排版须在 PowerPoint 原生视图检查。
 
