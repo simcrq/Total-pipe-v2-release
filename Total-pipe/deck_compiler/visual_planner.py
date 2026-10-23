@@ -7,11 +7,11 @@ from PIL import Image
 
 from .contracts import digest, file_hash
 from .ir import validate
-from .visual_design import object_errors
+from .visual_design import COMPOSITIONS, object_errors, validate_plan
 
 
 INSTRUCTIONS = """Act as the Scientific Visual Planner for this canonical research deck.
-Choose one restrained academic_design for the entire deck and visual_plan entries for selected slides.
+Choose one restrained academic_design for the entire deck and visual_plan entries for selected eligible slides.
 Return only the proposal shape below. Echo ir_sha256 exactly. Read the FULL deck_ir, including notes,
 figures, conditions, limitations and explicit evidence/hypothesis relationships before choosing a layout.
 Only these presentation decisions may change: never rewrite semantic, composition, graphics, assets,
@@ -32,7 +32,10 @@ Any emphasis.text must occur EXACTLY in its visible canonical source: semantic.t
 semantic.takeaway, composition.blocks.<id>.text, or composition.graphics.<id>.nodes.<id>.title/body.
 Use modest inline-callout annotations, thin rules or unframed figures. Avoid advertising cards,
 dashboard tiles, poster-sized numbers, background textures and decoration without a reading purpose.
-Omit plans for unsupported pages. Do not use per-slide colors/fonts, theme_tokens, component_variants,
+Use planning_targets to cover every selected eligible page; do not stop after a sample of the deck.
+Omit plans for unsupported pages. For a deck with no eligible pages, return slides: [] and still choose
+academic_design. Do not invent a source figure or mechanism to satisfy this stage.
+Do not use per-slide colors/fonts, theme_tokens, component_variants,
 page coordinates or geometry overrides. If a plan cannot fit, revise its design choices; never trim
 content, weaken panel floors, split a hard group, or silently ignore VISUAL_PLAN_UNSATISFIABLE.
 """
@@ -42,6 +45,32 @@ def checked(ir):
     failures = [item for item in validate(ir) if item['severity'] == 'FAIL']
     if failures:
         raise ValueError(json.dumps(failures, ensure_ascii=False))
+
+
+def planning_targets(ir):
+    """Discover supported jobs using the same validation as the compiler, without inventing a plan."""
+    targets = []
+    for slide in ir['slides']:
+        jobs = []
+        for job, compositions in COMPOSITIONS.items():
+            plan = {'visual_job': job, 'primary': {
+                'kind': 'graphic' if job == 'mechanism-explanation' else 'figure', 'index': 0},
+                'composition': compositions[0]}
+            if not validate_plan(plan, {**slide, 'presentation': {}}):
+                jobs.append(job)
+        targets.append({'slide_id': slide['id'], 'visual_jobs': jobs,
+                        **({'reason': 'hard_process_group' if slide['composition'].get('visual_intent')
+                            else 'no_supported_visual_job'} if not jobs else {})})
+    return targets
+
+
+def pending_design(ir):
+    """Public generation must make the agent's design pass explicit before rendering."""
+    slides = {slide['id']: slide for slide in ir['slides']}
+    missing = [target['slide_id'] for target in planning_targets(ir) if target['visual_jobs'] and
+               not slides[target['slide_id']].get('presentation', {}).get('visual_plan')]
+    return {'academic_design_required': not (ir.get('presentation') or {}).get('academic_design'),
+            'slide_ids': missing}
 
 
 def make_prompt(ir, base, requirements='', slide_ids=None):
@@ -59,12 +88,16 @@ def make_prompt(ir, base, requirements='', slide_ids=None):
             resources[key] = {'path': str(path), 'width': image.width, 'height': image.height,
                               'sha256': file_hash(path), 'origin': asset.get('origin', 'paper'),
                               'source_figure': asset.get('source_figure')}
+    targets = [target for target in planning_targets(ir) if target['slide_id'] in selected]
+    required_ids = [target['slide_id'] for target in targets if target['visual_jobs']]
     return {'instructions': INSTRUCTIONS, 'requirements': requirements,
             'ir_sha256': digest(ir), 'deck_ir': copy.deepcopy(ir), 'available_assets': resources,
             'selected_slide_ids': selected,
+            'planning_targets': targets, 'required_plan_slide_ids': required_ids,
             'schemas': {key: schema['$defs'][key] for key in ('academic-design', 'visual-plan')},
             'output_shape': {'ir_sha256': digest(ir), 'academic_design': '<academic-design object>',
-                'slides': [{'slide_id': '<selected slide id>', 'visual_plan': '<visual-plan object>'}]}}
+                'slides': [{'slide_id': '<eligible selected slide id>', 'visual_plan': '<visual-plan object>'}]
+                          if required_ids else []}}
 
 
 def apply_proposal(ir, proposal):
@@ -77,9 +110,11 @@ def apply_proposal(ir, proposal):
     if proposal.get('ir_sha256') != digest(ir):
         errors.append('VISUAL_PLAN_STALE: proposal must bind to the current full Deck IR SHA-256')
     entries = proposal.get('slides')
-    if not isinstance(entries, list) or not entries:
-        errors.append('Proposal slides must be a nonempty list')
+    if not isinstance(entries, list):
+        errors.append('Proposal slides must be a list')
         entries = []
+    if not entries and any(target['visual_jobs'] for target in planning_targets(ir)):
+        errors.append('Proposal slides must include a visual plan when the deck has eligible pages')
     slides = {slide['id']: slide for slide in ir['slides']}
     seen = set()
     for entry in entries:

@@ -30,7 +30,8 @@ def generate_presentation(
     layout_provider: str = "packer",
     officecli: str = "officecli",
     skip_native: bool = True,
-    enable_overflow_repair: bool = True
+    enable_overflow_repair: bool = True,
+    skip_visual_design: bool = False
 ) -> Tuple[bool, Optional[Path], Dict[str, Any]]:
     """
     One-function pipeline: Deck IR → PPTX
@@ -43,6 +44,7 @@ def generate_presentation(
         officecli: OfficeCLI executable path or command
         skip_native: Skip native PowerPoint validation (dev mode)
         enable_overflow_repair: Enable automatic overflow repair
+        skip_visual_design: Explicit legacy mode without an agent design pass
 
     Returns:
         Tuple of (success: bool, pptx_path: Optional[Path], qa_report: dict)
@@ -70,7 +72,8 @@ def generate_presentation(
             out_dir,
             not skip_native,
             officecli,
-            layout_options
+            layout_options,
+            require_visual_design=not skip_visual_design
         )
 
         # Check results
@@ -353,6 +356,8 @@ Examples:
                      help='Disable automatic overflow repair')
     gen.add_argument('--native', action='store_true',
                      help='Include native PowerPoint validation (requires PowerPoint)')
+    gen.add_argument('--skip-visual-design', action='store_true',
+                     help='Explicit legacy mode without the agent visual design stage')
 
     # Validate command
     val = subparsers.add_parser('validate', help='Validate inputs (dry-run)')
@@ -407,7 +412,8 @@ Examples:
                 layout_provider=args.layout_provider,
                 officecli=args.officecli,
                 skip_native=not args.native,
-                enable_overflow_repair=not args.no_overflow_repair
+                enable_overflow_repair=not args.no_overflow_repair,
+                skip_visual_design=args.skip_visual_design
             )
 
             status_icon = "[OK]" if success else "[FAIL]"
@@ -415,6 +421,9 @@ Examples:
             print(f"    FAIL: {qa['counts']['FAIL']}")
             print(f"    WARNING: {qa['counts']['WARNING']}")
             print(f"    REVIEW: {qa['counts']['REVIEW']}")
+            if qa.get('next_action'):
+                print(f"[DESIGN] Read {qa['next_action']['prompt']}, author a visual proposal, "
+                      "then run python -m deck_compiler apply-visual-plan and retry with the merged IR.")
 
             if pptx_path:
                 print(f"\n[FILE] Generated: {pptx_path}")

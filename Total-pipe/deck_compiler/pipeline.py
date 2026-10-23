@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import time
 from .contracts import digest, file_hash, issue, report
-from .ir import derive
+from .ir import derive, validate
 from .layout import compile_deck
 from .structural import verify
 from . import officecli
@@ -45,8 +45,34 @@ def locked(out):
         lock.unlink()
 
 
-def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True):
+def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True,
+                  require_visual_design=True):
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
+    if require_visual_design and not any(item['severity'] == 'FAIL' for item in validate(ir)):
+        from .visual_planner import make_prompt, pending_design
+        pending = pending_design(ir)
+        if pending['academic_design_required'] or pending['slide_ids']:
+            prompt_path = out/'visual_prompt.json'
+            items = [issue('VISUAL_DESIGN_REQUIRED', 'FAIL',
+                'Complete the design stage: read visual_prompt.json, author a visual proposal, '
+                'apply-visual-plan, then retry with the merged IR. '
+                'Explicit legacy builds may opt out with --skip-visual-design.',
+                detector='design-preflight', prompt=str(prompt_path.resolve()), **pending)]
+            try:
+                write_json(prompt_path, make_prompt(ir, ir_path.parent))
+            except (ValueError, OSError) as error:
+                items.append(issue('VISUAL_PROMPT_FAILED', 'FAIL', str(error), detector='design-preflight'))
+            # Do not leave a previous successful layout beside a blocked compile.
+            for name in ('layout.json', 'layout_provider.json'):
+                (out/name).unlink(missing_ok=True)
+            shutil.rmtree(out/'derived', ignore_errors=True)
+            write_json(out/'deck_ir.json', ir)
+            qa = report(items, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': False})
+            qa['next_action'] = {'action': 'author_visual_proposal', 'apply_tool': 'totalpipe_apply_visual_plan',
+                                 'prompt': str(prompt_path.resolve()),
+                                 'ir': str(ir_path.resolve()), **pending}
+            write_json(out/'qa_report.json', qa)
+            return ir, None, qa
     provider_name = (layout_options or {}).get('name', 'compiler')
     if provider_name not in ('compiler', 'deterministic', 'none') or (layout_options or {}).get('plugin'):
         try:
@@ -127,7 +153,8 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
     return ir, layout, qa
 
 
-def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None):
+def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
+          require_visual_design=True):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -137,7 +164,8 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                      'staging.pptx', 'native.pdf', 'native.json',
                      'powerpoint_review.json', 'layout.json', 'layout_provider.json'):
             (out/name).unlink(missing_ok=True)
-        ir, layout, qa = compile_input(ir_path, out, layout_options) if layout_options else compile_input(ir_path, out)
+        ir, layout, qa = compile_input(ir_path, out, layout_options,
+                                       require_visual_design=require_visual_design)
         items = qa['items']
         if qa['counts']['FAIL']:
             write_json(out/'state.json', {'phase': 'preflight_failed', 'previous_final_sha256': old_final})

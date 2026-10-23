@@ -135,11 +135,26 @@ The compiler never typesets it as text:
 - IR validation parses it and reports `FORMULA_SYNTAX` with the character offset of the offending
   token (`totalpipe_layout/formula.py`, the only place that knows the grammar);
 - the AST is measured at 30/28/26/24 css px and the largest size that fits the box wins; a formula
-  that cannot fit at 24 px (18 pt) returns `SPLIT_REQUIRED` rather than shrinking below the floor;
-- the writer receives one `a:p` holding `mc:AlternateContent` → `a14:m` → `m:oMathPara`, plus an
+  that cannot fit at 24 px (18 pt) returns `FORMULA_CAPACITY` rather than shrinking below the floor;
+- the writer receives one `a:p` holding `mc:AlternateContent` → `a14:m` → `m:oMathPara` → `m:oMath`, plus an
   `mc:Fallback` run with the Unicode text, so a reader without OMML still sees the formula;
 - structural verification rejects a shape without an OMML payload (`FORMULA_MISSING`) and a fallback
-  that disagrees with the parsed formula (`FORMULA_FALLBACK_MISMATCH`).
+  that disagrees with the parsed formula (`FORMULA_FALLBACK_MISMATCH`), or changed roots, powers,
+  operands and run properties (`FORMULA_CONTENT_MISMATCH`). Presence of a tag alone is insufficient.
+
+Supported inputs include fractions, `\sqrt{…}` / `\sqrt[3]{…}`, grouped/nested `^` and `_`,
+Greek, sums/integrals, `\left` / `\right`, `\exp` / `\log` / `\ln` and common trigonometric
+functions, plus `\text` / `\mathrm` / `\mathbf` / `\mathit`. Optional outer `$…$`, `$$…$$`,
+`\(…\)` and `\[…\]` are accepted on a **formula block**. Backslashes must be doubled in JSON.
+Ordinary prose blocks do not support inline math. Unknown commands, empty/missing operands and
+unclosed groups return `FORMULA_SYNTAX`; matrices and cases remain unsupported.
+
+The measurement projection preserves braces around the entire script base and uses mathtext's
+math mode (`$…$`), so it measures the typeset expression instead of the length of literal LaTeX.
+For example, a stacked `\frac{a}{b}` is narrow; a long source string is not automatically a wide equation.
+`MathTextParser` height already includes depth; the compiler does not add the descent twice.
+See [Matplotlib mathtext](https://matplotlib.org/stable/api/mathtext_api.html) and
+[Office Math paragraph structure](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.paragraphproperties?view=openxml-3.0.1).
 
 Measurement uses matplotlib's mathtext, the same offline metric source as the text layout. A formula
 that carries CJK inside `\text{}` cannot be measured there, so it is measured heuristically and

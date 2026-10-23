@@ -191,7 +191,7 @@ class GraphicComponentTests(unittest.TestCase):
             source, out = Path(folder)/'deck.json', Path(folder)/'build'
             source.write_text(json.dumps(example(), ensure_ascii=False), encoding='utf-8')
             request = {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{
-                'name':'totalpipe_compile','arguments':{'ir':str(source),'out':str(out)}}}
+                'name':'totalpipe_compile','arguments':{'ir':str(source),'out':str(out),'skip_visual_design':True}}}
             process = subprocess.run([sys.executable,'-X','utf8','-m','deck_compiler.mcp_server'],
                 cwd=ROOT,input=json.dumps(request)+'\n',capture_output=True,text=True,encoding='utf-8',timeout=40)
             self.assertEqual(process.returncode, 0, process.stderr)

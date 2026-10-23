@@ -1,6 +1,12 @@
 {
   "schema_version": "2.0",
   "deck_id": "formula-demo",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar", "title_treatment": "thin-rule", "density": "balanced",
+      "figure_treatment": "unframed", "decoration_policy": "minimal"
+    }
+  },
   "theme": {
     "font_family": "Microsoft YaHei",
     "font_file": "msyh.ttc",
@@ -28,6 +34,46 @@
            "text": "\\frac{\\partial c}{\\partial t} = D \\nabla^2 c"},
           {"id": "f2", "component": "formula",
            "text": "P(t) = \\frac{1}{1+e^{-t}}"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "roots",
+      "semantic": {
+        "title": "根号保留完整被开方项和根指数",
+        "purpose": "回归验证根号、分式和嵌套指数的原生插入",
+        "takeaway": "空格不改变根号的作用范围；带次数的根号保留显式根指数。以下仅为排版测试表达式。",
+        "evidence_refs": ["totalpipe_layout/formula.py"],
+        "caveats": [],
+        "speaker_notes": "这两个表达式用于软件回归测试，不陈述论文结果。应在 PowerPoint 中作为原生公式编辑。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {"id": "root", "component": "formula", "text": "\\sqrt {\\frac{1+e^{-t}}{1+x^{2}}}"},
+          {"id": "indexed-root", "component": "formula", "text": "\\sqrt[3]{x^{2}+y^{2}}"}
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    },
+    {
+      "id": "powers",
+      "semantic": {
+        "title": "指数的底数和嵌套层级保持正确",
+        "purpose": "回归验证指数函数与分组底数",
+        "takeaway": "指数函数、分式和括号均写成可编辑的公式结构；分组底数的幂不能变成仅作用于最后一个字母。",
+        "evidence_refs": ["totalpipe_layout/formula.py"],
+        "caveats": [],
+        "speaker_notes": "以下是软件回归表达式，不是科研结论；特别检查整体 xy 的幂和嵌套指数 a 的平方。"
+      },
+      "composition": {
+        "archetype": "metric-comparison",
+        "blocks": [
+          {"id": "exponential", "component": "formula", "text": "\\exp\\left(-\\frac{x^{2}}{2\\sigma^{2}}\\right)"},
+          {"id": "grouped-power", "component": "formula", "text": "{xy}^{a^{2}}"}
         ],
         "figure_refs": []
       },

@@ -1,19 +1,29 @@
 # Scientific Visual Planner (V6 MVP)
 
-V6 在 Canonical Deck IR 后增加一次可选的 Agent 视觉决策。它沿用 `schema_version: "2.0"`，
+design 阶段在 Canonical Deck IR 后默认执行一次 Agent 视觉决策。它沿用 `schema_version: "2.0"`，
 保留 Evidence、Story、RPA 和 v5 原生图形；没有新模型服务、Scene IR 或页面坐标接口。
-编译器只读取合入后的 Deck IR。没有新字段的 IR 保持旧行为。
+编译器只读取合入后的 Deck IR。低层 `compile_deck` 对没有新字段的 IR 保持旧行为；
+CLI/MCP 的 compile/build 和统一 generate 默认检查是否完成设计。
+
+漏做时返回 `VISUAL_DESIGN_REQUIRED`，在构建目录写 `visual_prompt.json`，并在小回执的
+`next_action` 列出提示包、输入 IR 和缺失页。Agent 读取提示包后生成提案，用
+`apply-visual-plan` 合入，再把新 IR 交回生成入口。不会自动替 Agent 选择构图或直接套默认样式。
+只有明确要求复现旧版时才用 `--skip-visual-design`；MCP 对应 `skip_visual_design=true`。
 
 ## 一次提案与严格合入
 
 ```bash
 python -m deck_compiler visual-prompt \
   --ir /work/deck_ir.json --out /work/visual_prompt.json \
-  --slides slide-04 slide-06 --requirements '科研组会，突出原图和证据等级'
+  --requirements '科研组会，突出原图和证据等级'
 ```
 
 现有 Agent 读取整个提示包，输出 `visual_proposal.json`。提示包包含完整 Deck IR、原图尺寸、
-文件哈希、指定页和两份严格 Schema；生成提示包本身不调用模型。提案示例：
+文件哈希、`planning_targets`、`required_plan_slide_ids` 和两份严格 Schema；生成提示包本身不调用模型。
+每个支持的页面均需有 visual_plan；不支持的页列出原因，不凭空添加图或机制。
+纯文字/公式 Deck 仍需 academic_design，其提案允许 `slides: []`。
+`--slides slide-04 slide-06` 仅用于局部修订，不能让其余支持的页静默跳过设计。
+下面是提案的单页节选，完整生成任务须覆盖全部支持的页：
 
 ```json
 {

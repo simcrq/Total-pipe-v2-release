@@ -71,7 +71,7 @@ class CompilerTests(unittest.TestCase):
             ir_path = root/'deck_ir.json'
             ir_path.write_text(json.dumps(ir, ensure_ascii=False), encoding='utf-8')
             out = root/'build'
-            qa = build(ir_path, out, native_render=False)
+            qa = build(ir_path, out, native_render=False, require_visual_design=False)
             self.assertEqual(qa['counts']['FAIL'], 0)
             self.assertEqual(qa['checks']['backend'], 'officecli')
             self.assertTrue(qa['checks']['officecli_runtime']['version'])

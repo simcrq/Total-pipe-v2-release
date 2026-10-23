@@ -8,6 +8,7 @@ from .pipeline import (build, compile_input, ingest_native, locked, promote,
 def qa_summary(qa, out):
     return {'status': qa['status'], 'counts': qa['counts'],
             'report': str(out/'qa_report.json'),
+            **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
             'design_notices': [
                 {'rule': item['rule'], 'slide': item['slide'], 'message': item['message']}
                 for item in qa['items']
@@ -33,6 +34,8 @@ def main():
         p.add_argument('--out', required=True, type=Path)
         p.add_argument('--layout-provider', default='packer',
                        help='packer (bundled deterministic), compiler (templates only) or module:factory')
+        p.add_argument('--skip-visual-design', action='store_true',
+                       help='Explicit legacy mode: compile without the agent visual design pass')
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
@@ -96,9 +99,11 @@ def main():
                    else args.layout_provider}
         if args.command == 'compile':
             with locked(out):
-                _, _, qa = compile_input(args.ir.resolve(), out, options)
+                _, _, qa = compile_input(args.ir.resolve(), out, options,
+                                         require_visual_design=not args.skip_visual_design)
         else:
-            qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options)
+            qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
+                       require_visual_design=not args.skip_visual_design)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

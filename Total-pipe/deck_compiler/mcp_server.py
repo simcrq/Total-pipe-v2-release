@@ -22,7 +22,13 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'On RPA revisions, compare slides with the original content model; do not compress or drop body or key_points. '
     'SOURCE_TEXT_NOT_BOUND blocks delivery; character limits are coarse, so inspect SLOT_WRAP_RISK. '
     'RPA layout_contract must bind the full ordered group; map its members to actual Deck IR block ids in composition.visual_intent. '
-    'Then pass canonical Deck IR to totalpipe_compile or totalpipe_build. '
+    'Design is a required stage after canonical IR: call totalpipe_visual_prompt, read the full prompt, '
+    'author one academic_design and visual plans for every eligible slide, then totalpipe_apply_visual_plan. '
+    'Pass the merged IR to totalpipe_compile or totalpipe_build; VISUAL_DESIGN_REQUIRED returns a prompt and missing slides. '
+    'Only an explicitly requested legacy build should set skip_visual_design=true. '
+    'Displayed equations must use component=formula and LaTeX in block.text with JSON backslashes escaped; '
+    'ordinary text blocks do not typeset math. Roots (including indexed roots), grouped powers, fractions, '
+    'exp/log/ln and common math styles are supported; never replace an unsupported equation with a wrong expression. '
     'Editable native graphics use composition.graphics: optional on process-flow and '
     'figure-parameters with context and source figures, or standalone on native-graphic. '
     'Declare every relationship explicitly; do not infer edges or replace source evidence with a schematic. '
@@ -31,7 +37,7 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Mechanism edges require explicit activate/inhibit/associate kind and evidence/hypothesis basis; '
     'evidence refs must bind to semantic.evidence_refs, and feedback must be explicit. '
     'Path IR accepts local view_box and absolute M/L/C/Q/Z only, compiling to native custom geometry; it is not SVG import. '
-    'V6 visual design is optional after canonical IR: totalpipe_visual_prompt prepares the full-deck agent prompt, '
+    'totalpipe_visual_prompt prepares the full-deck agent prompt, '
     'then totalpipe_apply_visual_plan validates a SHA-bound presentation-only proposal. '
     'Use one academic_design and source-bound visual_plan; VISUAL_PLAN_UNSATISFIABLE requires replanning. '
     'Use one deck frame; ordered figure-parameters blocks are a peer column with 24 px gaps. '
@@ -48,6 +54,8 @@ def invoke(command, arguments):
     argv = [sys.executable, '-m', 'deck_compiler', command, '--out', arguments['out']]
     if command in ('compile', 'build'):
         argv += ['--ir', arguments['ir'], '--layout-provider', arguments.get('layout_provider', 'packer')]
+        if arguments.get('skip_visual_design', False):
+            argv += ['--skip-visual-design']
     if command == 'build':
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
@@ -66,15 +74,17 @@ def invoke(command, arguments):
 
 
 for name, command, description in (
-    ('totalpipe_compile', 'compile', 'Compile layout from canonical Deck IR, defaulting to the bundled packer. Returns layout and QA without rendering a PPTX.'),
-    ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from canonical Deck IR. Defaults to the bundled packer.'),
+    ('totalpipe_compile', 'compile', 'Compile designed canonical Deck IR with the bundled packer. Requires academic_design and visual plans for eligible slides; otherwise returns VISUAL_DESIGN_REQUIRED with a full agent prompt. No PPTX rendering.'),
+    ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from designed canonical Deck IR. Missing design returns VISUAL_DESIGN_REQUIRED and the prompt before rendering. Defaults to the bundled packer.'),
     ('totalpipe_review', 'review-officecli', 'Inspect an existing build and export slide screenshots, schema, and issues on demand. OfficeCLI Text overflow is an unreliable heuristic.'),
 ):
     properties = {'out': {'type':'string', 'description':'Absolute build directory path.'}}
     required = ['out']
     if command in ('compile', 'build'):
         properties.update({'ir':{'type':'string', 'description':'Absolute canonical deck_ir.json path.'},
-                           'layout_provider':{'type':'string','default':'packer'}})
+                           'layout_provider':{'type':'string','default':'packer'},
+                           'skip_visual_design':{'type':'boolean','default':False,
+                               'description':'Explicit legacy mode only; bypass the default visual design stage.'}})
         required.append('ir')
     if command != 'compile':
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}
@@ -82,6 +92,10 @@ for name, command, description in (
         if set(arguments)-set(properties) or any(k not in arguments for k in required):
             raise ValueError('Missing or unknown arguments')
         for key, value in arguments.items():
+            if key == 'skip_visual_design':
+                if not isinstance(value, bool):
+                    raise ValueError('skip_visual_design must be a boolean')
+                continue
             if not isinstance(value, str):
                 raise ValueError(f'{key} must be a string')
         for key in ('ir','out'):
@@ -121,7 +135,7 @@ def visual_invoke(command, arguments):
 
 
 for name, command, description in (
-    ('totalpipe_visual_prompt', 'visual-prompt', 'Prepare the complete canonical Deck IR, asset metadata and strict V6 schemas for one agent visual design pass. No model call or PPTX rendering. out is a JSON file.'),
+    ('totalpipe_visual_prompt', 'visual-prompt', 'Required design stage: prepare the full Deck IR, asset metadata, eligible slide jobs and strict V6 schemas. Read the complete output, author a proposal covering eligible slides, then apply it. No model call. out is a JSON file.'),
     ('totalpipe_apply_visual_plan', 'apply-visual-plan', 'Validate and merge a SHA-bound visual proposal into canonical Deck IR, changing presentation only. Keep output alongside source IR when it uses relative assets. out is a JSON file.'),
 ):
     properties = {'ir': {'type': 'string'}, 'out': {'type': 'string'}}

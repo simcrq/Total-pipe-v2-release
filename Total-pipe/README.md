@@ -22,10 +22,18 @@ v5 增加机制、分层架构、漏斗/金字塔组件及可组合的区域接�
 `M/L/C/Q/Z` 编译为原生 `a:custGeom`，保持独立标签和对象身份。
 见 [组件与路径说明](docs/native-components.md) 和 [六页开发示例](examples/native-components.deck_ir.json)。
 
-V6 MVP 增加可选的 Scientific Visual Planner：一次 Agent 提案选择整套科研风格和测量、机制、
+Scientific Visual Planner 是默认 design 阶段：一次 Agent 提案选择整套科研风格和测量、机制、
 证据比较构图；严格合入 `presentation.academic_design / visual_plan` 后由现有编译器执行。
 标题和正文优先保留完整科学术语，文字超预算可带 REVIEW 生成候选。
+CLI/MCP 的 compile、build 和统一 generate 入口漏做设计时返回 `VISUAL_DESIGN_REQUIRED`、
+完整 `visual_prompt.json` 与缺失页面；补做并合入提案后继续。只有显式旧版构建才用
+`--skip-visual-design`（MCP：`skip_visual_design=true`）；低层 `compile_deck` 仍兼容旧 IR。
 见 [协议、CLI/MCP 与容量策略](docs/scientific-visual-planner.md)。
+
+公式使用 `component: "formula"`，支持分式、根号/带次数根号、上下标、嵌套指数和常用函数。
+AST 按数学模式测量后写入可编辑 OMML；普通文本中的 `$...$` 不会自动排成公式。
+见 [公式协议](docs/deck-compiler-v2.md#formulas-component-formula) 与
+[回归样例](examples/formula.deck_ir.json)。
 
 ## 🚀 Quick Start (New Unified CLI)
 

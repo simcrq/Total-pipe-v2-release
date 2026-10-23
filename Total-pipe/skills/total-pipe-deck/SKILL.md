@@ -1,304 +1,238 @@
 ---
 name: total-pipe-deck
-description: 从论文 PDF 到研究汇报 PPTX 的证据—故事—规划—编译—原生验收流水线。保留 PaperWorkflow、Story Planner、pwf2rpa 与 RPA 的科研职责，Deck IR 之后统一进入 Deck Compiler v3。
+description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX；保留 PaperWorkflow 证据、Story 与 RPA 规划，执行整套视觉设计，再由 Deck Compiler 和 OfficeCLI 编译、验收。
 ---
 
-# Total-pipe Deck Compiler v3
-
-主链固定为：
+# Total-pipe 研究汇报流水线
 
 ```text
-PDF → PaperWorkflow → Story Planner subagent → [DesignIntentPlanner] → pwf2rpa → RPA planning
-    → canonical deck_ir.json → [Scientific Visual Planner，仅 V6] → validated canonical Deck IR
-    → layout provider (packer by default) + compiler fallback → OfficeCLI
-    → candidate.pptx → staging.pptx → structural QA + PowerPoint native PDF
-    → qa_report.json → final.pptx
+PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → RPA
+    → canonical Deck IR → Scientific Visual Planner（design 阶段，默认必做）
+    → 合入设计的 Deck IR → packer / compiler → OfficeCLI → candidate.pptx + QA
+    → 用户要求正式 final 时：PowerPoint 原生验收 → 审核 → promote
 ```
 
-从 `deck_ir.json` 开始只有一个页面事实来源。`deck_plan.json`、
-`visual_manifest.json`、`plan_to_layout.json` 与 QA expectation 只能由编译器派生，
-下游不得回写或改变语义。禁止新增逐论文 adapter。
+从已有产物继续相应阶段，不重复 OCR 或重写已经通过的科学故事。科研内容只有一个真源：
+Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都是只读派生物。
+用户本轮或此前已给出的模型、语言和汇报要求继续有效。
 
-## 1. PaperWorkflow
+## 工作目录与入口
 
-对论文生成 schema v4 的 `workflow.json`、`document.manifest.json` 和
-`evidence.md`。下游优先引用 `EV####`；当 `synthesis_readiness` 为 `review` 或
-`blocked` 时，保留门禁原因，不能用摘要覆盖。
+先定位实际仓库，不猜测安装缓存路径。本文路径相对仓库：
 
-首轮运行前先按论文主题写检索 `queries`，有定制问题时省略
-`include_default_queries` 即只用定制问题；需要混用通用问题才显式设为 `true`。
-主文提到补充材料而文件名无法自动配对时，在 PaperWorkflow 调用中传
-`supplementary_paths` 的实际 PDF/Markdown 路径。此配对只证明来源在本地，
-补充材料门禁仍为 `review`。先将其 OCR/Markdown 内容合并到分析输入，再设置
-`supplementary_content_included=true`；不能只因文件存在就宣称完整证据审查通过。
-分别检查 `quality_audit` 与 `synthesis_readiness` 六项门禁：前者表示 OCR/文本捕获，
-不能用 `quality_audit.ready` 代替科学综合的 `synthesis_readiness.ready`。
+- Deck Compiler 命令在 `Total-pipe/` 运行；配置是 `Total-pipe/.mcp.json`。
+- pwf2rpa 命令在 `Total-pipe/pwf2rpa/` 运行。
+- RPA 命令在仓库根目录运行，入口为 `research-ppt-assistant/server/cli.mjs`。
+- MCP 的 `ir`、`out`、`proposal` 等路径必须为绝对路径；CLI 可用相对路径。
+- MCP 服务若尚未加载当前代码或新 schema，使用同一仓库的 CLI；运行中的旧服务需重载才能读取更新。
 
-## 2. Story Planner 硬门禁
+使用当前可用的 Python/Node/OfficeCLI；默认布局提供方是 `packer`，也可用 `compiler` 或
+`module:factory`。旧 `v26` 扩散模型已移除，不再用 `--layout-provider v26`。
 
-拿到 `workflow.json` 后，必须先问用户选择当前可用的高能力模型。不得默认选择，
-不得由主代理自行写 Story。用户选择后，用该模型的独立 subagent，reasoning 至少
-`high`，生成 5–8 个节点的 `story_plan.json`。
+## 1. 证据：PaperWorkflow
 
-先调用 `pwf2rpa_story_prompt` 生成证据约束的提示包。未传 `out_path` 时，工具在
-`workflow.json` 旁写出 `workflow.story_prompt.json`；也可用绝对路径 `out_path`
-指定本次输出目录。工具始终只返回小回执；子代理须读取
-该文件中的完整 `instructions`、`evidence_store` 和 `output_shape`。调用时原样传入
-用户选定的 `model`、`reasoning_effort` 与 `selected_by_user=true`。若当前 MCP
-服务调用超时，则在 `pwf2rpa` 目录直接运行同一确定性生成器：
+先根据论文主题和汇报问题写检索 `queries`。有定制 queries 时省略
+`include_default_queries` 即仅使用定制问题；要混用通用问题才传 `true`。
+生成并读取 schema v4 的 `workflow.json`、`document.manifest.json`、`evidence.md`；
+下游优先引用 `EV####`。
+
+主文提到补充材料而文件名无法自动配对时，显式传实际 `supplementary_paths`。
+文件存在只证明取得来源：先让补充材料 OCR/Markdown 内容进入分析输入，再设
+`supplementary_content_included=true`。分别检查 `quality_audit` 和
+`synthesis_readiness` 的六项门禁；文本捕获成功不能代替科学综合就绪。
+`review/blocked` 的原因必须保留，不能用摘要消除。
+
+## 2. 科学故事：Story Planner
+
+尚未获得用户的模型选择时，先请用户选择可用的高能力模型与至少 `high` 的 reasoning。
+模型已在本会话选定则沿用。Story 由该模型的独立 subagent 生成，主 Agent 不代写科学故事。
+这项用户选择与 subagent provenance 是 pwf2rpa 的硬门禁。
+
+先调用 `pwf2rpa_story_prompt`，原样传 `model`、`reasoning_effort`、
+`selected_by_user=true`；子代理读取输出文件的完整 `instructions/evidence_store/output_shape`。
+未传 `out_path` 时输出在 workflow 旁。CLI 回退：
 
 ```bash
-python -m pwf2rpa <workflow.json> \
-  --make-story-prompt <story_prompt.json> \
-  --story-model <用户选择> --story-reasoning <用户选择的强度> \
-  --model-selected-by-user
+python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
+  --story-model <用户选择> --story-reasoning <用户选择的强度> --model-selected-by-user
 ```
 
-提示包生成不调用模型；模型只在独立 Story Planner 子代理中使用。生成器代码位于本
-工作区的 `pwf2rpa`，插件 MCP 若已启动，需重启该服务才能读取新的工具 schema。
-
-每个节点保留以下字段：
+提示包生成器不调用模型。按论证需要安排 4–10 个节点，不凑页数：
 
 ```json
-{"title":"可选，幻灯片标题","question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
+{"title":"可选展示标题","question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
 ```
 
-`question`、`answer`、`evidence` 必填；`next` 除最后一个节点外必填——最后一步是收束，
-不需要为形式补一句“下一步看什么”。`title` 可选：它是这一页给听众看的话，可以不是问句，
-也可以比 `question` 更长或更短；不写就退回 `question`。不要把标题写成“主题：结论”的拼接，
-标题和正文优先保留完整、正确的科学术语、化学态、单位和限定词；不得为了容量强行造缩写或截断术语。
-转换器会把完整标题留在 `metadata.story_title`；映射 Canonical IR 时用完整 Story 标题，
-不能把 RPA 的短标题或摘要当成展示标题的科学真源。V6 的文字超预算按 4a 的 REVIEW 策略放行。
+`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 可独立于 question，
+省略时取 question；不要为了标题形式硬拼“主题：结论”。摘要不足以保留科学细节时加
+`key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
+输入是否取得、SI 是否审阅等放工作记录。
 
-节点数 4–10，由论证需要决定，不为凑页数加点。`ending.limitation` 可选，只写论文自身的边界；
-不要写本次拿到哪些文件、SI 是否取得或是否审阅，那是工作记录。
-
-仅在 `answer` 会丢失必须保留的连续内容时，可选加 `key_points` 字符串数组；
-不要求每个节点都有，也不限制条数。`answer` 是摘要，`key_points` 是要传给 RPA 的细节。
-
-顶层必须记录：
+顶层记录真实 provenance：
 
 ```json
-{"planner":{"mode":"subagent","model":"<用户选择>",
-"reasoning_effort":"high","selected_by_user":true}}
+{"planner":{"mode":"subagent","model":"<用户选择>","reasoning_effort":"high","selected_by_user":true}}
 ```
 
-若确定性校验失败，把错误和原证据退回同一个 subagent 修订；主代理不能静默改写
-科学故事。
+校验不通过时把原证据和错误退回同一子代理修订。标题和正文保留完整、正确的科学术语、
+化学态、单位和限定词，不为容量自造缩写或截断术语。
 
-## 2a. DesignIntentPlanner（可选）
+### 可选的 DesignIntentPlanner
 
-若四条 Story `key_points` 具有明确的步骤关系，让独立的
-DesignIntentPlanner 在 Story 完成后写 `design_intent.json`：
+只有恰好四条要点具有明确步骤关系时，单独声明上游科研流程语义：
 
 ```json
 {"slides":[{"story_node_index":2,"relation":"process","orientation":"vertical","emphasis":4}]}
 ```
 
-索引从 1 开始；`emphasis` 可省略。首版只支持恰好四条要点的纵向
-`process`。只声明关系和强调，不写 bbox、`x/y/w/h`、Layout 或 Slot，
-也不改写 Story 的 `question/answer/evidence/next`。没有明确流程关系时
-省略该文件，保留旧流程。此步骤只负责 Story 流程关系；整套视觉风格仅在 4a 的可选 V6 阶段规划。
+索引从 1 开始，emphasis 可省略。此步骤不改 Story、不写坐标；没有明确关系时省略。
+它不替代第 5 节的全 Deck 视觉设计。
 
-## 3. pwf2rpa 与 RPA 规划
-
-用严格模式把 Story 转为 RPA 输入：
+## 3. pwf2rpa 与 RPA
 
 ```bash
-cd Total-pipe/pwf2rpa
-PYTHONPATH=. python -m pwf2rpa <workflow.json> \
-  --story <story_plan.json> \
-  --design-intent <design_intent.json> \
-  --story-model <用户选择> --story-reasoning high \
+python -m pwf2rpa <workflow.json> --story <story_plan.json> \
+  --story-model <用户选择> --story-reasoning <用户选择的强度> \
   --model-selected-by-user --strict --out <rpa_input.json>
 ```
 
-只有提供设计意图时才传 `--design-intent`；它必须与 `--story` 同用。
-`pwf2rpa_check` / `pwf2rpa_convert` 的同名 MCP 输入为可选
-`design_intent_path`，且必须同时给 `story_path`。转换器保留四条原文，
-在 Brief metadata 写关系，并设 `allow_auto_split=false`。
+有设计意图才同时加 `--design-intent <design_intent.json>`。MCP 的对应字段为
+`story_path/design_intent_path`；设计意图不能脱离 Story 单独传。
 
-随后运行 RPA：
+在仓库根目录运行：
 
 ```bash
 node research-ppt-assistant/server/cli.mjs normalize-content \
   --file <rpa_input.json> --detail-level full > <normalized_content.json>
 node research-ppt-assistant/server/cli.mjs plan --file <rpa_input.json> \
   --presentation-type group_meeting --slide-count <N> --detail-level standard > <deck_plan.json>
-node research-ppt-assistant/server/cli.mjs validate-deck --file <validation_input.json> \
-  --detail-level compact
+node research-ppt-assistant/server/cli.mjs validate-deck \
+  --file <validation_input.json> --detail-level compact
 ```
 
-门禁分别要求 `normalize-content status=valid`、`pipeline_status=plan_complete`、
-`plan status=success/adapted` 且 `unplanned_slide_briefs` 为空，以及
-`validate-deck status=valid`。`adapted` 时逐条检查 `adaptation_log`，正文、
-`key_points`、结论和限制不得出现 `truncate_text`。RPA 负责 Layout、Slot、容量和 `layout_contract`；DesignIntentPlanner 只负责显式信息关系。RPA 不输出最终 bbox。
-`validation_input.json` 必须包含本轮计划的 `slides` 和未被修订覆盖的
-`normalized_content.json`（作为 `content_model`）。`KEY_POINTS_LOST` 是错误，
-需要恢复原文及顺序，不能通过修改或删去源 `content_model` 来消除。MCP 精简返回
-会保留完整 `slides[].key_points`，但其摘要、截短的 slot 文本和设计意图不能代替
-`rpa_input.json` 或完整的内容模型。每次 RPA 修订都从这些原始文件重新核对。
-转换后先核对整套 Brief 标题的展示语言。pwf2rpa 会根据 Story 主体语言生成默认
-结尾标题：英文 Story 用 `Conclusions and scope`，中文 Story 用 `结论与边界`；
-`title_chars` 自动按实际标题计算。若语言仍不符合演示要求，先修订 Story 并重跑转换，
-不要只手改 `rpa_input.json` 的标题而留下旧字符数。
+要求 normalize `status=valid`；规划 `pipeline_status=plan_complete`、
+`status=success/adapted` 且 `unplanned_slide_briefs` 为空；validate `status=valid`。
+逐项检查 adaptation，不接受正文或要点被 truncate。验证输入必须带本轮 slides 与原始完整
+`normalized_content.json` 作为 `content_model`；`KEY_POINTS_LOST/SOURCE_TEXT_NOT_BOUND`
+要恢复原文，不能删改 content_model 消除错误。MCP 摘要、slot 短文本和设计消息不能替代源 Brief。
 
-有流程意图时还要核对 `slide.design_ir.visual_topology` 和
-`slide.layout_contract`：后者记录实际 `layout_id`、绑定四条原文的
-`slot_id`、顺序与可选强调索引。`VISUAL_INTENT_NOT_BOUND` 和
-`VISUAL_INTENT_GROUP_SPLIT` 表示硬关系未满足，须重规划；不能删改
-要点或自动拆散流程组。
+RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox。
+硬流程组须保留四条原文、顺序及 Slot Binding，`VISUAL_INTENT_NOT_BOUND/GROUP_SPLIT`
+需要重规划，不能自动拆散。总结页保留 summary 类别；不要为通过容量改成错误类别。
+`max_chars` 只是粗筛，`SLOT_WRAP_RISK` 也不能代替实际渲染。
 
-`SOURCE_TEXT_NOT_BOUND` 表示原始 `body` 或要点未完整进入 Slot Binding，是硬错误。
-总结页仍须使用 summary 版式；容量不足时应保持 `needs_replan`，由 Story/RPA
-拆页或调整内容结构，不能回退到 literature 等错误类别来凑齐页数。
-`max_chars` 与总 `text_chars` 只是按码点计算的粗筛，不区分英文单词、字宽和真实
-换行。RPA 会按槽宽、字号及中英文字符宽度估计换行并报告 `SLOT_WRAP_RISK`；
-该估计也不能代替实际渲染检查。`ROLE_MISMATCH` 只比较版式展示角色，
-不把 Evidence 的 `primary_claim / primary_evidence` 当作版式角色。
+## 4. Canonical Deck IR：正文、图片、图形和公式
 
-长多段正文应在 Slide Brief 中保留为 `key_points` / `secondary_messages`，或在
-`body` 中保留明确换行。`evidence_texts` 保持为原始证据，不自动充当正文。
-RPA 的 Design Compiler 会在无主视觉、显示长度合适时输出
-`design_ir.text_flow.mode=distributed_arrow_list`，并优先选择
-`structured_text / distributed_list_panel`。Story Planner 不决定该版式。
+按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
-## 4. Canonical Deck IR
+- `semantic`：完整展示标题、purpose、takeaway、证据、论文边界、讲稿。
+- `composition`：稳定 archetype、完整 blocks、原图 figure_refs、显式原生 graphics。
+- `presentation`：整套 frame、文字策略与设计决策，不复制第二份科学内容。
 
-需要可编辑的流程示意图时，使用 `native-graphic` archetype 和
-`composition.graphics`：首版一页一个 3–4 节点的横向流程，五种预设形状、
-独立文本框和绑定节点的直线连接符均输出为 PowerPoint 原生对象。节点只描述内容与形状，不写
-坐标；连接必须与声明的节点顺序一致。字段、限制与可运行样例见
-`docs/native-graphics.md`、`examples/native-graphic.deck_ir.json`。
-原有正文或论文图页可保持 `process-flow` / `figure-parameters` archetype，并声明
-可选的 `composition.graphics`，与完整 blocks、原图和图注共存。只声明一张图形的
-内容和显式关系，不写节点坐标；页面编译器分配整图区域，图形布局器计算节点与连接符。
-原图的 asset、source_figure、caption、最小 panel 尺寸、结论和讲稿保留。
-`GRAPHIC_PAGE_CAPACITY` 必须回到规划调整页面，不可缩小证据下限、截断文字或静默删图。
-混排页当前由编译器排版；提供方报告记为 `COMPILER_FALLBACK`，原因为
-`native_graphic_composition`。不要与旧 `composition.visual_intent` 同页声明；
-流程关系统一由图形显式边表达，不从普通 blocks 推断。
-字段、混排边界和开发样例见 `docs/native-graphics.md`、
-`examples/native-research.deck_ir.json`。SVG 导入仍不支持。
+映射时可先显式设顶层 `presentation.text_capacity_policy="preserve-terms"`，
+让完整长标题和正文在进入设计提示包前也能保留，不等到样式合入后再处理字符预算。
 
-需要分支、并行或汇合时，同一 `native-graphic` 页面可显式使用 `type: "dag"`、
-`direction: "horizontal"`。只声明节点与真实关系边；编译器执行确定性分层、文字测量、
-正交路由及碰撞检查，不补写关系。最多 16 节点、64 边，实际容量不足或无法无冲突路由
-时必须拆图或重规划。`process` 保留原有 3–4 节点线性行为。用
-`examples/native-dag.deck_ir.json` 测试，字段与限制见 `docs/native-graphics.md` 的 DAG 部分。
-生成图仍保留 `SCHEMATIC_REVIEW`；结构通过不能代替科学解释核对。
+标题优先取 `metadata.story_title` 中的完整 Story 标题，不使用 RPA 临时压缩的短标题。
+逐条核对源 `key_points` 和正文：按原顺序进入 block、图形节点完整 title/body 或讲稿；
+必要的展示内容仍须可见，不能全部藏到 notes。段落边界保持换行，按需复制
+`design_ir.text_flow.mode` 到 block 的 `text_flow`；不要为了触发列表样式改写科研内容。
+证据编号和运行记录进入备注，不放到面向听众的标题、结论或 caveat。
 
-需要机制、架构、漏斗或自定义曲线时，使用同一 graphics 入口的 v5 组件：
-`mechanism`、`architecture`、`funnel`、`path`；`composite` 可按 rows/columns 与可选
-weights 组合 2–4 个独立组件，不自动添加跨组件关系。完整字段见
-`docs/native-components.md`、`examples/native-components.deck_ir.json`。
-机制边必须声明 `kind: activate/inhibit/associate` 和 `basis: evidence/hypothesis`；
-证据关系的 evidence_refs 必须来自本页 semantic.evidence_refs，假设显示虚线和“假设”标签。
-只有显式 `feedback: true` 可以返回前层；不得通过反馈标记绕过未澄清的科学关系。
-架构 layers 明确声明容器成员和边；漏斗宽度默认只是视觉层级，不可当作数据比例。
-Path IR 只接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；局部路径坐标
-不是页面 bbox，不能借此写标题、原图等页面坐标。渐变、滤镜、遮罩、SVG/XML 输入不支持。
-所有标签完整保留，容量错误须重规划；继续保留 SCHEMATIC_REVIEW。
-
-把通过的 Story/RPA 规划映射到 `schemas/deck-ir.schema.json`。Deck IR 分为：
-
-- `semantic`：title、purpose、takeaway、evidence_refs、caveats、speaker_notes。
-- `composition`：archetype、blocks、figure_refs，以及受支持页面上可选的 graphics。
-- `presentation`：theme tokens 与稳定组件变体。
-
-整套先选择同一 frame：可在 Deck IR 顶层写 `presentation.frame_variant` 为 `default`
-或 `spacious`。若省略，只要某页请求 spacious，编译器整套采用 spacious；不要让短中文
-内容触发逐页随意切换。将 RPA 的同级步骤按阅读顺序放入 `figure-parameters` 的 3–4 个
-blocks，并配一张 figure；这一 archetype 与顺序就是轻量的节奏契约，不需要模型写 bbox。
-打包器把组内间距校正为 24 px，同行按行内最高内容齐高；若文字较长则保持等距并分配足够高度。
-图注置于图像下方 12 px，所有校正后重新执行容量与碰撞检查。实际 frame 与逐页
-`MODEL_PROPOSAL / PACKING_FALLBACK / COMPILER_FALLBACK` 在 `layout.json`、
-`layout_provider.json` 和 `derived/plan_to_layout.json` 中查看。
-若 RPA 给出流程 `layout_contract`，先将四条完整原文按顺序落入四个
-实际 block，再写 `composition.visual_intent`：
+整套采用同一 frame（`default/spacious`）。有硬流程 layout_contract 时，映射实际 block ID：
 
 ```json
-{"relation":"process","members":["b1","b2","b3","b4"],
- "orientation":"vertical","preserve_order":true,"emphasis":"b4"}
+{"relation":"process","members":["b1","b2","b3","b4"],"orientation":"vertical","preserve_order":true,"emphasis":"b4"}
 ```
 
-`members` 必须与 `composition.blocks[].id` 的实际顺序一致；`emphasis`
-可省略，存在时由 RPA `emphasis_index` 映射为真实 block ID。编译器只接受
-四个无独立 label 的 block：有一张图时用 `figure-parameters`，无图时用
-`process-flow`；其他形态以 `VISUAL_INTENT_INVALID` 阻断。布局提供方只建议几何；编译器决定文字适配、
-等距、编号连线和最终合法性。容量不足回到 Story/RPA 重规划，硬流程组不可
-自动拆页。
+该对象放 `composition.visual_intent`；只支持四个无独立 label 的 block，有一张原图用
+`figure-parameters`、无图用 `process-flow`。不得与 graphics 或视觉重排混用。
 
-没有显式意图时，如果 RPA 规划的是单图四步加工路径，保留四个无独立 `label` 的有序 block：首项
-`method`、中间包含 `process-step`、末项 `result`。编译器会在文本列增加 1–4 编号和
-纵向连线，让步骤关系可见；编号所需的 56 px 已计入容量检查。不要为触发样式而改写
-科研内容或强行把非流程页标为 `method/result`。
+### 原生图形
 
-从 RPA 映射到 Deck IR 时，保留这些段落边界，并把
-`design_ir.text_flow.mode` 复制到对应 block 的 `text_flow`。block 也可使用 `auto`：
-编译器只把 3–5 个明确段落、总显示长度不少于 72 单位且单段不超过 120 单位的正文
-排为一个原生无序列表（汉字按 2 单位计）：一个文本框、每段一个段落、符号由段落属性
-（`a:buChar` / `a:buClr`）绘制，因此 Tab 可升降级、右键能改样式、复制单条自带符号。
-整份 deck 只用一个符号样式（`presentation.bullet_style` 可显式指定，默认按段落语义推导：
-流程→箭头、主张→空心方框、其余→实心方框），符号颜色取 `theme.accent`，与正文不同色。
-单个长段落、公式、表格、图注和参考文献保持原样；用 `plain` 禁止转换，用
-`distributed_arrow_list` 显式请求。实际触发结果写入编译后 slide 的 `adaptation_log`。
+使用 `composition.graphics`，不写页面坐标、不从普通正文推断关系。按实际类型读取：
 
-映射前逐条核对 `rpa_input.json` 中的 `key_points`。对应科学内容必须按原顺序
-进入 Deck IR 的 `composition.blocks[].text`、图形节点完整 title/body 或 `semantic.speaker_notes`，不能只留下
-`takeaway`、缩写后的 slot 文本或 `design_ir.message.secondary`。如果普通页面容量不足，拆页并保留全部细节；硬流程组先重规划，不能静默拆散；改写科学内容需先明确修订 Story/Brief，再重新运行 RPA。
+- 流程、DAG、分支/汇合及图文混排：`Total-pipe/docs/native-graphics.md`。
+- mechanism、architecture、funnel、path、composite：`Total-pipe/docs/native-components.md`。
 
-禁止在 IR 中写最终 `x/y/w/h`。首代目录只使用 `deck_compiler/catalog.py` 中的稳定
-archetype/component；内容超出容量时由编译器返回 `SPLIT_REQUIRED`，再回 Story/RPA
-拆页。不得无限缩字号。
+机制边须明确关系及 `evidence/hypothesis` 依据；证据引用绑定本页，假设保留虚线与标签。
+图形与原图、完整正文/图注共存，生成图不能代替论文证据；`SCHEMATIC_REVIEW` 始终保留。
+Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不是 SVG 导入或页面坐标接口。
 
-## 4a. Scientific Visual Planner（可选，仅 V6 设计模式）
+### 公式：必须走公式组件
 
-用户启用 V6 科研视觉设计时，在 Canonical Deck IR 形成后由当前 Agent 做一次整套视觉规划。
-先用 `totalpipe_visual_prompt`（CLI：`visual-prompt`）读取完整 Deck IR、资源尺寸和用户汇报要求。
-输出一个与当前完整 IR SHA-256 绑定的提案：整套 `academic_design` 与指定页的 `visual_plan`。
-Planner 不写 PPTX、不画图、不增加模型服务；不修改 Evidence、Story、正文、原图、数值或科学关系。
-DesignIntentPlanner 继续保留上游科研流程语义职责。
+展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本块中的 `$...$`
+不会被转成行内公式。JSON 必须转义反斜线：
 
-按 `docs/scientific-visual-planner.md` 的严格协议选择测量证据、机制解释或证据比较构图，
-声明现有主视觉索引、左右/上下位置、占比和必要的原文强调。整套统一字体层级、强调色、标题和图注样式；
-使用克制的原生细线或标注。不得生成商业 KPI 卡片、Dashboard 或无科学作用的背景。
-强调文字必须精确存在于其可见原文引用中，不能从讲稿新提取科学结论。
-
-用 `totalpipe_apply_visual_plan`（CLI：`apply-visual-plan`）严格验证并合入 presentation 后再编译。
-相对资源路径要求新 IR 与源 IR 同目录。旧 IR 与没有 visual_plan 的页面保留原构图路径。
-查看 `layout.json` 的 requested/selected 和候选失败原因，确认改变提案会改变实际区域；
-机制页直接复用 v5 mechanism，实测与假设的依据、虚线和 REVIEW 不变。
-
-V6 默认 `text_capacity_policy=preserve-terms`：标题和正文超字符预算或文字槽位容量时保留全文，
-允许生成候选并记录 `SCIENTIFIC_TEXT_CAPACITY_REVIEW / SCIENTIFIC_TEXT_OVERFLOW`。
-优先增加标题行数和调整区域；不得为了消除容量提示而改错专业术语，也不自动拆分或缩写正文。
-文字溢出的越界/碰撞仍保留为 REVIEW，供原生检查；原图尺寸、图形容量和科学关系硬门禁继续生效。
-`VISUAL_PLAN_UNSATISFIABLE` 需要修改设计提案；不能删改科学内容、降低原图下限或静默忽略规划。
-没有用户要求时不额外运行本阶段。正式 final 仍执行原有 PowerPoint 原生验收与科学审核。
-
-## 5. Agent 直接调用 v3
-
-在本实验目录运行；MCP 入口为 `deck_compiler/mcp_server.py`，配置见根目录 `.mcp.json`。
-该服务复用 pwf2rpa 协议和原有工具，同时新增：
-
-- `totalpipe_compile(ir, out, layout_provider="packer")`：编译布局，默认 packer；返回布局与 QA，不生成 PPTX。
-- `totalpipe_build(ir, out, layout_provider="packer", officecli="officecli")`：通过 OfficeCLI 生成 PPTX 候选和 QA。
-- `totalpipe_review(out, officecli="officecli")`：按需检查现有构建并导出逐页截图、schema 与 issues。
-
-`ir` 和 `out` 使用绝对路径。默认使用内置打包器 packer；也可传 `compiler`（仅用模板）或 `module:factory`（外部提供方）。提供方只提议 bbox，不改写科研内容；建议不通过时回退编译器模板，详情见 `layout_provider.json` 与 `docs/layout-provider.md`。
-
-MCP 未加载时，使用 `.mcp.json` 中的 Python，工作目录为本项目根目录：
-
-```powershell
-python -m deck_compiler build --ir <absolute-deck_ir.json> --out <absolute-build-dir> --layout-provider v26 --officecli <officecli-path> --skip-native
+```json
+{"id":"equation","component":"formula","text":"\\sqrt{\\frac{1+e^{-t}}{1+x^{2}}}","anchor":"explanation"}
 ```
 
-一般生成任务完成于候选 PPTX 与 QA；返回 artifact 路径、FAIL/WARNING/REVIEW 和模型回退情况。FAIL 必须处理；不能把候选称作 final。不要默认反复渲染或制作额外验收报告。
+`anchor` 可省略；存在时指向本页前方的非公式 block。无标签公式默认贴在前一说明块下方，
+有 label 时标签与公式并排。支持 `\frac`、`\sqrt{…}`、`\sqrt[3]{…}`、`^/_`、
+嵌套分组、`\left/\right`、Greek、求和/积分、`\exp/\log/\ln`、常用三角函数、
+`\text/\mathrm/\mathbf/\mathit`。多项底数和指数写完整分组，如 `{xy}^{a^{2}}`。
 
-用户要求正式 final 时，再按 `docs/deck-compiler-v2.md` 中原有原生验收与 promote 流程执行。OfficeCLI 截图不伪装为 PowerPoint UI 眼检。自动 issues 保留，不因截图观感而清零。
+先核对 `FORMULA_SYNTAX` 的字符位置；不支持的宏、matrix/cases 等不能硬塞给写入器。
+保留表达式的数学含义，使用支持的等价形式或回到规划调整，不把公式降成错误的 Unicode 文本或位图。
+每页最多两条展示公式，字号不低于 24 CSS px（18 pt）；容量不够用宽槽或拆页。
+详见 `Total-pipe/docs/deck-compiler-v2.md` 的 Formulas 和 `Total-pipe/examples/formula.deck_ir.json`。
+数学表达式按 AST 测量并写成原生 OMML；近似测量保留 REVIEW。HTML 截图仅显示 fallback，
+根号、分式线和指数的实际排版须在 PowerPoint 原生视图检查。
 
-OfficeCLI `view issues` 的 `Text overflow` 判断不准确，可能误报或漏报。看到此项时
-保留原始 issue，并查看实际 PPTX 页面或按需用 `totalpipe_review` 定位；正式验收
-仍以 PowerPoint 逐页眼检为准。不要为了消除该提示而压缩、删改 `key_points`。
-确认真实溢出后调整布局或拆页，再重新生成和检查。
+## 5. Design 阶段：Scientific Visual Planner（默认必做）
+
+Canonical IR 完成后，由当前 Agent 读取完整内容并设计一次整套 Deck；不需要新模型服务。
+
+1. 调 `totalpipe_visual_prompt(ir, out, requirements)`，或运行 `visual-prompt`。
+2. 读取完整提示包的 `deck_ir/available_assets/planning_targets/schemas`，生成绑定
+   `ir_sha256` 的提案；为整套选一个 `academic_design`，为每个支持的页面写 `visual_plan`。
+3. 调 `totalpipe_apply_visual_plan(ir, proposal, out)`，或 `apply-visual-plan`，严格验证后合入。
+4. 后续 compile/build 必须读取合入后的 IR。科学内容改变后重新检查设计，不沿用过期提案。
+
+```bash
+python -m deck_compiler visual-prompt --ir <deck_ir.json> --out <visual_prompt.json> \
+  --requirements <科研汇报要求>
+python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
+  --proposal <visual_proposal.json> --out <designed.deck_ir.json>
+```
+
+`out` 在这两个工具中是 JSON 文件路径。源 IR 用相对资源路径时，新 IR 必须与源 IR 同目录。
+提案只改变 presentation，不改 Story、正文、原图、数值、图注、讲稿和科学关系。
+协议与示例读取 `Total-pipe/docs/scientific-visual-planner.md`。
+
+支持的视觉任务：单图测量证据、既有机制图解释、双图证据比较。由科学阅读顺序决定主视觉、
+左右/上下、占比及原文强调；全套统一字体层级、强调色与标题/图注处理。强调必须精确出现在
+引用的可见原文中。保留克制的原生细线、科学标注，避免商业 KPI 卡片和无意义装饰。
+`planning_targets` 会列出不支持的页面及原因，硬流程组保持原顺序；不为补设计虚构图或机制。
+纯文字/公式 Deck 仍选择整套 academic_design，提案可为 `slides: []`。
+
+默认 compile/build/generate 会用 `VISUAL_DESIGN_REQUIRED` 阻止漏做设计，返回完整提示包和缺失页。
+补做提案并合入后重试；不要自动设置跳过标记。只有用户明确要求旧版构建时才用
+`--skip-visual-design`（MCP：`skip_visual_design=true`）。直接低层 `compile_deck` 保持旧 IR 兼容。
+
+默认 `text_capacity_policy=preserve-terms`：标题、正文超字符或槽位预算仍保留全文并生成候选，
+记录 `SCIENTIFIC_TEXT_CAPACITY_REVIEW/SCIENTIFIC_TEXT_OVERFLOW`，不为容量破坏术语或科学含义。
+先增行高、调整区域，溢出越界/碰撞保留 REVIEW；原图尺寸、公式/图形容量与科学关系仍是硬门禁。
+`VISUAL_PLAN_UNSATISFIABLE` 修改设计，不能删科研内容、降低原图下限或静默忽略失败。
+
+## 6. 编译、候选与正式验收
+
+```bash
+python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
+  --layout-provider packer --officecli <officecli-path> --skip-native
+```
+
+MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选与 QA；
+`totalpipe_review` 按需检查现有构建并截图。提供方只建议几何，编译器执行真实字体、容量、
+碰撞、原图下限与科学关系门禁，OfficeCLI 写 PPTX。查看 `layout_provider.json` 的回退原因，
+`layout.json/derived/plan_to_layout.json` 的 requested/selected 是否执行了设计决定。
+
+普通生成任务交付 `candidate.pptx` 路径、FAIL/WARNING/REVIEW 数量及关键未解决项，
+不把候选叫 final。`FORMULA_CONTENT_MISMATCH/FORMULA_MISSING` 等失败须修复；
+公式不仅要存在，还须保留被开方项、根指数和所有上下标结构。
+OfficeCLI 的 `Text overflow` 有误报/漏报：保留原 issue，检查实际页面，不据此压缩或删除科学内容。
+
+只有用户要求正式 final 才执行 `Total-pipe/docs/deck-compiler-v2.md` 的完整验收与 promote：
+直接在 PowerPoint 逐页检查当前 staging，记录绑定实际文件哈希的 UI review，再用该文件导出的
+原生 PDF 验证。OfficeCLI/HTML/PDF 截图不能冒充 PowerPoint UI 眼检。
+科学审核项需真实审核者接受，不能因观感良好清零；未完成平台验收必须如实注明。

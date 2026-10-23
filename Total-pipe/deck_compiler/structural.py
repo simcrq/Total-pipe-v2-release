@@ -11,6 +11,16 @@ from .graphic_paths import geometry_signature
 
 A = '{' + NS['a'] + '}'
 EMU = 9525
+MATH_NS = {**NS, 'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+           'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+           'a14': 'http://schemas.microsoft.com/office/drawing/2010/main'}
+
+
+def _math_signature(node):
+    """Compare expanded names and values, independently of namespace prefixes/pretty printing."""
+    return (node.tag, tuple(sorted(node.attrib.items())),
+            (node.text or '') if node.tag.endswith('}t') else (node.text or '').strip(),
+            tuple(_math_signature(child) for child in node))
 
 
 def verify(path, layout):
@@ -222,11 +232,20 @@ def verify(path, layout):
                             add('GEOMETRY_MISMATCH', 'Equation box differs from compiled layout',
                                 n, e['id'])
                         boxes.append((e['id'], box))
-                        xml = ET.tostring(shape, encoding='unicode')
-                        if 'oMathPara' not in xml or 'mc:AlternateContent' not in xml:
+                        choice_path = 'p:txBody/a:p/mc:AlternateContent/mc:Choice'
+                        choice = shape.find(choice_path, MATH_NS)
+                        math_para = shape.find(choice_path+'/a14:m/m:oMathPara', MATH_NS)
+                        if (math_para is None or math_para.find('m:oMath', MATH_NS) is None
+                                or choice is None or 'a14' not in choice.get('Requires', '').split()):
                             add('FORMULA_MISSING', 'Equation shape carries no OMML payload', n, e['id'])
-                        fallback = ''.join(text.text or '' for text in shape.iter(A+'t')).strip()
-                        if fallback and fallback != e['plain'].strip():
+                        else:
+                            expected = ET.fromstring(e['omml']).find('.//m:oMathPara', MATH_NS)
+                            if _math_signature(math_para) != _math_signature(expected):
+                                add('FORMULA_CONTENT_MISMATCH',
+                                    'Native math structure differs from the parsed equation', n, e['id'])
+                        fallback = shape.find('p:txBody/a:p/mc:AlternateContent/mc:Fallback', MATH_NS)
+                        plain = '' if fallback is None else ''.join(text.text or '' for text in fallback.iter(A+'t')).strip()
+                        if fallback is None or plain != e['plain'].strip():
                             add('FORMULA_FALLBACK_MISMATCH',
                                 'Plain fallback differs from the parsed formula', n, e['id'])
                         continue
