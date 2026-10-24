@@ -78,6 +78,28 @@
     }}}}}
   }],
   "$defs": {
+    "frame-border": {
+      "type": "object", "additionalProperties": false, "required": ["color"],
+      "properties": {"color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+                     "width": {"type": "number", "minimum": 0.5, "maximum": 6}}
+    },
+    "frame-fill": {"anyOf": [{"const": "none"}, {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}]},
+    "panel-frame": {
+      "type": "object", "additionalProperties": false, "required": ["border"],
+      "properties": {
+        "border": {"$ref": "#/$defs/frame-border"}, "fill": {"$ref": "#/$defs/frame-fill"},
+        "title_fill": {"$ref": "#/$defs/frame-fill"},
+        "title_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+        "title_align": {"enum": ["left", "center"]}
+      }
+    },
+    "takeaway-frame": {
+      "type": "object", "additionalProperties": false, "required": ["border"],
+      "properties": {
+        "border": {"$ref": "#/$defs/frame-border"}, "fill": {"$ref": "#/$defs/frame-fill"},
+        "padding": {"enum": ["none", "compact", "standard"]}
+      }
+    },
     "takeaway-marker": {
       "type": "object", "additionalProperties": false, "required": ["style"],
       "properties": {
@@ -89,13 +111,15 @@
     "layout-tree": {
       "type": "object", "additionalProperties": false, "required": ["version", "regions"],
       "properties": {
-        "version": {"enum": ["1.0", "1.1"]},
+        "version": {"enum": ["1.0", "1.1", "1.2"]},
         "regions": {"type": "object", "additionalProperties": false, "required": ["body"],
                     "properties": {"body": {"$ref": "#/$defs/region-node"}}}
       },
-      "description": "Bounded body tree: depth <= 6, nodes <= 64; table references require 1.1. No page coordinates.",
+      "description": "Bounded body tree: depth <= 6, nodes <= 64; tables require 1.1+, framed panels require 1.2. No page coordinates.",
       "allOf": [{"if": {"properties": {"version": {"const": "1.0"}}},
-        "then": {"properties": {"regions": {"properties": {"body": {"$ref": "#/$defs/region-no-table"}}}}}}]
+        "then": {"properties": {"regions": {"properties": {"body": {"$ref": "#/$defs/region-no-table"}}}}}},
+        {"if": {"properties": {"version": {"enum": ["1.0", "1.1"]}}},
+         "then": {"properties": {"regions": {"properties": {"body": {"$ref": "#/$defs/region-no-frame"}}}}}}]
     },
     "region-node": {
       "allOf": [{"$ref": "#/$defs/region-depth-1"}],
@@ -115,6 +139,7 @@
            "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "panel"},
            "title": {"type": "string", "minLength": 1, "pattern": "\\S"},
            "body": {"$ref": "#/$defs/region-node"},
+           "frame": {"$ref": "#/$defs/panel-frame"},
            "padding": {"enum": ["none", "compact", "standard"]},
            "gap": {"enum": ["compact", "standard", "spacious"]}}},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "columns", "children"],
@@ -149,6 +174,9 @@
     "region-no-table": {"properties": {
       "type": {"not": {"const": "table"}}, "body": {"$ref": "#/$defs/region-no-table"},
       "children": {"items": {"$ref": "#/$defs/region-no-table"}}}},
+    "region-no-frame": {"not": {"required": ["frame"]}, "properties": {
+      "body": {"$ref": "#/$defs/region-no-frame"},
+      "children": {"items": {"$ref": "#/$defs/region-no-frame"}}}},
     "native-table": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "row_count", "column_count", "cells", "origin"],
@@ -559,6 +587,7 @@
           "properties": {
             "visual_plan": {"$ref": "#/$defs/visual-plan"},
             "takeaway_marker": {"$ref": "#/$defs/takeaway-marker"},
+            "takeaway_frame": {"$ref": "#/$defs/takeaway-frame"},
             "variant": {"enum": ["default", "spacious"]},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},

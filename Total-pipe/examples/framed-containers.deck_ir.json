@@ -1,0 +1,295 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "measured-container-frame-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "thin-rule",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "minimal",
+      "header_variant": "compact",
+      "type_scale": "compact",
+      "accent_color": "#0755A3"
+    },
+    "text_capacity_policy": "preserve-terms",
+    "bullet_style": "large_square",
+    "bullet_color": "#6D28D9"
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {
+    "demo3": {
+      "path": "demo_deck/figures/fig3_provider.png",
+      "origin": "generated",
+      "generator": "bundled-demo-fixture"
+    }
+  },
+  "slides": [
+    {
+      "id": "framed-evidence-panels",
+      "semantic": {
+        "title": "带边框的研究内容分组",
+        "purpose": "验证原生项目符号、完整文字与独立颜色",
+        "takeaway": "单段结论与正文面板分别测量；图片、图注及完整科学术语都保留在编译器分配的边框区域中。",
+        "evidence_refs": [
+          "fixture:native-bullets"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归样例，不代表真实实验平台或科研成果；图片为仓库已有模拟数据。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "capabilities",
+            "component": "body",
+            "text_flow": "plain",
+            "text": "图片与图注按原始宽高比测量，容器标题保留完整科学术语。"
+          },
+          {
+            "id": "projects",
+            "component": "body",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "arrowhead",
+            "bullet_color": "#C2410C",
+            "text": "保留可检验的材料微观结构与宏观响应关联。\n保留不同激发条件及动力学机制的完整说明。\n保留不确定度分析与模型适用边界。"
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "demo3",
+            "caption": "示意图 1：模拟数据",
+            "min_panel_extent": 140
+          },
+          {
+            "asset_id": "demo3",
+            "caption": "示意图 2：模拟数据",
+            "min_panel_extent": 140
+          }
+        ],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "hug-panels",
+              "type": "stack",
+              "gap": "compact",
+              "children": [
+                {
+                  "id": "research-columns",
+                  "type": "columns",
+                  "gap": "standard",
+                  "children": [
+                    {
+                      "id": "evidence-panel",
+                      "type": "panel",
+                      "title": "研究图像与完整说明",
+                      "padding": "compact",
+                      "gap": "compact",
+                      "frame": {
+                        "border": {
+                          "color": "#A7B5C5",
+                          "width": 1.5
+                        },
+                        "fill": "#FFFFFF",
+                        "title_fill": "#0755A3",
+                        "title_color": "#FFFFFF",
+                        "title_align": "center"
+                      },
+                      "body": {
+                        "id": "evidence-stack",
+                        "type": "stack",
+                        "gap": "compact",
+                        "children": [
+                          {
+                            "id": "evidence-grid",
+                            "type": "image_grid",
+                            "columns": 2,
+                            "gap": "compact",
+                            "children": [
+                              {
+                                "id": "figure-0",
+                                "type": "figure",
+                                "ref": 0
+                              },
+                              {
+                                "id": "figure-1",
+                                "type": "figure",
+                                "ref": 1
+                              }
+                            ]
+                          },
+                          {
+                            "id": "description-ref",
+                            "type": "block",
+                            "ref": "capabilities"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "id": "results-panel",
+                      "type": "panel",
+                      "title": "研究条件与科学边界",
+                      "padding": "compact",
+                      "gap": "compact",
+                      "frame": {
+                        "border": {
+                          "color": "#A7B5C5",
+                          "width": 1.5
+                        },
+                        "fill": "#FFFFFF",
+                        "title_fill": "#0755A3",
+                        "title_color": "#FFFFFF",
+                        "title_align": "center"
+                      },
+                      "body": {
+                        "id": "projects-ref",
+                        "type": "block",
+                        "ref": "projects"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {
+        "takeaway_marker": {
+          "style": "large_diamond",
+          "color": "#000000"
+        },
+        "takeaway_frame": {
+          "border": {
+            "color": "#C4CED9",
+            "width": 1
+          },
+          "fill": "#F8FAFC",
+          "padding": "compact"
+        }
+      }
+    },
+    {
+      "id": "nested-frames-and-math",
+      "semantic": {
+        "title": "嵌套边框与原生行内公式",
+        "purpose": "验证原生项目符号、完整文字与独立颜色",
+        "takeaway": "在 $x>0$ 时，$q(x)=\\sqrt{1+x^2}$ 的完整定义与彩色列表共同保留。",
+        "evidence_refs": [
+          "fixture:native-bullets"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归样例，不代表真实实验平台或科研成果；图片为仓库已有模拟数据。",
+        "inline_math": [
+          "takeaway"
+        ]
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "mixed-context",
+            "component": "body",
+            "inline_math": true,
+            "text": "当 $x>0$ 时，定义 $q(x)=\\sqrt{1+x^2}$。\n关系式 $q(x)^2=1+x^2$ 与后续解释保持在可编辑文本框内。\n行内公式按实际宽度与基线上下尺寸测量，单段结论的标记只在第一行出现。"
+          },
+          {
+            "id": "constraints",
+            "component": "body",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "arrowhead",
+            "text": "专业术语、数值、负号与小数值在原文中完整保留。\n列表符号的颜色独立于正文颜色，可在整套或单个内容块指定。\n需要更多空间时保留标记并报告审核项，或明确要求调整布局与拆页。",
+            "bullet_color": "#0755A3"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "outer-panel",
+              "type": "panel",
+              "title": "容器递归分配区域，公式保持可编辑",
+              "padding": "compact",
+              "gap": "compact",
+              "frame": {
+                "border": {
+                  "color": "#A7B5C5",
+                  "width": 1.5
+                },
+                "fill": "#FFFFFF",
+                "title_fill": "#0755A3",
+                "title_color": "#FFFFFF",
+                "title_align": "center"
+              },
+              "body": {
+                "id": "nested-columns",
+                "type": "columns",
+                "gap": "compact",
+                "children": [
+                  {
+                    "id": "inner-panel-0",
+                    "type": "panel",
+                    "title": "原生根式与指数",
+                    "padding": "compact",
+                    "gap": "compact",
+                    "frame": {
+                      "border": {
+                        "color": "#A7B5C5",
+                        "width": 1
+                      },
+                      "fill": "none"
+                    },
+                    "body": {
+                      "id": "mixed-context-leaf",
+                      "type": "block",
+                      "ref": "mixed-context"
+                    }
+                  },
+                  {
+                    "id": "inner-panel-1",
+                    "type": "panel",
+                    "title": "完整术语与容量反馈",
+                    "padding": "compact",
+                    "gap": "compact",
+                    "frame": {
+                      "border": {
+                        "color": "#A7B5C5",
+                        "width": 1
+                      },
+                      "fill": "none"
+                    },
+                    "body": {
+                      "id": "constraints-leaf",
+                      "type": "block",
+                      "ref": "constraints"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "presentation": {
+        "takeaway_frame": {
+          "border": {
+            "color": "#C4CED9",
+            "width": 1
+          },
+          "fill": "#F8FAFC",
+          "padding": "compact"
+        }
+      }
+    }
+  ]
+}

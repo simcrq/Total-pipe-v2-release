@@ -46,7 +46,7 @@ class NativeTableTests(unittest.TestCase):
         ir = fixture()
         schema = json.loads((ROOT/'schemas/deck-ir.schema.json').read_text())
         jsonschema.validate(ir, schema)
-        self.assertEqual(capabilities()['supported_versions'], ['1.0', '1.1'])
+        self.assertEqual(capabilities()['supported_versions'], ['1.0', '1.1', '1.2'])
         ir['slides'][0]['composition']['layout_tree']['version'] = '1.0'
         self.assertIn('LAYOUT_TREE_INVALID', [i['rule'] for i in validate(ir)])
         with self.assertRaises(jsonschema.ValidationError):

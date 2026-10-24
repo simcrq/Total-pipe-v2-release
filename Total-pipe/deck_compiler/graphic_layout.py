@@ -124,6 +124,9 @@ def validate_graphics(graphics, archetype, region_tree=False):
 
 def intentional_overlap(first, second):
     """A node's background may contain its own labels, but no unrelated object."""
+    for container, child in ((first, second), (second, first)):
+        if child.get('id') in container.get('frame_members', []):
+            return True
     same_graphic = bool(first.get('graphic_id')) and first.get('graphic_id') == second.get('graphic_id')
     if same_graphic:
         if first.get('overlap_group') and first.get('overlap_group') == second.get('overlap_group'):
@@ -197,6 +200,8 @@ def graphic_obstacle_collisions(connectors, elements):
         for other in elements:
             if other['kind'] == 'connector' or other.get('collision_mode') == 'container':
                 continue
+            if edge.get('id') in other.get('frame_members', []):
+                continue  # The edge is inside this frame, not crossing unrelated page content.
             if other.get('graphic_id') == edge.get('graphic_id') and (
                     other.get('role') == 'graphic-container' or
                     (other.get('role') == 'graphic-mark' and other.get('edge_id') == edge['id'])):

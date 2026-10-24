@@ -95,7 +95,7 @@ Optional group requirements and body_size_px are measured size demands, never po
 For feedback-based repair, pass the current full IR ir_sha256, matching compiler_feedback and rejected_sublayout_ids.
 Reject stale feedback, preserve all references, and bound caller-controlled compile/replan to three rounds.
 Keep the full scientific content model and existing Evidence gates. Source image dimensions and crop_allowed
-are metadata, not authorization to crop a scientific image. Native tables require tree v1.1, table leaves and
+are metadata, not authorization to crop a scientific image. Native tables require consumer tree v1.1 or v1.2, table leaves and
 native_table; formula cells also require native_equation. content_refs.tables declares id/has_formulas.
 Tables support complete merged grids, multirow headers and formula/matrix cells; retain source evidence and units.
 The compiler measures at an 18 pt floor. Pure-text overflow can retain terms as REVIEW, formula tables must fit.

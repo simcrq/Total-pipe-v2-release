@@ -176,7 +176,7 @@ Path 和 composite 见 [native-components.md](native-components.md)。所有关�
 
 ### 复合内容区域
 
-现有整页框架可在 `composition.layout_tree` 中选用递归子布局，支持 `1.0/1.1`，外层 Deck IR 仍为 `2.0`。
+现有整页框架可在 `composition.layout_tree` 中选用递归子布局，支持 `1.0/1.1/1.2`，外层 Deck IR 仍为 `2.0`。
 支持 columns、stack、panel、image_grid；叶节点引用 block ID、figure_refs 零基索引、graphic ID，
 或 1.1 的 table ID。已有 1.0 树保持兼容。
 每项内容恰好引用一次，不复制正文或填写页面坐标。新混排页可用 `composite-research`。
@@ -195,6 +195,11 @@ Path 和 composite 见 [native-components.md](native-components.md)。所有关�
 过期反馈会被拒绝，已失败候选不会重试。调用者控制最多三轮修订，编译器不自行调用 RPA。
 不会自动缩小水平流程图或裁剪证据图；完整标题/正文超容量按 preserve-terms 保留 REVIEW。
 详见 [复合区域协议与样例](composite-layouts.md)。
+
+树版本 1.2 的 panel 可选 frame，配置原生边框、填充、标题色带和标题颜色。未声明时沿用原有无背景分组。
+单页 presentation.takeaway_frame 独立框选完整结论，可与可选 takeaway_marker 和显式行内公式一起使用。
+编译器扣除描边、内边距及标记槽后测量内容，并将正文移到结论框下；保留术语导致的增长与碰撞仍需 REVIEW。
+不传页面坐标，不用悬浮矩形补框。字段、嵌套规则、容量与两页样例见 [边框容器](framed-containers.md)。
 
 ### 原生科研表格
 

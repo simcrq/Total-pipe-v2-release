@@ -1,12 +1,12 @@
-# 复合内容区域（Layout Tree 1.0 / 1.1）
+# 复合内容区域（Layout Tree 1.0 / 1.1 / 1.2）
 
 RPA 选择分组和子布局，Deck Compiler 在现有框架内测量并分配区域，OfficeCLI 接收确定对象与坐标。
 PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管线。
 
 ## 输入与兼容性
 
-外层仍是 `schema_version: "2.0"`。`composition.layout_tree` 为可选扩展，支持 `1.0` 和 `1.1`。
-含原生 table 叶节点时使用 `1.1`；原有 `1.0` 树无需迁移。
+外层仍是 `schema_version: "2.0"`。`composition.layout_tree` 为可选扩展，支持 `1.0`、`1.1` 和 `1.2`。
+含原生 table 叶节点时使用 `1.1` 或 `1.2`；panel.frame 使用 `1.2`，旧树无需迁移。
 没有它时，旧平面表示继续使用原有布局与容量限制。已有 archetype 可采用区域树；新混排页可用
 `composite-research`，该 archetype 必须带树。标题、takeaway、caveat、脚注仍用现有 frame / academic_design。
 
@@ -39,7 +39,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 |---|---|---|
 | columns | children，可选 weights | 扣除间距后按相对权重分宽 |
 | stack | children，可选 weights | 默认贴合实测内容；显式权重控制相对行高 |
-| panel | title、body，可选 padding | 测量完整标题，为正文留区域，不绘制卡片背景 |
+| panel | title、body，可选 padding、frame（1.2） | 测量完整标题、内边距及描边；声明 frame 才绘制背景 / 边框，可带标题色带 |
 | image_grid | columns、figure children | 按行测量图片及图注，原图等比 contain |
 | block | ref 为 block ID | 原有正文或原生 OMML 公式 |
 | figure | ref 为 figure_refs 零基索引 | 原图、图注与来源检查一起复用 |
@@ -48,6 +48,8 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 
 节点 ID 全树唯一。间距 `compact/standard/spacious` 为 12/24/32 CSS px；panel 内边距
 `none/compact/standard` 为 0/12/20 CSS px。不能传页面 bbox/x/y/w/h。Path IR 原有局部坐标不变。
+带框 panel 默认 compact 内边距；未带框仍默认 none。takeaway 可在单页 presentation 中独立框选，
+内外框随完整结论测量，正文起点相应移动。字段、容量和原生验收见 [边框容器协议](framed-containers.md)。
 最多 6 层、64 节点、4 列；单个 grid 最多 12 图；canonical graphics 最多 8 项。
 每个 block、figure_ref、graphic、table 必须恰好引用一次。显式 anchor 的公式与解释是同一 stack 的兄弟节点，
 解释在前。树页不同时使用分配正文区域的 visual_plan/visual_intent。

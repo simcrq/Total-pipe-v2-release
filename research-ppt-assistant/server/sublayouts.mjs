@@ -62,7 +62,7 @@ export function sublayoutCapabilities() {
 
 function capabilityTree(input) {
   const value = input?.layout_tree ?? input;
-  return ['1.0', '1.1'].includes(value?.version) && value?.contract === "totalpipe.layout-tree" ? value : null;
+  return ['1.0', '1.1', '1.2'].includes(value?.version) && value?.contract === "totalpipe.layout-tree" ? value : null;
 }
 
 function supports(tree, containers, native = [], graphicTypes = []) {
@@ -118,7 +118,7 @@ export function composeSublayout(input = {}) {
   if (!supports(tree, containers, native, registry.graphics.map(g => g.type))) {
     return failure("SUBLAYOUT_CAPABILITY_UNAVAILABLE", "Consumer cannot compile this structure. Retain legacy layout planning.");
   }
-  if (tables.length && (tree.version !== '1.1' || !tree.leaves?.includes('table') || tables.length > (tree.limits?.max_tables ?? 0))) {
+  if (tables.length && (!['1.1', '1.2'].includes(tree.version) || !tree.leaves?.includes('table') || tables.length > (tree.limits?.max_tables ?? 0))) {
     return failure('SUBLAYOUT_CAPABILITY_UNAVAILABLE', 'Native tables require the declared 1.1 table contract.');
   }
   if ((spec.containers.includes('columns') && groups.length > (tree.limits?.max_columns ?? 0))

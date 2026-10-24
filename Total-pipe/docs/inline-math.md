@@ -70,7 +70,8 @@ PowerPoint 原生视觉检查仍必需，尤其检查基线、列边界和高公
 ## 能力与规划
 
 先查询 totalpipe_capabilities。行内模式要求 native_equation 和 native_inline_equation；
-表格另需 table 叶节点、native_table 与布局树 1.1。树中仍引用原有 block/table ID，不复制科学内容。
+表格另需 table 叶节点、native_table 与布局树 1.1 或 1.2。树中仍引用原有 block/table ID，不复制科学内容。
+带框 takeaway 和 1.2 面板按扣除描边、内边距及可选标记后的宽度测量，详见 [边框容器](framed-containers.md)。
 RPA 的 content_refs.blocks 可声明 inline_math；content_refs.tables 可声明 has_inline_math。
 消费者缺少能力时明确重规划，不向旧消费者发送不能处理的混排引用。
 

@@ -149,6 +149,10 @@ def validate(ir):
             if isinstance(marker, dict) and 'color' in marker:
                 check(isinstance(marker['color'], str) and ACCENT.fullmatch(marker['color']),
                       'takeaway_marker.color must be #RRGGBB', n, 'BULLET_COLOR_INVALID')
+        if 'takeaway_frame' in pres:
+            from .container_frames import validate_frame
+            for message in validate_frame(pres['takeaway_frame']):
+                check(False, message, n, 'TAKEAWAY_FRAME_INVALID')
         if 'visual_plan' in pres:
             check(isinstance(deck_presentation, dict) and 'academic_design' in deck_presentation,
                   'visual_plan requires deck presentation.academic_design', n, 'VISUAL_PLAN_INVALID')

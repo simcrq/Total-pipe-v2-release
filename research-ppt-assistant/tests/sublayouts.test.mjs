@@ -40,6 +40,22 @@ test("composition is deterministic, source-preserving and coordinate-free", () =
   assert.ok(!JSON.stringify(tree).includes('"bbox"'));
 });
 
+test("current compiler 1.2 capabilities retain existing sublayout and table planning", () => {
+  const input = request();
+  input.consumer_capabilities.layout_tree.version = '1.2';
+  input.consumer_capabilities.layout_tree.supported_versions = ['1.0', '1.1', '1.2'];
+  assert.equal(composeSublayout(input).status, 'structure_planned');
+  assert.equal(searchSublayouts({ consumer_capabilities: input.consumer_capabilities, group_count: 3 }).candidates[0].id, 'three-panels');
+  input.content_refs.tables = [{ id: 'results', has_formulas: false }];
+  input.groups[0].items.push({ kind: 'table', ref: 'results' });
+  input.consumer_capabilities.layout_tree.leaves.push('table');
+  input.consumer_capabilities.layout_tree.native.push('native_table');
+  input.consumer_capabilities.layout_tree.limits.max_tables = 4;
+  const result = composeSublayout(input);
+  assert.equal(result.status, 'structure_planned');
+  assert.equal(result.composition_patch.layout_tree.version, '1.1');
+});
+
 test("missing, duplicate and unknown references cannot silently disappear", () => {
   for (const mutation of ["missing", "duplicate", "unknown"]) {
     const input = request();

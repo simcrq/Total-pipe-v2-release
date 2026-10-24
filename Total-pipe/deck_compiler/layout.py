@@ -79,9 +79,15 @@ def body_region(slide, family, frame, design=None, font_paths=None, preserve_ter
     if design:
         return header_layout(design, slide, font_paths, preserve_terms)['body_top'], body_bottom(slide, family, False)
     if frame == "template":
-        return 132, (632 if audience.visible_caveats(slide) else 672)
-    spacious = frame == "spacious"
-    return (236 if spacious else 260), body_bottom(slide, family, spacious)
+        top, bottom = 132, (632 if audience.visible_caveats(slide) else 672)
+    else:
+        spacious = frame == "spacious"
+        top, bottom = (236 if spacious else 260), body_bottom(slide, family, spacious)
+    if slide.get('presentation', {}).get('takeaway_frame') and font_paths:
+        from .container_frames import measure_takeaway, legacy_takeaway_box
+        box = measure_takeaway(slide, font_paths, legacy_takeaway_box(slide, frame))['bbox']
+        top = max(top, box[1]+box[3]+20)
+    return top, bottom
 
 # Which marker a deck gets when it does not say. A deck keeps one style, so this is decided once
 # from the dominant list semantics: a procedure reads as arrows, a set of claims as open squares,
@@ -423,6 +429,10 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
 def geometry_issues(elements, number):
     """The same page gates run on every candidate and on the final composition."""
     findings = []
+    from .container_frames import containment_errors
+    for frame_id, message in containment_errors(elements):
+        findings.append(issue('FRAME_CONTENT_OUT_OF_BOUNDS', 'FAIL', message, number, frame_id,
+                              detector='geometric-preflight'))
     for edge_id, obstacle_id in graphic_obstacle_collisions(
             [e for e in elements if e['kind'] == 'connector'], elements):
         overflow = any(e['id'] == obstacle_id and e.get('scientific_text_overflow') for e in elements)
@@ -663,10 +673,27 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         templated = deck_frame == "template"
         footer = " · ".join(sem["evidence_refs"])
         visible_caveats, moved_caveats = audience.split_caveats(sem["caveats"])
+        takeaway_outer = None
+        def takeaway(slot, size=28, color=None, lines=2, frame_plan=None):
+            nonlocal takeaway_outer
+            if slide['presentation'].get('takeaway_frame'):
+                from .container_frames import measure_takeaway, rectangle, grow_frame, stroke_width
+                plan = frame_plan or measure_takeaway(slide, font_paths, slot, takeaway_marker)
+                framed = rectangle('takeaway:frame', plan['bbox'], plan['style'], ['takeaway'])
+                elements.append(framed)
+                first = len(elements)
+                text('takeaway', sem['takeaway'], plan['text_bbox'], 'takeaway', size, 24,
+                     plan['lines'], color=color, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
+                takeaway_outer = grow_frame(framed, plan['bbox'], elements[first:],
+                                            plan['padding_px']+stroke_width(plan['style']))
+                adaptations.append({'action': 'takeaway_frame', **plan, 'bbox': takeaway_outer})
+            else:
+                text('takeaway', sem['takeaway'], slot, 'takeaway', size, 24, lines,
+                     color=color, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
         if design:
             header = header_layout(design, slide, font_paths, preserve_terms)
             text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
-            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2), inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
+            takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
             elements.extend(header_decoration(design, header))
             caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
         elif templated:
@@ -676,8 +703,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # The template's title slot ends at its red rule (y=78), so the title is set to fit
             # above it and the takeaway opens the body underneath.
             text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A", inline_math='title' in sem.get('inline_math', []))
-            text("takeaway", sem["takeaway"], [88, 84, 1104, 42], "takeaway", 24, 24, 2,
-                 color="#333333", inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
+            takeaway([88, 84, 1104, 42], 24, color='#333333')
             caveat_y, caveat_h = 640, 36
         else:
             text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2, inline_math='title' in sem.get('inline_math', []))
@@ -685,7 +711,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # the unused vertical room lets the original scientific panels render
             # larger without colliding with the title block.
             takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
-            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
+            takeaway([56, 144 if spacious else 164, 1168, takeaway_h])
             # No footer element on any frame. The evidence ids used to be set at 15 pt under every
             # page, which meant a dozen EV numbers shared the bottom strip with the caveat. They are
             # traceability keys: the notes carry them, the room does not need them.
@@ -697,6 +723,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         if visible_caveats:
             text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
         top, bottom = body_region(slide, family, deck_frame, design, font_paths, preserve_terms)
+        if takeaway_outer:
+            top = max(top, takeaway_outer[1]+takeaway_outer[3]+20)
         bh = bottom-top
         def block(b, box, formula_size=None, formula_align='center'):
             label = b.get("label", "")
@@ -1034,8 +1062,21 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 for entry in plan['nodes']:
                     first, issue_start = len(elements), len(issues)
                     if entry['type'] == 'panel':
+                        title_id = 'region:'+entry['node_id']+':title'
+                        style = entry.get('frame')
+                        if style:
+                            from .container_frames import rectangle
+                            elements.append(rectangle('region:'+entry['node_id']+':frame', entry['bbox'], style, []))
+                            if style.get('title_fill', 'none') != 'none':
+                                elements.append({'id': 'region:'+entry['node_id']+':title-band', 'kind': 'shape',
+                                    'role': 'decoration', 'bbox': entry['title_band_bbox'], 'geometry': 'rect',
+                                    'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
+                                    'visual_decoration': True, 'frame_members': [title_id],
+                                    'frame_growth_inset': style['border'].get('width', 1.)})
                         text('region:'+entry['node_id']+':title', entry['title'], entry['title_bbox'],
-                             'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)))
+                             'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)),
+                             color=style.get('title_color') if style else None,
+                             align=style.get('title_align') if style else None)
                     elif entry['type'] == 'block':
                         block(by_id[entry['ref']], entry['bbox'], formula_align='left')
                     elif entry['type'] == 'figure':
@@ -1081,6 +1122,33 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             'A component failed an existing renderer gate after region allocation.',
                             [entry['bbox'][2], entry['requirements']['min_height_px']], entry['bbox'][2:],
                             cause=failures[0]['message'])
+                # Grow opted-in frames bottom-up when preserve-terms releases complete text.
+                # Each frame only exempts its own descendants from overlap checks.
+                from .container_frames import grow_frame, stroke_width
+                for entry in reversed(plan['nodes']):
+                    if not entry.get('frame'):
+                        continue
+                    prefix, eid = entry['component'], 'region:'+entry['node_id']
+                    framed = next(e for e in elements if e['id'] == eid+':frame')
+                    title_element = next(e for e in elements if e['id'] == eid+':title')
+                    band = next((e for e in elements if e['id'] == eid+':title-band'), None)
+                    if band:
+                        needed = title_element['bbox'][1]+title_element['bbox'][3]+entry['padding_px']-band['bbox'][1]
+                        if needed > band['bbox'][3]+.1:
+                            band['bbox'] = [*band['bbox'][:3], needed]
+                            band['scientific_text_overflow'] = {'policy': 'preserve-terms'}
+                    members = [e for e in elements if e is not framed and
+                               (e.get('layout_component') == prefix or e.get('layout_component', '').startswith(prefix+'.'))]
+                    framed['frame_members'] = [e['id'] for e in members]
+                    outer = grow_frame(framed, entry['bbox'], members,
+                                       entry['padding_px']+stroke_width(entry['frame']))
+                    entry['frame_bbox'] = outer
+                    framed['layout_region'] = outer
+                    if framed.get('scientific_text_overflow'):
+                        issues.append(issue('FRAME_EXPANDED_FOR_TERMS', 'REVIEW',
+                            'Native frame expanded with complete scientific content; inspect neighbouring regions.',
+                            n, framed['id'], detector='geometric-preflight', component=prefix,
+                            original_bbox=entry['bbox'], expanded_bbox=outer))
                 adaptations.append({'action': 'layout_tree', **plan})
                 adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})

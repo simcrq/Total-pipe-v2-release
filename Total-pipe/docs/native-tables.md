@@ -56,7 +56,8 @@ TABLE_CONTENT_REVIEW 始终要求核对科学术语、数值、单位及来源�
 
 ## 能力与示例
 
-先查询 totalpipe_capabilities；tables 需要 layout_tree 1.1、table 叶节点及 native_table。
+先查询 totalpipe_capabilities；tables 需要 layout_tree 1.1 或 1.2、table 叶节点及 native_table。
+1.2 可将表格放入带 frame 的 panel，描边和内边距计入真实可用尺寸，见 [边框容器](framed-containers.md)。
 含公式的表格另需 native_equation。旧 1.0 消费者明确回退；旧树无需迁移。
 
 [两页开发样例](../examples/native-table.deck_ir.json) 包含合并多级表头、Cholesky/LDLᵀ 分解矩阵，

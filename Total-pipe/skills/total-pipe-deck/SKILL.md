@@ -177,10 +177,16 @@ Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不�
 request 提交完整 canonical groups/content_refs 和新查询的消费者能力；不从 compact 摘要恢复内容。
 把 composition_patch 合入 canonical slide。缺少能力则沿用旧整页布局，不以 compact slot 文本重写正文。
 
-composition.layout_tree 1.0/1.1 支持 columns/stack/panel/image_grid，最多 6 层、64 节点。
+composition.layout_tree 1.0/1.1/1.2 支持 columns/stack/panel/image_grid，最多 6 层、64 节点。
 叶节点引用 block ID、figure_refs 零基索引、graphic ID，1.1 另支持 table ID；每项恰好一次。显式 anchor 的公式与解释
 在同一 stack、解释在前。不写页面坐标，不裁剪原图，不缩小图形绕过字号下限。树页仍需要整套
 academic_design，不再叠加 visual_plan/visual_intent。structure_planned 不能当成几何通过。
+
+需要外框、标题色带或结论框时，读 `Total-pipe/docs/framed-containers.md`。在 canonical 映射阶段
+为 panel 声明 frame.border（可选 fill/title_fill/title_color/title_align），并将树版本改为 1.2；
+未声明 frame 的 panel 仍不绘制背景。单页 presentation.takeaway_frame 为完整结论独立加框，
+可与可选 takeaway_marker 和 inline_math 共存。不用绝对坐标叠矩形；描边、内边距与标记槽都消耗容量。
+保留完整术语导致边框增长时检查 FRAME_EXPANDED_FOR_TERMS 与碰撞 REVIEW，不据此省略完整 Design 或原生验收。
 
 编译后读 layout_feedback.json 的 slide_id、component、所需/实际尺寸和 suggested_actions，带原始完整
 内容回 RPA 调整结构。plan_sublayout 接收当前 ir_sha256 和 compiler_feedback，哈希必须绑定完整 IR，

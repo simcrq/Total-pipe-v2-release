@@ -377,6 +377,33 @@ def verify(path, layout):
                     if any(abs(a-b) > .2 for a,b in zip(box, e['bbox'])):
                         add('GEOMETRY_MISMATCH', 'Image geometry differs from compiler', n, e['id'])
                 actual_elements = [{**planned[name], 'bbox': box} for name, box in boxes if name in planned]
+                if any(e.get('container_frame') for e in slide['elements']):
+                    from .container_frames import containment_errors
+                    ordered = {}
+                    for index, native in enumerate(root.find('p:cSld/p:spTree', NS)):
+                        identity = native.find('.//p:cNvPr', NS)
+                        if identity is not None:
+                            ordered[identity.get('name')] = (index, native)
+                    measured = {e['id']: e for e in actual_elements}
+                    for name, (_, native) in ordered.items():
+                        if name not in planned or name in measured:
+                            continue
+                        xf = native.find('p:spPr/a:xfrm', NS)
+                        if xf is None:
+                            continue
+                        off, ext = xf.find('a:off', NS), xf.find('a:ext', NS)
+                        measured[name] = {**planned[name], 'bbox': [int(off.get('x'))/EMU,
+                            int(off.get('y'))/EMU, int(ext.get('cx'))/EMU, int(ext.get('cy'))/EMU]}
+                    for frame_id, message in containment_errors(list(measured.values())):
+                        add('FRAME_CONTENT_OUT_OF_BOUNDS', message, n, frame_id)
+                    for frame in slide['elements']:
+                        if 'frame_members' not in frame or frame['id'] not in ordered:
+                            continue
+                        for child in frame['frame_members']:
+                            if child not in ordered:
+                                add('MISSING_FRAMED_CONTENT', f'Missing framed object {child}', n, frame['id'])
+                            elif ordered[child][0] < ordered[frame['id']][0]:
+                                add('FRAME_LAYER_ORDER', f'Native frame covers child {child}', n, frame['id'])
                 for edge_id, obstacle_id in graphic_obstacle_collisions(native_paths, actual_elements):
                     add('GRAPHIC_ROUTE_THROUGH_CONTENT', f'Connector crosses page content {obstacle_id}', n, edge_id,
                         severity='REVIEW' if planned.get(obstacle_id, {}).get('scientific_text_overflow') else 'FAIL')

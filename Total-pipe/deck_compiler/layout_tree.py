@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import math
 import re
 
-VERSION = '1.1'
-VERSIONS = ('1.0', '1.1')
+VERSION = '1.2'
+VERSIONS = ('1.0', '1.1', '1.2')
 MAX_DEPTH = 6
 MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
@@ -22,6 +22,8 @@ def capabilities():
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
                        'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
+            'container_frames': {'panel': {'min_tree_version': '1.2', 'native_rectangle': True,
+                                          'title_band': True}, 'takeaway': {'measured': True}},
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'legacy_flat_ir': True}
@@ -73,11 +75,11 @@ def validate_tree(tree, composition):
         elif kind == 'image_grid':
             fields |= {'children', 'columns', 'gap'}
         elif kind == 'panel':
-            fields |= {'title', 'body', 'padding', 'gap'}
+            fields |= {'title', 'body', 'padding', 'gap', 'frame'}
         elif kind in LEAVES:
             fields |= {'ref'}
-            if kind == 'table' and tree.get('version') != '1.1':
-                fail(path, 'native tables require layout_tree version 1.1')
+            if kind == 'table' and tree.get('version') not in ('1.1', '1.2'):
+                fail(path, 'native tables require layout_tree version 1.1 or newer')
         else:
             fail(path, f'unsupported node type {kind!r}')
             return
@@ -86,6 +88,12 @@ def validate_tree(tree, composition):
         if not isinstance(node.get('gap', 'standard'), str) or node.get('gap', 'standard') not in GAPS:
             fail(path, 'gap must be compact, standard or spacious')
         if kind == 'panel':
+            if 'frame' in node:
+                from .container_frames import validate_frame
+                if tree.get('version') != '1.2':
+                    fail(path, 'panel frames require layout_tree version 1.2')
+                for message in validate_frame(node['frame'], panel=True):
+                    fail(path, message)
             if not isinstance(node.get('title'), str) or not node.get('title', '').strip():
                 fail(path, 'panel title required; retain complete terminology')
             if not isinstance(node.get('padding', 'none'), str) or node.get('padding', 'none') not in PADDING:
@@ -309,12 +317,13 @@ class RegionCompiler:
             preferred = width*graphic['view_box'][3]/graphic['view_box'][2]+8 if graphic['type'] == 'path' else height
             need = Need(height, max(height, preferred), self.graphic_min_width(graphic))
         elif kind == 'panel':
-            pad = PADDING[node.get('padding', 'none')]
-            inner_w = width-2*pad
+            from .container_frames import panel_metrics
+            pad, stroke, overhead = panel_metrics(node)
+            inner_w = width-2*(pad+stroke)
             title = self.text_height(node['title'], inner_w, True)
-            child = self.measure(node['body'], inner_w, path+'.body', [inner_w, max(0, available[1]-title-gap-2*pad)])
-            need = Need(child.hard+(30 if self.preserve else title)+gap+2*pad,
-                        child.preferred+title+gap+2*pad, child.min_width+2*pad)
+            child = self.measure(node['body'], inner_w, path+'.body', [inner_w, max(0, available[1]-title-gap-overhead)])
+            need = Need(child.hard+(30 if self.preserve else title)+gap+overhead,
+                        child.preferred+title+gap+overhead, child.min_width+2*(pad+stroke))
         else:
             children = node['children']
             if kind == 'columns':
@@ -347,9 +356,12 @@ class RegionCompiler:
         need = self.measure(node, width, path, [width, height])
         kind, gap = node['type'], GAPS[node.get('gap', 'standard')]
         if height < need.hard-.1:
-            code = {'block': 'INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
-                    else 'INSUFFICIENT_TEXT_SPACE', 'figure': 'INSUFFICIENT_FIGURE_SPACE',
-                    'table': 'INSUFFICIENT_TABLE_SPACE'}.get(kind, 'INSUFFICIENT_DRAWING_SPACE')
+            if kind == 'block':
+                code = ('INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
+                        else 'INSUFFICIENT_TEXT_SPACE')
+            else:
+                code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE'}.get(
+                    kind, 'INSUFFICIENT_DRAWING_SPACE')
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
                                   [width, need.hard], [width, height])
         self.entries.append({'component': path, 'node_id': node['id'], 'type': kind, 'bbox': list(box),
@@ -360,14 +372,20 @@ class RegionCompiler:
         if kind in LEAVES:
             return
         if kind == 'panel':
-            pad = PADDING[node.get('padding', 'none')]
-            title = self.text_height(node['title'], width-2*pad, True)
+            from .container_frames import panel_metrics
+            pad, stroke, overhead = panel_metrics(node)
+            inner_w = width-2*(pad+stroke)
+            title = self.text_height(node['title'], inner_w, True)
             if self.preserve:
-                child_need = self.measure(node['body'], width-2*pad, path+'.body', [width-2*pad, height])
-                title = min(title, max(30., height-child_need.hard-gap-2*pad))
-            self.entries[-1]['title_bbox'] = [x+pad, y+pad, width-2*pad, title]
+                child_need = self.measure(node['body'], inner_w, path+'.body', [inner_w, height])
+                title = min(title, max(30., height-child_need.hard-gap-overhead))
+            self.entries[-1]['title_bbox'] = [x+stroke+pad, y+stroke+pad, inner_w, title]
             self.entries[-1]['title'] = node['title']
-            self.allocate(node['body'], [x+pad, y+pad+title+gap, width-2*pad, height-title-gap-2*pad], path+'.body')
+            if node.get('frame'):
+                self.entries[-1].update(frame=node['frame'], padding_px=pad,
+                    title_band_bbox=[x+stroke, y+stroke, width-2*stroke, title+2*pad])
+            body_y = y+stroke+pad+title+gap+(pad if node.get('frame') else 0)
+            self.allocate(node['body'], [x+stroke+pad, body_y, inner_w, height-title-gap-overhead], path+'.body')
             return
         children = node['children']
         if kind == 'columns':

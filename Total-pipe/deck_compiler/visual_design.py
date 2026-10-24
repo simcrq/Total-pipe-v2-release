@@ -208,6 +208,13 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
         header['body_top'] += title_extra+takeaway_extra
         header['title_lines'] = max(2, title_lines)
         header['takeaway_lines'] = max(2, takeaway_lines)
+    if slide and fonts and slide.get('presentation', {}).get('takeaway_frame'):
+        from .container_frames import measure_takeaway
+        plan = measure_takeaway(slide, fonts, header['takeaway'])
+        header['takeaway_frame'] = plan
+        header['takeaway'] = plan['text_bbox']
+        header['takeaway_lines'] = plan['lines']
+        header['body_top'] = max(header['body_top'], plan['bbox'][1]+plan['bbox'][3]+20)
     return header
 
 

@@ -62,9 +62,12 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'marker colors do not recolor prose. Explicit lists need a 520x220 px component region; insufficient space requires replanning. '
     'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
-    'composition.layout_tree versions 1.0/1.1 reuse the compiler body frame; columns/stack/panel/image_grid '
+    'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
     'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
     'native table references to composition.tables, including merged headers and formula/matrix cells. '
+    'Version 1.2 adds optional panel.frame with border/fill/title band and measured padding. '
+    'Slide presentation.takeaway_frame independently boxes complete prose or inline math; takeaway_marker remains optional. '
+    'Frames follow compiled content and never grant page-coordinate control. '
     'RPA search_sublayouts/compose_sublayout and automatic plan_sublayout propose structure; the compiler measures every child. '
     'Read layout_feedback.json for component paths, required/available sizes and replan actions. '
     'Keep deck academic_design; tree pages do not also carry a flat visual_plan. '

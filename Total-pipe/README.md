@@ -6,7 +6,7 @@
 **组件、当前版本和全流程入口见 [仓库 README](../README.md)。**
 插件清单版本为 `3.3.0+codex.20261021203000`；MCP 握手版本为 `3.2.0`，
 编译器 Python 模块仍声明 `2.0.0`。输入 Deck IR 为 `schema_version: "2.0"`，
-可选 layout tree 支持 `1.0 / 1.1`。这些版本属于不同对象。
+可选 layout tree 支持 `1.0 / 1.1 / 1.2`。这些版本属于不同对象。
 
 ## 入口与职责
 
@@ -89,6 +89,7 @@ OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；preserve-terms 保留列表呈现和全文。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
+- [边框容器](docs/framed-containers.md)：panel 原生描边、填充与标题色带；独立 takeaway 框选；内边距、描边与完整内容共同测量。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
 - [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。
 - [整套视觉设计](docs/scientific-visual-planner.md)：保留完整科研术语，文字超容量按 preserve-terms 生成候选及 REVIEW。
