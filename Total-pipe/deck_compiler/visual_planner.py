@@ -14,6 +14,8 @@ INSTRUCTIONS = """Act as the Scientific Visual Planner for this canonical resear
 Choose one restrained academic_design for the entire deck and visual_plan entries for selected eligible slides.
 Return only the proposal shape below. Echo ir_sha256 exactly. Read the FULL deck_ir, including notes,
 figures, conditions, limitations and explicit evidence/hypothesis relationships before choosing a layout.
+Respect assets.origin: reference images retain reference_source and are user-provided visual material,
+not independently verified paper evidence. Never invent a paper figure number or schematic caption for them.
 Only these presentation decisions may change: never rewrite semantic, composition, graphics, assets,
 evidence, numbers, captions or speaker notes. Do not invent relationships, crop a paper image, add a new
 mechanism renderer, or copy scientific content into a second content model.
@@ -91,7 +93,8 @@ def make_prompt(ir, base, requirements='', slide_ids=None):
         with Image.open(path) as image:
             resources[key] = {'path': str(path), 'width': image.width, 'height': image.height,
                               'sha256': file_hash(path), 'origin': asset.get('origin', 'paper'),
-                              'source_figure': asset.get('source_figure')}
+                              'source_figure': asset.get('source_figure'),
+                              'reference_source': asset.get('reference_source')}
     targets = [target for target in planning_targets(ir) if target['slide_id'] in selected]
     required_ids = [target['slide_id'] for target in targets if target['visual_jobs']]
     return {'instructions': INSTRUCTIONS, 'requirements': requirements,

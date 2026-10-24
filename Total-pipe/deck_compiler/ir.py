@@ -93,12 +93,19 @@ def validate(ir):
                   f"asset {key}: source_figure must look like 3 or 3a", rule="FIGURE_PROVENANCE_INVALID")
         if isinstance(asset, dict):
             origin = asset.get("origin", "paper")
-            check(origin in ("paper", "generated"),
-                  f"asset {key}: origin must be paper or generated", rule="FIGURE_PROVENANCE_INVALID")
+            check(origin in ("paper", "generated", "reference"),
+                  f"asset {key}: origin must be paper, generated or reference", rule="FIGURE_PROVENANCE_INVALID")
             if origin == "generated":
                 check(isinstance(asset.get("generator"), str) and bool(asset["generator"].strip()),
                       f"asset {key}: a generated schematic records its generator",
                       rule="SCHEMATIC_GENERATOR_REQUIRED")
+            elif origin == "reference":
+                check(isinstance(asset.get("reference_source"), str) and bool(asset["reference_source"].strip()),
+                      f"asset {key}: a reference image records its source",
+                      rule="REFERENCE_SOURCE_REQUIRED")
+                check("source_figure" not in asset,
+                      f"asset {key}: a reference image cannot claim a paper figure number",
+                      rule="FIGURE_PROVENANCE_FORBIDDEN")
     seen = set()
     for n, s in enumerate(slides, 1):
         if not isinstance(s, dict):
@@ -299,6 +306,11 @@ def validate(ir):
             asset = assets[f["asset_id"]]
             asset = asset if isinstance(asset, dict) else {}
             origin = asset.get("origin", "paper")
+            if origin == "reference":
+                check("source_figure" not in f and "source_figure" not in asset,
+                      f"{f['asset_id']}: a reference image cannot claim a paper figure number",
+                      n, "FIGURE_PROVENANCE_FORBIDDEN")
+                continue
             if origin == "generated":
                 # A drawn schematic must be recognisable as one: no paper figure number, and a
                 # caption that says so. Everything else about it (size, caption height) is checked

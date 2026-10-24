@@ -164,11 +164,18 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 无序列表用顶层 `presentation.bullet_style / bullet_color` 设默认，正文 block 同名字段独立覆盖；
 符号颜色不改变正文颜色。单页 `presentation.takeaway_marker={"style":"large_diamond","color":"#000000"}`
 为完整 takeaway 加一个原生前导标记，换行和行内公式按剩余宽度实测。
-preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW；显式列表最低区域不足时
-报告拆页 / 重规划，不降级为无符号文本。572 × 226 px 已达到 520 × 220 px 的组件门槛。
+preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW；显式列表宽度至少 520 CSS px，
+高度按完整条目、标记槽、实际换行、标签、间距及内边距测量。区域不足时报告拆页 / 重规划，
+不降级为无符号文本。
 完整用法、优先级及两页样例见 [原生列表](native-lists.md)。
 项目符号可选；plain 关闭正文列表，takeaway 未配置则不加标记。large_square / large_diamond /
 arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸参与空间测量。
+
+图片来源在 canonical IR 中区分 `paper`、`generated` 与 `reference`：论文图要求图号，管线自绘示意图要求
+生成器和“示意图”图注；用户提供的参考页 / 图片裁图标记为 `reference` 并记录 `reference_source`，不伪装成论文图或
+强制添加示意图图注。参考裁图保留来源说明，但不作为独立科研证据核验。
+`reference_source` 不能留空白；图注可以为空，图片仍执行原图字节核对、等比包含和最小可读尺寸检查，
+并保留 `REFERENCE_IMAGE_REVIEW` 供来源 / 裁图 / 可读性审核。字段示例见[图片来源协议](deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
 
 原生 process/DAG 与图文混排见 [native-graphics.md](native-graphics.md)；机制、架构、漏斗、
 Path 和 composite 见 [native-components.md](native-components.md)。所有关系显式声明；

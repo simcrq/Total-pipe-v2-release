@@ -12,9 +12,10 @@ def ratios(preferred, low=.35, high=.75):
             yield value
 
 
-def block_height(block, width, fonts, archetype):
+def block_height(block, width, fonts, archetype, *, list_gap_ratio=.45, bullet_style='large_square'):
     from .layout import formula_fit, formula_label_width, text_floor_height, native_list_height
-    list_height = native_list_height(block, width, fonts['font_file'])
+    list_height = native_list_height(block, width, fonts['font_file'], list_gap_ratio,
+                                     default_style=bullet_style)
     if list_height is not None:
         return list_height
     label = block.get('label', '')
@@ -26,15 +27,17 @@ def block_height(block, width, fonts, archetype):
     return label_h + (text_floor_height(block['text'], width, fonts['font_file'], inline_math=block.get('inline_math', False)) or 10000)
 
 
-def text_regions(blocks, box, fonts, archetype, gap=24, band=False):
+def text_regions(blocks, box, fonts, archetype, gap=24, band=False, *,
+                  list_gap_ratio=.45, bullet_style='large_square'):
     x, y, width, height = box
     if not blocks:
         return [], 0
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
     if band:
         w = (width-gap*(len(blocks)-1))/len(blocks)
-        h = max(block_height(b, w, fonts, archetype) for b in blocks)
+        h = max(block_height(b, w, fonts, archetype, **list_options) for b in blocks)
         return [[x+i*(w+gap), y, w, h] for i in range(len(blocks))], h
-    needs = [block_height(b, width, fonts, archetype) for b in blocks]
+    needs = [block_height(b, width, fonts, archetype, **list_options) for b in blocks]
     required = sum(needs)+gap*(len(blocks)-1)
     extra = max(0, height-required)/len(blocks)
     boxes = []
@@ -55,7 +58,7 @@ def emphasis_region(plan, box, fonts):
     return [x, y, w, height], [x, y+height+12, w, h-height-12]
 
 
-def candidates(slide, region, assets, fonts, design):
+def candidates(slide, region, assets, fonts, design, *, list_gap_ratio=.45, bullet_style='large_square'):
     """Only allocate regions. No canonical text, figure, or relationship is rewritten."""
     from .layout import graphic_page_regions, caption_height
     comp = slide['composition']
@@ -65,16 +68,18 @@ def candidates(slide, region, assets, fonts, design):
     x, y, width, height = region
     gap = 24 if design['density'] == 'balanced' else 18
     archetype = comp['archetype']
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
     if job == 'mechanism-explanation':
         annotation, body = emphasis_region(plan, region, fonts)
-        for candidate in graphic_page_regions(comp, body, assets, fonts, visual_plan=plan):
+        for candidate in graphic_page_regions(comp, body, assets, fonts, visual_plan=plan, **list_options):
             yield {**candidate, 'emphasis': annotation}
         return
     if job == 'measurement-evidence':
         for ratio in ratios(plan.get('figure_width_ratio', .64)):
             figure_w = width*ratio
             if composition == 'figure-top':
-                context, needed = text_regions(blocks, [x, 0, width, height], fonts, archetype, gap, band=True)
+                context, needed = text_regions(blocks, [x, 0, width, height], fonts, archetype, gap,
+                                               band=True, **list_options)
                 annotation, _ = emphasis_region(plan, [x, 0, width, height], fonts)
                 ah = annotation[3]+12 if annotation else 0
                 figure_h = height-needed-ah-(gap if blocks or annotation else 0)
@@ -88,7 +93,7 @@ def candidates(slide, region, assets, fonts, design):
                 figure_x = x if composition == 'figure-left' else x+text_w+gap
                 text_x = x+figure_w+gap if composition == 'figure-left' else x
                 annotation, text_box = emphasis_region(plan, [text_x, y, text_w, height], fonts)
-                context, _ = text_regions(blocks, text_box, fonts, archetype, gap)
+                context, _ = text_regions(blocks, text_box, fonts, archetype, gap, **list_options)
                 figure_box = [figure_x, y, figure_w, height]
             yield {'pattern': composition, 'blocks': context, 'figures': [figure_box],
                    'emphasis': annotation, 'figure_width_ratio': ratio}
@@ -98,7 +103,7 @@ def candidates(slide, region, assets, fonts, design):
     order = plan.get('evidence_order', [primary, 1-primary])
     annotation, body = emphasis_region(plan, region, fonts)
     x, y, width, height = body
-    context, needed = text_regions(blocks, body, fonts, archetype, gap, band=True)
+    context, needed = text_regions(blocks, body, fonts, archetype, gap, band=True, **list_options)
     figure_y = y+needed+(gap if blocks else 0)
     figure_h = y+height-figure_y
     shares = ratios(plan.get('figure_width_ratio', .5)) if composition == 'evidence-columns' else [1]
@@ -125,15 +130,16 @@ def candidates(slide, region, assets, fonts, design):
                **({'figure_width_ratio': ratio} if composition == 'evidence-columns' else {})}
 
 
-def graphic_without_evidence(composition, region, fonts, plan):
+def graphic_without_evidence(composition, region, fonts, plan, *, list_gap_ratio=.45, bullet_style='large_square'):
     """Add left/right/below context variants to the existing graphic candidate mechanism."""
     x, y, width, height = region
     blocks = composition['blocks']
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
     preferred = plan.get('graphic_width_ratio', .68 if blocks else 1.0)
     for share in ratios(preferred, .4, 1.0):
         if plan['composition'] == 'graphic-top':
             context, needed = text_regions(blocks, [x, 0, width, height], fonts,
-                                           composition['archetype'], band=True)
+                                           composition['archetype'], band=True, **list_options)
             graphic_h = height-needed-(24 if blocks else 0)
             yield {'pattern': 'graphic-above-context',
                    'blocks': [[bx, y+graphic_h+24, bw, bh] for bx, _, bw, bh in context],
@@ -145,7 +151,8 @@ def graphic_without_evidence(composition, region, fonts, plan):
             left = plan['composition'] == 'graphic-left'
             graphic_x = x if left else x+context_w+24
             context_x = x+graphic_w+24 if left else x
-            context, _ = text_regions(blocks, [context_x, y, context_w, height], fonts, composition['archetype'])
+            context, _ = text_regions(blocks, [context_x, y, context_w, height], fonts,
+                                      composition['archetype'], **list_options)
             yield {'pattern': plan['composition'], 'blocks': context, 'figures': [],
                    'graphic': [graphic_x, y, graphic_w, height], 'graphic_width_ratio': share}
         else:

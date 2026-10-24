@@ -111,6 +111,8 @@ Skill/调用者控制最多三轮编译与修订，合入 patch 后重新生成�
 可以调整权重、放整行、换两栏或拆页，不缩小节点绕过下限。
 原生表格按列宽、完整文字换行、跨行需求及数学 AST 测量，不使用源字符串长度代替公式尺寸。
 表格每页最多 4 项、每表最多 32 行/12 列，详见 [原生表格协议](native-tables.md)。
+显式原生列表以 520 CSS px 为最小宽度；高度按完整条目、标记槽、实际换行、标签、间距和内边距测量，
+并参与树的递归分配，不使用固定高度下限。详见[原生列表协议](native-lists.md)。
 
 每次 compile/build 写 layout_feedback.json，绑定完整 IR 哈希。协议见
 [layout-feedback.schema.json](../schemas/layout-feedback.schema.json)。单条错误示例：

@@ -82,6 +82,23 @@ class EmbeddedGraphicTests(unittest.TestCase):
                         self.assertFalse(intersect(e['bbox'], objects['figure-1']['bbox']))
                         self.assertFalse(intersect(e['bbox'], objects['context']['bbox']))
 
+    def test_short_native_list_keeps_measured_padding_beside_graphics(self):
+        from test_native_list import styled_deck
+        for designed in (False, True):
+            with self.subTest(designed=designed):
+                ir = self.deck(figure=False)
+                if designed:
+                    ir['presentation'] = styled_deck()['presentation']
+                ir.setdefault('presentation', {}).update(text_capacity_policy='strict',
+                    list_gap=.8 if designed else .1, frame_variant='spacious', bullet_style='arrowhead')
+                ir['slides'][0]['composition']['blocks'][0].update(
+                    text='First complete finding.\nSecond complete finding.',
+                    text_flow='distributed_arrow_list')
+                layout, _ = self.compile_ok(ir)
+                items = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'context')
+                self.assertEqual(items['kind'], 'list')
+                self.assertLess(items['bbox'][3], 220)
+
     def test_branch_merge_graph_uses_explicit_edges_inside_shared_page(self):
         ir = self.deck(dag=True)
         graph = ir['slides'][0]['composition']['graphics'][0]

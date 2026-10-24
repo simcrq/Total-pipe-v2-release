@@ -15,7 +15,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from deck_compiler.contracts import TextBoxContract
-from deck_compiler.layout import DEFAULT_ACCENT, compile_deck
+from deck_compiler.layout import DEFAULT_ACCENT, compile_deck, native_list_height
 from deck_compiler.officecli import list_paragraph_properties
 from deck_compiler.ir import validate
 from deck_compiler.structural import verify
@@ -212,11 +212,112 @@ class NativeListTests(unittest.TestCase):
         self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
         lists = [e for e in layout['slides'][0]['elements'] if e['id'] in ('a','b')]
         self.assertTrue(all(e['kind'] == 'list' for e in lists))
-        self.assertTrue(all(e['layout_region'][2] == 572 and e['layout_region'][3] >= 220 for e in lists))
+        for element in lists:
+            self.assertEqual(element['layout_region'][2], 572)
+            self.assertGreaterEqual(element['layout_region'][3], element['bbox'][3])
         comp['blocks'].append({**block('c', 'body', BODY), 'text_flow': 'distributed_arrow_list'})
         comp['layout_tree']['regions']['body']['children'].append({'id': 'c-leaf', 'type': 'block', 'ref': 'c'})
         _, issues = compile_deck(ir, ROOT)
         self.assertIn('INSUFFICIENT_LIST_SPACE', [i['rule'] for i in issues])
+
+    def test_short_explicit_lists_fit_measured_boxes_below_220px(self):
+        for designed in (False, True):
+            with self.subTest(designed=designed):
+                ir = styled_deck() if designed else list_deck([])
+                ir['presentation']['text_capacity_policy'] = 'strict'
+                row = {**block('short', 'body', 'Complete first finding.\nComplete second finding.'),
+                       'text_flow': 'distributed_arrow_list', 'label': 'Findings'}
+                ir['slides'][0]['composition']['blocks'] = [row]
+                # Resolve the real font from the compiler before requesting an exact measured box.
+                initial, _ = in_feedback_box(ir, 572, 300)
+                element = next(e for e in initial['slides'][0]['elements'] if e['id'] == 'short')
+                font = element['contract']['font_file']
+                padding = (0, 0) if designed else (28, 18)
+                height = native_list_height(row, 572, font, padding=padding)
+                self.assertLess(height, 220)
+                layout, issues = in_feedback_box(ir, 572, height)
+                self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+                native = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short')
+                label = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short:label')
+                self.assertEqual(native['kind'], 'list')
+                self.assertAlmostEqual(label['bbox'][3]+native['bbox'][3]+2*padding[1], height)
+                _, issues = in_feedback_box(ir, 572, height-2)
+                failure = next(i for i in issues if i['rule'] == 'SPLIT_REQUIRED')
+                self.assertAlmostEqual(failure['source']['required_size_px'][1], height, delta=.1)
+
+    def test_auto_lists_keep_native_markers_and_plain_mode_remains_optional(self):
+        for mode in ('auto', 'plain'):
+            ir = list_deck([{**block('automatic', 'body', BODY), 'text_flow': mode}])
+            layout, issues = in_feedback_box(ir, height=300)
+            self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+            element = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')
+            self.assertEqual(element['kind'], 'list' if mode == 'auto' else 'text')
+        layout, issues = in_feedback_box(list_deck([block('automatic', 'body', BODY)]), 519, 300)
+        self.assertEqual(next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')['kind'], 'text')
+        self.assertIn('TEXT_FLOW_FALLBACK', [i['rule'] for i in issues])
+
+    def test_preserve_terms_recursive_floor_reserves_every_marker_row(self):
+        from deck_compiler.layout_tree import RegionCompiler
+        ir = styled_deck()
+        row = ir['slides'][0]['composition']['blocks'][0]
+        row.update(text='\n'.join([line*5 for line in BODY.splitlines()]), label='Findings')
+        layout, _ = in_feedback_box(ir)
+        element = next(e for e in layout['slides'][0]['elements'] if e['id'] == row['id'])
+        font = element['contract']['font_file']
+        fonts = {'font_file': font, 'bold_font_file': font}
+        for padding in ((0, 0), (28, 18)):
+            compiler = RegionCompiler(ir['slides'][0]['composition'], {}, fonts, ir['theme'],
+                                      preserve_terms=True, list_gap_ratio=.8, list_padding=padding)
+            need = compiler.measure({'id': 'leaf', 'type': 'block', 'ref': row['id']},
+                                    572, 'body', [572, 300])
+            self.assertAlmostEqual(need.hard, native_list_height(row, 572, font, .8, padding, wrap_items=False))
+            self.assertGreater(need.preferred, need.hard)
+            self.assertGreater(need.hard, 44+30*3+2*padding[1])
+
+    def test_narrow_list_feedback_contains_numeric_measured_sizes(self):
+        import jsonschema
+        from deck_compiler.layout_feedback import make_feedback
+        ir = styled_deck()
+        layout, issues = in_feedback_box(ir, 519, 120)
+        failure = next(i for i in issues if i['rule'] == 'SPLIT_REQUIRED')
+        self.assertEqual(failure['source']['required_size_px'][0], 520)
+        self.assertGreater(failure['source']['required_size_px'][1], 0)
+        jsonschema.validate(make_feedback(ir, layout, issues),
+                            json.loads((ROOT/'schemas/layout-feedback.schema.json').read_text()))
+
+    def test_short_list_and_native_formula_share_the_measured_region(self):
+        from test_formula_capacity import formulas_deck
+        for designed in (False, True):
+            with self.subTest(designed=designed):
+                ir = formulas_deck([
+                    {**block('items', 'body', 'First finding.\nSecond finding.'),
+                     'text_flow': 'distributed_arrow_list'},
+                    block('equation', 'formula', r'x=\sqrt{2}')])
+                if designed:
+                    ir['presentation'] = styled_deck()['presentation']
+                ir.setdefault('presentation', {}).update(text_capacity_policy='strict', list_gap=.8,
+                                                         bullet_style='arrowhead')
+                layout, issues = compile_deck(ir, ROOT)
+                self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+                elements = {e['id']: e for e in layout['slides'][0]['elements']}
+                self.assertEqual(elements['items']['kind'], 'list')
+                self.assertEqual(elements['equation']['kind'], 'math')
+                self.assertGreater(elements['equation']['bbox'][1],
+                                   elements['items']['bbox'][1]+elements['items']['bbox'][3])
+
+    def test_short_list_native_roundtrip_fits_below_the_old_height_floor(self):
+        if not shutil.which('officecli'):
+            self.skipTest('OfficeCLI required')
+        ir = styled_deck([{**block('short', 'body', 'First finding.\nSecond finding.'),
+                           'text_flow': 'distributed_arrow_list', 'bullet_style': 'arrowhead'}])
+        ir['presentation']['text_capacity_policy'] = 'strict'
+        layout, issues = in_feedback_box(ir, 572, 80)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(root/'layout.json', layout)
+            render(root/'layout.json', root/'candidate.pptx', shutil.which('officecli'))
+            self.assertFalse([i for i in verify(root/'candidate.pptx', layout) if i['severity'] == 'FAIL'])
 
     def test_generic_overflow_repair_preserves_native_list_item_boundaries(self):
         from deck_compiler.overflow_repair import repair_overflow

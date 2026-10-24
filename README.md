@@ -141,7 +141,8 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **显式行内公式**：正文、标题 / takeaway、表格文字格可选开启；文字与数学片段按逐行宽度、上伸和下伸高度计算容量。图注、图形标签和 panel 标题暂不解析行内公式。
 - **复合区域与表格**：`columns / stack / panel / image_grid` 递归布局；layout tree `1.1` 增加原生表格，含合并表头、跨行跨列和公式格；保留旧平面 IR 与 `1.0` 树。
 - **原生科研图形**：流程、DAG、机制、分层架构、漏斗和贝塞尔路径；关系由上游显式声明，编译器分配区域。
-- **原生列表**：整套或 block 独立设置符号样式与颜色，takeaway 可单独加前导标记；术语保留策略不删除项目符号。见 [列表协议](Total-pipe/docs/native-lists.md)。
+- **原生列表**：整套或 block 独立设置符号样式与颜色，takeaway 可单独加前导标记；最低宽度 520 CSS px，高度按完整条目实测，术语保留策略不删除项目符号。见 [列表协议](Total-pipe/docs/native-lists.md)。
+- **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
 - **可测量边框容器**：layout tree `1.2` 为 panel 增加原生边框与标题色带；takeaway 可独立框选。描边、内边距和完整内容参与容量计算，支持嵌套并保留旧树。见 [容器协议](Total-pipe/docs/framed-containers.md)。
 - **可追溯反馈**：`layout_feedback.json` 给出组件路径、所需 / 可用尺寸与建议，供上游用完整内容重规划。
 - **科学术语优先**：`preserve-terms` 保留长标题与正文，超预算可带 REVIEW 生成候选；公式真实宽高、图形可读性和原图尺寸仍执行容量门禁。

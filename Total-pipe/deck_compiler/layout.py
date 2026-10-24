@@ -128,21 +128,33 @@ def fit_list_items(items, width, font_file, size, floor, max_lines):
 
 
 def native_list_height(block, width, font_file, gap_ratio=DEFAULT_LIST_GAP, padding=(0, 0), preserve_terms=False,
-                       default_style='large_square'):
-    """Minimum box for an explicit list, including its native hanging indent and item gaps."""
-    if block.get('text_flow') != DISTRIBUTED_ARROW_LIST:
+                       default_style='large_square', *, flow=None, wrap_items=True):
+    """Measure an explicit or already-selected native list, including indent and item gaps.
+
+    Planners only reserve compulsory lists by default. The emitter may pass its selected auto
+    flow; measuring it must not silently turn other prose into a compulsory list. With wrapping
+    disabled, preserve-terms still reserves one complete marker row per item before overflow.
+    """
+    if flow is None and block.get('text_flow') != DISTRIBUTED_ARROW_LIST:
+        return None
+    flow = flow or select_text_flow(block['text'], DISTRIBUTED_ARROW_LIST)
+    if flow['mode'] != DISTRIBUTED_ARROW_LIST:
         return None
     if width < 520:
         return 10000.0
     pad_x, pad_y = padding
-    rows = select_text_flow(block['text'], DISTRIBUTED_ARROW_LIST)['items']
+    rows = flow['items']
     face = ImageFont.truetype(font_file, 24)
     from .fonts import bullet_metrics
     marker = bullet_metrics(block.get('bullet_style', default_style), face.getname()[0], font_file, 24)
     line_h = marker['line_height_px']
-    height = (sum(len(break_lines(row, face, width-2*pad_x-marker['gutter'])) for row in rows)*line_h
+    line_count = (sum(len(break_lines(row, face, width-2*pad_x-marker['gutter'])) for row in rows)
+                  if wrap_items else len(rows))
+    height = (line_count*line_h
               +max(0, len(rows)-1)*round(line_h*gap_ratio, 2)+2*pad_y+(44 if block.get('label') else 0))
-    return 220.0 if preserve_terms else max(220.0, height)
+    # Height is content-dependent. A fixed floor creates unexplained gaps in compact regions.
+    # preserve_terms affects overflow handling at emission time, not the measured minimum.
+    return height
 
 
 def text_floor_height(text, width, font_file, floor=24, max_lines=10, inline_math=False):
@@ -328,7 +340,8 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  empty_share=round(share, 3))
 
 
-def graphic_page_regions(composition, region, assets, font_paths, visual_plan=None):
+def graphic_page_regions(composition, region, assets, font_paths, visual_plan=None, *,
+                         list_gap_ratio=DEFAULT_LIST_GAP, list_padding=(0, 0), bullet_style='large_square'):
     """Finite page-level candidates; graph internals stay with compile_graphic.
 
     Measure context at the existing font floor and keep each image with its caption.
@@ -339,11 +352,13 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
     gap = 24.0
     if visual_plan and not figures:
         from .academic_layout import graphic_without_evidence
-        yield from graphic_without_evidence(composition, region, font_paths, visual_plan)
+        yield from graphic_without_evidence(composition, region, font_paths, visual_plan,
+                                             list_gap_ratio=list_gap_ratio, bullet_style=bullet_style)
         return
 
     def need(block, w):
-        list_height = native_list_height(block, w, font_paths['font_file'])
+        list_height = native_list_height(block, w, font_paths['font_file'], list_gap_ratio,
+                                         list_padding, default_style=bullet_style)
         if list_height is not None:
             return list_height
         label = block.get('label', '')
@@ -793,8 +808,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
             if b.get('inline_math'):
                 flow = {**flow, 'mode': 'plain'}
-            if flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520 and box[3] >= 220:
-                pad_x, pad_y = (0, 0) if design else (28, 18)
+            pad_x, pad_y = (0, 0) if design else (28, 18)
+            measured_list_height = (native_list_height(
+                b, max(520, box[2]), font_paths["font_file"], list_gap_ratio,
+                (pad_x, pad_y), preserve_terms, bullet_style, flow=flow)
+                if flow["mode"] == DISTRIBUTED_ARROW_LIST else None)
+            if (flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520
+                    and measured_list_height is not None
+                    and (preserve_terms or box[3] + .5 >= measured_list_height)):
                 label_h = 44 if label else 0
                 items = flow["items"]
                 current_style = b.get('bullet_style', bullet_style)
@@ -891,19 +912,20 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 return
             if flow["mode"] == DISTRIBUTED_ARROW_LIST:
                 if flow['source'] == 'explicit':
+                    required_height = round(measured_list_height, 1)
                     issues.append(issue('SPLIT_REQUIRED', 'FAIL',
-                        f"{b['id']}: explicit native list requires a component box of at least 520 × 220 px; markers were not removed.",
-                        n, b['id'], detector='geometric-preflight', required_size_px=[520, 220],
+                        f"{b['id']}: explicit native list requires at least 520 px width and its measured content height; markers were not removed.",
+                        n, b['id'], detector='geometric-preflight', required_size_px=[520, required_height],
                         available_size_px=box[2:], suggested_actions=['widen_region', 'increase_region_height', 'split_slide']))
                     return
                 adaptations.append({
                     "block_id": b["id"],
                     "action": "text_flow_fallback",
                     "requested": DISTRIBUTED_ARROW_LIST,
-                    "reason": "component_box_below_520x220",
+                    "reason": "component_box_below_measured_minimum",
                 })
                 issues.append(issue("TEXT_FLOW_FALLBACK", "INFO",
-                                    f"{b['id']} kept plain because its component box is too narrow or short",
+                                    f"{b['id']} kept plain because its component box is narrower than 520 px or shorter than the measured list content",
                                     n, b["id"], detector="geometric-preflight"))
             label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
@@ -915,7 +937,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     max_columns=max_columns, preferred_columns=preferred_columns,
                     body_size=type_sizes(design)['body'] if design else 28,
                     text_inset=56 if show_sequence else 0, preserve_terms=preserve_terms,
-                    list_gap_ratio=list_gap_ratio,
+                    list_gap_ratio=list_gap_ratio, list_padding=(0, 0) if design else (28, 18),
+                    bullet_style=bullet_style,
                     gap=24 if comp['archetype'] == 'figure-parameters' else 18)
             except FormulaCapacityError as error:
                 issues.append(issue('FORMULA_CAPACITY', 'FAIL', str(error), n,
@@ -941,6 +964,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         def figure(f, box, k, caption_top=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
+            reference = asset.get("origin") == "reference"
             caption_h = 0
             if f["caption"]:
                 # Declared height wins; otherwise the strip follows the actual line count. A drawn
@@ -959,12 +983,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             eid = f"figure-{k}"
             min_extent = f.get("min_panel_extent", 220)
             actual_extent = min(w / f.get("panel_count", 1), h)
-            element = {"id": eid, "kind": "image", "role": "evidence", "bbox": bbox,
+            element = {"id": eid, "kind": "image", "role": "reference" if reference else "evidence", "bbox": bbox,
                        "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
                        "min_panel_extent": min_extent,
                        "actual_panel_extent": actual_extent}
             if schematic:
                 element["schematic"] = {"generator": asset.get("generator")}
+            elif reference:
+                element.update(origin="reference", reference_source=asset["reference_source"])
             else:
                 element["source_figure"] = f["source_figure"]
             elements.append(element)
@@ -973,6 +999,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     issues.append(issue("SCHEMATIC_TOO_SMALL", "FAIL",
                                         f"Schematic extent {actual_extent:.1f}px is below {min_extent}px",
                                         n, eid, detector="geometric-preflight", confidence="HIGH"))
+                elif reference:
+                    issues.append(issue("REFERENCE_IMAGE_TOO_SMALL", "FAIL",
+                                        f"Reference image extent {actual_extent:.1f}px is below {min_extent}px",
+                                        n, eid, detector="geometric-preflight", confidence="HIGH",
+                                        reference_source=asset["reference_source"]))
                 else:
                     issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
                                         f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
@@ -988,6 +1019,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                     "Confirm the drawn schematic matches the text it illustrates; "
                                     "it is not a paper figure",
                                     n, eid, detector="scientific-review", confidence="MEDIUM"))
+            elif reference:
+                issues.append(issue("REFERENCE_IMAGE_REVIEW", "REVIEW",
+                                    "Confirm the crop and readability against its user-provided source; "
+                                    "this image is not independently verified scientific evidence",
+                                    n, eid, detector="source-review", confidence="MEDIUM",
+                                    reference_source=asset["reference_source"]))
             else:
                 issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW",
                                     "Confirm scientific panel labels and evidence fidelity",
@@ -1161,7 +1198,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         elif visual_plan:
             from .academic_layout import candidates
             best_failures, attempts = [], []
-            for plan in candidates(slide, [56, top, 1168, bh], assets, font_paths, design):
+            for plan in candidates(slide, [56, top, 1168, bh], assets, font_paths, design,
+                                   list_gap_ratio=list_gap_ratio, bullet_style=bullet_style):
                 boxes = [*plan['blocks'], *plan['figures']]
                 boxes += [plan[key] for key in ('graphic', 'emphasis') if plan.get(key) is not None]
                 if any(min(box[2:]) <= 0 for box in boxes):
@@ -1206,7 +1244,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # Try a small set of whole-page compositions using the existing emitters. Failed
             # attempts never leak partial content, warnings or text adaptations into the result.
             best_failures, attempted = [], 0
-            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths):
+            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths,
+                    list_gap_ratio=list_gap_ratio, list_padding=(0, 0) if design else (28, 18),
+                    bullet_style=bullet_style):
                 boxes = [plan['graphic'], *plan['blocks'], *plan['figures']]
                 if any(min(box[2:]) <= 0 for box in boxes):
                     continue

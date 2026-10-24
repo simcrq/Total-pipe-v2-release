@@ -153,7 +153,8 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 读 `Total-pipe/docs/native-lists.md`：顶层 presentation.bullet_style/bullet_color 设默认，block 同名字段覆盖。
 单页 presentation.takeaway_marker={style:large_diamond,color:#000000} 为完整 takeaway 加一个独立标记；
 可与 takeaway 行内公式共存，符号颜色不改正文颜色。preserve-terms 不移除项目符号，
-垂直超容量保留原文与 REVIEW；显式列表最低区域 520×220 px 不足时回到布局规划或拆页。
+垂直超容量保留原文与 REVIEW；显式列表宽度至少 520 px，高度按完整内容实测，不使用固定高度门槛；
+空间不足时回到布局规划或拆页。
 不要为套入列表缩短术语，也不要把失败列表改成普通文本掩盖问题。
 标记可选；plain 关闭正文列表，不配置 takeaway_marker 则无前导标记。优先选 large_square、
 large_diamond、arrowhead 等饱满原生字形，不设置项目符号百分比 / 点数缩放；符号颜色独立配置。
@@ -167,6 +168,9 @@ large_diamond、arrowhead 等饱满原生字形，不设置项目符号百分比
 
 机制边须明确关系及 `evidence/hypothesis` 依据；证据引用绑定本页，假设保留虚线与标签。
 图形与原图、完整正文/图注共存，生成图不能代替论文证据；`SCHEMATIC_REVIEW` 始终保留。
+图像来源按实际区分：论文图用 `origin: paper` 和完整 `source_figure`；管线绘制的图用 `origin: generated`、`generator`
+及“示意图”图注；从用户提供的幻灯片或图片裁切时用 `origin: reference` 和非空白的 `reference_source`，
+不填写 `source_figure`、不强制加示意图图注；仍检查裁图来源、最小可读尺寸和 `REFERENCE_IMAGE_REVIEW`。
 Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不是 SVG 导入或页面坐标接口。
 
 ### 可选的复合内容区域

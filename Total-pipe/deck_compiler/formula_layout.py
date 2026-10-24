@@ -37,7 +37,8 @@ def formula_groups(blocks):
 
 
 def plan_formula_flow(blocks, region, fonts, archetype, *, max_columns=2, preferred_columns=1,
-                      body_size=28, gap=18, text_inset=0, preserve_terms=False, list_gap_ratio=.45):
+                      body_size=28, gap=18, text_inset=0, preserve_terms=False, list_gap_ratio=.45,
+                      list_padding=(0, 0), bullet_style='large_square'):
     """Return one measured layout or explain why none fits above the existing 18 pt floor.
 
     Reading order is down the first column, then down the second. Column breaks are between
@@ -69,7 +70,8 @@ def plan_formula_flow(blocks, region, fonts, archetype, *, max_columns=2, prefer
                 if block.get('text_flow') == 'distributed_arrow_list':
                     from .layout import native_list_height
                     content_height = native_list_height(block, column_width-text_inset, fonts['font_file'],
-                                                        list_gap_ratio, preserve_terms=overflow_review)
+                                                        list_gap_ratio, list_padding, overflow_review,
+                                                        default_style=bullet_style)
                 elif block.get('inline_math'):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     try:

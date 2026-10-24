@@ -116,13 +116,31 @@ contain two to six rows and fit the component box above the font floor.
 Blocks may override `bullet_style` and `bullet_color` independently; prose color remains unchanged.
 Slide `presentation.takeaway_marker: {"style":"diamond","color":"#000000"}` gives the complete takeaway
 one native leading marker, including on an inline-math takeaway, with continuation lines aligned to the prose.
-Explicit lists need at least 520 × 220 px. `preserve-terms` retains full native list rows, markers and colors;
+Explicit lists need at least 520 px width; the required height is measured from complete native rows, marker gutter,
+wrapping, labels, spacing and padding rather than a fixed floor. `preserve-terms` retains full native list rows, markers and colors;
 vertical overflow becomes REVIEW at the 18 pt floor, while strict mode requires replanning or splitting.
 It never silently removes explicit bullets. See [native list styles and capacity](native-lists.md).
 
 `examples/distributed-arrow-list.deck_ir.json` is the canonical model/compiler reference.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer
 new scientific claims or split prose at punctuation merely to fill space.
+
+### Figure provenance: paper, generated and reference images
+
+`assets.origin` separates three sources. `paper` is cropped from a scientific paper and requires a matching
+`source_figure` on the asset and figure reference. `generated` is drawn by the pipeline, requires `generator`,
+forbids paper figure numbers and requires a schematic caption. `reference` is cropped from a user-provided slide
+or image; it requires `reference_source`, forbids `source_figure`, and does not require a visible schematic caption.
+Reference crops are visual source material, not independently verified scientific evidence. The compiled image element
+retains `reference_source` for traceability.
+
+For example, `assets.facility = {"path":"assets/facility-crop.png", "origin":"reference",
+"reference_source":"User-provided feasibility.pptx, slide 8, left panel"}` pairs with
+`{"asset_id":"facility", "caption":"Research facilities"}` in `figure_refs`.
+An empty caption is also allowed. Schema and runtime validation require a nonblank source; runtime
+validation additionally forbids `source_figure` on references to this asset. Contain fitting, image byte
+checks and minimum panel extent still apply. `REFERENCE_IMAGE_TOO_SMALL` blocks unreadable crops;
+`REFERENCE_IMAGE_REVIEW` requests source/crop/readability review without treating the crop as paper evidence.
 
 ### Drawn schematics (`origin: generated`)
 

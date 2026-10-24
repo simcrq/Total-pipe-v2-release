@@ -266,12 +266,19 @@ class RegionCompiler:
                 if block.get('text_flow') == 'distributed_arrow_list':
                     from .layout import native_list_height
                     if width < 520:
+                        minimum_height = native_list_height(block, 520, self.fonts['font_file'],
+                                                            self.list_gap_ratio, self.list_padding,
+                                                            default_style=self.bullet_style)
                         raise LayoutTreeError(path, 'INSUFFICIENT_LIST_SPACE',
                             'Explicit native lists require at least 520 px width; markers cannot be discarded.',
-                            [520, 220], available, ['widen_region', 'switch_to_two_columns', 'split_slide'])
+                            [520, minimum_height], available,
+                            ['widen_region', 'switch_to_two_columns', 'split_slide'])
                     natural = native_list_height(block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
                                                  default_style=self.bullet_style)
-                    need = Need(220 if self.preserve else natural, natural, 520)
+                    hard_minimum = (native_list_height(
+                        block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
+                        default_style=self.bullet_style, wrap_items=False) if self.preserve else natural)
+                    need = Need(hard_minimum, natural, 520)
                 elif block.get('inline_math'):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     from .fonts import load_font_file
