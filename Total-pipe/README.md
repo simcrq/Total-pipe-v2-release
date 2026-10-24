@@ -1,300 +1,99 @@
-# Total-pipe Deck Compiler v3
+# Total-pipe：Deck IR 编译与 Agent 接口
 
-新增可选的 [复合内容区域](docs/composite-layouts.md)：RPA 检索、组合或自动选择子布局，Deck IR 在现有框架内递归
-分配 columns/stack/panel/image_grid，复用原生公式、图片、流程图与贝塞尔路径。旧平面 IR 继续支持，
-容量错误通过绑定 IR 哈希的 layout_feedback.json 返回。1.1 增加 [原生科研表格](docs/native-tables.md)，
-含多级表头、跨行跨列、公式/矩阵单元格；已有 1.0 树不必迁移。
-见 [三页混排样例](examples/composite-layout.deck_ir.json) 和 [两页表格样例](examples/native-table.deck_ir.json)。
+本目录包含 Deck Compiler、确定性布局提供方、pwf2rpa、Schema、示例和总调度 Skill。
+完整论文流程还使用同级的 `PaperWorkflow/` 和 `research-ppt-assistant/`。
 
-**🎉 NEW: AI-Friendly Unified CLI + Comprehensive Quality Metrics** - [See Implementation Guide](IMPLEMENTATION_COMPLETE.md)
+**组件、当前版本和全流程入口见 [仓库 README](../README.md)。**
+插件清单版本为 `3.3.0+codex.20261021203000`；MCP 握手版本为 `3.2.0`，
+编译器 Python 模块仍声明 `2.0.0`。输入 Deck IR 为 `schema_version: "2.0"`，
+可选 layout tree 支持 `1.0 / 1.1`。这些版本属于不同对象。
 
-Total-pipe 是从论文证据到可验收 PPTX 的端到端编排项目。上游负责证据与科研叙事，
-Research PPT Assistant 负责页面规划，Deck Compiler v3 从 canonical
-`deck_ir.json` 开始接收布局建议（默认来自内置确定性打包器 packer，见
-[docs/layout-provider.md](docs/layout-provider.md)）、校验约束并生成 PPTX。
-原 v26 扩散模型已移除，模型接口保留。
+## 入口与职责
 
-现已支持原生可编辑流程图：3–4 个横向节点、五种形状、独立文字，以及绑定节点的原生连接符。
-见 [使用说明](docs/native-graphics.md) 和 [可运行示例](examples/native-graphic.deck_ir.json)。
+| 入口 | 用途 |
+| --- | --- |
+| [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → Deck IR → Design → 编译 / 验收 |
+| `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
+| `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
+| `python -m deck_compiler.mcp_server` | Total-pipe stdio MCP，配置为 [.mcp.json](.mcp.json)，服务名 `total_pipe_v3` |
+| `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
-`type: "dag"` 支持确定性分层、分支/汇合与原生正交连接符；见
-[DAG 示例](examples/native-dag.deck_ir.json)。线性 `process` 的 v2 行为保持兼容。
-
-`process-flow` 和 `figure-parameters` 现可选用 `composition.graphics`，与正文、
-证据原图、图注和讲稿共存；区域由编译器分配，图形内部仍使用现有布局器。
-见 [混排说明](docs/native-graphics.md#科研页面混排) 和 [开发示例](examples/native-research.deck_ir.json)。
-
-v5 增加机制、分层架构、漏斗/金字塔组件及可组合的区域接口；Path IR 的
-`M/L/C/Q/Z` 编译为原生 `a:custGeom`，保持独立标签和对象身份。
-见 [组件与路径说明](docs/native-components.md) 和 [六页开发示例](examples/native-components.deck_ir.json)。
-
-Scientific Visual Planner 是默认 design 阶段：一次 Agent 提案选择整套科研风格和测量、机制、
-证据比较构图；严格合入 `presentation.academic_design / visual_plan` 后由现有编译器执行。
-标题和正文优先保留完整科学术语，文字超预算可带 REVIEW 生成候选。
-CLI/MCP 的 compile、build 和统一 generate 入口漏做设计时返回 `VISUAL_DESIGN_REQUIRED`、
-完整 `visual_prompt.json` 与缺失页面；补做并合入提案后继续。只有显式旧版构建才用
-`--skip-visual-design`（MCP：`skip_visual_design=true`）；低层 `compile_deck` 仍兼容旧 IR。
-见 [协议、CLI/MCP 与容量策略](docs/scientific-visual-planner.md)。
-
-公式使用 `component: "formula"`，支持分式、根号/带次数根号、上下标、嵌套指数和常用函数。
-AST 按数学模式测量后写入可编辑 OMML；普通文本中的 `$...$` 不会自动排成公式。
-矩阵支持六种常用 matrix 环境与单元格内的分式、根号、上下标。密集推导页用
-`equation-derivation`，按实际行列尺寸尝试单双栏，保留每条公式与解释；不再用两条公式上限
-或跨栏高度之和判定容量。见 [4×4 矩阵与密集公式回归样例](examples/matrix-derivation.deck_ir.json)。
-见 [公式协议](docs/deck-compiler-v2.md#formulas-component-formula) 与
-[回归样例](examples/formula.deck_ir.json)。
-
-## 🚀 Quick Start (New Unified CLI)
-
-```bash
-# 1. Validate inputs (fast pre-check, <1 second)
-python totalpipe.py validate deck_ir.json
-
-# 2. Generate presentation with automatic overflow repair
-python totalpipe.py generate deck_ir.json --out build/
-
-# 3. Analyze quality (6 dimensions: readability, consistency, accessibility, etc.)
-python totalpipe.py quality build/
-
-# 4. Generate preview images (no PowerPoint required)
-python totalpipe.py preview build/ --format png
-
-# 5. Check that a delivered .pptx is the file the QA report describes
-python totalpipe.py verify build/final.pptx --build build/
-```
-
-**Key Features**:
-- ✅ **Single entry point** - One CLI replaces multiple tools
-- ✅ **Cross-platform fonts** - Automatic font discovery (Windows/macOS/Linux)
-- ✅ **Quality scoring** - Comprehensive 0-100 quality analysis across 6 dimensions
-- ✅ **Fast validation** - Pre-flight checks in <1 second
-- ✅ **Structured errors** - Clear error messages with fix suggestions
-- ✅ **JSON output** - All commands support `--json` for AI integration
-- ✅ **Preview generation** - PNG/JPG previews without PowerPoint
-
-**Documentation**:
-- [Complete Implementation Guide](IMPLEMENTATION_COMPLETE.md) - Full feature documentation
-- [Quality Metrics Guide](docs/QUALITY_METRICS.md) - Visual quality analysis system
-- [AI Usage Guide](../AI_USAGE_GUIDE.md) - For AI agents
-- [Quick Start Guide](../QUICKSTART.md) - 5-minute introduction
-
-```text
-PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → Research PPT Assistant
-    → canonical deck_ir.json → Deck Compiler v3
-    → candidate.pptx → staging.pptx
-    → structural QA + PowerPoint PDF
-    → qa_report.json → final.pptx
-```
-
-## 职责边界
-
-- **PaperWorkflow**：从论文生成可追溯 Evidence。
-- **Story Planner**：组织研究问题、回答、证据和叙事推进。
-- **DesignIntentPlanner（可选）**：只声明四个 Story 要点的流程关系与强调位置，不提供坐标。
-- **pwf2rpa**：验证 Story provenance，将 `answer` 转成 `takeaway`，可选 `key_points` 原顺序传给 RPA，并保留 `body` 的段落边界。
-- **Research PPT Assistant**：按完整内容和设计意图选择 Layout、绑定 Slot，输出可核对的 `layout_contract`；不生成 PPTX。
-- **Deck Compiler v3**：验证 Deck IR、约束布局建议，并通过 OfficeCLI 唯一写入 PPTX。
-- **PowerPoint 验收**：以 PowerPoint 导出的 PDF 和人工逐页检查作为原生证据。
-
-`deck_ir.json` 是编译阶段唯一可维护的页面真源。以下文件只能由编译器派生：
-
-- `derived/deck_plan.json`
-- `derived/visual_manifest.json`
-- `derived/plan_to_layout.json`
-- `derived/qa_expectation.json`
-
-下游不得修改这些派生文件再回写语义。
-
-Deck IR 可在顶层声明 `"presentation": {"frame_variant": "spacious"}`（或 `default`）。省略时，只要任一页请求 `spacious`，整套使用同一个 spacious 标题、takeaway 和正文基线；否则整套为 default。编译结果在 `layout.json` 记录实际 `deck_frame_variant` 和覆盖的页码。`figure-parameters` 中按阅读顺序排列的 3–4 个 block 与一张图构成同级纵向组：同一网格列内按 24 px 间距重新堆叠，容量允许时等高，否则依文本所需高度分配；图与图注相隔 12 px。校正后仍需通过容量、碰撞与字体检查，不通过则回退。
-
-若同一版型是无独立标签的四步加工流程，首项角色为 `method`、中间含 `process-step`、末项为 `result`，编译器会在文本列内加入 1–4 编号与纵向连线。编号占用的 56 px 会纳入容量检查；原 block 文本不重写，触发结果记入 `adaptation_log`。
-
-v3.2 可在 Story 后另写 `design_intent.json`，用 `--story` 与 `--design-intent` 一起转换。首版只接受恰好四条 `key_points` 的纵向 `process`，没有 bbox；未提供该文件时原有流程保持兼容。RPA `layout_contract` 必须核对整组原文的 Slot Binding。映射到 Deck IR 时，用实际 block ID 写 `composition.visual_intent.members`；该硬关系不得自动拆页，容量不足时返回重规划。编译器验证成员顺序并绘制编号连线，布局提供方仍只提供几何建议。
-
-每页的 `MODEL_PROPOSAL`、`PACKING_FALLBACK` 或 `COMPILER_FALLBACK` 可直接查 `layout_provider.json`；派生的 `plan_to_layout.json` 也记录 `layout_provider_status`，无需从 PPTX 的间距推断来源。
-
-Story 节点的四个原有字段保持必需；只有需要保留细节时才加 `key_points`，没有固定条数。pwf2rpa 把它与 `takeaway` 一起计入布局容量；`evidence_texts` 仍是原始证据，不自动填入正文。完整用法见 [pwf2rpa README](pwf2rpa/README.md) 与 [中文使用说明](docs/USAGE.zh-CN.md)。
-
-RPA 修订须用原始 `normalized_content.json` 核对计划的 `key_points`；
-`validate-deck` 对丢失或改写的条目报告 `KEY_POINTS_LOST`。映射到 Deck IR 时，
-把每条细节保留在正文或讲者备注中，容量不足则拆页。OfficeCLI 的
-`Text overflow` issue 仅作排查线索，应以实际 PPTX 页面确认。
-RPA 的字符容量只是粗筛；正文和要点在 Slot Binding 中不可静默裁切。
-若总结页无法完整绑定，规划必须返回 `needs_replan`，不能用其他类别替代。
-PaperWorkflow 的定制 `queries` 应在首轮调用前准备；无显式要求时它们会替代通用
-默认问题。文件名无法关联的补充 PDF 用 `supplementary_paths` 明确配对；仅配对时
-补充门禁仍为 `review`。将补充文本纳入 OCR/Markdown 输入后才设置
-`supplementary_content_included=true`。验收科学综合时看 `synthesis_readiness`
-六项门禁，不以 `quality_audit.ready` 代替。pwf2rpa 的默认结尾标题跟随 Story
-主要语言，英文 Story 生成 `Conclusions and scope`，`title_chars` 自动重算。
-
-## 当前目录
-
-```text
-Total-pipe/
-├── deck_compiler/        # Deck IR → PPTX → unified QA
-├── schemas/              # Deck IR / TextBoxContract / QA Report
-├── examples/             # 可运行的内容无关示例
-├── benchmarks/           # compiler smoke 与历史基线
-├── pwf2rpa/              # Story → RPA input
-├── skills/
-│   ├── total-pipe-deck/
-│   └── local-project-mcp-bridge/
-├── docs/
-└── tests/
-```
-
-M5 已从 Total-pipe 主链删除旧 SlideDSL、`deckplan2slide.py`、
-`design_land.py`、`rpa_full_pipeline.py`、孪生 artifact telemetry、
-PPTX sidecar 和旧 Team 编排。Research PPT Assistant 仍保留自己的 renderer
-telemetry adapter；它们不属于 Deck Compiler 的 PPTX 生成路径。
+编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
+`packer` 是默认布局建议提供方，也可选 `compiler` 或外部 `module:factory`。
+旧 v26 扩散模型已移除，当前运行无需 torch。
 
 ## 环境
 
-生成 PPTX 需要 OfficeCLI 1.0.152 或更新版本的可执行文件（源码克隆不等于已安装）。
-编译器会检查版本及所需 PPTX 属性 schema。
-最低要求和 PowerPoint 说明见 [环境清单](环境清单.md)。
+完整流水线使用 Python 3.12+、Node.js 22+；编译依赖见 [requirements.txt](requirements.txt)。
+生成 PPTX 需 OfficeCLI 1.0.152+，正式原生验收需 macOS / Windows 的 Microsoft PowerPoint。
+PDF OCR、字体、可选数学度量和安装命令见 [环境清单](环境清单.md)。
+
+## 从 Deck IR 编译
+
+在本目录执行；尖括号参数替换为实际路径：
 
 ```bash
-python -m unittest discover -s tests -v
+python -m deck_compiler capabilities
 
-cd pwf2rpa
-PYTHONPATH=. python -m unittest discover -s tests -v
+python -m deck_compiler visual-prompt --ir <deck_ir.json> --out <visual_prompt.json>
+# Agent 阅读完整提示包，生成绑定当前 IR 哈希的 visual_proposal.json
+python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
+  --proposal <visual_proposal.json> --out <designed.deck_ir.json>
+
+python -m deck_compiler compile --ir <designed.deck_ir.json> --out <build-dir>
+python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
+  --officecli <officecli-path> --skip-native
 ```
 
-Research PPT Assistant 是同级项目，测试应在其目录运行：
+已完成整套设计的 IR 可直接 compile / build。Design 默认必做；漏做时返回
+`VISUAL_DESIGN_REQUIRED` 和完整提示包。提案只改变 presentation；相对资源路径要求新 IR
+与源 IR 同目录。简化构建命令为：
 
 ```bash
-cd ../research-ppt-assistant
-npm test
-npm run audit:layouts
+python totalpipe.py generate <designed.deck_ir.json> --out <build-dir>
 ```
 
-## Usage Options
+该命令接收已有 Deck IR，默认生成候选。上述开发构建的 `--skip-native` 须在正式晋级前补验收。
 
-### Option A: Unified CLI (Recommended for AI Agents)
-
-Use the new `totalpipe.py` unified CLI for simplified workflows:
+### 快速运行已带设计的样例
 
 ```bash
-# Fast validation before generation
-python totalpipe.py validate deck_ir.json
-
-# Generate with automatic overflow repair and quality analysis
-python totalpipe.py generate deck_ir.json --out build/
-
-# Check quality (0-100 score across 6 dimensions)
-python totalpipe.py quality build/
-
-# Generate preview images
-python totalpipe.py preview build/
+python -m deck_compiler build --ir examples/inline-math.deck_ir.json \
+  --out build/inline-math --officecli officecli --skip-native
 ```
 
-All commands support `--json` flag for machine-readable output. See [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) for details.
+此样例有三页，覆盖行内文字 / 根号 / 指数、行内矩阵与独立公式、原生表格。
+样例字体名会按当前系统解析，字体替代和数学近似测量会进入 REVIEW。
 
-### Option B: Traditional Deck Compiler (Full Control)
+## 构建产物与验收
 
-## Deck Compiler 快速使用
+| 文件 | 含义 |
+| --- | --- |
+| `deck_ir.json` | 本次构建冻结的科学内容输入 |
+| `layout.json`、`layout_provider.json` | 最终几何、文本契约、提供方与回退记录 |
+| `derived/` | 从输入派生的规划、资源清单与 QA expectation |
+| `layout_feedback.json` | 绑定 IR 哈希的组件尺寸错误及上游修订建议 |
+| `candidate.pptx`、`staging.pptx` | 可编辑候选与字节一致的验收副本 |
+| `qa_report.json`、`officecli_issues.json` | 统一 QA 和保留的 OfficeCLI 原始问题 |
+| `powerpoint_review.json`、`native.pdf`、`native.json` | 当前 staging 的直接 UI 检查与 PowerPoint 原生证据 |
+| `final.pptx`、`state.json` | 完成验收 / REVIEW 审核 / promote 后的交付及状态 |
 
-只编译 Deck IR 和布局，不生成 PPTX：
+修改页面从 canonical Deck IR 开始；派生文件由编译器重建。
+候选可以交付并注明未解决项；正式 final 按 [使用说明第 6 节](docs/USAGE.zh-CN.md#6-正式-finalpowerpoint-验收与晋级)
+完成逐页 PowerPoint 检查、PDF 绑定及 REVIEW acknowledgement，再 promote。
+OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
 
-```bash
-cd Total-pipe
-python -m deck_compiler compile \
-  --ir examples/research.deck_ir.json --out /tmp/total-pipe-compile
-```
+## 当前能力与协议
 
-生成 `candidate.pptx` 和 `staging.pptx`：
+- [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
+- [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
+- [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
+- [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
+- [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。
+- [整套视觉设计](docs/scientific-visual-planner.md)：保留完整科研术语，文字超容量按 preserve-terms 生成候选及 REVIEW。
 
-```bash
-python -m deck_compiler build \
-  --ir examples/research.deck_ir.json --out /tmp/total-pipe-build \
-  --officecli /absolute/path/to/officecli --skip-native
-```
+旧平面 IR、layout tree 1.0 和未启用行内公式的文字仍兼容。
+文字容量例外允许保留全文；公式真实宽高、图形可读性和原图尺寸门禁继续执行。
 
-`--skip-native` 仅用于开发检查，会产生 `REVIEW`，不能晋级 final。正式流程不要使用
-该参数。正式流程必须直接在 PowerPoint 普通视图或阅读视图逐页眼检
-`staging.pptx`；不得用导出后的 Preview/PDF 代替。确认图号—图注—素材、科学图面
-尺寸、碰撞和字体后，记录与当前 staging 绑定的 UI 眼检：
-
-```bash
-python -m deck_compiler record-powerpoint-review --out /tmp/total-pipe-build \
-  --reviewer "reviewer" --slides all
-```
-
-随后在同一次 PowerPoint 控制流程中导出 `native.pdf`，再绑定原生证据：
-Windows 当前需在 PowerPoint 界面手工导出该 PDF。
-
-```bash
-python -m deck_compiler validate-native \
-  --out /tmp/total-pipe-build --pdf /tmp/total-pipe-build/native.pdf \
-  --reviewer "reviewer"
-```
-
-论文图片还必须在 asset 与 figure reference 上声明相同的 `source_figure`（如 `3e`），
-且图注显式包含 `Fig.3e`；三方不一致或有效图面小于默认 220 px 都会直接 FAIL。
-
-若 `qa_report.json` 中存在 `REVIEW`，创建与当前 staging SHA-256 绑定的
-`review_ack.json`，列出全部接受的 review ID，然后晋级：
-
-```bash
-python -m deck_compiler promote \
-  --out /tmp/total-pipe-build --ack /tmp/total-pipe-build/review_ack.json
-```
-
-完整端到端步骤见 [中文使用说明](docs/USAGE.zh-CN.md)，编译器契约见
-[Deck Compiler v2](docs/deck-compiler-v2.md)。OfficeCLI 后端的命令、接口协议与
-agent 调用顺序见 [OfficeCLI 后端说明](docs/officecli-backend.zh-CN.md)。
-
-## Deck IR 与 text_flow
-
-Deck IR Schema 位于 [schemas/deck-ir.schema.json](schemas/deck-ir.schema.json)。
-block 支持：
-
-```json
-{
-  "id": "findings",
-  "component": "body",
-  "label": "关键发现",
-  "text_flow": "auto",
-  "text": "第一项内容……\n第二项内容……\n第三项内容……"
-}
-```
-
-`text_flow` 可选值：
-
-- `auto`：满足条件时使用等距箭头列表；
-- `plain`：始终保持普通正文；
-- `distributed_arrow_list`：显式请求等距箭头列表。
-
-自动模式只处理 3–5 个明确段落，总显示长度至少 72 单位、单项最多 120 单位，
-汉字按 2 单位计。编译器不会按标点拆分单个段落。实际触发写入
-`adaptation_log`；组件框不足 520×220 CSS px 时保持普通正文并记录
-`TEXT_FLOW_FALLBACK`。
-
-可运行参考见
-[examples/distributed-arrow-list.deck_ir.json](examples/distributed-arrow-list.deck_ir.json)。
-
-## 状态与晋级规则
-
-- `FAIL`：阻断 PPTX 生成或晋级。
-- `WARNING`：记录风险，不单独阻断晋级。
-- `REVIEW`：需要绑定当前 artifact SHA-256 的人工确认。
-- `INFO`：记录确定性适配或非阻断事实。
-
-`promote` 会重新验证 staging、Deck IR、layout、PowerPoint PDF 和 acknowledgement
-的哈希。任何证据过期都会拒绝生成 `final.pptx`。
-
-## Test3 验收基线
-
-验收证据的发布副本位于仓库根目录：
-
-```text
-acceptance/Test3/build/
-```
-
-（`acceptance/` 按 `.gitignore` 不随仓库分发；从原始工作区复制时保持同样的目录结构即可。）
-
-发布副本包含 baseline final、微软雅黑版本、装饰修订版本、PowerPoint PDF、
-QA 报告、metrics、state 和 review acknowledgement。当前人工装饰版不等同于
-canonical Deck Compiler 输出；`final_msyh.pptx` 保留为回退基线。
+完整操作见 [USAGE.zh-CN.md](docs/USAGE.zh-CN.md)；开发与验收记录见
+[composite-layout-development.md](docs/composite-layout-development.md)。
