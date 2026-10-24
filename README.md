@@ -137,6 +137,10 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 
 ## 当前能力与容量规则
 
+可直接打开[复杂混排单页 PPTX](Total-pipe/examples/complex-mixed/complex-mixed.pptx)，
+对应 [Deck IR、资源与重建说明](Total-pipe/examples/complex-mixed/README.zh-CN.md) 一并版本管理。
+该样例同时展示参考图片、测量边框、原生项目符号、矩阵、行内根式 / 指数以及原生 Bézier 光子芯片图案。
+
 - **原生数学内容**：分式、根号、上下标、嵌套指数、六种矩阵环境；密集多步推导按实际单双栏区域测量。
 - **显式行内公式**：正文、标题 / takeaway、表格文字格可选开启；文字与数学片段按逐行宽度、上伸和下伸高度计算容量。图注、图形标签和 panel 标题暂不解析行内公式。
 - **复合区域与表格**：`columns / stack / panel / image_grid` 递归布局；layout tree `1.1` 增加原生表格，含合并表头、跨行跨列和公式格；保留旧平面 IR 与 `1.0` 树。

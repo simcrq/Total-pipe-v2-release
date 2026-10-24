@@ -176,6 +176,8 @@ arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸�
 强制添加示意图图注。参考裁图保留来源说明，但不作为独立科研证据核验。
 `reference_source` 不能留空白；图注可以为空，图片仍执行原图字节核对、等比包含和最小可读尺寸检查，
 并保留 `REFERENCE_IMAGE_REVIEW` 供来源 / 裁图 / 可读性审核。字段示例见[图片来源协议](deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
+可运行的[复杂混排单页样例](../examples/complex-mixed/README.zh-CN.md)同时提供 PPTX 与完整 Deck IR：
+包含参考图片、原生列表、矩阵、行内公式、边框及 graphics/path 小图案，可用于检查这些能力共存时的容量。
 
 原生 process/DAG 与图文混排见 [native-graphics.md](native-graphics.md)；机制、架构、漏斗、
 Path 和 composite 见 [native-components.md](native-components.md)。所有关系显式声明；

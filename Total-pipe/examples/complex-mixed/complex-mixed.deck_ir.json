@@ -1,0 +1,1068 @@
+{
+  "schema_version": "2.0",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyh.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "thin-rule",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "minimal",
+      "header_variant": "compact",
+      "type_scale": "compact",
+      "accent_color": "#0755A3"
+    },
+    "text_capacity_policy": "strict",
+    "bullet_style": "large_square",
+    "bullet_color": "#0755A3",
+    "list_gap": 0.45
+  },
+  "deck_id": "complex-mixed-research-example",
+  "assets": {
+    "fabrication": {
+      "path": "assets/micro-nano-fabrication.jpg",
+      "origin": "reference",
+      "reference_source": "User-provided feasibility reference slide (2026-10), micro/nano fabrication photo crop; source resolution 126 x 114 px"
+    },
+    "optics": {
+      "path": "assets/optical-characterization.jpg",
+      "origin": "reference",
+      "reference_source": "User-provided feasibility reference slide (2026-10), optical characterization photo crop; source resolution 126 x 114 px"
+    }
+  },
+  "slides": [
+    {
+      "id": "complex-mixed",
+      "semantic": {
+        "title": "光学表征平台与矩阵计算示例",
+        "purpose": "展示参考图片、完整科学术语、矩阵分解与响应函数",
+        "takeaway": "示例矩阵满足 $A=LL^{T}$，响应函数满足 $q(0)=1$。",
+        "inline_math": [
+          "takeaway"
+        ],
+        "evidence_refs": [
+          "fixture:complex-mixed"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件混排示例。平台图片沿用用户参考页的原始裁图，不作为独立科研证据。矩阵和响应函数为演示计算模型，不代表图片所示平台的实测结果。A 为对称正定矩阵，L 为其下三角 Cholesky 因子。原始图片为 126×114 px，未重绘或声称更高分辨率。 集成光子芯片图案由 Deck IR graphics/path 绘制，包含等距基底、双微环、弯曲波导、电极及输入输出光束；属于概念图案，不代表实际器件拓扑或实验数据。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "conditions",
+            "component": "body",
+            "text_flow": "plain",
+            "text": "微纳加工制备\n与光学测试表征\n分别记录测量条件。"
+          },
+          {
+            "id": "factorization",
+            "component": "formula",
+            "text": "A=\\begin{pmatrix}4&2\\\\2&3\\end{pmatrix}=LL^{T},\\quad L=\\begin{pmatrix}2&0\\\\1&\\sqrt{2}\\end{pmatrix}"
+          },
+          {
+            "id": "response",
+            "component": "body",
+            "inline_math": true,
+            "text": "以无量纲时间 $t\\ge0$ 定义 $q(t)=\\sqrt{\\frac{1+e^{-t}}{2(1+t^2)}}$，且 $q(0)=1$。"
+          },
+          {
+            "id": "constraints",
+            "component": "body",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "arrowhead",
+            "bullet_color": "#B45309",
+            "text": "对称正定矩阵采用 Cholesky 分解。\n无量纲时间的响应在初始时刻归一化。"
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "fabrication",
+            "caption": "微纳加工制备平台",
+            "min_panel_extent": 140,
+            "caption_font_size": 20
+          },
+          {
+            "asset_id": "optics",
+            "caption": "光学测试表征平台",
+            "min_panel_extent": 140,
+            "caption_font_size": 20
+          }
+        ],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "content-row",
+              "type": "columns",
+              "gap": "standard",
+              "children": [
+                {
+                  "id": "platforms",
+                  "type": "panel",
+                  "title": "研究平台参考",
+                  "frame": {
+                    "border": {
+                      "color": "#A7B5C5",
+                      "width": 1.5
+                    },
+                    "fill": "#FFFFFF",
+                    "title_fill": "#0755A3",
+                    "title_color": "#FFFFFF",
+                    "title_align": "center"
+                  },
+                  "padding": "compact",
+                  "gap": "compact",
+                  "body": {
+                    "id": "platform-stack",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "platform-grid",
+                        "type": "image_grid",
+                        "columns": 2,
+                        "gap": "compact",
+                        "children": [
+                          {
+                            "id": "fabrication-ref",
+                            "type": "figure",
+                            "ref": 0
+                          },
+                          {
+                            "id": "optics-ref",
+                            "type": "figure",
+                            "ref": 1
+                          }
+                        ]
+                      },
+                      {
+                        "id": "platform-description-row",
+                        "type": "columns",
+                        "gap": "compact",
+                        "weights": [
+                          1.15,
+                          1
+                        ],
+                        "children": [
+                          {
+                            "id": "conditions-ref",
+                            "type": "block",
+                            "ref": "conditions"
+                          },
+                          {
+                            "id": "wave-ref",
+                            "type": "graphic",
+                            "ref": "optical-chip"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "model",
+                  "type": "panel",
+                  "title": "矩阵分解与响应函数",
+                  "frame": {
+                    "border": {
+                      "color": "#A7B5C5",
+                      "width": 1.5
+                    },
+                    "fill": "#FFFFFF",
+                    "title_fill": "#0755A3",
+                    "title_color": "#FFFFFF",
+                    "title_align": "center"
+                  },
+                  "padding": "compact",
+                  "gap": "compact",
+                  "body": {
+                    "id": "model-stack",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "factorization-ref",
+                        "type": "block",
+                        "ref": "factorization"
+                      },
+                      {
+                        "id": "response-ref",
+                        "type": "block",
+                        "ref": "response"
+                      },
+                      {
+                        "id": "constraints-ref",
+                        "type": "block",
+                        "ref": "constraints"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "graphics": [
+          {
+            "id": "optical-chip",
+            "type": "path",
+            "view_box": [
+              0,
+              0,
+              420,
+              160
+            ],
+            "paths": [
+              {
+                "id": "substrate-left",
+                "commands": [
+                  [
+                    "M",
+                    78,
+                    57
+                  ],
+                  [
+                    "L",
+                    161,
+                    121
+                  ],
+                  [
+                    "L",
+                    161,
+                    133
+                  ],
+                  [
+                    "L",
+                    78,
+                    69
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#93BAD6",
+                "stroke": "#6C9ABB",
+                "line_width": 1
+              },
+              {
+                "id": "substrate-front",
+                "commands": [
+                  [
+                    "M",
+                    161,
+                    121
+                  ],
+                  [
+                    "L",
+                    351,
+                    82
+                  ],
+                  [
+                    "L",
+                    351,
+                    94
+                  ],
+                  [
+                    "L",
+                    161,
+                    133
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#BCD8EA",
+                "stroke": "#6C9ABB",
+                "line_width": 1
+              },
+              {
+                "id": "substrate-top",
+                "commands": [
+                  [
+                    "M",
+                    78,
+                    57
+                  ],
+                  [
+                    "L",
+                    265,
+                    22
+                  ],
+                  [
+                    "L",
+                    351,
+                    82
+                  ],
+                  [
+                    "L",
+                    161,
+                    121
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#EDF6FC",
+                "stroke": "#6B9AB9",
+                "line_width": 1.2
+              },
+              {
+                "id": "front-highlight",
+                "commands": [
+                  [
+                    "M",
+                    167,
+                    117
+                  ],
+                  [
+                    "L",
+                    344,
+                    81
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#FFFFFF",
+                "line_width": 1
+              },
+              {
+                "id": "bus-guide",
+                "commands": [
+                  [
+                    "M",
+                    61,
+                    98
+                  ],
+                  [
+                    "C",
+                    107,
+                    94,
+                    121,
+                    80,
+                    159,
+                    85
+                  ],
+                  [
+                    "C",
+                    197,
+                    90,
+                    216,
+                    108,
+                    251,
+                    98
+                  ],
+                  [
+                    "C",
+                    292,
+                    86,
+                    317,
+                    116,
+                    365,
+                    106
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#0755A3",
+                "line_width": 4
+              },
+              {
+                "id": "bus-guide-core",
+                "commands": [
+                  [
+                    "M",
+                    61,
+                    98
+                  ],
+                  [
+                    "C",
+                    107,
+                    94,
+                    121,
+                    80,
+                    159,
+                    85
+                  ],
+                  [
+                    "C",
+                    197,
+                    90,
+                    216,
+                    108,
+                    251,
+                    98
+                  ],
+                  [
+                    "C",
+                    292,
+                    86,
+                    317,
+                    116,
+                    365,
+                    106
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#5DA5D0",
+                "line_width": 1.3
+              },
+              {
+                "id": "resonator-main",
+                "commands": [
+                  [
+                    "M",
+                    263,
+                    68
+                  ],
+                  [
+                    "C",
+                    263,
+                    77.9411255,
+                    243.74824425,
+                    86,
+                    220,
+                    86
+                  ],
+                  [
+                    "C",
+                    196.25175575,
+                    86,
+                    177,
+                    77.9411255,
+                    177,
+                    68
+                  ],
+                  [
+                    "C",
+                    177,
+                    58.0588745,
+                    196.25175575,
+                    50,
+                    220,
+                    50
+                  ],
+                  [
+                    "C",
+                    243.74824425,
+                    50,
+                    263,
+                    58.0588745,
+                    263,
+                    68
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#0755A3",
+                "line_width": 3
+              },
+              {
+                "id": "resonator-main-inner",
+                "commands": [
+                  [
+                    "M",
+                    254,
+                    68
+                  ],
+                  [
+                    "C",
+                    254,
+                    74.07513225,
+                    238.7776815,
+                    79,
+                    220,
+                    79
+                  ],
+                  [
+                    "C",
+                    201.2223185,
+                    79,
+                    186,
+                    74.07513225,
+                    186,
+                    68
+                  ],
+                  [
+                    "C",
+                    186,
+                    61.92486775,
+                    201.2223185,
+                    57,
+                    220,
+                    57
+                  ],
+                  [
+                    "C",
+                    238.7776815,
+                    57,
+                    254,
+                    61.92486775,
+                    254,
+                    68
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#70ACCF",
+                "line_width": 1.2
+              },
+              {
+                "id": "resonator-coupled",
+                "commands": [
+                  [
+                    "M",
+                    314,
+                    59
+                  ],
+                  [
+                    "C",
+                    314,
+                    65.07513225,
+                    302.80711875,
+                    70,
+                    289,
+                    70
+                  ],
+                  [
+                    "C",
+                    275.19288125,
+                    70,
+                    264,
+                    65.07513225,
+                    264,
+                    59
+                  ],
+                  [
+                    "C",
+                    264,
+                    52.92486775,
+                    275.19288125,
+                    48,
+                    289,
+                    48
+                  ],
+                  [
+                    "C",
+                    302.80711875,
+                    48,
+                    314,
+                    52.92486775,
+                    314,
+                    59
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#B45309",
+                "line_width": 2.5
+              },
+              {
+                "id": "resonator-coupled-inner",
+                "commands": [
+                  [
+                    "M",
+                    306,
+                    59
+                  ],
+                  [
+                    "C",
+                    306,
+                    62.3137085,
+                    298.38884075,
+                    65,
+                    289,
+                    65
+                  ],
+                  [
+                    "C",
+                    279.61115925,
+                    65,
+                    272,
+                    62.3137085,
+                    272,
+                    59
+                  ],
+                  [
+                    "C",
+                    272,
+                    55.6862915,
+                    279.61115925,
+                    53,
+                    289,
+                    53
+                  ],
+                  [
+                    "C",
+                    298.38884075,
+                    53,
+                    306,
+                    55.6862915,
+                    306,
+                    59
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#D49B55",
+                "line_width": 1
+              },
+              {
+                "id": "coupling-section",
+                "commands": [
+                  [
+                    "M",
+                    256,
+                    65
+                  ],
+                  [
+                    "C",
+                    263,
+                    60,
+                    264,
+                    61,
+                    268,
+                    65
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#B45309",
+                "line_width": 2
+              },
+              {
+                "id": "contact-0",
+                "commands": [
+                  [
+                    "M",
+                    112,
+                    48.0
+                  ],
+                  [
+                    "L",
+                    124,
+                    45.7
+                  ],
+                  [
+                    "L",
+                    131,
+                    51.0
+                  ],
+                  [
+                    "L",
+                    119,
+                    53.3
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#DFC183",
+                "stroke": "#B58B48",
+                "line_width": 0.7
+              },
+              {
+                "id": "contact-1",
+                "commands": [
+                  [
+                    "M",
+                    135,
+                    43.7
+                  ],
+                  [
+                    "L",
+                    147,
+                    41.400000000000006
+                  ],
+                  [
+                    "L",
+                    154,
+                    46.7
+                  ],
+                  [
+                    "L",
+                    142,
+                    49.0
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#DFC183",
+                "stroke": "#B58B48",
+                "line_width": 0.7
+              },
+              {
+                "id": "contact-2",
+                "commands": [
+                  [
+                    "M",
+                    158,
+                    39.4
+                  ],
+                  [
+                    "L",
+                    170,
+                    37.1
+                  ],
+                  [
+                    "L",
+                    177,
+                    42.4
+                  ],
+                  [
+                    "L",
+                    165,
+                    44.699999999999996
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#DFC183",
+                "stroke": "#B58B48",
+                "line_width": 0.7
+              },
+              {
+                "id": "contact-3",
+                "commands": [
+                  [
+                    "M",
+                    181,
+                    35.1
+                  ],
+                  [
+                    "L",
+                    193,
+                    32.800000000000004
+                  ],
+                  [
+                    "L",
+                    200,
+                    38.1
+                  ],
+                  [
+                    "L",
+                    188,
+                    40.4
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#DFC183",
+                "stroke": "#B58B48",
+                "line_width": 0.7
+              },
+              {
+                "id": "optical-pulse-0",
+                "commands": [
+                  [
+                    "M",
+                    120.4,
+                    88
+                  ],
+                  [
+                    "C",
+                    120.4,
+                    89.1045695,
+                    118.87776815,
+                    90,
+                    117,
+                    90
+                  ],
+                  [
+                    "C",
+                    115.12223185,
+                    90,
+                    113.6,
+                    89.1045695,
+                    113.6,
+                    88
+                  ],
+                  [
+                    "C",
+                    113.6,
+                    86.8954305,
+                    115.12223185,
+                    86,
+                    117,
+                    86
+                  ],
+                  [
+                    "C",
+                    118.87776815,
+                    86,
+                    120.4,
+                    86.8954305,
+                    120.4,
+                    88
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#D98B29",
+                "stroke": "#B45309",
+                "line_width": 0.6
+              },
+              {
+                "id": "optical-pulse-1",
+                "commands": [
+                  [
+                    "M",
+                    251.4,
+                    99
+                  ],
+                  [
+                    "C",
+                    251.4,
+                    100.1045695,
+                    249.87776815,
+                    101,
+                    248,
+                    101
+                  ],
+                  [
+                    "C",
+                    246.12223185,
+                    101,
+                    244.6,
+                    100.1045695,
+                    244.6,
+                    99
+                  ],
+                  [
+                    "C",
+                    244.6,
+                    97.8954305,
+                    246.12223185,
+                    97,
+                    248,
+                    97
+                  ],
+                  [
+                    "C",
+                    249.87776815,
+                    97,
+                    251.4,
+                    97.8954305,
+                    251.4,
+                    99
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#D98B29",
+                "stroke": "#B45309",
+                "line_width": 0.6
+              },
+              {
+                "id": "optical-pulse-2",
+                "commands": [
+                  [
+                    "M",
+                    335.4,
+                    109
+                  ],
+                  [
+                    "C",
+                    335.4,
+                    110.1045695,
+                    333.87776815,
+                    111,
+                    332,
+                    111
+                  ],
+                  [
+                    "C",
+                    330.12223185,
+                    111,
+                    328.6,
+                    110.1045695,
+                    328.6,
+                    109
+                  ],
+                  [
+                    "C",
+                    328.6,
+                    107.8954305,
+                    330.12223185,
+                    107,
+                    332,
+                    107
+                  ],
+                  [
+                    "C",
+                    333.87776815,
+                    107,
+                    335.4,
+                    107.8954305,
+                    335.4,
+                    109
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#D98B29",
+                "stroke": "#B45309",
+                "line_width": 0.6
+              },
+              {
+                "id": "input-wave",
+                "commands": [
+                  [
+                    "M",
+                    8,
+                    98
+                  ],
+                  [
+                    "C",
+                    14,
+                    85,
+                    20,
+                    85,
+                    26,
+                    98
+                  ],
+                  [
+                    "C",
+                    32,
+                    111,
+                    38,
+                    111,
+                    44,
+                    98
+                  ],
+                  [
+                    "C",
+                    50,
+                    85,
+                    56,
+                    85,
+                    62,
+                    98
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#0755A3",
+                "line_width": 1.8
+              },
+              {
+                "id": "output-wave",
+                "commands": [
+                  [
+                    "M",
+                    362,
+                    106
+                  ],
+                  [
+                    "C",
+                    369,
+                    94,
+                    375,
+                    94,
+                    381,
+                    106
+                  ],
+                  [
+                    "C",
+                    387,
+                    118,
+                    393,
+                    118,
+                    399,
+                    106
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "#B45309",
+                "line_width": 1.8
+              },
+              {
+                "id": "input-direction",
+                "commands": [
+                  [
+                    "M",
+                    65,
+                    98
+                  ],
+                  [
+                    "L",
+                    55,
+                    94
+                  ],
+                  [
+                    "L",
+                    57,
+                    102
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#0755A3",
+                "stroke": "#0755A3",
+                "line_width": 0.5
+              },
+              {
+                "id": "output-direction",
+                "commands": [
+                  [
+                    "M",
+                    409,
+                    106
+                  ],
+                  [
+                    "L",
+                    398,
+                    101
+                  ],
+                  [
+                    "L",
+                    398,
+                    111
+                  ],
+                  [
+                    "Z"
+                  ]
+                ],
+                "fill": "#B45309",
+                "stroke": "#B45309",
+                "line_width": 0.5
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {
+        "takeaway_marker": {
+          "style": "large_diamond",
+          "color": "#000000"
+        },
+        "takeaway_frame": {
+          "border": {
+            "color": "#C4CED9",
+            "width": 1
+          },
+          "fill": "#F8FAFC",
+          "padding": "compact"
+        }
+      }
+    }
+  ]
+}

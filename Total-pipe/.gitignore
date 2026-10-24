@@ -39,6 +39,8 @@ node_modules/
 *.pyc
 # 无代码引用的残留素材（例如 pwf2rpa/空白幻灯片.pptx）
 *.pptx
+# Versioned, rebuildable mixed-content regression example.
+!examples/complex-mixed/complex-mixed.pptx
 *.inspect.ndjson
 benchmarks/*/native.pdf
 benchmarks/*/native.json

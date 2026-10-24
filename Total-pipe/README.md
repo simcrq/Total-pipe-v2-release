@@ -65,6 +65,15 @@ python -m deck_compiler build --ir examples/inline-math.deck_ir.json \
 此样例有三页，覆盖行内文字 / 根号 / 指数、行内矩阵与独立公式、原生表格。
 样例字体名会按当前系统解析，字体替代和数学近似测量会进入 REVIEW。
 
+另有[复杂混排单页样例](examples/complex-mixed/README.zh-CN.md)，包含可直接打开的
+[PPTX](examples/complex-mixed/complex-mixed.pptx)、canonical IR 和参考图片。
+它将图片网格、边框面板、短原生列表、矩阵、行内根式 / 指数和由 22 个原生路径组成的光子芯片图案放在同页。
+
+```bash
+python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.json \
+  --out build/complex-mixed --officecli officecli --skip-native
+```
+
 ## 构建产物与验收
 
 | 文件 | 含义 |

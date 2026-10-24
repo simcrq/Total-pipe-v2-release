@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-24",
+  "compiler_commit": "adc5cc8",
+  "officecli_version": "1.0.158",
+  "files": {
+    "complex-mixed.deck_ir.json": "8fcfbf76410f7621fea603100cd10c49f7af9fef38dd679c66d5881e8a971399",
+    "complex-mixed.pptx": "bd9e5a6fd60fc42b658df84c9417a3ed66b4b07893bf7145b475fb75e5b4464b"
+  },
+  "slide_count": 1,
+  "compile_failures": 0,
+  "openxml_schema_errors": 0,
+  "structural_failures": 0,
+  "list_height_px": 73.5,
+  "native_custom_paths": 22,
+  "powerpoint_ui": {
+    "checked": true,
+    "mode": "slideshow",
+    "result": "PASS",
+    "checks": [
+      "matrices_roots_exponents_fractions",
+      "inline_math_baselines_and_wrap",
+      "native_marker_glyphs_and_colors",
+      "panel_containment",
+      "larger_reference_images_and_captions",
+      "native_photonic_chip_paths",
+      "no_clipping_or_collisions"
+    ],
+    "independent_visual_review": {
+      "result": "PASS",
+      "reviewer": "complex_mixed_visual_review",
+      "note": "Reviewed actual PowerPoint slideshow after the final photonic-chip update; no clipping, collisions or mathematical regressions."
+    }
+  },
+  "warnings": [
+    {
+      "rule": "OFFICECLI_FORMAT",
+      "message": "text overflow: 3 lines at 18.0pt need 189pt, usable 88pt. suggest.height=6.7cm"
+    }
+  ],
+  "warning_review": "The generic inline-formula text-overflow estimate was checked in actual PowerPoint slideshow; complete formula and following text are visible without clipping.",
+  "review_rules": [
+    "FORMULA_MEASURE_APPROXIMATE",
+    "INLINE_MATH_MEASUREMENT_REVIEW",
+    "NATIVE_RENDER_SKIPPED",
+    "REFERENCE_IMAGE_REVIEW",
+    "SCHEMATIC_REVIEW"
+  ],
+  "limitations": [
+    "Two original reference photo crops are 126 x 114 px; no high-resolution source is claimed.",
+    "Conceptual photonic chip paths and mathematical model are examples, not experimental evidence.",
+    "No PowerPoint-native PDF export or final promotion was performed."
+  ],
+  "native_pdf_exported": false,
+  "formal_final_promoted": false
+}
