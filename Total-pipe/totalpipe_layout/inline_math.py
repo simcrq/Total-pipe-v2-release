@@ -80,7 +80,7 @@ TOKEN = re.compile(r'[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u0
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
 
 
-def measure_inline(source, width, font, size, line_height=1.25):
+def measure_inline(source, width, font, size, line_height=1.25, leading_marker=None):
     """Sum widths within each line; sum per-line max ascent + max descent, not TeX length."""
     if width <= 0:
         raise InlineWidthError(1, width)
@@ -117,6 +117,9 @@ def measure_inline(source, width, font, size, line_height=1.25):
                 fragments.append(dict(atom))
         above = max([ascent, *(a['ascent'] for a in current)])
         below = max([descent, *(a['descent'] for a in current)])
+        if leading_marker and not lines:
+            above = max(above, leading_marker['ascent'])
+            below = max(below, leading_marker['descent'])
         lines.append({'fragments': fragments, 'ascent': above, 'descent': below,
             'height': max(size*line_height, above+below),
             'width': sum(a['width'] for a in fragments), 'text': ''.join(a['plain'] for a in fragments)})

@@ -161,6 +161,15 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 长多段正文保持换行，可复制 RPA 的 `text_flow.mode`。`auto` 仅把符合长度条件的 3–5 个明确
 段落转换为可编辑原生列表；`plain` 禁止转换。公式不经过普通文本列表转换。
 
+无序列表用顶层 `presentation.bullet_style / bullet_color` 设默认，正文 block 同名字段独立覆盖；
+符号颜色不改变正文颜色。单页 `presentation.takeaway_marker={"style":"large_diamond","color":"#000000"}`
+为完整 takeaway 加一个原生前导标记，换行和行内公式按剩余宽度实测。
+preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW；显式列表最低区域不足时
+报告拆页 / 重规划，不降级为无符号文本。572 × 226 px 已达到 520 × 220 px 的组件门槛。
+完整用法、优先级及两页样例见 [原生列表](native-lists.md)。
+项目符号可选；plain 关闭正文列表，takeaway 未配置则不加标记。large_square / large_diamond /
+arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸参与空间测量。
+
 原生 process/DAG 与图文混排见 [native-graphics.md](native-graphics.md)；机制、架构、漏斗、
 Path 和 composite 见 [native-components.md](native-components.md)。所有关系显式声明；
 机制的实测与假设保留依据、不同线型及标签。生成示意图不能替代论文原图，保留 `SCHEMATIC_REVIEW`。

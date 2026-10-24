@@ -1,0 +1,158 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-bullet-styling-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none",
+      "header_variant": "compact",
+      "type_scale": "compact"
+    },
+    "text_capacity_policy": "preserve-terms",
+    "bullet_style": "large_square",
+    "bullet_color": "#6D28D9"
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "local-markers",
+      "semantic": {
+        "title": "原生项目符号：同页独立样式与颜色",
+        "purpose": "验证原生项目符号、完整文字与独立颜色",
+        "takeaway": "单段结论使用黑色菱形，两个列表分别使用蓝色方形和橙色箭头，正文保持独立颜色。",
+        "evidence_refs": [
+          "fixture:native-bullets"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件排版回归示例；不代表真实课题组、项目或获奖成果。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "capabilities",
+            "component": "body",
+            "label": "实验与分析能力",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "large_square",
+            "bullet_color": "#005A9C",
+            "text": "光谱表征与时间分辨测量共同约束材料的非平衡动力学响应。\n各向异性介电响应张量保留完整的空间方向与边界条件。\n不确定度分析同时保留标定误差、重复性与模型适用范围。"
+          },
+          {
+            "id": "projects",
+            "component": "body",
+            "label": "研究项目与成果",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "arrowhead",
+            "bullet_color": "#C2410C",
+            "text": "项目一：建立材料微观结构与宏观响应之间的可检验关联。\n项目二：比较不同激发条件下的动力学机制与实验观测。\n成果说明：完整保留科学术语、限定条件及原始研究边界。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "local-markers-columns",
+              "type": "columns",
+              "gap": "standard",
+              "children": [
+                {
+                  "id": "capabilities-leaf",
+                  "type": "block",
+                  "ref": "capabilities"
+                },
+                {
+                  "id": "projects-leaf",
+                  "type": "block",
+                  "ref": "projects"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {
+        "takeaway_marker": {
+          "style": "large_diamond",
+          "color": "#000000"
+        }
+      }
+    },
+    {
+      "id": "mixed-takeaway",
+      "semantic": {
+        "title": "术语保留与彩色列表：行内公式继续可用",
+        "purpose": "验证原生项目符号、完整文字与独立颜色",
+        "takeaway": "在 $x>0$ 时，$q(x)=\\sqrt{1+x^2}$ 的完整定义与彩色列表共同保留。",
+        "evidence_refs": [
+          "fixture:native-bullets"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件排版回归示例；不代表真实课题组、项目或获奖成果。",
+        "inline_math": [
+          "takeaway"
+        ]
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "mixed-context",
+            "component": "body",
+            "inline_math": true,
+            "text": "当 $x>0$ 时，定义 $q(x)=\\sqrt{1+x^2}$。\n关系式 $q(x)^2=1+x^2$ 与后续解释保持在可编辑文本框内。\n行内公式按实际宽度与基线上下尺寸测量，单段结论的标记只在第一行出现。"
+          },
+          {
+            "id": "constraints",
+            "component": "body",
+            "label": "完整内容与容量反馈",
+            "text_flow": "distributed_arrow_list",
+            "bullet_style": "check",
+            "text": "专业术语、数值、负号与小数值在原文中完整保留。\n列表符号的颜色独立于正文颜色，可在整套或单个内容块指定。\n需要更多空间时保留标记并报告审核项，或明确要求调整布局与拆页。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "mixed-takeaway-columns",
+              "type": "columns",
+              "gap": "standard",
+              "children": [
+                {
+                  "id": "mixed-context-leaf",
+                  "type": "block",
+                  "ref": "mixed-context"
+                },
+                {
+                  "id": "constraints-leaf",
+                  "type": "block",
+                  "ref": "constraints"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {
+        "takeaway_marker": {
+          "style": "large_diamond",
+          "color": "#000000"
+        }
+      }
+    }
+  ]
+}

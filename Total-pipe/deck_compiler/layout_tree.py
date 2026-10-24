@@ -22,7 +22,7 @@ def capabilities():
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
                        'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
-            'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table'],
+            'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'legacy_flat_ir': True}
 
@@ -167,9 +167,12 @@ class Need:
 
 
 class RegionCompiler:
-    def __init__(self, composition, assets, fonts, theme, preserve_terms=False):
+    def __init__(self, composition, assets, fonts, theme, preserve_terms=False,
+                 list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square'):
         self.comp, self.assets, self.fonts, self.theme = composition, assets, fonts, theme
         self.preserve = preserve_terms
+        self.list_gap_ratio, self.list_padding = list_gap_ratio, list_padding
+        self.bullet_style = bullet_style
         self.blocks = {b['id']: b for b in composition['blocks']}
         self.graphics = {g['id']: g for g in composition.get('graphics', [])}
         self.tables = {t['id']: t for t in composition.get('tables', [])}
@@ -252,7 +255,16 @@ class RegionCompiler:
                 need = Need(height, max(height, preferred.height+12 if preferred else height), required_w)
             else:
                 label = 44 if block.get('label') else 0
-                if block.get('inline_math'):
+                if block.get('text_flow') == 'distributed_arrow_list':
+                    from .layout import native_list_height
+                    if width < 520:
+                        raise LayoutTreeError(path, 'INSUFFICIENT_LIST_SPACE',
+                            'Explicit native lists require at least 520 px width; markers cannot be discarded.',
+                            [520, 220], available, ['widen_region', 'switch_to_two_columns', 'split_slide'])
+                    natural = native_list_height(block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
+                                                 default_style=self.bullet_style)
+                    need = Need(220 if self.preserve else natural, natural, 520)
+                elif block.get('inline_math'):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     from .fonts import load_font_file
                     try:
@@ -395,8 +407,10 @@ class RegionCompiler:
             cursor += row_h+gap
 
 
-def compile_regions(composition, region, assets, fonts, theme, preserve_terms=False):
-    compiler = RegionCompiler(composition, assets, fonts, theme, preserve_terms)
+def compile_regions(composition, region, assets, fonts, theme, preserve_terms=False,
+                    list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square'):
+    compiler = RegionCompiler(composition, assets, fonts, theme, preserve_terms, list_gap_ratio, list_padding,
+                              bullet_style)
     compiler.allocate(composition['layout_tree']['regions']['body'], list(region), 'body')
     return {'version': composition['layout_tree']['version'], 'regions': {'body': list(region)}, 'nodes': compiler.entries,
             'reading_order': [e['node_id'] for e in compiler.entries if e['type'] in LEAVES]}

@@ -13,7 +13,10 @@ def ratios(preferred, low=.35, high=.75):
 
 
 def block_height(block, width, fonts, archetype):
-    from .layout import formula_fit, formula_label_width, text_floor_height
+    from .layout import formula_fit, formula_label_width, text_floor_height, native_list_height
+    list_height = native_list_height(block, width, fonts['font_file'])
+    if list_height is not None:
+        return list_height
     label = block.get('label', '')
     if block.get('component') == 'formula':
         label_w = formula_label_width(label, fonts['bold_font_file'])

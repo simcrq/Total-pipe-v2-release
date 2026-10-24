@@ -17,9 +17,11 @@
           "description": "V6 defaults to preserve-terms: title/body budgets and visible text overflow require REVIEW without rewriting terminology. Legacy IR defaults to strict."},
         "frame_variant": {"enum": ["default", "spacious"]},
         "bullet_style": {
-          "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash"],
-          "description": "Native list marker used on every list page of this deck."
+          "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash", "large_square", "large_diamond", "arrowhead"],
+          "description": "Default native list marker; a block may override bullet_style."
         },
+        "bullet_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Default list marker color, independent of body text; otherwise theme.accent."},
         "list_gap": {
           "type": "number", "minimum": 0.1, "maximum": 1.5,
           "description": "Space between list items as a fraction of the line height (default 0.45)."
@@ -76,6 +78,14 @@
     }}}}}
   }],
   "$defs": {
+    "takeaway-marker": {
+      "type": "object", "additionalProperties": false, "required": ["style"],
+      "properties": {
+        "style": {"enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash", "large_square", "large_diamond", "arrowhead"]},
+        "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+      },
+      "description": "One native leading marker for the complete takeaway; wrapped lines do not repeat it. Color defaults to the body foreground."
+    },
     "layout-tree": {
       "type": "object", "additionalProperties": false, "required": ["version", "regions"],
       "properties": {
@@ -467,9 +477,18 @@
                   "inline_math": {"type": "boolean", "default": false,
                     "description": "Prose only: explicitly enable measured native $...$ or \\(...\\) inline formulas; no auto-list conversion."},
                   "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
+                  "bullet_style": {"enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash", "large_square", "large_diamond", "arrowhead"],
+                    "description": "Override the deck default for this native prose list; does not invent list rows."},
+                  "bullet_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
+                    "description": "Override this list's marker color, independently of body text."},
                   "anchor": {"type": "string", "minLength": 1,
                              "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."}
-                }
+                },
+                "allOf": [{
+                  "if": {"anyOf": [{"required": ["bullet_style"]}, {"required": ["bullet_color"]}]},
+                  "then": {"properties": {"component": {"not": {"const": "formula"}},
+                    "inline_math": {"const": false}, "text_flow": {"enum": ["auto", "distributed_arrow_list"]}}}
+                }]
               }
             },
             "layout_tree": {"$ref": "#/$defs/layout-tree"},
@@ -539,6 +558,7 @@
           "additionalProperties": false,
           "properties": {
             "visual_plan": {"$ref": "#/$defs/visual-plan"},
+            "takeaway_marker": {"$ref": "#/$defs/takeaway-marker"},
             "variant": {"enum": ["default", "spacious"]},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},

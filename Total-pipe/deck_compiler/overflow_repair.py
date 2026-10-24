@@ -166,12 +166,15 @@ def repair_overflow(ir: Dict, layout: Dict, qa_report: Dict,
         has_inline = (original_slide.get('semantic', {}).get('inline_math')
             or any(b.get('inline_math') for b in comp['blocks'])
             or any(c.get('inline_math') for t in comp.get('tables', []) for c in t['cells']))
+        has_native_list = any(b.get('text_flow') == 'distributed_arrow_list'
+                              or 'bullet_style' in b or 'bullet_color' in b for b in comp['blocks'])
         if (original_slide['composition'].get('graphics') or
-                original_slide.get('presentation', {}).get('visual_plan') or has_inline):
+                original_slide.get('presentation', {}).get('visual_plan') or has_inline or has_native_list):
             # A graphic and its evidence form one scientific page. Replanning must be explicit;
             # cloning its graph while splitting a context paragraph changes that relationship.
             # Mixed text also needs measured replanning: a plain-text split can cut a math span,
             # and OfficeCLI's uniform-line estimate is not its variable-height contract.
+            # Explicit lists also retain complete item boundaries and local marker styles.
             new_slides.append(copy.deepcopy(original_slide))
             continue
         if original_idx not in slides_to_repair:

@@ -87,6 +87,7 @@ OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
 
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
+- [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；preserve-terms 保留列表呈现和全文。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
 - [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。

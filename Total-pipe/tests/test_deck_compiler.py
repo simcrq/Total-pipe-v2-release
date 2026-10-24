@@ -250,8 +250,8 @@ class CompilerTests(unittest.TestCase):
         self.assertEqual(len(lists),1,'parallel paragraphs are one native list, not one shape per row')
         self.assertEqual(lists[0]['id'],'findings')
         self.assertEqual(len(lists[0]['items']),3)
-        self.assertEqual(lists[0]['bullet']['style'],'square')
-        self.assertEqual(lists[0]['bullet']['char'],'\u25aa')
+        self.assertEqual(lists[0]['bullet']['style'],'large_square')
+        self.assertIn(lists[0]['bullet']['char'], ('\uf06e', '\u25a0', '\u2022'))
         self.assertFalse([e for e in planned['elements'] if ':arrow:' in e['id'] or ':item:' in e['id']])
         self.assertTrue(any(e['kind']=='shape' and e['id']=='findings:panel' for e in planned['elements']))
     def test_single_long_paragraph_is_not_semantically_split(self):

@@ -37,7 +37,7 @@ def formula_groups(blocks):
 
 
 def plan_formula_flow(blocks, region, fonts, archetype, *, max_columns=2, preferred_columns=1,
-                      body_size=28, gap=18, text_inset=0, preserve_terms=False):
+                      body_size=28, gap=18, text_inset=0, preserve_terms=False, list_gap_ratio=.45):
     """Return one measured layout or explain why none fits above the existing 18 pt floor.
 
     Reading order is down the first column, then down the second. Column breaks are between
@@ -66,7 +66,11 @@ def plan_formula_flow(blocks, region, fonts, archetype, *, max_columns=2, prefer
                 need = max(30 if label_w else 0, metrics.height)+12
             else:
                 face = ImageFont.truetype(fonts['font_file'], int(text_size))
-                if block.get('inline_math'):
+                if block.get('text_flow') == 'distributed_arrow_list':
+                    from .layout import native_list_height
+                    content_height = native_list_height(block, column_width-text_inset, fonts['font_file'],
+                                                        list_gap_ratio, preserve_terms=overflow_review)
+                elif block.get('inline_math'):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     try:
                         inline = measure_inline(block['text'], column_width-text_inset, face, text_size)
@@ -78,10 +82,12 @@ def plan_formula_flow(blocks, region, fonts, archetype, *, max_columns=2, prefer
                     lines = break_lines(block['text'], face, column_width-text_inset)
                     content_height = max(1, len(lines))*text_size*1.25
                 label_h = (40 if archetype == 'figure-parameters' else 44) if block.get('label') else 0
+                if block.get('text_flow') == 'distributed_arrow_list':
+                    label_h = 0  # Native list measurement already includes the label and minimum box.
                 # A last-resort nominal slot lets the existing text writer retain the full
                 # scientific prose with SCIENTIFIC_TEXT_OVERFLOW REVIEW. Equations still have
                 # to fit geometrically; terminology policy never hides a math capacity failure.
-                need = label_h+(text_size*1.25 if overflow_review else content_height)
+                need = label_h+(text_size*1.25 if overflow_review and block.get('text_flow') != 'distributed_arrow_list' else content_height)
             rows.append((block, need))
         return rows, None
 

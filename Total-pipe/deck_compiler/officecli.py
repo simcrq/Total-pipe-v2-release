@@ -72,7 +72,7 @@ def list_paragraph_properties(contract, bullet, index, count):
 
     Written as raw XML because the typed OfficeCLI paragraph API has no bullet colour and no
     before/after paragraph spacing; the element order below is the order DrawingML requires
-    (lnSpc → spcAft → buClr → buFont → buChar).
+    (lnSpc → spcAft → buClr → buSzTx → buFont → buChar).
     """
     gutter = round(float(bullet['gutter']) * 9525)          # css px → EMU
     spacing = round(contract['font_size'] * contract['line_height'] * 75)   # px → 1/100 pt
@@ -82,6 +82,8 @@ def list_paragraph_properties(contract, bullet, index, count):
     if index < count - 1 and gap > 0:
         parts.append(f'<a:spcAft><a:spcPts val="{round(gap * 75)}" /></a:spcAft>')
     parts.append(f'<a:buClr><a:srgbClr val="{_color(bullet["color"])}" /></a:buClr>')
+    if bullet.get('size_from_text'):
+        parts.append('<a:buSzTx />')
     parts.append(f'<a:buFont typeface="{_xml_attribute(bullet["face"])}" />')
     parts.append(f'<a:buChar char="{_xml_attribute(bullet["char"])}" />')
     parts.append('</a:pPr>')

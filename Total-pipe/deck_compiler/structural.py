@@ -310,9 +310,11 @@ def verify(path, layout):
                             char = None if ppr is None else ppr.find('a:buChar', NS)
                             colour = None if ppr is None else ppr.find('a:buClr/a:srgbClr', NS)
                             face = None if ppr is None else ppr.find('a:buFont', NS)
+                            same_size = None if ppr is None else ppr.find('a:buSzTx', NS)
                             if (ppr is None or char is None or char.get('char') != marker['char']
                                     or face is None or face.get('typeface') != marker['face']
                                     or colour is None or colour.get('val') != marker['color'].lstrip('#').upper()
+                                    or (marker.get('size_from_text') and same_size is None)
                                     or ppr.get('marL') != gutter or ppr.get('indent') != '-' + gutter):
                                 add('LIST_BULLET_MISMATCH', 'Native bullet differs from compiled layout',
                                     n, e['id'])

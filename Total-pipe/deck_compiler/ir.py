@@ -56,9 +56,12 @@ def validate(ir):
               "Unknown deck frame variant")
         if "bullet_style" in deck_presentation:
             from .fonts import BULLET_STYLES
-            check(deck_presentation["bullet_style"] in BULLET_STYLES,
+            check(isinstance(deck_presentation['bullet_style'], str) and deck_presentation["bullet_style"] in BULLET_STYLES,
                   f"Unknown bullet_style; expected one of {sorted(BULLET_STYLES)}",
                   rule="BULLET_STYLE_INVALID")
+        if 'bullet_color' in deck_presentation:
+            check(isinstance(deck_presentation['bullet_color'], str) and ACCENT.fullmatch(deck_presentation['bullet_color']),
+                  'presentation.bullet_color must be #RRGGBB', rule='BULLET_COLOR_INVALID')
         if "list_gap" in deck_presentation:
             gap = deck_presentation["list_gap"]
             check(isinstance(gap, (int, float)) and not isinstance(gap, bool)
@@ -137,6 +140,15 @@ def validate(ir):
             continue
         check('academic_design' not in pres, 'academic_design belongs to the deck', n,
               'ACADEMIC_DESIGN_INVALID')
+        if 'takeaway_marker' in pres:
+            from .fonts import BULLET_STYLES
+            marker = pres['takeaway_marker']
+            check(isinstance(marker, dict) and not set(marker)-{'style', 'color'}
+                  and isinstance(marker.get('style'), str) and marker['style'] in BULLET_STYLES,
+                  'presentation.takeaway_marker requires a supported style and optional color', n, 'TAKEAWAY_MARKER_INVALID')
+            if isinstance(marker, dict) and 'color' in marker:
+                check(isinstance(marker['color'], str) and ACCENT.fullmatch(marker['color']),
+                      'takeaway_marker.color must be #RRGGBB', n, 'BULLET_COLOR_INVALID')
         if 'visual_plan' in pres:
             check(isinstance(deck_presentation, dict) and 'academic_design' in deck_presentation,
                   'visual_plan requires deck presentation.academic_design', n, 'VISUAL_PLAN_INVALID')
@@ -189,6 +201,20 @@ def validate(ir):
             if isinstance(bid, str):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
+            if 'bullet_style' in b:
+                from .fonts import BULLET_STYLES
+                check(isinstance(b['bullet_style'], str) and b['bullet_style'] in BULLET_STYLES,
+                      f"block {bid}: unknown bullet_style", n, 'BULLET_STYLE_INVALID')
+            if 'bullet_color' in b:
+                check(isinstance(b['bullet_color'], str) and ACCENT.fullmatch(b['bullet_color']),
+                      f'block {bid}: bullet_color must be #RRGGBB', n, 'BULLET_COLOR_INVALID')
+            if 'bullet_style' in b or 'bullet_color' in b:
+                check(b.get('component') != 'formula' and not b.get('inline_math') and b.get('text_flow', 'auto') != 'plain',
+                      f'block {bid}: bullet overrides require native prose-list flow', n, 'TEXT_FLOW_INVALID')
+            if b.get('text_flow') == 'distributed_arrow_list' and isinstance(b.get('text'), str):
+                from .text_flow import select_text_flow
+                check(select_text_flow(b['text'], 'distributed_arrow_list')['mode'] != 'plain',
+                      f'block {bid}: explicit native lists require two to six nonempty rows', n, 'TEXT_FLOW_INVALID')
             check(isinstance(b.get("text"), str) and bool(b["text"].strip()), "Block text required", n)
             check(type(b.get('inline_math', False)) is bool, 'inline_math must be boolean', n, 'INLINE_MATH_INVALID')
             if b.get('inline_math') is True:

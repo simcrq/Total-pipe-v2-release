@@ -128,8 +128,8 @@ def missing_glyphs(font_path, text) -> set:
 
 
 # PowerPoint's list styles are (glyph, face) pairs: round, square and open-square markers live in
-# ordinary text faces, while diamond, check and arrow come from a symbol face. A deck keeps one
-# style throughout, so the marker reads as a system instead of a decoration.
+# ordinary text faces, while diamond, check and arrow come from a symbol face. Deck defaults may
+# be overridden by individual prose blocks and the single takeaway marker.
 BULLET_STYLES = {
     'bullet': '\u2022',       # •
     'square': '\u25aa',       # ▪
@@ -138,6 +138,14 @@ BULLET_STYLES = {
     'arrow': '\u2192',        # →
     'check': '\u2713',        # ✓
     'dash': '\u2013',         # –
+    'large_square': '\u25a0', # ■ (Unicode fallback for a full native square)
+    'large_diamond': '\u25c6',# ◆ (Unicode fallback for a full native diamond)
+    'arrowhead': '\u27a2',    # ➢
+}
+NATIVE_BULLET_FACES = {
+    'large_square': ('Wingdings', 'Wingdings.ttf', '\uf06e'),
+    'large_diamond': ('Wingdings', 'Wingdings.ttf', '\uf075'),
+    'arrowhead': ('Wingdings', 'Wingdings.ttf', '\uf0d8'),
 }
 # (family, candidate file names) for the faces PowerPoint itself uses for these markers.
 BULLET_SYMBOL_FACES = (
@@ -157,6 +165,16 @@ def resolve_bullet(style, family, font_file):
     is what the writer puts in ``a:buFont``, so the stored style survives on another machine as
     long as either face is installed.
     """
+    if style in NATIVE_BULLET_FACES:
+        face, name, glyph = NATIVE_BULLET_FACES[style]
+        path = find_font_file(name)
+        if path:
+            try:
+                symbol = ImageFont.truetype(path, 24, encoding='symb')
+                if bytes(symbol.getmask(glyph)) != bytes(symbol.getmask(chr(0x10FFFF))):
+                    return glyph, face
+            except (OSError, ValueError):
+                pass
     glyph = BULLET_STYLES.get(style) or BULLET_STYLES['square']
     if font_file and glyph not in missing_glyphs(font_file, glyph):
         return glyph, family
@@ -166,6 +184,35 @@ def resolve_bullet(style, family, font_file):
             if path and glyph not in missing_glyphs(path, glyph):
                 return glyph, face
     return BULLET_STYLES['bullet'], family
+
+
+def bullet_metrics(style, family, font_file, size):
+    """Measure the chosen native glyph at the prose size, without bullet-size scaling."""
+    glyph, face = resolve_bullet(style, family, font_file)
+    path = font_file
+    encoding = ''
+    if face == 'Wingdings' and style in NATIVE_BULLET_FACES:
+        path = find_font_file(NATIVE_BULLET_FACES[style][1])
+        encoding = 'symb'
+    elif face != family:
+        for candidate_face, names in BULLET_SYMBOL_FACES:
+            if candidate_face != face:
+                continue
+            for name in names:
+                candidate = find_font_file(name)
+                if candidate and glyph not in missing_glyphs(candidate, glyph):
+                    path = candidate
+                    break
+            else:
+                continue
+            break
+    font = ImageFont.truetype(path, int(size), encoding=encoding)
+    left, top, right, bottom = font.getbbox(glyph, anchor='ls')
+    return {'style': style, 'char': glyph, 'face': face, 'size_from_text': True,
+            'native_font_fallback': style in NATIVE_BULLET_FACES and face != NATIVE_BULLET_FACES[style][0],
+            'gutter': round(max(42., right-left+12.), 2),
+            'ascent': max(0, -top)+2, 'descent': max(0, bottom)+2,
+            'line_height_px': max(size*1.25, bottom-top+4)}
 
 
 def coverage_is_fatal(missing, text_sample):

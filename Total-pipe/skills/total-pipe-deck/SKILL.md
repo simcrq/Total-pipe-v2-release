@@ -147,6 +147,17 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 该对象放 `composition.visual_intent`；只支持四个无独立 label 的 block，有一张原图用
 `figure-parameters`、无图用 `process-flow`。不得与 graphics 或视觉重排混用。
 
+### 原生列表与单段标记
+
+正文列表先明确条目换行，用 text_flow=distributed_arrow_list 保留原生无序列表。
+读 `Total-pipe/docs/native-lists.md`：顶层 presentation.bullet_style/bullet_color 设默认，block 同名字段覆盖。
+单页 presentation.takeaway_marker={style:large_diamond,color:#000000} 为完整 takeaway 加一个独立标记；
+可与 takeaway 行内公式共存，符号颜色不改正文颜色。preserve-terms 不移除项目符号，
+垂直超容量保留原文与 REVIEW；显式列表最低区域 520×220 px 不足时回到布局规划或拆页。
+不要为套入列表缩短术语，也不要把失败列表改成普通文本掩盖问题。
+标记可选；plain 关闭正文列表，不配置 takeaway_marker 则无前导标记。优先选 large_square、
+large_diamond、arrowhead 等饱满原生字形，不设置项目符号百分比 / 点数缩放；符号颜色独立配置。
+
 ### 原生图形
 
 使用 `composition.graphics`，不写页面坐标、不从普通正文推断关系。按实际类型读取：

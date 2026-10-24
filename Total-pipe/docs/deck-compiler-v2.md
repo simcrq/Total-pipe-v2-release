@@ -87,7 +87,7 @@ The v3 integration uses one frame grid across a deck. Top-level
 `presentation.frame_variant` selects `default` or `spacious`; if omitted, any slide requesting
 `spacious` selects it for the deck. The compiled layout records the actual choice. For a
 `figure-parameters` slide, ordered blocks beside a figure share a 24 px vertical rhythm.
-The v26 provider proposes macro geometry only. The compiler snaps peer spacing and figure-caption slack, then repeats capacity and
+The bundled packer proposes macro geometry only. The compiler snaps peer spacing and figure-caption slack, then repeats capacity and
 collision checks. `derived/plan_to_layout.json` reports the provider status per slide.
 For a four-step, unlabeled `figure-parameters` process whose roles progress from `method`
 through `process-step` to `result`, the v3 compiler draws a numbered vertical rail beside
@@ -98,16 +98,24 @@ the compiler recognizes three to five explicit prose/list rows (72 or more displ
 CJK characters count as two),
 places them in one low-contrast panel as **one text object with one paragraph per row**, and lets
 PowerPoint draw the marker: each paragraph carries `a:buChar` + `a:buClr` and a hanging indent, so
-Tab changes the level and the bullet menu reflects the style. The deck picks a single marker style —
-`theme.accent` colours it, `presentation.bullet_style` selects it (`bullet`, `square`,
-`open_square`, `diamond`, `arrow`, `check`, `dash`); the default is derived from the dominant row
-semantics (procedure → arrow, claims → open square, otherwise square). Item spacing is a fraction of
+Tab changes the level and the bullet menu reflects the style. The deck picks a default marker style —
+`presentation.bullet_color` (otherwise `theme.accent`) colours it, `presentation.bullet_style` selects it (`bullet`, `square`,
+`open_square`, `diamond`, `arrow`, `check`, `dash`, `large_square`, `large_diamond`, `arrowhead`); the default is derived from the dominant row
+semantics (procedure → arrowhead, claims → open square, otherwise large square). The large styles select
+native Wingdings glyphs at the prose size, without percentage or point-size scaling. Item spacing is a fraction of
 the line height (`0.45`, override with `presentation.list_gap`) rather than the leftover panel height,
 and the card hugs the list instead of stretching across the body area; a row may wrap to four lines
 before the page is asked to split. It does not split a single
 paragraph, tables, code, or formula-like content into invented bullets. The applied choice is
 recorded in the slide's `adaptation_log`; an explicit `distributed_arrow_list` request still has to
 contain two to six rows and fit the component box above the font floor.
+
+Blocks may override `bullet_style` and `bullet_color` independently; prose color remains unchanged.
+Slide `presentation.takeaway_marker: {"style":"diamond","color":"#000000"}` gives the complete takeaway
+one native leading marker, including on an inline-math takeaway, with continuation lines aligned to the prose.
+Explicit lists need at least 520 × 220 px. `preserve-terms` retains full native list rows, markers and colors;
+vertical overflow becomes REVIEW at the 18 pt floor, while strict mode requires replanning or splitting.
+It never silently removes explicit bullets. See [native list styles and capacity](native-lists.md).
 
 `examples/distributed-arrow-list.deck_ir.json` is the canonical model/compiler reference.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer

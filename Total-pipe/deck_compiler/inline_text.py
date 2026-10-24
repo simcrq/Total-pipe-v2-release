@@ -15,13 +15,13 @@ for prefix, namespace in (('a', A), ('p', P), ('mc', MC), ('a14', A14), ('m', M)
     ET.register_namespace(prefix, namespace)
 
 
-def fit_inline(source, bbox, contract, preserve_terms=False):
+def fit_inline(source, bbox, contract, preserve_terms=False, marker=None):
     width = bbox[2]-contract.inset['left']-contract.inset['right']
     available = bbox[3]-contract.inset['top']-contract.inset['bottom']
     width_error = None
     for size in range(int(contract.font_size), int(contract.font_floor)-1, -1):
         try:
-            plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height)
+            plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height, marker)
         except InlineWidthError as error:
             width_error = error
             continue
@@ -29,7 +29,7 @@ def fit_inline(source, bbox, contract, preserve_terms=False):
             return plan, replace(contract, font_size=size), False
     if width_error and size == int(contract.font_floor):
         # Re-measure the floor: a wider formula at an earlier size must not mask a height issue.
-        plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height)
+        plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height, marker)
     if preserve_terms:
         return plan, replace(contract, font_size=size, max_lines=max(contract.max_lines, len(plan['lines'])),
                              overflow_policy='preserve_terms_review'), True
@@ -49,15 +49,25 @@ def _props(parent, tag, contract, color):
     return props
 
 
-def paragraphs(plan, contract, color, align='left'):
+def paragraphs(plan, contract, color, align='left', marker=None):
     result = []
-    for line in plan['lines']:
+    for index, line in enumerate(plan['lines']):
         p = ET.Element('{'+A+'}p')
-        ppr = _sub(p, 'pPr', {'algn': {'left': 'l', 'center': 'ctr', 'right': 'r'}[align]})
+        attrs = {'algn': {'left': 'l', 'center': 'ctr', 'right': 'r'}[align]}
+        if marker:
+            attrs.update(marL=round(marker['gutter']*9525), indent=-round(marker['gutter']*9525) if index == 0 else 0)
+        ppr = _sub(p, 'pPr', attrs)
         _sub(_sub(ppr, 'lnSpc'), 'spcPts', {'val': round(line['height']*75)})
         _sub(_sub(ppr, 'spcBef'), 'spcPts', {'val': 0})
         _sub(_sub(ppr, 'spcAft'), 'spcPts', {'val': 0})
-        _sub(ppr, 'buNone')
+        if marker and index == 0:
+            _sub(_sub(ppr, 'buClr'), 'srgbClr', {'val': marker['color'].lstrip('#').upper()})
+            if marker.get('size_from_text'):
+                _sub(ppr, 'buSzTx')
+            _sub(ppr, 'buFont', {'typeface': marker['face']})
+            _sub(ppr, 'buChar', {'char': marker['char']})
+        else:
+            _sub(ppr, 'buNone')
         _props(ppr, 'defRPr', contract, color)
         for fragment in line['fragments']:
             if fragment['kind'] == 'text':
@@ -76,12 +86,12 @@ def paragraphs(plan, contract, color, align='left'):
     return result
 
 
-def text_body(plan, contract, color, align='left'):
+def text_body(plan, contract, color, align='left', marker=None):
     root = ET.Element('{'+P+'}txBody')
     attrs = {'wrap': 'none', 'anchor': {'top': 't', 'middle': 'ctr', 'bottom': 'b'}[contract['vertical_anchor']]}
     attrs.update({key: round(contract['inset'][name]*9525) for key, name in
                   (('lIns', 'left'), ('rIns', 'right'), ('tIns', 'top'), ('bIns', 'bottom'))})
     _sub(_sub(root, 'bodyPr', attrs), 'noAutofit')
     _sub(root, 'lstStyle')
-    root.extend(paragraphs(plan, contract, color, align))
+    root.extend(paragraphs(plan, contract, color, align, marker))
     return ET.tostring(root, encoding='unicode')

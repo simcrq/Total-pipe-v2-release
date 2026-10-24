@@ -88,14 +88,14 @@ def body_region(slide, family, frame, design=None, font_paths=None, preserve_ter
 # settled points as filled squares, and anything mixed falls back to the square PowerPoint itself
 # uses as its second list style.
 BULLET_COMPONENT_STYLE = {
-    "process-step": "arrow", "method": "arrow",
-    "conclusion": "square", "result": "square",
+    "process-step": "arrowhead", "method": "arrowhead",
+    "conclusion": "large_square", "result": "large_square",
     "hypothesis": "open_square", "caveat": "open_square", "comparison": "open_square",
 }
 
 
 def choose_bullet_style(ir):
-    """One list-marker style for the whole deck: explicit, else the dominant list semantics."""
+    """Deck default; individual blocks may override the marker without changing other lists."""
     explicit = (ir.get("presentation") or {}).get("bullet_style")
     if explicit:
         return explicit
@@ -106,9 +106,9 @@ def choose_bullet_style(ir):
                 component = block.get("component", "body")
                 counts[component] = counts.get(component, 0) + 1
     if not counts:
-        return "square"
+        return "large_square"
     top = max(sorted(counts), key=lambda component: counts[component])
-    return BULLET_COMPONENT_STYLE.get(top, "square")
+    return BULLET_COMPONENT_STYLE.get(top, "large_square")
 
 
 def fit_list_items(items, width, font_file, size, floor, max_lines):
@@ -119,6 +119,24 @@ def fit_list_items(items, width, font_file, size, floor, max_lines):
         if all(len(item_lines) <= max_lines for item_lines in lines):
             return lines, candidate
     return None
+
+
+def native_list_height(block, width, font_file, gap_ratio=DEFAULT_LIST_GAP, padding=(0, 0), preserve_terms=False,
+                       default_style='large_square'):
+    """Minimum box for an explicit list, including its native hanging indent and item gaps."""
+    if block.get('text_flow') != DISTRIBUTED_ARROW_LIST:
+        return None
+    if width < 520:
+        return 10000.0
+    pad_x, pad_y = padding
+    rows = select_text_flow(block['text'], DISTRIBUTED_ARROW_LIST)['items']
+    face = ImageFont.truetype(font_file, 24)
+    from .fonts import bullet_metrics
+    marker = bullet_metrics(block.get('bullet_style', default_style), face.getname()[0], font_file, 24)
+    line_h = marker['line_height_px']
+    height = (sum(len(break_lines(row, face, width-2*pad_x-marker['gutter'])) for row in rows)*line_h
+              +max(0, len(rows)-1)*round(line_h*gap_ratio, 2)+2*pad_y+(44 if block.get('label') else 0))
+    return 220.0 if preserve_terms else max(220.0, height)
 
 
 def text_floor_height(text, width, font_file, floor=24, max_lines=10, inline_math=False):
@@ -271,7 +289,11 @@ def text_visible_bottom(element):
         return y + height
     if element.get('inline_math'):
         return min(y+height, y+contract['inset']['top']+element['inline_layout']['height'])
-    line_count = len(element["text"].split("\n"))
+    if element['kind'] == 'list':
+        occupied = (sum(len(lines) for lines in element['items'])*contract['font_size']*contract['line_height']
+                    +element['bullet'].get('space_after', 0)*max(0, len(element['items'])-1))
+        return min(y+height, y+contract['inset']['top']+occupied)
+    line_count = len(re.split('[\n\v]', element["text"]))
     return min(y + height, y + contract["inset"]["top"] +
                line_count * contract["font_size"] * contract["line_height"])
 
@@ -315,6 +337,9 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
         return
 
     def need(block, w):
+        list_height = native_list_height(block, w, font_paths['font_file'])
+        if list_height is not None:
+            return list_height
         label = block.get('label', '')
         if block.get('component') == 'formula':
             label_w = formula_label_width(label, font_paths['bold_font_file'])
@@ -434,7 +459,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
     # another operating system, and a deck that cannot find its declared face is still deliverable in
     # a substituted one. Only "no font anywhere" is a FAIL.
-    from .fonts import resolve_bullet, resolve_theme_fonts
+    from .fonts import resolve_theme_fonts
     # Every character the deck will set, so the resolver can reject a face that cannot draw them.
     # The compiler's own strings count too: the evidence family draws 直接证据 / 假设（未证实） and the
     # header separator ·, none of which appear in the Deck IR. The list marker is left out of the
@@ -475,7 +500,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         if note['rule'] in ('FONT_SUBSTITUTED', 'FONT_GLYPH_FALLBACK'):
             deck_gap.update(note.get('detail', {}).get('unsupported_characters', ''))
     bullet_style = choose_bullet_style(ir)
-    bullet_glyph, bullet_face = resolve_bullet(bullet_style, theme["font_family"], regular_font)
+    bullet_color = (ir.get('presentation') or {}).get('bullet_color', theme.get('accent', DEFAULT_ACCENT))
     list_gap_ratio = float((ir.get("presentation") or {}).get("list_gap", DEFAULT_LIST_GAP))
     for note in font_notes:
         issues.append(issue(note["rule"], note["severity"], note["message"],
@@ -523,6 +548,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         visual_intent = comp.get("visual_intent") or {}
         family = ARCHETYPES[comp["archetype"]]["layout"]
         elements = []
+        adaptations = []
         slide_formulas = []
         scientific_text_ids = {'title', 'takeaway', *(b['id'] for b in blocks), *(b['id']+':label' for b in blocks)}
         if comp.get('layout_tree'):
@@ -530,7 +556,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             scientific_text_ids.update('region:'+node['id']+':title'
                                        for _, node in walk(comp['layout_tree']) if node['type'] == 'panel')
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
-                 anchor="top", color=None, flow=None, align=None, inline_math=False):
+                 anchor="top", color=None, flow=None, align=None, inline_math=False, marker=None):
             if not content:
                 return
             if design and role in type_sizes(design) and not eid.startswith('graphic:'):
@@ -539,12 +565,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 font_paths["bold_font_file" if role in ("title", "heading") else "font_file"],
                 font_weight=700 if role in ("title", "heading") else 400,
                 font_floor=floor, max_lines=lines, vertical_anchor=anchor)
+            if marker:
+                contract = replace(contract, line_height=max(contract.line_height, marker['line_height_px']/size))
+            measure_box = [*bbox[:2], bbox[2]-(marker['gutter'] if marker else 0), bbox[3]]
             overflow = None
             if inline_math:
                 from .inline_text import fit_inline, text_body
                 from totalpipe_layout.inline_math import InlineWidthError
                 try:
-                    plan, fitted, overflowed = fit_inline(content, bbox, contract, preserve_terms and eid in scientific_text_ids)
+                    plan, fitted, overflowed = fit_inline(content, measure_box, contract, preserve_terms and eid in scientific_text_ids, marker)
                 except InlineWidthError as error:
                     issues.append(issue('INLINE_FORMULA_SPACE', 'FAIL', str(error), n, eid,
                         detector='geometric-preflight', required_size_px=[error.required_width, 0],
@@ -561,7 +590,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 colour = color or theme.get('foreground', '#142735')
                 elements.append({'id': eid, 'kind': 'text', 'role': role, 'text': plan['text'], 'source_text': content,
                     'bbox': bbox, 'contract': fitted.to_dict(), 'color': colour, 'inline_math': True,
-                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left'),
+                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left', marker=marker),
+                    **({'bullet': marker, 'leading_marker': True} if marker else {}),
                     **({'align': align} if align else {}), **({'scientific_text_overflow': overflow} if overflow else {})})
                 if plan['formula_count']:
                     issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
@@ -569,10 +599,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         n, eid, detector='geometric-preflight', confidence='LOW'))
                 return
             try:
-                output, fitted = fit_text(content, bbox, contract)
+                output, fitted = fit_text(content, measure_box, contract)
             except ValueError:
                 if preserve_terms and eid in scientific_text_ids and min(bbox[2:]) > 0:
-                    wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), bbox[2])
+                    wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), measure_box[2])
                     output = '\n'.join(wrapped)
                     overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
                     bbox = [*bbox[:3], max(bbox[3], len(wrapped)*floor*contract.line_height)]
@@ -608,12 +638,27 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 # A soft break, not a new paragraph: OfficeCLI's overflow estimator counts every
                 # paragraph of a pre-broken footer as one line more than the renderer draws.
                 output = output.replace("\n", "\v")
-            elements.append({"id": eid, "kind": "text", "role": role, "text": output,
+            elements.append({"id": eid, "kind": 'list' if marker else "text", "role": role,
+                             "text": output.replace('\n', '\v') if marker else output,
+                             **({'items': [output.split('\n')], 'bullet': marker,
+                                 'leading_marker': True, 'source_text': content} if marker else {}),
                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
                              "color": color or theme.get("foreground", "#142735"),
                              **({'scientific_text_overflow': overflow} if overflow else {}),
                              **({"align": align} if align else {}),
                              **({"text_flow": flow} if flow else {})})
+        takeaway_marker = None
+        if slide['presentation'].get('takeaway_marker'):
+            setting = slide['presentation']['takeaway_marker']
+            from .fonts import bullet_metrics
+            takeaway_marker = {**bullet_metrics(setting['style'], theme['font_family'], regular_font, 28),
+                               'color': setting.get('color', theme.get('foreground', '#142735')),
+                               'space_after': 0}
+            adaptations.append({'action': 'takeaway_marker', **takeaway_marker})
+            if takeaway_marker['native_font_fallback']:
+                issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
+                    'Requested native marker font is unavailable; inspect the Unicode fallback glyph.',
+                    n, 'takeaway', detector='font-resolution'))
         spacious = deck_frame == "spacious"
         templated = deck_frame == "template"
         footer = " · ".join(sem["evidence_refs"])
@@ -621,7 +666,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         if design:
             header = header_layout(design, slide, font_paths, preserve_terms)
             text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
-            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2), inline_math='takeaway' in sem.get('inline_math', []))
+            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2), inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
             elements.extend(header_decoration(design, header))
             caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
         elif templated:
@@ -632,7 +677,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # above it and the takeaway opens the body underneath.
             text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A", inline_math='title' in sem.get('inline_math', []))
             text("takeaway", sem["takeaway"], [88, 84, 1104, 42], "takeaway", 24, 24, 2,
-                 color="#333333", inline_math='takeaway' in sem.get('inline_math', []))
+                 color="#333333", inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
             caveat_y, caveat_h = 640, 36
         else:
             text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2, inline_math='title' in sem.get('inline_math', []))
@@ -640,7 +685,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # the unused vertical room lets the original scientific panels render
             # larger without colliding with the title block.
             takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
-            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2, inline_math='takeaway' in sem.get('inline_math', []))
+            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
             # No footer element on any frame. The evidence ids used to be set at 15 pt under every
             # page, which meant a dozen EV numbers shared the bottom strip with the caveat. They are
             # traceability keys: the notes carry them, the room does not need them.
@@ -720,26 +765,31 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
             if b.get('inline_math'):
                 flow = {**flow, 'mode': 'plain'}
-            if preserve_terms and flow['mode'] == DISTRIBUTED_ARROW_LIST:
-                # The complete prose remains editable even when a native list's item limit is too
-                # tight. Do not shorten a technical name to satisfy that presentational limit.
-                flow = {**flow, 'mode': 'plain'}
             if flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520 and box[3] >= 220:
                 pad_x, pad_y = (0, 0) if design else (28, 18)
                 label_h = 44 if label else 0
                 items = flow["items"]
+                current_style = b.get('bullet_style', bullet_style)
+                from .fonts import bullet_metrics
+                marker = bullet_metrics(current_style, theme['font_family'], regular_font, 24)
                 # One text object, one paragraph per item, marker set by the paragraph itself.
                 # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
-                fitted = fit_list_items(items, box[2]-2*pad_x-BULLET_GUTTER,
-                                        font_paths["font_file"], 24, 22, LIST_ITEM_LINES)
-                if fitted is None:
+                fitted = fit_list_items(items, box[2]-2*pad_x-marker['gutter'],
+                                        font_paths["font_file"], 24, 24, LIST_ITEM_LINES)
+                beyond_lines = fitted is None
+                if beyond_lines and not preserve_terms:
                     issues.append(issue("SPLIT_REQUIRED", "FAIL",
                                         f"{b['id']} list items cannot fit above their font floor",
                                         n, b["id"], detector="geometric-preflight",
                                         textbox_contract="deck_ir"))
                     return
-                lines, size = fitted
-                line_h = size * 1.25
+                if beyond_lines:
+                    size = 24
+                    lines = [break_lines(item, ImageFont.truetype(font_paths['font_file'], size),
+                                         box[2]-2*pad_x-marker['gutter']) for item in items]
+                else:
+                    lines, size = fitted
+                line_h = marker['line_height_px']
                 gaps = len(lines) - 1
                 # Item spacing is a typographic value, not leftover space: filling the panel is what
                 # pushed three short items a hundred pixels apart. The ratio is relative to the line
@@ -747,12 +797,22 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 space_after = round(line_h * list_gap_ratio, 2) if gaps else 0.0
                 content_h = sum(len(item_lines) for item_lines in lines) * line_h + space_after * gaps
                 panel_h = 2*pad_y + label_h + content_h
-                if panel_h > box[3] + .5:
+                overflow = None
+                if (panel_h > box[3] + .5 or beyond_lines) and not preserve_terms:
                     issues.append(issue("SPLIT_REQUIRED", "FAIL",
                                         f"{b['id']} list needs {content_h:.0f}px but the panel gives "
                                         f"{box[3]-2*pad_y-label_h:.0f}px", n, b["id"],
                                         detector="geometric-preflight", textbox_contract="deck_ir"))
                     return
+                if panel_h > box[3] + .5 or beyond_lines:
+                    overflow = {'original_bbox': [box[0]+pad_x, box[1]+pad_y+label_h,
+                                                 box[2]-2*pad_x, max(0, box[3]-2*pad_y-label_h)],
+                                'policy': 'preserve-terms'}
+                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                        f"{b['id']}: complete native list retained with its markers and wrapped scientific terms beyond the nominal slot or item-line budget.",
+                        n, b['id'], detector='geometric-preflight', original_bbox=overflow['original_bbox'],
+                        required_size_px=[box[2], panel_h], available_size_px=box[2:],
+                        suggested_actions=['increase_region_height', 'split_slide', 'review_native_render']))
                 # The card hugs the list instead of stretching to the page: a panel with 150 px of
                 # empty space under three rows reads as a layout mistake, not as breathing room.
                 if not design:
@@ -761,7 +821,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     "bbox": [box[0], box[1], box[2], panel_h],
                     "geometry": "rect", "fill": theme.get("panel_fill", "none"),
                     "line": theme.get("panel_line", "#142735"), "line_width": 1,
-                    "collision_mode": "container"})
+                    "collision_mode": "container",
+                    **({'scientific_text_overflow': {'original_bbox': list(box), 'policy': 'preserve-terms'}} if overflow else {})})
                 if label:
                     text(b["id"]+":label", label,
                          [box[0]+pad_x, box[1]+pad_y, box[2]-2*pad_x, label_h],
@@ -770,30 +831,43 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                          "bbox": [box[0]+pad_x, box[1]+pad_y+label_h, box[2]-2*pad_x, content_h],
                          "color": theme.get("foreground", "#142735")}
                 contract = TextBoxContract(theme["font_family"], size, font_paths["font_file"],
-                                           font_weight=400, font_floor=22,
+                                           font_weight=400, font_floor=24,
+                                           line_height=line_h/size,
                                            max_lines=max(len(item_lines) for item_lines in lines),
                                            vertical_anchor="top")
+                bullet_glyph, bullet_face = marker['char'], marker['face']
+                current_color = b.get('bullet_color', bullet_color)
+                if marker['native_font_fallback']:
+                    issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
+                        'Requested native marker font is unavailable; inspect the Unicode fallback glyph.',
+                        n, b['id'], detector='font-resolution'))
                 elements.append({**style, "items": lines,
                                  "text": "\n".join("\v".join(item_lines) for item_lines in lines),
                                  "source_text": b["text"], "contract": contract.to_dict(),
-                                 "bullet": {"style": bullet_style, "char": bullet_glyph,
-                                            "face": bullet_face,
-                                            "color": theme.get("accent", DEFAULT_ACCENT),
-                                            "gutter": BULLET_GUTTER,
+                                 "bullet": {**marker,
+                                            "color": current_color,
                                             "space_after": round(space_after, 2)},
-                                 "text_flow": flow})
+                                 "text_flow": flow,
+                                 **({'scientific_text_overflow': overflow} if overflow else {})})
                 adaptations.append({
                     "block_id": b["id"],
                     "action": DISTRIBUTED_ARROW_LIST,
                     "source": flow["source"],
                     "item_count": len(lines),
-                    "bullet_style": bullet_style,
+                    "bullet_style": current_style,
+                    "bullet_color": current_color,
                     "bullet_glyph": bullet_glyph,
                     "bullet_face": bullet_face,
                     "distribution": flow["distribution"],
                 })
                 return
             if flow["mode"] == DISTRIBUTED_ARROW_LIST:
+                if flow['source'] == 'explicit':
+                    issues.append(issue('SPLIT_REQUIRED', 'FAIL',
+                        f"{b['id']}: explicit native list requires a component box of at least 520 × 220 px; markers were not removed.",
+                        n, b['id'], detector='geometric-preflight', required_size_px=[520, 220],
+                        available_size_px=box[2:], suggested_actions=['widen_region', 'increase_region_height', 'split_slide']))
+                    return
                 adaptations.append({
                     "block_id": b["id"],
                     "action": "text_flow_fallback",
@@ -813,6 +887,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     max_columns=max_columns, preferred_columns=preferred_columns,
                     body_size=type_sizes(design)['body'] if design else 28,
                     text_inset=56 if show_sequence else 0, preserve_terms=preserve_terms,
+                    list_gap_ratio=list_gap_ratio,
                     gap=24 if comp['archetype'] == 'figure-parameters' else 18)
             except FormulaCapacityError as error:
                 issues.append(issue('FORMULA_CAPACITY', 'FAIL', str(error), n,
@@ -915,7 +990,6 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     cursor += height + 18
             figure(f, [56, cursor, 1168, bottom - cursor], 1)
 
-        adaptations = []
         def native_graphic(region, graphic=None):
             graphic = graphic or comp["graphics"][0]
             try:
@@ -953,7 +1027,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             from .layout_tree import LayoutTreeError, compile_regions
             checkpoints = [len(elements), len(issues), len(adaptations)]
             try:
-                plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms)
+                plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
+                                       list_gap_ratio, (0, 0) if design else (28, 18), bullet_style)
                 by_id = {b['id']: b for b in blocks}
                 graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
                 for entry in plan['nodes']:
@@ -1209,6 +1284,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             issues.append(issue('GRAPHIC_ID_COLLISION' if comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
                                 'FAIL', 'Page object names must be unique',
                                 n, detector='geometric-preflight'))
+        for b in blocks:
+            if (b.get('text_flow') == DISTRIBUTED_ARROW_LIST
+                    and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in elements)
+                    and not any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues)):
+                issues.append(issue('SPLIT_REQUIRED', 'FAIL',
+                    f"{b['id']}: this composition cannot realize the explicit native list; choose a wider layout or split the page.",
+                    n, b['id'], detector='geometric-preflight', suggested_actions=['widen_region', 'split_slide']))
         issues.extend(geometry_issues(elements, n))
         if visual_plan and any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues) and not any(
                 i['rule'] == 'VISUAL_PLAN_UNSATISFIABLE' and i.get('slide') == n for i in issues):

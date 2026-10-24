@@ -55,6 +55,11 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'A provider that fails or is rejected loses that page to the compiler templates; check layout_provider.json for per-slide provenance. '
     'Build returns a candidate and QA, not automatic final approval. '
     'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
+    'Native lists retain complete rows under preserve-terms; never remove bullets to satisfy capacity. '
+    'Deck presentation.bullet_style/bullet_color provide defaults; prose blocks may override bullet_style/bullet_color. '
+    'Markers are optional; large_square, large_diamond and arrowhead select full native glyphs without bullet scaling. '
+    'Slide presentation.takeaway_marker={style,color?} adds one independent leading marker, including on mixed inline math; '
+    'marker colors do not recolor prose. Explicit lists need a 520x220 px component region; insufficient space requires replanning. '
     'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
     'composition.layout_tree versions 1.0/1.1 reuse the compiler body frame; columns/stack/panel/image_grid '

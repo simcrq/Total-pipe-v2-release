@@ -4,7 +4,7 @@ import re
 
 DISTRIBUTED_ARROW_LIST = "distributed_arrow_list"
 ARROW_GLYPH = "➢"
-_PREFIX = re.compile(r"^\s*(?:[-*•●▪◦‣⁃➢▶▷►▸→]|\d+[.)、])\s*")
+_PREFIX = re.compile(r"^\s*(?:[-*]\s+|[•●▪◦‣⁃➢▶▷►▸→]\s*|\d+[.)](?!\d)\s*|\d+、\s*)")
 _EXCLUDED = re.compile(r"(?:^|\n)\s*(?:```|\|.+\||[$].+[$])", re.MULTILINE)
 
 

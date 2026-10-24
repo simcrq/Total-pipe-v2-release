@@ -60,7 +60,7 @@ class ListSpacingTests(unittest.TestCase):
             '第三段列出仍然不确定的因素：样品之间的批次漂移、标定误差，以及需要下一步实验确认的机制假设，这三项都会影响结论的适用范围。'])
         page, lists = self.lists(list_deck([block('a', 'body', long_rows)]))
         self.assertEqual(len(lists), 1)
-        self.assertEqual(lists[0]['bullet']['style'], 'square')
+        self.assertEqual(lists[0]['bullet']['style'], 'large_square')
         self.assertGreater(max(len(item) for item in lists[0]['items']), 1,
                            'at least one row wraps to several lines')
 
