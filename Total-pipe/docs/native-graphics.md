@@ -60,9 +60,13 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
   节点 ID 在图内唯一；编译后对象名包含图形和节点 ID，可在选择窗格中定位。
 - 字体继承 deck theme，描边与箭头使用 `theme.accent`。文字独立测量并居中，
   不低于 18 pt；装不下时返回 `SPLIT_REQUIRED`，保留原文。
-- 不写 `x/y/w/h/bbox`。一页最多一张原生图形；独立页使用 `native-graphic`。
+- 不写 `x/y/w/h/bbox`。旧平面表示一页最多一张原生图形；独立页使用 `native-graphic`。
   `process-flow`、`figure-parameters` 可与 blocks 和论文图片混排，见下文。
   其他 archetype 下的非空 `graphics` 会明确报错，避免内容被忽略。
+
+复合区域扩展允许把最多 8 项 canonical graphics 分配到不同子区域，并与公式、图片和正文混排。
+此时使用 `composition.layout_tree`，每项恰好引用一次，绕过平面 archetype 的数量粗筛，但不绕过
+原有图形尺寸和证据门禁。详见 [Layout Tree 1.0](composite-layouts.md)。
 
 节点是 `p:sp` 预设形状，文字是独立文本框，边是 `p:cxnSp` 直线连接符。
 布局器输出源/目标节点、端点和形状专属连接点索引；OfficeCLI 在所有节点创建后，

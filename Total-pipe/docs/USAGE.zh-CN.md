@@ -164,6 +164,24 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 Path 和 composite 见 [native-components.md](native-components.md)。所有关系显式声明；
 机制的实测与假设保留依据、不同线型及标签。生成示意图不能替代论文原图，保留 `SCHEMATIC_REVIEW`。
 
+### 复合内容区域
+
+现有整页框架可在 `composition.layout_tree` 中选用递归子布局，版本为 `1.0`，外层 Deck IR 仍为 `2.0`。
+支持 columns、stack、panel、image_grid；叶节点引用原有 block ID、figure_refs 零基索引或 graphic ID。
+每项内容恰好引用一次，不复制正文或填写页面坐标。新混排页可用 `composite-research`。
+
+先查询 `totalpipe_capabilities`（CLI：`python -m deck_compiler capabilities`），再让 RPA
+`search_sublayouts/compose_sublayout` 组合。整页版式库继续保留，结构规划成功仍需编译器实测。
+最多 6 层、64 节点，公式与解释在同一 stack，图形和原图的尺寸下限不变。
+
+树页仍执行整套 Design、保留 academic_design，不叠加分配同一区域的 visual_plan/visual_intent。
+查看 `layout_feedback.json` 的组件路径、所需/实际尺寸和建议，容量不足交回 RPA 重规划。
+不会自动缩小水平流程图或裁剪证据图；完整标题/正文超容量按 preserve-terms 保留 REVIEW。
+复杂表格尚未接入。详见 [复合区域协议与样例](composite-layouts.md)。
+
+PWF 新增 `artifacts.figure_assets_metadata`，pwf2rpa 对显式匹配的资源引用补齐源图片像素尺寸、宽高比、
+格式及裁剪策略，RPA 保留这些字段。旧 workflow 缺少元数据仍可转换。
+
 ### 公式插入
 
 公式用独立的 `component: "formula"`，`text` 保存 LaTeX 子集。JSON 必须双写反斜线：

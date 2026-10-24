@@ -9,6 +9,7 @@ from .capacity import FORMULA_GAP, FORMULA_LABEL_MAX, FORMULA_SIZES
 from .formula_layout import formula_groups, plan_formula_flow, FormulaCapacityError
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
+from .layout_tree import walk as walk_regions
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
                              graphic_texts, intentional_overlap)
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
@@ -187,7 +188,7 @@ def frame_variant(ir):
 def sequence_flow(composition):
     """Render an explicit process intent, retaining the legacy role heuristic."""
     blocks = composition["blocks"]
-    if composition.get("graphics"):
+    if composition.get("graphics") or composition.get('layout_tree'):
         return False  # The declared graphic edges own the process topology.
     intent = composition.get("visual_intent")
     if intent is not None:
@@ -430,7 +431,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     # header separator ·, none of which appear in the Deck IR. The list marker is left out of the
     # sample on purpose: it has its own face (a:buFont) and letting it decide the body face would
     # push a Chinese deck from a sans face to a symbol one.
-    compiler_strings = '直接证据假设（未证实）·0123456789'
+    compiler_strings = '·0123456789'
+    if any(ARCHETYPES[s['composition']['archetype']]['layout'] == 'evidence' for s in ir['slides']):
+        compiler_strings += '直接证据假设（未证实）'
     text_sample = compiler_strings + "".join(
         [str(value) for slide in ir["slides"]
          for value in (slide["semantic"].get("title", ""), slide["semantic"].get("purpose", ""),
@@ -440,13 +443,19 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         + [figure.get("caption", "") for slide in ir["slides"]
            for figure in slide["composition"]["figure_refs"]]
         + [value for slide in ir["slides"] for graphic in slide["composition"].get("graphics", [])
-           for _, value in graphic_texts(graphic)])
+           for _, value in graphic_texts(graphic)]
+        + [node['title'] for slide in ir['slides']
+           for _, node in walk_regions(
+               slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel'])
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
         issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(error), detector="geometric-preflight"))
         return None, issues
     font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
+    # The measured fallback must also be the native typeface. Keeping the authored Arial family
+    # after measuring a CJK fallback lets PowerPoint choose different advances and overrun a panel.
+    theme['font_family'] = ImageFont.truetype(regular_font, 24).getname()[0]
     # Characters the deck-level font note already covers: repeating them per text element turns one
     # real finding into fifty identical REVIEWs and buries everything else in the report.
     deck_gap = set()
@@ -504,6 +513,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         elements = []
         slide_formulas = []
         scientific_text_ids = {'title', 'takeaway', *(b['id'] for b in blocks), *(b['id']+':label' for b in blocks)}
+        if comp.get('layout_tree'):
+            from .layout_tree import walk
+            scientific_text_ids.update('region:'+node['id']+':title'
+                                       for _, node in walk(comp['layout_tree']) if node['type'] == 'panel')
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
                  anchor="top", color=None, flow=None, align=None):
             if not content:
@@ -861,8 +874,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             figure(f, [56, cursor, 1168, bottom - cursor], 1)
 
         adaptations = []
-        def native_graphic(region):
-            graphic = comp["graphics"][0]
+        def native_graphic(region, graphic=None):
+            graphic = graphic or comp["graphics"][0]
             try:
                 graphic_elements = compile_graphic(graphic, region, theme, font_paths)
             except ValueError as error:
@@ -893,8 +906,50 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 "generated graphics do not establish scientific correctness",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
         has_formulas = any(b.get('component') == 'formula' for b in blocks)
-        proposal = None if visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
-        if visual_plan:
+        proposal = None if comp.get('layout_tree') or visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
+        if comp.get('layout_tree'):
+            from .layout_tree import LayoutTreeError, compile_regions
+            checkpoints = [len(elements), len(issues), len(adaptations)]
+            try:
+                plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms)
+                by_id = {b['id']: b for b in blocks}
+                graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
+                for entry in plan['nodes']:
+                    first, issue_start = len(elements), len(issues)
+                    if entry['type'] == 'panel':
+                        text('region:'+entry['node_id']+':title', entry['title'], entry['title_bbox'],
+                             'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)))
+                    elif entry['type'] == 'block':
+                        block(by_id[entry['ref']], entry['bbox'], formula_align='left')
+                    elif entry['type'] == 'figure':
+                        figure(figs[entry['ref']], entry['bbox'], entry['ref']+1)
+                    elif entry['type'] == 'graphic':
+                        native_graphic(entry['bbox'], graphics_by_id[entry['ref']])
+                    for element in elements[first:]:
+                        element.update(layout_component=entry['component'], layout_region=entry['bbox'])
+                        ex, ey, ew, eh = element['bbox']
+                        rx, ry, rw, rh = entry['bbox']
+                        if (not element.get('scientific_text_overflow') and
+                            (ex < rx-.1 or ey < ry-.1 or ex+ew > rx+rw+.1 or ey+eh > ry+rh+.1)):
+                            issues.append(issue('REGION_CONTENT_OUT_OF_BOUNDS', 'FAIL',
+                                'Rendered component exceeds its assigned compiler region.', n, element['id'],
+                                detector='geometric-preflight', component=entry['component']))
+                    failures = [item for item in issues[issue_start:] if item['severity'] == 'FAIL']
+                    if failures:
+                        raise LayoutTreeError(entry['component'], 'COMPONENT_RENDER_FAILED',
+                            'A component failed an existing renderer gate after region allocation.',
+                            [entry['bbox'][2], entry['requirements']['min_height_px']], entry['bbox'][2:],
+                            cause=failures[0]['message'])
+                adaptations.append({'action': 'layout_tree', **plan})
+                adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                    'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
+            except LayoutTreeError as error:
+                del elements[checkpoints[0]:]
+                del adaptations[checkpoints[2]:]
+                issues.append(issue(error.detail['code'], 'FAIL', str(error), n,
+                    detector='geometric-preflight', slide_id=slide['id'],
+                    **{key: value for key, value in error.detail.items() if key not in ('code', 'message')}))
+        elif visual_plan:
             from .academic_layout import candidates
             best_failures, attempts = [], []
             for plan in candidates(slide, [56, top, 1168, bh], assets, font_paths, design):
@@ -1084,7 +1139,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)
-        if (comp.get('graphics') or design) and len({e['id'] for e in elements}) != len(elements):
+        if (comp.get('layout_tree') or comp.get('graphics') or design) and len({e['id'] for e in elements}) != len(elements):
             issues.append(issue('GRAPHIC_ID_COLLISION' if comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
                                 'FAIL', 'Page object names must be unique',
                                 n, detector='geometric-preflight'))
@@ -1119,6 +1174,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             "frame_variant_overrides": {str(n): deck_frame for n, slide in enumerate(ir["slides"], 1)
                 if slide["presentation"].get("variant", "default") != deck_frame},
             "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in font_paths.values()},
+            "resolved_font_family": theme['font_family'],
             "background_image": (assets[background_key]["path"] if background_key else None),
             **({'academic_design': design} if design else {}),
             "slides": slides}, issues

@@ -13,6 +13,7 @@ from .layout import compile_deck
 from .structural import verify
 from . import officecli
 from . import native
+from .layout_feedback import make_feedback
 
 
 def write_json(path, value):
@@ -72,6 +73,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                                  'prompt': str(prompt_path.resolve()),
                                  'ir': str(ir_path.resolve()), **pending}
             write_json(out/'qa_report.json', qa)
+            write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
     provider_name = (layout_options or {}).get('name', 'compiler')
     if provider_name not in ('compiler', 'deterministic', 'none') or (layout_options or {}).get('plugin'):
@@ -142,6 +144,10 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                     f"Automatic overflow repair failed: {error}", detector='overflow-repair'))
 
     write_json(out/'deck_ir.json', ir)
+    if not layout:
+        for name in ('layout.json', 'layout_provider.json'):
+            (out/name).unlink(missing_ok=True)
+        shutil.rmtree(out/'derived', ignore_errors=True)
     if layout:
         write_json(out/'layout.json', layout)
         if layout.get('layout_provider'):
@@ -150,6 +156,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             write_json(out/'derived'/name, value)
     qa = report(issues, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': layout is not None})
     write_json(out/'qa_report.json', qa)
+    write_json(out/'layout_feedback.json', make_feedback(ir, layout, issues))
     return ir, layout, qa
 
 
@@ -227,6 +234,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                     'officecli_commands_sha256': command_sha256})
         qa['layout_sha256'] = file_hash(out/'layout.json')
         write_json(out/'qa_report.json', qa)
+        write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         write_json(out/'state.json', {'phase': 'failed' if qa['counts']['FAIL'] else 'awaiting_validation',
                                      'artifact_sha256': sha, 'previous_final_sha256': old_final})
         write_json(out/'metrics.json', {'elapsed_seconds': round(time.monotonic()-started, 3),

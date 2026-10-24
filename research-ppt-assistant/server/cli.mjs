@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import { searchSublayouts, composeSublayout } from "./sublayouts.mjs";
 import { assertSupportedNodeVersion } from "./runtime.mjs";
 import { runBenchmark } from "./benchmark.mjs";
 import { normalizeContentModel } from "./content-model.mjs";
@@ -95,6 +96,8 @@ Usage:
   node server/cli.mjs benchmark --iterations 20
   node server/cli.mjs search --text-chars 80 --image-count 2 --k 5 --include-slots
   node server/cli.mjs get RM-DUAL_FIGURE-01 --theme-id paper_blue
+  node server/cli.mjs search-sublayouts --file sublayout-search.json
+  node server/cli.mjs compose-sublayout --file sublayout-request.json
   node server/cli.mjs normalize-content --file content-model-input.json
   node server/cli.mjs plan --presentation-type group_meeting --slide-count 12 --topic "研究进展"
   node server/cli.mjs plan --presentation-type group_meeting --allow-auto-split false --max-replan-attempts 3
@@ -120,6 +123,8 @@ const COMMAND_TOOL_NAMES = {
   "audit-layouts": "audit_layout_library",
   benchmark: "run_benchmark",
   search: "search_layouts",
+  "search-sublayouts": "search_sublayouts",
+  "compose-sublayout": "compose_sublayout",
   get: "get_layout",
   "normalize-content": "normalize_content",
   plan: "create_deck_plan",
@@ -155,6 +160,12 @@ async function main() {
       break;
     case "search":
       result = await searchLayouts(await readInput(commandOptions));
+      break;
+    case "search-sublayouts":
+      result = searchSublayouts(await readInput(commandOptions));
+      break;
+    case "compose-sublayout":
+      result = composeSublayout(await readInput(commandOptions));
       break;
     case "get":
       result = await getLayout(positionals[1] ?? commandOptions.layout_id, commandOptions.theme_id, commandOptions.viewing_mode);

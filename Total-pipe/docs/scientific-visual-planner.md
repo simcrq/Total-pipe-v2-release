@@ -22,6 +22,8 @@ python -m deck_compiler visual-prompt \
 文件哈希、`planning_targets`、`required_plan_slide_ids` 和两份严格 Schema；生成提示包本身不调用模型。
 每个支持的页面均需有 visual_plan；不支持的页列出原因，不凭空添加图或机制。
 纯文字/公式 Deck 仍需 academic_design，其提案允许 `slides: []`。
+已有 composition.layout_tree 的页面由 RPA 子布局定义正文结构，同样选择整套 academic_design，
+不叠加平面 visual_plan。它会作为已有复合结构列入规划目标，仍按真实几何与原生渲染检查。
 `--slides slide-04 slide-06` 仅用于局部修订，不能让其余支持的页静默跳过设计。
 下面是提案的单页节选，完整生成任务须覆盖全部支持的页：
 

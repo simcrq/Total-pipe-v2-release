@@ -1,0 +1,411 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "composite-region-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none",
+      "header_variant": "compact",
+      "type_scale": "compact"
+    }
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {
+    "demo1": {
+      "path": "demo_deck/figures/fig1_quality.png",
+      "origin": "generated",
+      "generator": "bundled-demo-fixture"
+    },
+    "demo2": {
+      "path": "demo_deck/figures/fig2_stages.png",
+      "origin": "generated",
+      "generator": "bundled-demo-fixture"
+    },
+    "demo3": {
+      "path": "demo_deck/figures/fig3_provider.png",
+      "origin": "generated",
+      "generator": "bundled-demo-fixture"
+    }
+  },
+  "slides": [
+    {
+      "id": "three-panel-mixed",
+      "semantic": {
+        "title": "三栏内容区：公式、图片与原生曲线",
+        "purpose": "验证复合区域中内容完整性与原生对象边界",
+        "takeaway": "页面框架保持统一；各子区域保留完整内容与图注。",
+        "evidence_refs": [
+          "fixture:composite-regions"
+        ],
+        "caveats": [],
+        "speaker_notes": "本页使用模拟图形与数学例式作软件布局验收，不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "explain",
+            "component": "body",
+            "text": "矩阵的每个元素与平方根的作用范围均完整保留。"
+          },
+          {
+            "id": "matrix",
+            "component": "formula",
+            "text": "A=\\begin{bmatrix}4&2\\\\2&5\\end{bmatrix}",
+            "anchor": "explain"
+          },
+          {
+            "id": "root",
+            "component": "formula",
+            "text": "\\lambda=\\sqrt{a^{2}+b^{2}}",
+            "anchor": "explain"
+          },
+          {
+            "id": "curve-explain",
+            "component": "body",
+            "text": "曲线是可编辑的原生路径，用于验证区域边界。"
+          }
+        ],
+        "figure_refs": [
+          {
+            "asset_id": "demo1",
+            "caption": "示意图 1：软件回归模拟数据",
+            "min_panel_extent": 140
+          },
+          {
+            "asset_id": "demo2",
+            "caption": "示意图 2：软件回归模拟数据",
+            "min_panel_extent": 140
+          }
+        ],
+        "graphics": [
+          {
+            "id": "curve",
+            "type": "path",
+            "view_box": [
+              0,
+              0,
+              300,
+              180
+            ],
+            "paths": [
+              {
+                "id": "response",
+                "commands": [
+                  [
+                    "M",
+                    10,
+                    160
+                  ],
+                  [
+                    "C",
+                    70,
+                    160,
+                    80,
+                    30,
+                    150,
+                    30
+                  ],
+                  [
+                    "C",
+                    220,
+                    30,
+                    230,
+                    160,
+                    290,
+                    160
+                  ]
+                ],
+                "fill": "none",
+                "stroke": "accent",
+                "line_width": 3
+              }
+            ]
+          }
+        ],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "three-panels",
+              "type": "columns",
+              "gap": "standard",
+              "children": [
+                {
+                  "id": "math-panel",
+                  "type": "panel",
+                  "title": "矩阵与平方根表达式",
+                  "gap": "compact",
+                  "body": {
+                    "id": "math-rows",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "math-context",
+                        "type": "block",
+                        "ref": "explain"
+                      },
+                      {
+                        "id": "matrix-ref",
+                        "type": "block",
+                        "ref": "matrix"
+                      },
+                      {
+                        "id": "root-ref",
+                        "type": "block",
+                        "ref": "root"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "evidence-panel",
+                  "type": "panel",
+                  "title": "两幅模拟图的完整图注",
+                  "gap": "compact",
+                  "body": {
+                    "id": "evidence-grid",
+                    "type": "image_grid",
+                    "columns": 1,
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "fig-a",
+                        "type": "figure",
+                        "ref": 0
+                      },
+                      {
+                        "id": "fig-b",
+                        "type": "figure",
+                        "ref": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "curve-panel",
+                  "type": "panel",
+                  "title": "局部区域内的贝塞尔曲线",
+                  "gap": "compact",
+                  "body": {
+                    "id": "curve-rows",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "curve-ref",
+                        "type": "graphic",
+                        "ref": "curve"
+                      },
+                      {
+                        "id": "curve-context",
+                        "type": "block",
+                        "ref": "curve-explain"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "wide-graphic",
+      "semantic": {
+        "title": "宽栏流程图与窄栏公式",
+        "purpose": "验证复合区域中内容完整性与原生对象边界",
+        "takeaway": "水平流程图按最小节点尺寸分配宽栏。",
+        "evidence_refs": [
+          "fixture:composite-regions"
+        ],
+        "caveats": [],
+        "speaker_notes": "本页使用模拟图形与数学例式作软件布局验收，不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "explain",
+            "component": "body",
+            "text": "指数作用于完整的平方根项。"
+          },
+          {
+            "id": "equation",
+            "component": "formula",
+            "text": "y=\\left(\\sqrt{x+1}\\right)^{2}",
+            "anchor": "explain"
+          }
+        ],
+        "figure_refs": [],
+        "graphics": [
+          {
+            "id": "workflow",
+            "type": "process",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "input",
+                "title": "输入",
+                "body": "保留条件"
+              },
+              {
+                "id": "control",
+                "title": "控制",
+                "body": "检查变量"
+              },
+              {
+                "id": "output",
+                "title": "输出",
+                "body": "核对结果"
+              }
+            ],
+            "edges": [
+              {
+                "from": "input",
+                "to": "control"
+              },
+              {
+                "from": "control",
+                "to": "output"
+              }
+            ]
+          }
+        ],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "wide-left",
+              "type": "columns",
+              "weights": [
+                2.5,
+                1
+              ],
+              "children": [
+                {
+                  "id": "process-panel",
+                  "type": "panel",
+                  "title": "水平流程图保留节点可读性",
+                  "gap": "compact",
+                  "body": {
+                    "id": "process-ref",
+                    "type": "graphic",
+                    "ref": "workflow"
+                  }
+                },
+                {
+                  "id": "formula-panel",
+                  "type": "panel",
+                  "title": "公式与解释同组",
+                  "gap": "compact",
+                  "body": {
+                    "id": "equation-rows",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "explain-ref",
+                        "type": "block",
+                        "ref": "explain"
+                      },
+                      {
+                        "id": "equation-ref",
+                        "type": "block",
+                        "ref": "equation"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "grid",
+      "semantic": {
+        "title": "图片网格：保留宽高比和每幅图注",
+        "purpose": "验证复合区域中内容完整性与原生对象边界",
+        "takeaway": "完整证据图采用 contain 策略，网格行高由内容尺寸决定。",
+        "evidence_refs": [
+          "fixture:composite-regions"
+        ],
+        "caveats": [],
+        "speaker_notes": "本页使用模拟图形与数学例式作软件布局验收，不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [],
+        "figure_refs": [
+          {
+            "asset_id": "demo1",
+            "caption": "示意图 1：软件回归模拟数据",
+            "min_panel_extent": 140
+          },
+          {
+            "asset_id": "demo2",
+            "caption": "示意图 2：软件回归模拟数据",
+            "min_panel_extent": 140
+          },
+          {
+            "asset_id": "demo3",
+            "caption": "示意图 3：软件回归模拟数据",
+            "min_panel_extent": 140
+          }
+        ],
+        "graphics": [],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "grid-panel",
+              "type": "panel",
+              "title": "模拟数据图：等比放置与图注",
+              "gap": "compact",
+              "body": {
+                "id": "three-figure-grid",
+                "type": "image_grid",
+                "columns": 2,
+                "gap": "compact",
+                "children": [
+                  {
+                    "id": "grid-ref-0",
+                    "type": "figure",
+                    "ref": 0
+                  },
+                  {
+                    "id": "grid-ref-1",
+                    "type": "figure",
+                    "ref": 1
+                  },
+                  {
+                    "id": "grid-ref-2",
+                    "type": "figure",
+                    "ref": 2
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "presentation": {}
+    }
+  ]
+}

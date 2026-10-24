@@ -24,6 +24,13 @@ Evidence -> Story -> [DesignIntentPlanner] -> RPA -> deck_ir.json
 
 ## Contracts
 
+Optional [Layout Tree 1.0](composite-layouts.md) extends canonical v2 in place. A bounded
+`composition.layout_tree.regions.body` recursively compiles columns, stacks, panels and image grids
+without changing scientific content or the OfficeCLI protocol. RPA's separate sublayout search and
+composition tools emit references only. `layout_feedback.json` is SHA-bound planner feedback,
+specified by `schemas/layout-feedback.schema.json`; it supplements the unified QA report.
+Flat IR remains supported and tree pages still require deck-wide visual design.
+
 - `schemas/deck-ir.schema.json` separates semantic, composition and presentation data.
   Blocks and figures use component names and asset references. Final bounding boxes are
   compiler output and are rejected in Deck IR.

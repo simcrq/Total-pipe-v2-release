@@ -143,6 +143,10 @@ class CompilerTests(unittest.TestCase):
                 if archetype == 'native-graphic':
                     example = json.loads((ROOT/'examples/native-graphic.deck_ir.json').read_text(encoding='utf-8'))
                     s['composition'] = example['slides'][0]['composition']
+                if archetype == 'composite-research':
+                    s['composition']['figure_refs'] = []
+                    s['composition']['layout_tree'] = {'version': '1.0', 'regions': {
+                        'body': {'id': 'body-ref', 'type': 'block', 'ref': 'b'}}}
                 layout, items=compile_deck({**ir,'slides':[s]},ROOT)
                 self.assertIsNotNone(layout); self.assertFalse([i for i in items if i['severity']=='FAIL'])
     def test_capacity_excess(self):

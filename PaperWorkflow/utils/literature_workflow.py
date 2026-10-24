@@ -1037,6 +1037,7 @@ def build_literature_workflow(
             "bundle_manifest_path": "bundle.manifest.json",
             "figure_asset_count": bundle["asset_count"],
             "figure_asset_paths": bundle["asset_paths"],
+            "figure_assets_metadata": bundle.get("asset_metadata", []),
             "asset_roots": bundle["asset_roots"],
             "bundle_relative_paths": {
                 "workflow": "workflow.json",

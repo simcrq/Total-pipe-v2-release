@@ -161,6 +161,23 @@ node server/cli.mjs validate-deck --file deck-plan.json
 `slot_specs[].pptx_in` 是 PowerPoint 英寸坐标。显式 `slot_id` 必须存在且类型兼容，
 不会回退到其他槽位。结构内容超过容量时，`allow_auto_split: true` 才允许确定性拆页。
 
+### 3.3 可选的内容区子布局
+
+整页版式库继续保留。新增 `search_sublayouts` 和 `compose_sublayout`，在已有页面框架中组合
+two-panels、three-panels、four-panels、vertical-stack、image-grid。CLI 对应 search-sublayouts /
+compose-sublayout，使用 `--file` 输入。先查询消费者 `totalpipe_capabilities`，作为 consumer_capabilities
+传入，避免向旧编译器输出不支持的结构。
+
+compose 输入 sublayout_id、带完整标题和 kind/ref items 的 groups、canonical content_refs；
+输出 composition_patch.layout_tree，不生成页面坐标，不调用 OfficeCLI。每项内容恰好引用一次，
+公式及其解释锚点留在同组。structure_planned 仍需 Deck Compiler 实测，不能当作 plan_complete 或几何通过。
+现有 create_deck_plan 的完整内容和证据验证保持原流程。
+
+最终编译器以 layout_feedback.json 返回组件路径、所需/实际尺寸及修复建议。能力不兼容则沿用
+整页版式，复杂表格暂不受此协议支持。协议与完整示例见
+[复合区域说明](../../Total-pipe/docs/composite-layouts.md)。PWF 的源图片像素尺寸、宽高比、路径身份、格式和
+crop_allowed 会经过 pwf2rpa 与 RPA 规范化保留，不推断科学图像类别。
+
 ## 4. 长多段正文与 text_flow
 
 RPA 接受以下字段：

@@ -69,6 +69,13 @@ validates a compact Story and converts it into the one thing RPA cannot infer â€
 
 ## Story Planning is a hard intermediate gate
 
+Image metadata is passed without interpreting scientific content. When PWF supplies
+`artifacts.figure_assets_metadata`, explicitly matching visual `source_asset_id/asset_uri/uri`
+references inherit source pixel dimensions, aspect ratio, format, image kind and conservative
+`crop_allowed=false`. Basename matching is not used. Conflicting explicit values remain visible
+with `ASSET_METADATA_CONFLICT` warnings. Older workflows still convert without metadata.
+The original workflow remains untouched; neither this bridge nor PWF chooses a body layout.
+
 The full path is:
 
 ```text

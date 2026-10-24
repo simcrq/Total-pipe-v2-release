@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Deck Compiler to Planner layout feedback v1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "ir_sha256", "geometry_generated", "slides", "retry_owner", "automatic_retries"],
+  "properties": {
+    "version": {"const": "1.0"}, "ir_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "geometry_generated": {"type": "boolean"}, "retry_owner": {"const": "skill_or_caller"},
+    "automatic_retries": {"const": 0},
+    "slides": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["slide_id", "status", "errors", "suggested_actions"],
+      "properties": {
+        "slide_id": {"type": "string"}, "status": {"enum": ["compiled", "needs_review", "layout_failed"]},
+        "suggested_actions": {"type": "array", "items": {"type": "string"}},
+        "errors": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["code", "severity", "component", "message"],
+          "properties": {
+            "code": {"type": "string"}, "severity": {"enum": ["FAIL", "REVIEW"]},
+            "component": {"type": "string"}, "message": {"type": "string"},
+            "required_size_px": {"$ref": "#/$defs/size"}, "available_size_px": {"$ref": "#/$defs/size"},
+            "measurement": {"type": "string"}, "cause": {"type": "string"},
+            "suggested_actions": {"type": "array", "items": {"type": "string"}}
+          }
+        }}
+      }
+    }}
+  },
+  "$defs": {"size": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}}
+}

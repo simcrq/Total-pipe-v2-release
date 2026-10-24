@@ -62,6 +62,7 @@ _VISUAL_KEYS = frozenset(
         "description", "alt_text", "label", "figure_table_ref", "importance",
         "must_keep", "asset_uri", "uri", "visual_id", "evidence_ids",
         "citation_ids", "min_display_width", "visual_aspect_ratio",
+        "source_width_px", "source_height_px", "source_asset_id", "image_kind", "image_format", "crop_allowed",
     }
 )
 
@@ -146,6 +147,23 @@ def _normalize_visual(raw: Any, path: str, problems: list[Problem]) -> dict[str,
         value = raw.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             visual[key] = value
+    for key in ('source_width_px', 'source_height_px'):
+        if key in raw:
+            value = raw[key]
+            if type(value) is int and value > 0:
+                visual[key] = value
+            else:
+                problems.append(Problem('VISUAL_DIMENSION_INVALID', f'{path}.{key}',
+                    'Source pixel dimensions must be positive integers.', actual=value))
+    for key in ('source_asset_id', 'image_kind', 'image_format'):
+        if isinstance(raw.get(key), str) and raw[key].strip():
+            visual[key] = raw[key].strip()
+    if 'crop_allowed' in raw:
+        if isinstance(raw['crop_allowed'], bool):
+            visual['crop_allowed'] = raw['crop_allowed']
+        else:
+            problems.append(Problem('VISUAL_CROP_INVALID', f'{path}.crop_allowed',
+                'crop_allowed must be a boolean.', actual=raw['crop_allowed']))
 
     return visual
 

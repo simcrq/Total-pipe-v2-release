@@ -64,7 +64,7 @@ test("MCP stdio server initializes, lists tools, and calls content/layout tools"
   const listed = await request("tools/list");
   assert.deepEqual(
     listed.result.tools.map((tool) => tool.name),
-    ["catalog_summary", "audit_layout_library", "run_benchmark", "normalize_content", "search_layouts", "get_layout", "create_deck_plan", "validate_slide", "validate_deck_plan", "run_preflight", "validate_renderer_inputs", "run_visual_fit_preflight", "run_group_fit_preflight", "run_figure_placement", "assemble_render_telemetry", "evaluate_visual_quality", "validate_rendered_slide", "validate_rendered_deck"],
+    ["catalog_summary", "audit_layout_library", "run_benchmark", "normalize_content", "search_layouts", "search_sublayouts", "compose_sublayout", "get_layout", "create_deck_plan", "validate_slide", "validate_deck_plan", "run_preflight", "validate_renderer_inputs", "run_visual_fit_preflight", "run_group_fit_preflight", "run_figure_placement", "assemble_render_telemetry", "evaluate_visual_quality", "validate_rendered_slide", "validate_rendered_deck"],
   );
   assert.ok(listed.result.tools.every((tool) => tool.inputSchema.properties.detail_level.enum.includes("compact")));
 

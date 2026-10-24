@@ -80,6 +80,8 @@ def validate_plan(plan, slide):
     primary = plan.get('primary')
     errors += object_errors(primary, {'kind', 'index'}, {'kind', 'index'}, 'visual_plan.primary')
     comp = slide.get('composition', {})
+    if comp.get('layout_tree'):
+        errors.append('layout_tree already defines the body composition; choose deck academic_design only')
     figures, graphics = comp.get('figure_refs', []), comp.get('graphics', [])
     if isinstance(primary, dict):
         kind, index = primary.get('kind'), primary.get('index')

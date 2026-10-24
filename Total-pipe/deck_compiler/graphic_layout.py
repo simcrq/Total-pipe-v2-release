@@ -26,10 +26,21 @@ class GraphicLayoutError(ValueError):
         self.rule = rule
 
 
-def validate_graphics(graphics, archetype):
+def validate_graphics(graphics, archetype, region_tree=False):
     """Return actionable errors; unsupported graphic content must never disappear."""
     if not isinstance(graphics, list):
         return ['composition.graphics must be a list']
+    if region_tree:
+        if len(graphics) > 8:
+            return ['A layout tree supports at most eight canonical graphics']
+        errors, ids = [], []
+        for graphic in graphics:
+            errors.extend(validate_graphics([graphic], 'native-graphic'))
+            if isinstance(graphic, dict) and isinstance(graphic.get('id'), str):
+                ids.append(graphic['id'])
+        if len(ids) != len(set(ids)):
+            errors.append('Graphic ids must be unique across layout-tree leaves')
+        return errors
     if archetype != 'native-graphic' and not graphics:
         return []
     if archetype != 'native-graphic' and archetype not in EMBEDDED_ARCHETYPES:

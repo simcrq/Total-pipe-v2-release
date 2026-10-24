@@ -328,7 +328,7 @@ def read_requests(path, root=None):
             'sequence_flow': module.sequence_flow(slide['composition']),
             'font': str((path.parent/ir['theme']['font_file']).resolve()),
             'bold_font': str((path.parent/ir['theme']['bold_font_file']).resolve()),
-            'font_family': ir['theme']['font_family'], 'frame': frames,
+            'font_family': layout.get('resolved_font_family', ir['theme']['font_family']), 'frame': frames,
             'frame_failures': frame_failures}
         # Use the compiler's resolved faces, including its coverage fallback. Reconstructing a
         # path from the authored filename gives the packer different metrics (or a missing file).
@@ -337,7 +337,9 @@ def read_requests(path, root=None):
                            if e.get('contract') and (e['contract']['font_weight'] >= 700) == bold), None)
             if fitted:
                 request[key] = fitted
-        if slide['presentation'].get('visual_plan'):
+        if slide['composition'].get('layout_tree'):
+            request['compiler_owned'] = 'recursive_regions'
+        elif slide['presentation'].get('visual_plan'):
             request['compiler_owned'] = 'scientific_visual_plan'
         elif any(b.get('component') == 'formula' for b in slide['composition']['blocks']):
             request['compiler_owned'] = 'measured_formula_flow'
@@ -403,6 +405,8 @@ def snap_rhythm(request, boxes):
 
 
 def check(request, boxes):
+    if request.get('compiler_owned') == 'recursive_regions':
+        return ['LAYOUT_TREE_REQUIRES_COMPILER']
     if request.get('compiler_owned') == 'scientific_visual_plan':
         return ['VISUAL_PLAN_REQUIRES_COMPILER']
     if request.get('compiler_owned') == 'native_graphic_composition':

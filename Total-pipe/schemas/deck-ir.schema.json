@@ -76,6 +76,64 @@
     }}}}}
   }],
   "$defs": {
+    "layout-tree": {
+      "type": "object", "additionalProperties": false, "required": ["version", "regions"],
+      "properties": {
+        "version": {"const": "1.0"},
+        "regions": {"type": "object", "additionalProperties": false, "required": ["body"],
+                    "properties": {"body": {"$ref": "#/$defs/region-node"}}}
+      },
+      "description": "Bounded body tree: runtime enforces depth <= 6, nodes <= 64, exact content coverage and formula-anchor groups. No page coordinates."
+    },
+    "region-node": {
+      "allOf": [{"$ref": "#/$defs/region-depth-1"}],
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["id", "type", "children"],
+         "properties": {
+           "id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["columns", "stack"]},
+           "children": {"type": "array", "minItems": 1, "maxItems": 12,
+                        "items": {"$ref": "#/$defs/region-node"}},
+           "weights": {"type": "array", "minItems": 1, "maxItems": 12,
+                       "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
+           "gap": {"enum": ["compact", "standard", "spacious"]}},
+         "allOf": [{"if": {"properties": {"type": {"const": "columns"}}},
+                    "then": {"properties": {"children": {"maxItems": 4}, "weights": {"maxItems": 4}}}}]},
+        {"type": "object", "additionalProperties": false, "required": ["id", "type", "title", "body"],
+         "properties": {
+           "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "panel"},
+           "title": {"type": "string", "minLength": 1, "pattern": "\\S"},
+           "body": {"$ref": "#/$defs/region-node"},
+           "padding": {"enum": ["none", "compact", "standard"]},
+           "gap": {"enum": ["compact", "standard", "spacious"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["id", "type", "columns", "children"],
+         "properties": {
+           "id": {"$ref": "#/$defs/identifier"}, "type": {"const": "image_grid"},
+           "columns": {"type": "integer", "minimum": 1, "maximum": 4},
+           "children": {"type": "array", "minItems": 1, "maxItems": 12,
+                        "items": {"$ref": "#/$defs/region-figure"}},
+           "gap": {"enum": ["compact", "standard", "spacious"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
+         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic"]},
+                        "ref": {"type": "string", "minLength": 1}}},
+        {"$ref": "#/$defs/region-figure"}
+      ]
+    },
+    "region-depth-1": {"properties": {"body": {"$ref": "#/$defs/region-depth-2"},
+      "children": {"items": {"$ref": "#/$defs/region-depth-2"}}}},
+    "region-depth-2": {"properties": {"body": {"$ref": "#/$defs/region-depth-3"},
+      "children": {"items": {"$ref": "#/$defs/region-depth-3"}}}},
+    "region-depth-3": {"properties": {"body": {"$ref": "#/$defs/region-depth-4"},
+      "children": {"items": {"$ref": "#/$defs/region-depth-4"}}}},
+    "region-depth-4": {"properties": {"body": {"$ref": "#/$defs/region-depth-5"},
+      "children": {"items": {"$ref": "#/$defs/region-depth-5"}}}},
+    "region-depth-5": {"properties": {"body": {"$ref": "#/$defs/region-depth-6"},
+      "children": {"items": {"$ref": "#/$defs/region-depth-6"}}}},
+    "region-depth-6": {"not": {"anyOf": [{"required": ["body"]}, {"required": ["children"]}]}},
+    "region-figure": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
+      "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"const": "figure"},
+                     "ref": {"type": "integer", "minimum": 0}}
+    },
     "academic-design": {
       "type": "object", "additionalProperties": false,
       "required": ["style", "title_treatment", "density", "figure_treatment", "decoration_policy"],
@@ -320,6 +378,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "semantic", "composition", "presentation"],
+      "allOf": [{"if": {"properties": {"composition": {"required": ["layout_tree"]}}},
+        "then": {"properties": {"presentation": {"not": {"required": ["visual_plan"]}}}}}],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "semantic": {
@@ -343,13 +403,13 @@
           "properties": {
             "archetype": {
               "enum": [
-                "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
+                "composite-research", "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
                 "hero-dual-evidence", "evidence-hypothesis", "dual-demonstration",
                 "three-limitations", "three-conclusions"
               ]
             },
             "graphics": {
-              "type": "array", "maxItems": 1,
+              "type": "array", "maxItems": 8,
               "items": {"$ref": "#/$defs/graphic"},
               "description": "One editable process/DAG, scientific component, Path IR scene or composite. Optional on process-flow and figure-parameters; required on native-graphic. Only Path IR uses local coordinates; page geometry is compiler-owned."
             },
@@ -376,6 +436,7 @@
                 }
               }
             },
+            "layout_tree": {"$ref": "#/$defs/layout-tree"},
             "visual_intent": {
               "type": "object",
               "additionalProperties": false,
@@ -411,6 +472,15 @@
             }
           },
           "allOf": [{
+            "if": {"required": ["layout_tree"]},
+            "then": {"not": {"required": ["visual_intent"]}},
+            "else": {"properties": {"graphics": {"maxItems": 1}}}
+          }, {
+            "if": {"properties": {"archetype": {"const": "composite-research"}}},
+            "then": {"required": ["layout_tree"]}
+          }, {
+            "if": {"not": {"required": ["layout_tree"]}},
+            "then": {
             "if": {"properties": {"archetype": {"const": "native-graphic"}}},
             "then": {
               "required": ["graphics"],
@@ -420,6 +490,7 @@
             "else": {
               "if": {"properties": {"archetype": {"enum": ["process-flow", "figure-parameters"]}}},
               "else": {"properties": {"graphics": {"maxItems": 0}}}
+            }
             }
           }, {
             "if": {"required": ["graphics"], "properties": {"graphics": {"minItems": 1}}},

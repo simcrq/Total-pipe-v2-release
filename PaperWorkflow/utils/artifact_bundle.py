@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -125,6 +126,35 @@ def _asset_candidates(
     return list(found.values()), replacements
 
 
+def image_metadata(path: Path, relative: str) -> dict[str, Any]:
+    """Describe an extracted resource without assigning a scientific role or slide layout."""
+    vector = path.suffix.casefold() in {'.svg', '.pdf', '.emf', '.wmf'}
+    result: dict[str, Any] = {
+        'asset_id': relative, 'path': relative, 'sha256': sha256_file(path),
+        'image_kind': 'vector' if vector else 'raster',
+        'image_format': path.suffix.lstrip('.').lower(),
+        'content_type': mimetypes.guess_type(path.name)[0] or 'application/octet-stream',
+        'crop_allowed': False, 'metadata_status': 'unavailable',
+    }
+    try:
+        if path.suffix.casefold() == '.svg':
+            from xml.etree import ElementTree as ET
+            root = ET.parse(path).getroot()
+            view = [float(v) for v in re.split(r'[\s,]+', root.get('viewBox', '').strip()) if v]
+            if len(view) == 4 and view[2] > 0 and view[3] > 0:
+                result.update(visual_aspect_ratio=view[2]/view[3], metadata_status='available')
+        elif not vector:
+            from PIL import Image
+            with Image.open(path) as image:
+                result.update(source_width_px=image.width, source_height_px=image.height,
+                    visual_aspect_ratio=image.width/image.height,
+                    image_format=(image.format or result['image_format']).lower(), metadata_status='available')
+    except (ImportError, OSError, ValueError, SyntaxError):
+        # Unsupported formats remain inventoried and portable; never invent pixel dimensions.
+        pass
+    return result
+
+
 def stage_markdown_bundle(markdown_path: Path, output_dir: Path) -> dict[str, Any]:
     """Stage Markdown and extracted images into ``output_dir``.
 
@@ -167,6 +197,7 @@ def stage_markdown_bundle(markdown_path: Path, output_dir: Path) -> dict[str, An
         "original_markdown_path": str(markdown_path),
         "asset_count": len(copied_assets),
         "asset_paths": copied_assets,
+        "asset_metadata": [image_metadata(output_dir/path, path) for path in copied_assets],
         "asset_roots": image_roots,
         "rewritten_reference_count": len(replacements),
     }

@@ -51,6 +51,10 @@ def planning_targets(ir):
     """Discover supported jobs using the same validation as the compiler, without inventing a plan."""
     targets = []
     for slide in ir['slides']:
+        if slide['composition'].get('layout_tree'):
+            targets.append({'slide_id': slide['id'], 'visual_jobs': [], 'reason': 'body_layout_tree',
+                            'layout_tree_version': slide['composition']['layout_tree']['version']})
+            continue
         jobs = []
         for job, compositions in COMPOSITIONS.items():
             plan = {'visual_job': job, 'primary': {

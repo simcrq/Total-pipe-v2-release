@@ -84,6 +84,15 @@ Prefer these semantic roles when applicable: `headline`, `body_text`, `primary_v
 
 ## Rendering boundary and QA
 
+For a mixed body region, retain the existing whole-slide plan and use search_sublayouts / compose_sublayout
+with fresh consumer_capabilities from the Deck Compiler. Supply canonical content_refs and explicit groups;
+merge only the returned composition_patch into the canonical slide. Every block, figure and graphic must
+occur once, and an equation stays with its preceding explanation anchor. No page coordinates are emitted.
+structure_planned requires compiler measurement; inspect layout_feedback.json before rendering. Missing
+capabilities require legacy layout planning. create_deck_plan does not automatically select body trees.
+Keep the full scientific content model and existing Evidence gates. Source image dimensions and crop_allowed
+are metadata, not authorization to crop a scientific image. Complex tables are not part of tree v1.0.
+
 Keep OCR and source extraction upstream. Accept PaperWorkflow output as an in-memory object only; do not invoke its Python/PDF handlers or read its artifact paths on behalf of the normalizer.
 
 Pass selected layout IDs and `pptx_in` coordinates to the renderer. Keep text, charts, tables, and shapes editable where possible. After export, collect actual slide/render dimensions, source `layout_id/category`, and per-element `bbox`, `render_bbox_px`, `z_index`, `opacity`, `quality_role`, text overflow/font/local-contrast facts, image source/display/allocation dimensions, scientific visual identity/type/panel facts, measured embedded-text pixels, overlay fills, solid colors, and theme-token usage. Renderer adapters report facts only; they must not decide whether a page is too empty, unbalanced, unreadable, or low contrast. For cover text intersecting an image, require either measured local contrast or an actual opaque surface between the image and text layers; unknown facts are release-blocking `not_evaluable`, not pass.

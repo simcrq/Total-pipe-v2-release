@@ -8,6 +8,7 @@ from .pipeline import (build, compile_input, ingest_native, locked, promote,
 def qa_summary(qa, out):
     return {'status': qa['status'], 'counts': qa['counts'],
             'report': str(out/'qa_report.json'),
+            'layout_feedback': str(out/'layout_feedback.json'),
             **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
             'design_notices': [
                 {'rule': item['rule'], 'slide': item['slide'], 'message': item['message']}
@@ -19,6 +20,7 @@ def qa_summary(qa, out):
 def main():
     parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('capabilities', help='Print supported region-tree and backend contracts')
     for name in ('visual-prompt', 'apply-visual-plan'):
         p = commands.add_parser(name)
         p.add_argument('--ir', required=True, type=Path)
@@ -58,6 +60,12 @@ def main():
                    help='Every reviewed slide id, or all')
     args = parser.parse_args()
     try:
+        if args.command == 'capabilities':
+            from .layout_tree import capabilities
+            print(json.dumps({'deck_ir_version': '2.0', 'layout_tree': capabilities(),
+                'backend': {'name': 'officecli', 'minimum_version': '1.0.152',
+                            'runtime_probe_required': True}}))
+            return 0
         out = args.out.resolve()
         if args.command in ('visual-prompt', 'apply-visual-plan'):
             from .visual_planner import apply_proposal, make_prompt

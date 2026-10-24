@@ -124,7 +124,17 @@ def validate(ir):
             for key in ('theme_tokens', 'component_variants'):
                 check(not pres.get(key), f'Use deck academic_design instead of per-slide {key}',
                       n, 'ACADEMIC_DESIGN_INVALID')
-        for message in validate_graphics(comp.get("graphics", []), archetype):
+        has_tree = 'layout_tree' in comp
+        check(archetype != 'composite-research' or has_tree,
+              'composite-research requires composition.layout_tree', n, 'LAYOUT_TREE_INVALID')
+        if has_tree:
+            from .layout_tree import validate_tree
+            for message in validate_tree(comp['layout_tree'], comp):
+                check(False, message, n, 'LAYOUT_TREE_INVALID')
+            check(not pres.get('visual_plan') and not comp.get('visual_intent'),
+                  'layout_tree owns body organization; visual_plan/visual_intent cannot also allocate it',
+                  n, 'LAYOUT_TREE_INVALID')
+        for message in validate_graphics(comp.get("graphics", []), archetype, region_tree=has_tree):
             check(False, message, n, "GRAPHIC_INVALID")
         if isinstance(comp.get('graphics'), list):
             for graphic in comp['graphics']:
@@ -249,7 +259,7 @@ def validate(ir):
                 check(expected in caption_figure_ids(f.get("caption", "")),
                       f"Caption must explicitly name Fig.{expected}", n,
                       "FIGURE_CAPTION_MISMATCH")
-        if archetype in ARCHETYPES:
+        if archetype in ARCHETYPES and not has_tree:
             cap = ARCHETYPES[archetype]
             context_count = sum(b.get('component') != 'formula' for b in blocks if isinstance(b, dict))
             check((len(blocks) if cap['blocks'] == 0 else context_count) <= cap["blocks"]

@@ -1,5 +1,8 @@
 # Total-pipe v3
 
+新增 [复合内容区域](Total-pipe/docs/composite-layouts.md)：RPA 子布局检索/组合、Deck IR 递归区域编译、
+结构化容量反馈与图片元数据传递。保留模块边界和旧平面 IR，复用现有 OfficeCLI 原生写入器。
+
 本目录复用完整 v2 科研链路，提供 agent MCP 工具。**v26 扩散模型已于 2026-10-21 完全移除**，改为内置确定性打包器 + 保留的模型接口（见 [布局提供方接口](Total-pipe/docs/layout-provider.md)）。PaperWorkflow、Story、pwf2rpa、RPA 规划职责保持不变；编译器约束最终布局，OfficeCLI 写入 PPTX。
 
 ## v3.1-pwf2rpa

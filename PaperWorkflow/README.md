@@ -1,5 +1,8 @@
 # PaperWorkflow
 
+证据包现提供 `artifacts.figure_assets_metadata`：资源路径身份、哈希、格式、宽高比、可读取的源像素尺寸
+及保守的 `crop_allowed=false`。未知格式保留 unavailable；本模块不据此决定 PPT 布局或科学图像类别。
+
 PaperWorkflow 是 Total-pipe 的论文接入层：把任意本地 PDF 或 Markdown 整理成 schema v4 的证据包，并把 OCR Markdown、图片资产、`workflow.json`、`document.manifest.json`、`evidence.md` 与校验清单自动放进同一个 bundle 目录。`workflow.json` 可直接交给 `Total-pipe/pwf2rpa`。
 
 它不替代通用 Agent：PaperWorkflow 负责确定性的文件解析、缓存、批量执行和证据定位；Agent 负责决定读什么、比较什么、何时调用工具。当前 WSL2 部署已经提供 DeepSeek Harness 原生 bundle 插件。

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import readline from "node:readline";
+import { SEARCH_SUBLAYOUT_SCHEMA, COMPOSE_SUBLAYOUT_SCHEMA, searchSublayouts, composeSublayout } from "./sublayouts.mjs";
 import { assertSupportedNodeVersion } from "./runtime.mjs";
 import { runBenchmark } from "./benchmark.mjs";
 import {
@@ -630,6 +631,16 @@ const rawTools = [
     annotations: readOnlyAnnotations,
   },
   {
+    name: "search_sublayouts", title: "Search body sublayouts",
+    description: "Search bounded body-region compositions alongside existing whole-slide templates. Supply fresh compiler capabilities; results contain no coordinates and still require compiler measurement.",
+    inputSchema: SEARCH_SUBLAYOUT_SCHEMA, annotations: readOnlyAnnotations,
+  },
+  {
+    name: "compose_sublayout", title: "Compose a body region tree",
+    description: "Compose canonical block, figure and graphic references into a bounded Deck IR layout_tree. Enforces exact content coverage, formula-anchor groups and consumer capabilities. Does not render or claim geometric fit; merge composition_patch and inspect compiler layout_feedback.json.",
+    inputSchema: COMPOSE_SUBLAYOUT_SCHEMA, annotations: readOnlyAnnotations,
+  },
+  {
     name: "get_layout",
     title: "Get an exact slide layout",
     description: "Return one layout's complete slot geometry, reading order, constraints, capacity, preview URI, and optional theme tokens.",
@@ -912,6 +923,8 @@ const toolHandlers = {
   run_benchmark: (args) => runBenchmark(args),
   normalize_content: (args) => normalizeContentModel(args),
   search_layouts: (args) => searchLayouts(args),
+  search_sublayouts: (args) => searchSublayouts(args),
+  compose_sublayout: (args) => composeSublayout(args),
   get_layout: (args) => getLayout(args.layout_id, args.theme_id, args.viewing_mode),
   create_deck_plan: (args) => createDeckPlan(args),
   validate_slide: (args) => validateSlide(args),

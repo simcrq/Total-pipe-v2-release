@@ -158,6 +158,21 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 图形与原图、完整正文/图注共存，生成图不能代替论文证据；`SCHEMATIC_REVIEW` 始终保留。
 Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不是 SVG 导入或页面坐标接口。
 
+### 可选的复合内容区域
+
+复杂混排需要子布局时，读 `Total-pipe/docs/composite-layouts.md`，先查询 totalpipe_capabilities
+（CLI：`python -m deck_compiler capabilities`）。再用 RPA search_sublayouts/compose_sublayout 选择结构，
+把 composition_patch 合入 canonical slide。缺少能力则沿用旧整页布局，不以 compact slot 文本重写正文。
+
+composition.layout_tree 版本 1.0 支持 columns/stack/panel/image_grid，最多 6 层、64 节点。
+叶节点引用 block ID、figure_refs 零基索引或 graphic ID，每项恰好一次。显式 anchor 的公式与解释
+在同一 stack、解释在前。不写页面坐标，不裁剪原图，不缩小图形绕过字号下限。树页仍需要整套
+academic_design，不再叠加 visual_plan/visual_intent。structure_planned 不能当成几何通过。
+
+编译后读 layout_feedback.json 的 slide_id、component、所需/实际尺寸和 suggested_actions，带原始完整
+内容回 RPA 调整结构。最多自主修订三次；同一问题仍存在则保留失败并向用户说明所缺空间，
+不继续无界循环或删改科学内容。复杂表格尚不受该树协议支持。
+
 ### 公式：必须走公式组件
 
 展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本块中的 `$...$`

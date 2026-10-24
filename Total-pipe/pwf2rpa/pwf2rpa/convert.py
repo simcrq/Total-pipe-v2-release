@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from .briefs import build_briefs
+from .asset_metadata import enrich_visuals
 from .design_intent import apply_design_intent
 from .errors import BriefError, Problem, StoryError
 from .fallback import fallback_specs
@@ -66,6 +67,7 @@ def convert(
     if design_intent is not None:
         apply_design_intent(resolved, design_intent)
     briefs, warnings = build_briefs(resolved, workflow, strict_fit=strict_fit)
+    warnings += enrich_visuals(briefs, workflow.document)
     payload = {
         "paperworkflow_v4": workflow.document,
         "slide_briefs": briefs,

@@ -703,6 +703,7 @@ const VISUAL_KEYS = new Set([
   "must_keep", "recommended_crop", "data", "metadata",
   "source_visual_id", "region_id", "semantic_relation", "semantic_regions", "visual_aspect_ratio",
   "embedded_text_density", "caption_chars",
+  "source_asset_id", "image_kind", "image_format", "crop_allowed",
 ]);
 
 function normalizeVisual(value, context, contentId, index, path) {
@@ -734,7 +735,7 @@ function normalizeVisual(value, context, contentId, index, path) {
     } else if (key === "panel_count" || key === "importance" || key === "caption_chars" || key === "source_width_px" || key === "source_height_px") {
       const normalized = normalizeIndex(child, context, `visuals.${key}`, `${path}.${key}`, { minimum: key === "caption_chars" ? 0 : 1 });
       if (normalized !== undefined) out[key] = normalized;
-    } else if (key === "has_embedded_text" || key === "must_keep") {
+    } else if (key === "has_embedded_text" || key === "must_keep" || key === "crop_allowed") {
       out[key] = normalizeBoolean(child, context, `visuals.${key}`, `${path}.${key}`, false);
     } else if (key === "min_display_width" || key === "visual_aspect_ratio") {
       const normalized = normalizePositiveNumber(child, context, `visuals.${key}`, `${path}.${key}`, undefined);
@@ -1314,6 +1315,10 @@ const JSON_VALUE_SCHEMA = {};
 export const VISUAL_SOURCE_DIMENSIONS_SCHEMA = deepFreeze({
   source_width_px: { type: "integer", minimum: 1 },
   source_height_px: { type: "integer", minimum: 1 },
+  source_asset_id: { type: "string", minLength: 1 },
+  image_kind: { enum: ["raster", "vector"] },
+  image_format: { type: "string", minLength: 1 },
+  crop_allowed: { type: "boolean" },
 });
 const SLOT_METRIC_SCHEMA = {
   type: "object",

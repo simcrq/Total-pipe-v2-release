@@ -1,5 +1,9 @@
 # Total-pipe Deck Compiler v3
 
+新增可选的 [复合内容区域](docs/composite-layouts.md)：RPA 检索并组合子布局，Deck IR 在现有框架内递归
+分配 columns/stack/panel/image_grid，复用原生公式、图片、流程图与贝塞尔路径。旧平面 IR 继续支持，
+容量错误通过绑定 IR 哈希的 layout_feedback.json 返回。见 [三页混排样例](examples/composite-layout.deck_ir.json)。
+
 **🎉 NEW: AI-Friendly Unified CLI + Comprehensive Quality Metrics** - [See Implementation Guide](IMPLEMENTATION_COMPLETE.md)
 
 Total-pipe 是从论文证据到可验收 PPTX 的端到端编排项目。上游负责证据与科研叙事，

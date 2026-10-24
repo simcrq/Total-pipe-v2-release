@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import { sublayoutCapabilities } from "./sublayouts.mjs";
+export { searchSublayouts, composeSublayout } from "./sublayouts.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTENT_MODEL_VERSION, createViolation, normalizeContentModel, normalizePaperWorkflowV4 } from "./content-model.mjs";
@@ -227,6 +229,10 @@ function publicVisualMetric(visual) {
     rendered_embedded_text_px: visual.embeddedTextPx,
     source_width_px: visual.source_width_px,
     source_height_px: visual.source_height_px,
+    source_asset_id: visual.source_asset_id,
+    image_kind: visual.image_kind,
+    image_format: visual.image_format,
+    crop_allowed: visual.crop_allowed,
     visual_aspect_ratio: visual.aspectRatio,
     embedded_text_density: visual.embeddedTextDensity,
     caption_chars: visual.captionChars,
@@ -570,6 +576,7 @@ export async function catalogSummary() {
     })),
     themes: catalog.themes.map((theme) => enrichThemeContract(theme, catalog.themeMeta)),
     supported_presentation_types: Object.keys(DECK_BLUEPRINTS),
+    sublayout_capabilities: sublayoutCapabilities(),
     viewing_profiles: Object.values(VIEWING_PROFILES),
     supported_visual_types: Object.entries(VISUAL_TYPE_RULES).map(([id, rules]) => ({ id, ...rules })),
     readability_contract_version: "1.1.0",

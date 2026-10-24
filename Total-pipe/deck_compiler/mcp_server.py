@@ -52,6 +52,26 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Build returns a candidate and QA, not automatic final approval. '
     'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
     'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
+transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
+    'composition.layout_tree version 1.0 reuses the compiler body frame; columns/stack/panel/image_grid '
+    'contain block/figure/graphic references exactly once, with no page coordinates. '
+    'RPA search_sublayouts/compose_sublayout propose structure; the compiler measures every child. '
+    'Read layout_feedback.json for component paths, required/available sizes and replan actions. '
+    'Keep deck academic_design; tree pages do not also carry a flat visual_plan. '
+    'No arbitrary table renderer is supported by this tree version.')
+
+
+def capability_handler(arguments):
+    if arguments:
+        raise ValueError('No arguments supported')
+    from .layout_tree import capabilities
+    return {'deck_ir_version': '2.0', 'layout_tree': capabilities(),
+            'backend': {'name': 'officecli', 'minimum_version': '1.0.152', 'runtime_probe_required': True}}
+
+
+transport.TOOLS['totalpipe_capabilities'] = {'description': 'Declare compiler region-tree contracts and required native backend capabilities; runtime OfficeCLI support is checked again at build time.',
+    'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
+    'handler': capability_handler, 'timeout': 10}
 
 
 def invoke(command, arguments):

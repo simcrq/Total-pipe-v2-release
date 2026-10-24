@@ -25,7 +25,7 @@ from PIL import ImageFont
 FONT_DIRECTORY_VARIABLE = 'TOTALPIPE_FONT_DIR'
 # Faces tried last, in order, when neither the declared file nor the declared family resolves.
 # The list prefers a face that covers Latin and CJK, because these decks mix both.
-FALLBACK_FAMILIES = ('Microsoft YaHei', 'Noto Sans CJK SC', 'Arial', 'Liberation Sans',
+FALLBACK_FAMILIES = ('Microsoft YaHei', 'Noto Sans CJK SC', 'Heiti TC', 'Arial Unicode MS', 'Arial', 'Liberation Sans',
                      'DejaVu Sans', 'Helvetica')
 
 
@@ -294,6 +294,8 @@ def discover_fonts() -> Dict[str, Dict[str, str]]:
 
 
 FONT_FILES = {
+    'Heiti TC': {'regular': ('STHeiti Light.ttc',), 'bold': ('STHeiti Medium.ttc',)},
+    'Arial Unicode MS': {'regular': ('Arial Unicode.ttf',)},
     'Arial': {'regular': ('arial.ttf',), 'bold': ('arialbd.ttf',), 'italic': ('ariali.ttf',)},
     'Calibri': {'regular': ('calibri.ttf',), 'bold': ('calibrib.ttf',)},
     'Times New Roman': {'regular': ('times.ttf', 'Times New Roman.ttf'),
@@ -341,7 +343,7 @@ def _discover_windows_fonts() -> Dict[str, Dict[str, str]]:
 
 def _discover_macos_fonts() -> Dict[str, Dict[str, str]]:
     """Discover fonts on macOS."""
-    fonts = {}
+    fonts = _discover_platform_fonts()
     font_dirs = [
         Path('/System/Library/Fonts'),
         Path('/System/Library/Fonts/Supplemental'),
