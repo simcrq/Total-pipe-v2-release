@@ -160,6 +160,7 @@
             "row_span": {"type": "integer", "minimum": 1, "maximum": 32},
             "column_span": {"type": "integer", "minimum": 1, "maximum": 12},
             "kind": {"enum": ["text", "formula"]}, "text": {"type": "string"},
+            "inline_math": {"type": "boolean", "default": false},
             "align": {"enum": ["left", "center", "right"]}
           }
         }}
@@ -421,6 +422,8 @@
             "title": {"type": "string", "minLength": 1},
             "purpose": {"type": "string", "minLength": 1},
             "takeaway": {"type": "string", "minLength": 1},
+            "inline_math": {"type": "array", "uniqueItems": true, "items": {"enum": ["title", "takeaway"]},
+              "description": "Opt in selected semantic fields to measured $...$ or \\(...\\) native inline math. Other fields stay literal."},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
             "caveats": {"type": "array", "items": {"type": "string"}},
             "run_notes": {"type": "array", "items": {"type": "string"}},
@@ -461,6 +464,8 @@
                   },
                   "label": {"type": "string"},
                   "text": {"type": "string", "minLength": 1},
+                  "inline_math": {"type": "boolean", "default": false,
+                    "description": "Prose only: explicitly enable measured native $...$ or \\(...\\) inline formulas; no auto-list conversion."},
                   "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
                   "anchor": {"type": "string", "minLength": 1,
                              "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."}

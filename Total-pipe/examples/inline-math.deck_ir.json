@@ -1,0 +1,274 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "inline-math-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none",
+      "header_variant": "compact",
+      "type_scale": "compact"
+    }
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "mixed-prose",
+      "semantic": {
+        "title": "行内公式：$x_i^2$ 与根号",
+        "purpose": "验证混合文字与原生数学内容的测量和兼容性",
+        "takeaway": "文字、$x^{a^{2}}$ 与 $\\sqrt{x^2+y^2}$ 共享文本框，按逐行尺寸计算容量。",
+        "evidence_refs": [
+          "fixture:inline-math"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归数学示例；不建立新的科学结论。",
+        "inline_math": [
+          "title",
+          "takeaway"
+        ]
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "definition",
+            "component": "body",
+            "inline_math": true,
+            "text": "当 $x>0$ 时，令 $q(x)=\\sqrt{1+x^{2}}$，则平方关系为 $q(x)^{2}=1+x^{2}$。完整科学术语与公式共同参与换行。"
+          },
+          {
+            "id": "fraction",
+            "component": "body",
+            "inline_math": true,
+            "text": "归一化响应写为 $r(t)=\\sqrt{\\frac{1+e^{-t}}{1+t^{2}}}$。这里的分式、根号与指数属于同一完整公式；后续文字仍在同一文本框中。"
+          },
+          {
+            "id": "legacy",
+            "component": "body",
+            "text": "兼容性检查：未启用行内模式的 $x^2$ 与 \\(x^2\\) 保持原来的普通文本。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "body-stack",
+              "type": "stack",
+              "gap": "standard",
+              "children": [
+                {
+                  "id": "definition-leaf",
+                  "type": "block",
+                  "ref": "definition"
+                },
+                {
+                  "id": "fraction-leaf",
+                  "type": "block",
+                  "ref": "fraction"
+                },
+                {
+                  "id": "legacy-leaf",
+                  "type": "block",
+                  "ref": "legacy"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "inline-and-display",
+      "semantic": {
+        "title": "行内矩阵与独立公式共同排版",
+        "purpose": "验证混合文字与原生数学内容的测量和兼容性",
+        "takeaway": "完整数学结构保持可编辑，解释文字与原有独立公式继续保留。",
+        "evidence_refs": [
+          "fixture:inline-math"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归数学示例；不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "matrix-prose",
+            "component": "body",
+            "inline_math": true,
+            "text": "定义 $M=\\begin{pmatrix}x^{2}&\\sqrt{y}\\\\0&1\\end{pmatrix}$ 后，矩阵两行及括号保留原生结构。矩阵提高所在文字行的高度，其余文字行按各自内容测量。"
+          },
+          {
+            "id": "anchor",
+            "component": "body",
+            "inline_math": true,
+            "text": "原有独立公式继续保留；由 $q(t)=\\sqrt{\\frac{1+e^{-t}}{1+t^{2}}}$ 可核对 $t=0$ 时的值。"
+          },
+          {
+            "id": "display",
+            "component": "formula",
+            "text": "q(0)=\\sqrt{2}",
+            "anchor": "anchor"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.0",
+          "regions": {
+            "body": {
+              "id": "two-columns",
+              "type": "columns",
+              "weights": [
+                1.15,
+                1
+              ],
+              "children": [
+                {
+                  "id": "matrix-panel",
+                  "type": "panel",
+                  "title": "正文中的原生矩阵",
+                  "body": {
+                    "id": "matrix-prose-leaf",
+                    "type": "block",
+                    "ref": "matrix-prose"
+                  }
+                },
+                {
+                  "id": "display-panel",
+                  "type": "panel",
+                  "title": "原有独立公式",
+                  "body": {
+                    "id": "display-stack",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "anchor-leaf",
+                        "type": "block",
+                        "ref": "anchor"
+                      },
+                      {
+                        "id": "display-leaf",
+                        "type": "block",
+                        "ref": "display"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "inline-table",
+      "semantic": {
+        "title": "原生表格中的文字与行内公式",
+        "purpose": "验证混合文字与原生数学内容的测量和兼容性",
+        "takeaway": "单元格的行高按混排实测需求计算，原有公式格保持兼容。",
+        "evidence_refs": [
+          "fixture:inline-math"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归数学示例；不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.1",
+          "regions": {
+            "body": {
+              "id": "table-leaf",
+              "type": "table",
+              "ref": "inline-cells"
+            }
+          }
+        },
+        "tables": [
+          {
+            "id": "inline-cells",
+            "row_count": 4,
+            "column_count": 2,
+            "header_rows": 1,
+            "column_weights": [
+              1,
+              3
+            ],
+            "origin": "generated",
+            "cells": [
+              {
+                "id": "h-name",
+                "row": 0,
+                "column": 0,
+                "text": "运算类型"
+              },
+              {
+                "id": "h-value",
+                "row": 0,
+                "column": 1,
+                "text": "完整表达式及说明"
+              },
+              {
+                "id": "r1-name",
+                "row": 1,
+                "column": 0,
+                "text": "根号与分式"
+              },
+              {
+                "id": "r1-value",
+                "row": 1,
+                "column": 1,
+                "inline_math": true,
+                "text": "响应 $q(t)=\\sqrt{\\frac{1+e^{-t}}{1+t^{2}}}$ 与解释文字位于同一原生单元格。"
+              },
+              {
+                "id": "r2-name",
+                "row": 2,
+                "column": 0,
+                "text": "矩阵与指数"
+              },
+              {
+                "id": "r2-value",
+                "row": 2,
+                "column": 1,
+                "inline_math": true,
+                "text": "算子 $M=\\begin{bmatrix}x^2&0\\\\1&\\sqrt{y}\\end{bmatrix}$ 保留二维结构。"
+              },
+              {
+                "id": "r3-name",
+                "row": 3,
+                "column": 0,
+                "text": "原有公式格"
+              },
+              {
+                "id": "r3-value",
+                "row": 3,
+                "column": 1,
+                "kind": "formula",
+                "text": "A=LL^{T}"
+              }
+            ]
+          }
+        ]
+      },
+      "presentation": {}
+    }
+  ]
+}

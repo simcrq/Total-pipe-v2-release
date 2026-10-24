@@ -21,6 +21,17 @@ def caption_figure_ids(caption):
     return {f"{number}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
 
 
+def coarse_characters(text, inline_math=False):
+    """Prose characters plus atomic formulas; actual mathematical dimensions are a layout gate."""
+    if not isinstance(text, str): return 0
+    if not inline_math: return len(text)
+    from totalpipe_layout.inline_math import parse_inline, InlineMathError
+    try:
+        return sum(len(s.text) if s.kind == 'text' else 1 for s in parse_inline(text))
+    except InlineMathError:
+        return len(text)  # Syntax is reported separately; validation must return structured errors.
+
+
 def validate(ir):
     errors = []
     def check(ok, message, slide=None, rule="IR_INVALID", severity="FAIL"):
@@ -102,6 +113,18 @@ def validate(ir):
             check(isinstance(sem.get(key), str) and bool(sem.get(key, "").strip()), f"semantic.{key} required", n)
         for key in ("evidence_refs", "caveats"):
             check(isinstance(sem.get(key), list) and all(isinstance(v, str) for v in sem[key]), f"semantic.{key} list required", n)
+        from totalpipe_layout.inline_math import InlineMathError, parse_inline
+        inline_fields = sem.get('inline_math', [])
+        check(isinstance(inline_fields, list) and all(f in ('title', 'takeaway') for f in inline_fields)
+              and len(set(inline_fields)) == len(inline_fields),
+              'semantic.inline_math must list unique title/takeaway fields', n, 'INLINE_MATH_INVALID')
+        if not isinstance(inline_fields, list): inline_fields = []
+        for field in ('title', 'takeaway'):
+            if isinstance(inline_fields, list) and field in inline_fields and isinstance(sem.get(field), str):
+                try:
+                    parse_inline(sem[field])
+                except InlineMathError as error:
+                    check(False, f'semantic.{field}: {error}', n, 'INLINE_MATH_SYNTAX')
         if "run_notes" in sem:
             check(isinstance(sem["run_notes"], list)
                   and all(isinstance(v, str) for v in sem["run_notes"]),
@@ -167,6 +190,15 @@ def validate(ir):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
             check(isinstance(b.get("text"), str) and bool(b["text"].strip()), "Block text required", n)
+            check(type(b.get('inline_math', False)) is bool, 'inline_math must be boolean', n, 'INLINE_MATH_INVALID')
+            if b.get('inline_math') is True:
+                check(b.get('component') != 'formula' and b.get('text_flow', 'auto') != 'distributed_arrow_list',
+                      'Inline math requires a prose block with auto/plain text flow', n, 'INLINE_MATH_INVALID')
+                if isinstance(b.get('text'), str):
+                    try:
+                        parse_inline(b['text'])
+                    except InlineMathError as error:
+                        check(False, f'block {bid}: {error}', n, 'INLINE_MATH_SYNTAX')
             if b.get("component") == "formula":
                 formulas.append(b)
                 from totalpipe_layout.formula import FormulaError, parse as parse_formula
@@ -183,7 +215,7 @@ def validate(ir):
         # Formula count is not a capacity measure. Complete equations and explanations must fit
         # actual regions, including independent columns and tall matrices.
         if formulas:
-            prose = sum(len(b.get("text", "")) for b in blocks
+            prose = sum(coarse_characters(b.get("text", ""), b.get('inline_math', False)) for b in blocks
                         if isinstance(b, dict) and b.get("component") != "formula")
             check(prose >= FORMULA_MIN_TEXT_CHARS,
                   "this page is an equation with no prose beside it: confirm the sentence it "
@@ -275,11 +307,11 @@ def validate(ir):
                               for role in ("direct-evidence", "hypothesis")),
                       "Evidence and hypothesis must be separate, each <= 4", n, "CONTENT_CAPACITY_EXCEEDED")
         for field, limit in (("title", 120), ("takeaway", 180)):
-            check(isinstance(sem.get(field), str) and len(sem[field]) <= limit,
+            check(isinstance(sem.get(field), str) and coarse_characters(sem[field], field in inline_fields) <= limit,
                   f"{field} exceeds {limit} characters; retain complete scientific terminology", n,
                   "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
                   severity='REVIEW' if preserve_scientific_terms(ir) and isinstance(sem.get(field), str) else 'FAIL')
-        check(all(isinstance(b, dict) and len(b.get("text", "")) <= 600 for b in blocks),
+        check(all(isinstance(b, dict) and coarse_characters(b.get("text", ""), b.get('inline_math', False)) <= 600 for b in blocks),
               "Block exceeds 600 characters; retain complete scientific terminology", n,
               "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
               severity='REVIEW' if preserve_scientific_terms(ir) else 'FAIL')

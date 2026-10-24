@@ -42,6 +42,8 @@ compact 也保留完整树。规范化后的实际 slide ID 必须匹配；失�
 支持可选组尺寸下界、body_size_px、绑定当前 ir_sha256 的 compiler_feedback 及 rejected_sublayout_ids。
 结构成功仍要求编译器测量；RPA 不调用编译器，不改写科学术语或删除不能容纳的组。
 原生表格引用需声明 tree 1.1 / native_table，公式格另需 native_equation；旧消费者明确回退。
+行内公式需求用 content_refs.blocks[].inline_math 或 tables[].has_inline_math 声明，
+另需 native_inline_equation；RPA 不把 LaTeX 字符数当成最终容量，混排行高由 Deck Compiler 实测。
 详见 [复合区域协议](../Total-pipe/docs/composite-layouts.md) 和 [原生表格协议](../Total-pipe/docs/native-tables.md)。
 
 ```bash

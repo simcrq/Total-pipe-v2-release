@@ -208,6 +208,7 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
                    ROOT/'deck_compiler/academic_layout.py', ROOT/'deck_compiler/visual_design.py',
                    ROOT/'deck_compiler/layout_tree.py', ROOT/'deck_compiler/layout_feedback.py',
                    ROOT/'deck_compiler/native_table.py',
+                   ROOT/'deck_compiler/inline_text.py', ROOT/'totalpipe_layout/inline_math.py',
                    *sorted((ROOT/'totalpipe_layout').glob('*.py'))]
         if getattr(provider, 'source_files', None):
             sources.extend(Path(path) for path in provider.source_files)

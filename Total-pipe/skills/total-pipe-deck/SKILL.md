@@ -182,10 +182,19 @@ paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最�
 纯文字表格超容量按 preserve-terms 保留 REVIEW；含公式表格尺寸不足需加宽或拆页。
 始终保留 TABLE_CONTENT_REVIEW 与近似公式测量审核，原生 PPTX/PDF 必须检查合并表头、公式及单位。
 
-### 公式：必须走公式组件
+### 公式：独立公式与显式行内模式
 
-展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本块中的 `$...$`
-不会被转成行内公式。JSON 必须转义反斜线：
+展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本默认不解析数学标记。
+需要行内混排时读 `Total-pipe/docs/inline-math.md`：正文块或表格 text 格加 inline_math=true，
+用 `$…$` 或 `\(…\)` 标记完整数学区域；semantic.inline_math 列出 title/takeaway 可开启相应字段。
+先查询 native_inline_equation 与 native_equation 能力；RPA content_refs 传 block.inline_math /
+table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字处理。
+
+混排宽度和高度按逐行片段、基线上下需求测量，不按 LaTeX 命令长度或固定正文行高估算。
+公式保持完整单元；过宽改用独立公式或加宽，不缩到字号下限以下。标题/正文按 preserve-terms
+保留全文及高度溢出 REVIEW；含行内数学的表格按公式表格执行真实容量门禁。
+行内模式不使用 distributed_arrow_list；字面美元符号须转义。保留 INLINE_MATH_MEASUREMENT_REVIEW，
+实际核对 PowerPoint 的基线、换行与表格边界。原有独立公式不变。JSON 必须转义反斜线：
 
 ```json
 {"id":"equation","component":"formula","text":"\\sqrt{\\frac{1+e^{-t}}{1+x^{2}}}","anchor":"explanation"}

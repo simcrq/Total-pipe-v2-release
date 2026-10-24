@@ -2,6 +2,7 @@
 
 本文对应当前仓库的 PaperWorkflow、Story、RPA、Scientific Visual Planner 和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
+组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
 ## 1. 输入、工作目录与产物
 
@@ -211,7 +212,28 @@ PWF 新增 `artifacts.figure_assets_metadata`，pwf2rpa 对显式匹配的资源
 ```
 
 anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标签公式默认位于前一说明块下方，
-有 label 时标签与公式并排。普通正文中的 `$…$` 不会自动转成行内公式。
+有 label 时标签与公式并排。普通正文默认不解析 `$…$`；显式开启行内模式后按下节处理。
+
+#### 行内公式与混排容量
+
+正文块或表格 text 格加 `inline_math: true`，以 `$…$` 或 `\(…\)` 标记公式：
+
+```json
+{"id":"response", "component":"body", "inline_math":true,
+ "text":"当 $x>0$ 时，响应为 $\\sqrt{1+x^{2}}$，完整说明保持可编辑。"}
+```
+
+标题/结论在 semantic.inline_math 中列出 title/takeaway；未列出的字段保持原样。
+开启后字面美元符号写 `\$`（JSON：`"\\$"`），不接受显示公式分隔符或分布式项目列表。
+图注、panel 标题和图形标签仍按原有文字处理。
+
+容量改为逐行测量文字与公式宽度、最大上伸/下伸高度，再累计实际行高；高矩阵只影响所在行。
+数学区域整体换行，不按 LaTeX 字符长度估算，不拆根号和指数。正文、树和表格复用混排测量，
+字号下限与完整术语策略保持不变；公式过宽需加宽或改用独立公式，含数学的表格不足需拆页。
+查询 native_inline_equation 能力；RPA content_refs 的 block.inline_math / table.has_inline_math 传递需求。
+保留原生核对 REVIEW。完整协议与三页样例见 [行内公式](inline-math.md)。
+
+#### 独立公式语法
 
 支持分式、`\sqrt{…}` / `\sqrt[3]{…}`、上下标和嵌套分组、Greek、求和/积分、
 `\left/\right`、`\exp/\log/\ln`、常用三角函数与 `\text/\mathrm/\mathbf/\mathit`。
@@ -320,7 +342,7 @@ python -m deck_compiler validate-native --out <build-dir> \
   --pdf <build-dir/native.pdf> --reviewer <相同审核者>
 ```
 
-macOS 可尝试自动 PowerPoint 导出；Windows 使用 UI 导出后 validate-native。自动导出不代替
+macOS / Windows 可尝试自动 PowerPoint 导出，也可在 UI 检查后手动导出并 validate-native。自动导出不代替
 直接 UI review。不同版本的 PDF 或眼检记录不得复用；未做的平台验收如实注明。
 source_figure、原图引用和图注须匹配；科学 panel 默认最小有效尺寸 220 CSS px，按协议显式
 声明的下限也参与门禁，不能为排版静默降低。

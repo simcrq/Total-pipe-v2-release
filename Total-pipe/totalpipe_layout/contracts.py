@@ -341,7 +341,7 @@ def read_requests(path, root=None):
             request['compiler_owned'] = 'recursive_regions'
         elif slide['presentation'].get('visual_plan'):
             request['compiler_owned'] = 'scientific_visual_plan'
-        elif any(b.get('component') == 'formula' for b in slide['composition']['blocks']):
+        elif any(b.get('component') == 'formula' or b.get('inline_math') for b in slide['composition']['blocks']):
             request['compiler_owned'] = 'measured_formula_flow'
         elif slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
             request['compiler_owned'] = 'native_graphic_composition'

@@ -22,7 +22,7 @@ def capabilities():
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
                        'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
-            'native': ['native_equation', 'native_flowchart', 'native_bezier', 'native_table'],
+            'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'legacy_flat_ir': True}
 
@@ -252,9 +252,20 @@ class RegionCompiler:
                 need = Need(height, max(height, preferred.height+12 if preferred else height), required_w)
             else:
                 label = 44 if block.get('label') else 0
-                natural = label+self.text_height(block['text'], width)
-                need = Need(label+30 if self.preserve else natural,
-                            max(natural, label+self.text_height(block['text'], width, size=28)))
+                if block.get('inline_math'):
+                    from totalpipe_layout.inline_math import measure_inline, InlineWidthError
+                    from .fonts import load_font_file
+                    try:
+                        measured = measure_inline(block['text'], width, load_font_file(self.fonts['font_file'], 24), 24)
+                    except InlineWidthError as error:
+                        raise LayoutTreeError(path, 'INLINE_FORMULA_SPACE', str(error), [error.required_width, 0], available,
+                                              ['widen_region', 'use_display_formula', 'split_slide']) from error
+                    natural = label+measured['height']
+                    need = Need(label+30 if self.preserve else natural, natural, measured['min_width'])
+                else:
+                    natural = label+self.text_height(block['text'], width)
+                    need = Need(label+30 if self.preserve else natural,
+                                max(natural, label+self.text_height(block['text'], width, size=28)))
         elif kind == 'figure':
             ref = self.comp['figure_refs'][node['ref']]
             asset = self.assets[ref['asset_id']]
@@ -272,13 +283,13 @@ class RegionCompiler:
                     [required_w, height], available, ['widen_region', 'reduce_grid_columns', 'split_slide'])
             need = Need(height, max(height, width*asset['height']/asset['width']+caption+12), required_w)
         elif kind == 'table':
-            from .native_table import measure_table
+            from .native_table import measure_table, table_has_math
             table = self.tables[node['ref']]
             plan = measure_table(table, width, self.fonts)
             if plan['min_width'] > width+.1:
                 raise LayoutTreeError(path, 'INSUFFICIENT_TABLE_SPACE', 'Native table cells need a wider region.',
                     [plan['min_width'], plan['height']], available, ['widen_region', 'split_table_or_slide'])
-            soft = self.preserve and not any(c.get('kind') == 'formula' for c in table['cells'])
+            soft = self.preserve and not table_has_math(table)
             need = Need(46. if soft else plan['height'], plan['height'], plan['min_width'])
         elif kind == 'graphic':
             graphic = self.graphics[node['ref']]

@@ -284,6 +284,10 @@ def verify(path, layout):
                     if any(abs(a-b) > .2 for a,b in zip(box, e['bbox'])):
                         add('GEOMETRY_MISMATCH', 'Exported box differs from compiled layout', n, e['id'])
                     boxes.append((e['id'], box))
+                    if e.get('inline_math'):
+                        if _math_signature(tx) != _math_signature(ET.fromstring(e['inline_xml'])):
+                            add('INLINE_CONTENT_MISMATCH', 'Inline prose, formulas, line breaks or measured line heights differ from layout', n, e['id'])
+                        continue
                     paragraphs = []
                     for p in tx.findall('a:p', NS):
                         paragraphs.append(''.join('\n' if el.tag == A+'br' else (el.text or '')

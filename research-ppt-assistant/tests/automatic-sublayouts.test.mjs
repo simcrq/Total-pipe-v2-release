@@ -84,6 +84,20 @@ test('native tables negotiate 1.1 and old consumers receive explicit fallback', 
   assert.equal(failed.attempts[0].errors[0].code, 'SUBLAYOUT_CAPABILITY_UNAVAILABLE');
 });
 
+test('inline text and table cells require explicit consumer support without changing legacy composition', () => {
+  const input = request(); input.content_refs.blocks[0].inline_math = true;
+  assert.equal(planSublayout(input).status, 'needs_replan');
+  input.consumer_capabilities.layout_tree.native.push('native_inline_equation');
+  const planned = planSublayout(input);
+  assert.equal(planned.status, 'structure_planned');
+  assert.ok(planned.required_native_capabilities.includes('native_inline_equation'));
+  input.content_refs = { blocks: [], figure_count: 0, graphics: [], tables: [{ id: 'mixed', has_inline_math: true }] };
+  input.groups = [{ id: 'mixed-panel', title: '完整说明与公式', items: [{ kind: 'table', ref: 'mixed' }] }];
+  assert.equal(planSublayout(input).status, 'structure_planned');
+  input.consumer_capabilities.layout_tree.native = input.consumer_capabilities.layout_tree.native.filter(c => c !== 'native_inline_equation');
+  assert.equal(planSublayout(input).status, 'needs_replan');
+});
+
 test('image-only groups use grids and sequence semantics prefer stacks', () => {
   const input = request(); input.query = 'Derivation';
   assert.equal(planSublayout(input).selected_sublayout_id, 'vertical-stack');

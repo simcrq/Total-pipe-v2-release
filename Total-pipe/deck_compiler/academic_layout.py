@@ -20,7 +20,7 @@ def block_height(block, width, fonts, archetype):
         metrics = formula_fit(block['text'], width-20-(label_w+12 if label_w else 0))
         return max(30 if label else 0, metrics.height+12) if metrics else 10000
     label_h = (40 if archetype == 'figure-parameters' else 44) if label else 0
-    return label_h + (text_floor_height(block['text'], width, fonts['font_file']) or 10000)
+    return label_h + (text_floor_height(block['text'], width, fonts['font_file'], inline_math=block.get('inline_math', False)) or 10000)
 
 
 def text_regions(blocks, box, fonts, archetype, gap=24, band=False):

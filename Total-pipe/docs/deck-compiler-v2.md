@@ -154,7 +154,11 @@ Supported inputs include fractions, `\sqrt{…}` / `\sqrt[3]{…}`, grouped/nest
 Greek, sums/integrals, `\left` / `\right`, `\exp` / `\log` / `\ln` and common trigonometric
 functions, plus `\text` / `\mathrm` / `\mathbf` / `\mathit`. Optional outer `$…$`, `$$…$$`,
 `\(…\)` and `\[…\]` are accepted on a **formula block**. Backslashes must be doubled in JSON.
-Ordinary prose blocks do not support inline math. Unknown commands, empty/missing operands and
+Ordinary prose remains literal by default. Optional [inline math](inline-math.md) enables mixed native
+prose/math for explicitly marked blocks, title/takeaway fields and table text cells. It measures atomic
+formula widths and per-line baseline extents; the inline_layout line metrics override the base
+TextBoxContract's ordinary fixed line spacing. Existing display math is unchanged.
+Unknown commands, empty/missing operands and
 unclosed groups return `FORMULA_SYNTAX`; `array` and `cases` remain unsupported.
 
 Matrix environments `matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix` produce editable

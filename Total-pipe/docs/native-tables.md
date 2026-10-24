@@ -33,7 +33,8 @@ OfficeCLI 建立原生 PowerPoint 表格并写入验证后的 DrawingML，不使
 - 多级表头通过 header_rows 与合并区域表示。默认 header_rows=1，可设为 0；表头加粗，
   填充和正文颜色来自当前主题。column_weights 只表达相对列宽，不接受页面坐标、行高或任意字号。
 - cell.kind 为 text（默认）或 formula；align 为 left（默认）、center、right。
-  同一格选择一种类型，带说明的复杂推导可分格或使用相邻正文块。
+  text 格可显式加 inline_math=true，按 `$…$` 或 `\(…\)` 混排解释与公式，详见 [行内公式](inline-math.md)。
+  formula 格仍表示完整独立公式；不同时标记 inline_math。
 - formula 使用现有公式 AST，支持矩阵、根号、分式、上下标、嵌套指数等。
   未支持的 LaTeX 明确报错；不把失败公式变成普通文本。
 - origin 必须为 paper 或 generated；paper 表格必须提供 evidence_refs，且全部绑定本页 semantic.evidence_refs。
@@ -46,7 +47,7 @@ OfficeCLI 建立原生 PowerPoint 表格并写入验证后的 DrawingML，不使
 合并后的宽高，跨行需求向被覆盖行分配。最终表格贴合实测行高，不拉伸填满剩余正文区。
 
 纯文字表格在 preserve-terms 下可超名义区域生成候选并保留 SCIENTIFIC_TEXT_OVERFLOW REVIEW。
-含公式表格的尺寸不足返回 INSUFFICIENT_TABLE_SPACE 与所需/实际尺寸，需加宽、减少同页并列项
+含独立或行内公式的表格尺寸不足返回 INSUFFICIENT_TABLE_SPACE 与所需/实际尺寸，需加宽、减少同页并列项
 或拆表/拆页；不能把公式缩到 18 pt 以下。保留全文不等于视觉已验收。
 
 实际 PPTX 的表格名称、数量、坐标、每格内容、合并、公式和样式会与编译结果核对。

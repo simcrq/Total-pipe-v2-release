@@ -121,9 +121,16 @@ def fit_list_items(items, width, font_file, size, floor, max_lines):
     return None
 
 
-def text_floor_height(text, width, font_file, floor=24, max_lines=10):
+def text_floor_height(text, width, font_file, floor=24, max_lines=10, inline_math=False):
     """Height of ``text`` at the 18 pt floor, or None when it cannot fit in ``max_lines``."""
     face = ImageFont.truetype(font_file, floor)
+    if inline_math:
+        from totalpipe_layout.inline_math import InlineWidthError, measure_inline
+        try:
+            plan = measure_inline(text, width, face, floor)
+        except InlineWidthError:
+            return None
+        return plan['height'] if len(plan['lines']) <= max_lines else None
     lines = break_lines(text, face, max(1, width))
     if len(lines) > max_lines:
         return None
@@ -262,6 +269,8 @@ def text_visible_bottom(element):
     contract = element["contract"]
     if contract["vertical_anchor"] != "top":
         return y + height
+    if element.get('inline_math'):
+        return min(y+height, y+contract['inset']['top']+element['inline_layout']['height'])
     line_count = len(element["text"].split("\n"))
     return min(y + height, y + contract["inset"]["top"] +
                line_count * contract["font_size"] * contract["line_height"])
@@ -312,7 +321,7 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
             metrics = formula_fit(block['text'], w-20-(label_w+12 if label_w else 0))
             return max(30 if label else 0, metrics.height+12) if metrics else 10000
         label_h = (40 if composition['archetype'] == 'figure-parameters' else 44) if label else 0
-        return label_h + (text_floor_height(block['text'], w, font_paths['font_file']) or 10000)
+        return label_h + (text_floor_height(block['text'], w, font_paths['font_file'], inline_math=block.get('inline_math', False)) or 10000)
 
     def rows(w, bx, by):
         boxes = []
@@ -432,13 +441,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     # sample on purpose: it has its own face (a:buFont) and letting it decide the body face would
     # push a Chinese deck from a sans face to a symbol one.
     compiler_strings = '·0123456789'
+    from totalpipe_layout.inline_math import prose_only
+    font_sample = lambda value, enabled=False: prose_only(value) if enabled else value
     if any(ARCHETYPES[s['composition']['archetype']]['layout'] == 'evidence' for s in ir['slides']):
         compiler_strings += '直接证据假设（未证实）'
     text_sample = compiler_strings + "".join(
-        [str(value) for slide in ir["slides"]
-         for value in (slide["semantic"].get("title", ""), slide["semantic"].get("purpose", ""),
-                       slide["semantic"].get("takeaway", ""), slide["semantic"].get("speaker_notes", ""))]
-        + [block.get("text", "")+block.get("label", "") for slide in ir["slides"]
+        [font_sample(slide['semantic'].get(field, ''), field in slide['semantic'].get('inline_math', []))
+         for slide in ir['slides'] for field in ('title', 'purpose', 'takeaway', 'speaker_notes')]
+        + [font_sample(block.get("text", ""), block.get('inline_math', False))+block.get("label", "") for slide in ir["slides"]
            for block in slide["composition"]["blocks"]]
         + [figure.get("caption", "") for slide in ir["slides"]
            for figure in slide["composition"]["figure_refs"]]
@@ -447,7 +457,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         + [node['title'] for slide in ir['slides']
            for _, node in walk_regions(
                slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel']
-        + [cell['text'] for slide in ir['slides'] for table in slide['composition'].get('tables', [])
+        + [font_sample(cell['text'], cell.get('inline_math', False)) for slide in ir['slides'] for table in slide['composition'].get('tables', [])
            for cell in table['cells'] if cell.get('kind', 'text') == 'text'])
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
@@ -520,7 +530,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             scientific_text_ids.update('region:'+node['id']+':title'
                                        for _, node in walk(comp['layout_tree']) if node['type'] == 'panel')
         def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
-                 anchor="top", color=None, flow=None, align=None):
+                 anchor="top", color=None, flow=None, align=None, inline_math=False):
             if not content:
                 return
             if design and role in type_sizes(design) and not eid.startswith('graphic:'):
@@ -530,6 +540,34 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 font_weight=700 if role in ("title", "heading") else 400,
                 font_floor=floor, max_lines=lines, vertical_anchor=anchor)
             overflow = None
+            if inline_math:
+                from .inline_text import fit_inline, text_body
+                from totalpipe_layout.inline_math import InlineWidthError
+                try:
+                    plan, fitted, overflowed = fit_inline(content, bbox, contract, preserve_terms and eid in scientific_text_ids)
+                except InlineWidthError as error:
+                    issues.append(issue('INLINE_FORMULA_SPACE', 'FAIL', str(error), n, eid,
+                        detector='geometric-preflight', required_size_px=[error.required_width, 0],
+                        available_size_px=bbox[2:], suggested_actions=['widen_region', 'use_display_formula', 'split_slide']))
+                    return
+                except ValueError as error:
+                    issues.append(issue('INLINE_TEXT_CAPACITY', 'FAIL', str(error), n, eid, detector='geometric-preflight'))
+                    return
+                if overflowed:
+                    overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
+                    bbox = [*bbox[:3], max(bbox[3], plan['height']+contract.inset['top']+contract.inset['bottom'])]
+                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                        f'{eid}: complete mixed text and formulas retained beyond the nominal slot.', n, eid, detector='geometric-preflight'))
+                colour = color or theme.get('foreground', '#142735')
+                elements.append({'id': eid, 'kind': 'text', 'role': role, 'text': plan['text'], 'source_text': content,
+                    'bbox': bbox, 'contract': fitted.to_dict(), 'color': colour, 'inline_math': True,
+                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left'),
+                    **({'align': align} if align else {}), **({'scientific_text_overflow': overflow} if overflow else {})})
+                if plan['formula_count']:
+                    issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
+                        f'{eid}: verify native inline baseline, line spacing and formula bounds in PowerPoint.',
+                        n, eid, detector='geometric-preflight', confidence='LOW'))
+                return
             try:
                 output, fitted = fit_text(content, bbox, contract)
             except ValueError:
@@ -582,8 +620,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         visible_caveats, moved_caveats = audience.split_caveats(sem["caveats"])
         if design:
             header = header_layout(design, slide, font_paths, preserve_terms)
-            text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2))
-            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2))
+            text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
+            text('takeaway', sem['takeaway'], header['takeaway'], 'takeaway', 28, 24, header.get('takeaway_lines', 2), inline_math='takeaway' in sem.get('inline_math', []))
             elements.extend(header_decoration(design, header))
             caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
         elif templated:
@@ -592,17 +630,17 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # to the template's geometry.
             # The template's title slot ends at its red rule (y=78), so the title is set to fit
             # above it and the takeaway opens the body underneath.
-            text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A")
+            text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A", inline_math='title' in sem.get('inline_math', []))
             text("takeaway", sem["takeaway"], [88, 84, 1104, 42], "takeaway", 24, 24, 2,
-                 color="#333333")
+                 color="#333333", inline_math='takeaway' in sem.get('inline_math', []))
             caveat_y, caveat_h = 640, 36
         else:
-            text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2)
+            text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2, inline_math='title' in sem.get('inline_math', []))
             # These two evidence-heavy slides use a single-line takeaway; reclaiming
             # the unused vertical room lets the original scientific panels render
             # larger without colliding with the title block.
             takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
-            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2)
+            text("takeaway", sem["takeaway"], [56, 144 if spacious else 164, 1168, takeaway_h], "takeaway", 28, 24, 2, inline_math='takeaway' in sem.get('inline_math', []))
             # No footer element on any frame. The evidence ids used to be set at 15 pt under every
             # page, which meant a dozen EV numbers shared the bottom strip with the caveat. They are
             # traceability keys: the notes carry them, the room does not need them.
@@ -680,6 +718,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if show_sequence:
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
+            if b.get('inline_math'):
+                flow = {**flow, 'mode': 'plain'}
             if preserve_terms and flow['mode'] == DISTRIBUTED_ARROW_LIST:
                 # The complete prose remains editable even when a native list's item limit is too
                 # tight. Do not shorten a technical name to satisfy that presentational limit.
@@ -766,7 +806,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
             emphasis_color = theme.get("accent", DEFAULT_ACCENT) if b["id"] == visual_intent.get("emphasis") else None
-            text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color)
+            text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color, inline_math=b.get('inline_math', False))
         def formula_flow(bs, box, max_columns=1, preferred_columns=1):
             try:
                 plan = plan_formula_flow(bs, box, font_paths, comp['archetype'],
@@ -788,7 +828,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         def stack(bs, box):
             if not bs:
                 return
-            if any(b.get('component') == 'formula' for b in bs):
+            if any(b.get('component') == 'formula' or b.get('inline_math') for b in bs):
                 formula_flow(bs, box)
                 return
             gap = 24 if comp['archetype'] == 'figure-parameters' else 18
@@ -907,7 +947,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                 "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
                                 "generated graphics do not establish scientific correctness",
                                 n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
-        has_formulas = any(b.get('component') == 'formula' for b in blocks)
+        has_formulas = any(b.get('component') == 'formula' or b.get('inline_math') for b in blocks)
         proposal = None if comp.get('layout_tree') or visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
         if comp.get('layout_tree'):
             from .layout_tree import LayoutTreeError, compile_regions
@@ -943,6 +983,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             issues.append(issue('FORMULA_MEASURE_APPROXIMATE', 'REVIEW',
                                 'Native table formulas use conservative structural metrics; verify cell bounds in PowerPoint.',
                                 n, rendered['id'], detector='geometric-preflight', confidence='LOW', font_metrics='heuristic'))
+                        if any(c.get('inline_formula_count', 0) for c in rendered['cells']):
+                            issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
+                                'Verify inline formula baselines and measured line heights in native table cells.',
+                                n, rendered['id'], detector='geometric-preflight', confidence='LOW'))
                         if rendered.get('scientific_text_overflow'):
                             issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
                                 'Native table retains complete scientific terminology beyond its nominal region.',

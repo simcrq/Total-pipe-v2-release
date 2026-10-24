@@ -52,7 +52,7 @@ def validate_tables(tables, evidence_refs):
             if not isinstance(cell, dict):
                 errors.append(f'{tid}: cell must be an object')
                 continue
-            if set(cell)-{'id', 'row', 'column', 'row_span', 'column_span', 'text', 'kind', 'align'}:
+            if set(cell)-{'id', 'row', 'column', 'row_span', 'column_span', 'text', 'kind', 'align', 'inline_math'}:
                 errors.append(f'{tid}: unknown cell fields; dimensions are compiler-owned')
             cid = cell.get('id')
             if not isinstance(cid, str) or not IDENTIFIER.fullmatch(cid) or cid in cell_ids:
@@ -76,11 +76,25 @@ def validate_tables(tables, evidence_refs):
                     parse(cell['text'])
                 except FormulaError as error:
                     errors.append(f'{tid}.{cid}: {error}')
+            if type(cell.get('inline_math', False)) is not bool or cell.get('inline_math') and cell.get('kind') == 'formula':
+                errors.append(f'{tid}.{cid}: inline_math is a boolean for text cells only')
+            elif cell.get('inline_math') and isinstance(cell.get('text'), str):
+                from totalpipe_layout.inline_math import parse_inline, InlineMathError
+                try:
+                    parse_inline(cell['text'])
+                except InlineMathError as error:
+                    errors.append(f'{tid}.{cid}: {error}')
             if cell.get('align', 'left') not in ('left', 'center', 'right'):
                 errors.append(f'{tid}.{cid}: invalid alignment')
         if len(occupied) != rows*cols:
             errors.append(f'{tid}: every logical position must be covered exactly once; use explicit blank cells')
     return errors
+
+
+def table_has_math(table):
+    from totalpipe_layout.inline_math import parse_inline
+    return any(c.get('kind') == 'formula' or c.get('inline_math') and
+               any(s.kind == 'formula' for s in parse_inline(c['text'])) for c in table['cells'])
 
 
 def measure_table(table, width, fonts, size=24):
@@ -106,6 +120,23 @@ def measure_table(table, width, fonts, size=24):
             minimum_width = max(minimum_width, required*sum(weights)/sum(weights[c:c+cs]))
             needed = metrics.height+16
             lines = None
+        elif cell.get('inline_math'):
+            from totalpipe_layout.inline_math import measure_inline, InlineWidthError
+            face = load_font_file(fonts['bold_font_file' if bold else 'font_file'], size)
+            measured_width, required_width = max(1, cw), 0.
+            for _ in range(256):
+                try:
+                    inline = measure_inline(cell['text'], measured_width, face, size)
+                    break
+                except InlineWidthError as error:
+                    # Only increasing atomic-width probes; the actual narrower region still fails.
+                    required_width = max(required_width, error.required_width)
+                    measured_width = max(measured_width+1, required_width)
+            else:
+                raise ValueError('Inline table measurement exceeded its bounded width probes')
+            inline['min_width'] = max(inline['min_width'], required_width)
+            minimum_width = max(minimum_width, (inline['min_width']+20)*sum(weights)/sum(weights[c:c+cs]))
+            needed, lines = inline['height']+16, None
         else:
             face = load_font_file(fonts['bold_font_file' if bold else 'font_file'], size)
             lines = break_lines(cell['text'], face, max(1, cw)) if cell['text'] else ['']
@@ -114,7 +145,8 @@ def measure_table(table, width, fonts, size=24):
         for y in range(r, r+rs):
             heights[y] += missing/rs
         cells.append({**cell, 'lines': lines, 'bold': bold,
-                      **({'measured_exact': metrics.exact} if cell.get('kind') == 'formula' else {})})
+                      **({'measured_exact': metrics.exact} if cell.get('kind') == 'formula' else {}),
+                      **({'inline_layout': inline, 'measured_exact': inline['measured_exact']} if cell.get('inline_math') else {})})
     return {'column_widths': widths, 'row_heights': heights, 'height': sum(heights),
             'min_width': minimum_width, 'font_size_px': size, 'cells': cells}
 
@@ -135,7 +167,7 @@ def compile_table(table, box, fonts, theme, preserve_terms=False):
             break
     if chosen is None:
         chosen = measure_table(table, width, fonts)
-        if chosen['min_width'] > width+.1 or not preserve_terms or any(c.get('kind') == 'formula' for c in table['cells']):
+        if chosen['min_width'] > width+.1 or not preserve_terms or table_has_math(table):
             raise LayoutTreeError('table:'+table['id'], 'INSUFFICIENT_TABLE_SPACE',
                 'Complete native table cannot fit above its 18 pt font floor.',
                 [chosen['min_width'], chosen['height']], [width, height], ['widen_region', 'split_table_or_slide'])
@@ -168,7 +200,13 @@ def compile_table(table, box, fonts, theme, preserve_terms=False):
             body = _element(tc, 'txBody')
             _element(body, 'bodyPr', {'wrap': 'none', 'anchor': 'ctr'})
             _element(body, 'lstStyle')
-            if anchor and cell.get('kind') == 'formula':
+            if anchor and cell.get('inline_math'):
+                from .inline_text import paragraphs
+                from totalpipe_layout.inline_math import plain_text
+                body.extend(paragraphs(cell['inline_layout'], {'font_size': chosen['font_size_px'],
+                    'font_family': font, 'font_weight': 700 if cell['bold'] else 400}, '#'+color, cell.get('align', 'left')))
+                content = plain_text(cell['text'])
+            elif anchor and cell.get('kind') == 'formula':
                 paragraph = ET.fromstring(to_omml_paragraph(parse(cell['text']), chosen['font_size_px'], '#'+color))
                 paragraph.insert(0, ET.Element('{'+A+'}pPr', {'algn': {'left': 'l', 'center': 'ctr', 'right': 'r'}[cell.get('align', 'left')]}))
                 math_para = paragraph.find('.//{'+M+'}oMathPara')
@@ -201,6 +239,7 @@ def compile_table(table, box, fonts, theme, preserve_terms=False):
             if anchor:
                 native_cells.append({'id': cell['id'], 'text': content, 'kind': cell.get('kind', 'text'),
                     **({'measured_exact': cell['measured_exact']} if cell.get('kind') == 'formula' else {}),
+                    **({'measured_exact': cell['measured_exact'], 'inline_formula_count': cell['inline_layout']['formula_count']} if cell.get('inline_math') else {}),
                     'bbox': [x+sum(chosen['column_widths'][:c]), y+sum(chosen['row_heights'][:r]),
                         sum(chosen['column_widths'][c:c+cell.get('column_span', 1)]),
                         sum(chosen['row_heights'][r:r+cell.get('row_span', 1)])]})

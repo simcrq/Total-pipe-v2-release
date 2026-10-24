@@ -78,3 +78,20 @@
 - 构建及哈希绑定的 UI/PDF 记录位于忽略目录 builds/native-table/verified/。
   测量顺序收尾修正后，重新编译的页面几何、表格 XML 和内容与原生验收版本完全一致。
 - 本轮是软件回归，不自动晋级 final。
+
+## 第三轮：行内公式与混排容量
+
+- 正文块和原生表格文字格显式 inline_math=true；semantic.inline_math 可列出 title/takeaway。
+  未开启的正文和独立公式路径保持兼容，详见 [行内公式协议](inline-math.md)。
+- 复用公式 AST，按不可拆分数学区域的宽度换行，逐行取最大基线上方/下方需求并累计行高。
+  不把 LaTeX 源码长度当数学宽度，也不把整段都按最高矩阵拉高。
+- 树、密集公式解释块、图文混排和表格共用测量；原生 XML 保留同行文字和可编辑数学内容，
+  结构审核逐项核对数学结构、换行和实际行距。宽度不足明确反馈，专业术语不截断。
+- RPA 根据 native_inline_equation 能力检查 inline_math / has_inline_math 内容引用；
+  原有设计阶段、Evidence 绑定和旧版消费者回退保持。普通溢出自动拆页不能切开混排公式。
+- 验收：Deck Compiler 280、RPA 315、pwf2rpa 83、PWF 38 项通过，1 项缺少既有 Li 样例跳过，
+  合计 716 项通过、1 项跳过。三页 PowerPoint UI、同次原生 PDF 及独立 PNG 复核均 PASS。
+- 原有复合布局和表格样例的页面几何、原生 XML、内容逐项相同。行首标点收尾后，
+  行内样例输出也与原生验收版本完全一致。
+- QA 0 FAIL、2 WARNING、37 REVIEW；两条 OfficeCLI 溢出估计仍保留，实际原生页面无可见越界。
+  数学测量、字体和科学内容审核项不自动清零。构建位于忽略目录 builds/inline-math/initial/。

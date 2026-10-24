@@ -101,6 +101,13 @@ Tables support complete merged grids, multirow headers and formula/matrix cells;
 The compiler measures at an 18 pt floor. Pure-text overflow can retain terms as REVIEW, formula tables must fit.
 Existing v1.0 trees and whole-slide plans remain supported. See Total-pipe/docs/native-tables.md in the monorepo.
 
+For opt-in inline math, preserve full canonical text and declare content_refs.blocks[].inline_math or
+content_refs.tables[].has_inline_math. Require native_inline_equation plus native_equation; consumers without
+these capabilities must replan explicitly. RPA's character counts are a coarse prefilter, not mixed-line geometry.
+Deck Compiler measures atomic math widths and per-line baseline extents; it preserves literal legacy text and
+existing display equations. Never reconstruct scientific text from a compact summary or Unicode math fallback.
+In the monorepo see Total-pipe/docs/inline-math.md for source flags, delimiters and native review requirements.
+
 Keep OCR and source extraction upstream. Accept PaperWorkflow output as an in-memory object only; do not invoke its Python/PDF handlers or read its artifact paths on behalf of the normalizer.
 
 Pass selected layout IDs and `pptx_in` coordinates to the renderer. Keep text, charts, tables, and shapes editable where possible. After export, collect actual slide/render dimensions, source `layout_id/category`, and per-element `bbox`, `render_bbox_px`, `z_index`, `opacity`, `quality_role`, text overflow/font/local-contrast facts, image source/display/allocation dimensions, scientific visual identity/type/panel facts, measured embedded-text pixels, overlay fills, solid colors, and theme-token usage. Renderer adapters report facts only; they must not decide whether a page is too empty, unbalanced, unreadable, or low contrast. For cover text intersecting an image, require either measured local contrast or an actual opaque surface between the image and text layers; unknown facts are release-blocking `not_evaluable`, not pass.

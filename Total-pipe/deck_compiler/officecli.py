@@ -181,6 +181,10 @@ def commands(layout):
                     'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]"
                               "/p:txBody/a:p[1]"),
                     'action': 'replace', 'xml': element['omml']})
+            if element.get('inline_math'):
+                result.append({'command': 'raw-set', 'part': parent,
+                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]/p:txBody",
+                    'action': 'replace', 'xml': element['inline_xml']})
         if has_text:
             # OfficeCLI has typed line spacing and insets, but no typed bodyPr.wrap yet.
             result.append({'command': 'raw-set', 'part': parent,

@@ -43,10 +43,10 @@ export const COMPOSE_SUBLAYOUT_SCHEMA = {
       required: ["blocks", "figure_count", "graphics"], properties: {
         blocks: { type: "array", maxItems: 64, items: { type: "object", additionalProperties: false,
           required: ["id", "component"], properties: { id: { type: "string", minLength: 1 },
-            component: { type: "string", minLength: 1 }, anchor: { type: "string", minLength: 1 } } } },
+            component: { type: "string", minLength: 1 }, anchor: { type: "string", minLength: 1 }, inline_math: { type: 'boolean' } } } },
         figure_count: { type: "integer", minimum: 0, maximum: 12 },
         tables: { type: 'array', maxItems: 4, items: { type: 'object', additionalProperties: false,
-          required: ['id'], properties: { id: identifier, has_formulas: { type: 'boolean' } } } },
+          required: ['id'], properties: { id: identifier, has_formulas: { type: 'boolean' }, has_inline_math: { type: 'boolean' } } } },
         graphics: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false,
           required: ["id", "type"], properties: { id: identifier,
             type: { enum: ["process", "dag", "mechanism", "architecture", "funnel", "path", "composite"] } } } },
@@ -110,6 +110,7 @@ export function composeSublayout(input = {}) {
   const tables = registry.tables ?? [];
   if (tables.length) native.push('native_table');
   if (tables.some(t => t.has_formulas)) native.push('native_equation');
+  if (registry.blocks.some(b => b.inline_math) || tables.some(t => t.has_inline_math)) native.push('native_equation', 'native_inline_equation');
   if (registry.blocks.some(b => b.component === "formula")) native.push("native_equation");
   if (registry.graphics.some(g => g.type === "path")) native.push("native_bezier");
   if (registry.graphics.some(g => ["process", "dag"].includes(g.type))) native.push("native_flowchart");

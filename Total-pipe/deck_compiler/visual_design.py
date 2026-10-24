@@ -181,8 +181,19 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
         from .layout import break_lines
         title_lines = len(break_lines(slide['semantic']['title'], load_font_file(fonts['bold_font_file'], 36), 1168))
         takeaway_lines = len(break_lines(slide['semantic']['takeaway'], load_font_file(fonts['font_file'], 24), 1168))
-        title_extra = max(0, title_lines*45-header['title'][3])
-        takeaway_extra = max(0, takeaway_lines*30-header['takeaway'][3])
+        title_height, takeaway_height = title_lines*45, takeaway_lines*30
+        if slide['semantic'].get('inline_math'):
+            from totalpipe_layout.inline_math import measure_inline, InlineWidthError
+            for field, size, font in (('title', 36, 'bold_font_file'), ('takeaway', 24, 'font_file')):
+                if field not in slide['semantic']['inline_math']: continue
+                try:
+                    plan = measure_inline(slide['semantic'][field], 1168, load_font_file(fonts[font], size), size)
+                except InlineWidthError:
+                    continue  # The final emitter reports a structured width failure at its font floor.
+                if field == 'title': title_height, title_lines = plan['height'], len(plan['lines'])
+                else: takeaway_height, takeaway_lines = plan['height'], len(plan['lines'])
+        title_extra = max(0, title_height-header['title'][3])
+        takeaway_extra = max(0, takeaway_height-header['takeaway'][3])
         header['title'][3] += title_extra
         header['rule'][1] += title_extra
         header['takeaway'][1] += title_extra
