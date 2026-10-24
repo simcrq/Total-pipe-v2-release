@@ -2,6 +2,7 @@
 
 import readline from "node:readline";
 import { SEARCH_SUBLAYOUT_SCHEMA, COMPOSE_SUBLAYOUT_SCHEMA, searchSublayouts, composeSublayout } from "./sublayouts.mjs";
+import { PLAN_SUBLAYOUT_SCHEMA, BODY_COMPOSITIONS_SCHEMA, planSublayout } from "./automatic-sublayouts.mjs";
 import { assertSupportedNodeVersion } from "./runtime.mjs";
 import { runBenchmark } from "./benchmark.mjs";
 import {
@@ -637,8 +638,13 @@ const rawTools = [
   },
   {
     name: "compose_sublayout", title: "Compose a body region tree",
-    description: "Compose canonical block, figure and graphic references into a bounded Deck IR layout_tree. Enforces exact content coverage, formula-anchor groups and consumer capabilities. Does not render or claim geometric fit; merge composition_patch and inspect compiler layout_feedback.json.",
+    description: "Compose canonical block, figure, graphic and table references into a bounded Deck IR layout_tree. Enforces exact content coverage, formula-anchor groups and consumer capabilities. Native tables require tree 1.1. Does not render or claim geometric fit; merge composition_patch and inspect compiler layout_feedback.json.",
     inputSchema: COMPOSE_SUBLAYOUT_SCHEMA, annotations: readOnlyAnnotations,
+  },
+  {
+    name: "plan_sublayout", title: "Select a body region tree",
+    description: "Automatically select from bounded body sublayouts using canonical content groups, current consumer capabilities, optional measured requirements and SHA-bound compiler feedback. Preserves full content references, emits no coordinates and requires Deck Compiler measurement. No compiler calls or unbounded retries.",
+    inputSchema: PLAN_SUBLAYOUT_SCHEMA, annotations: readOnlyAnnotations,
   },
   {
     name: "get_layout",
@@ -659,7 +665,7 @@ const rawTools = [
   {
     name: "create_deck_plan",
     title: "Plan a complete research presentation",
-    description: "Compile SlideDesignIR, rank legal layout/treatment/decoration candidates, and bind full content to exact slots. Body and key_points are never silently truncated; a summary that cannot fit remains needs_replan. Use slide_briefs when real content is available; otherwise a scenario-specific blueprint is generated.",
+    description: "Compile SlideDesignIR, rank legal layout/treatment/decoration candidates, and bind full content to exact slots. Optional body_compositions requests automatically select bounded body trees for canonical slide IDs, then require Deck Compiler measurement. Body and key_points are never silently truncated; a summary that cannot fit remains needs_replan. Use slide_briefs when real content is available; otherwise a scenario-specific blueprint is generated.",
     inputSchema: {
       type: "object",
       properties: {
@@ -680,6 +686,7 @@ const rawTools = [
         citations: CONTENT_MODEL_INPUT_SCHEMA.properties.citations,
         evidence: CONTENT_MODEL_INPUT_SCHEMA.properties.evidence,
         paperworkflow_v4: CONTENT_MODEL_INPUT_SCHEMA.properties.paperworkflow_v4,
+        body_compositions: BODY_COMPOSITIONS_SCHEMA,
         slide_briefs: {
           type: "array",
           minItems: 1,
@@ -925,6 +932,7 @@ const toolHandlers = {
   search_layouts: (args) => searchLayouts(args),
   search_sublayouts: (args) => searchSublayouts(args),
   compose_sublayout: (args) => composeSublayout(args),
+  plan_sublayout: (args) => planSublayout(args),
   get_layout: (args) => getLayout(args.layout_id, args.theme_id, args.viewing_mode),
   create_deck_plan: (args) => createDeckPlan(args),
   validate_slide: (args) => validateSlide(args),

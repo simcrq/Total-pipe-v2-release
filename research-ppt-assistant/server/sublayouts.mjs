@@ -12,7 +12,7 @@ const identifier = { type: "string", pattern: "^[A-Za-z0-9_-]{1,64}$" };
 const reference = {
   oneOf: [
     { type: "object", additionalProperties: false, required: ["kind", "ref"], properties: {
-      kind: { enum: ["block", "graphic"] }, ref: { type: "string", minLength: 1 } } },
+      kind: { enum: ["block", "graphic", "table"] }, ref: { type: "string", minLength: 1 } } },
     { type: "object", additionalProperties: false, required: ["kind", "ref"], properties: {
       kind: { const: "figure" }, ref: { type: "integer", minimum: 0 } } },
   ],
@@ -35,6 +35,9 @@ export const COMPOSE_SUBLAYOUT_SCHEMA = {
       type: "object", additionalProperties: false, required: ["id", "title", "items"], properties: {
         id: identifier, title: { type: "string", minLength: 1, pattern: "\\S" },
         arrangement: { enum: ["stack", "image_grid"] }, columns: { type: "integer", minimum: 1, maximum: 4 },
+        requirements: { type: 'object', additionalProperties: false, properties: {
+          min_width_px: { type: 'number', exclusiveMinimum: 0 }, min_height_px: { type: 'number', exclusiveMinimum: 0 } },
+          description: 'Optional measured component requirements, not page coordinates.' },
         items: { type: "array", minItems: 1, maxItems: 12, items: reference } } } },
     content_refs: { type: "object", additionalProperties: false,
       required: ["blocks", "figure_count", "graphics"], properties: {
@@ -42,6 +45,8 @@ export const COMPOSE_SUBLAYOUT_SCHEMA = {
           required: ["id", "component"], properties: { id: { type: "string", minLength: 1 },
             component: { type: "string", minLength: 1 }, anchor: { type: "string", minLength: 1 } } } },
         figure_count: { type: "integer", minimum: 0, maximum: 12 },
+        tables: { type: 'array', maxItems: 4, items: { type: 'object', additionalProperties: false,
+          required: ['id'], properties: { id: identifier, has_formulas: { type: 'boolean' } } } },
         graphics: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false,
           required: ["id", "type"], properties: { id: identifier,
             type: { enum: ["process", "dag", "mechanism", "architecture", "funnel", "path", "composite"] } } } },
@@ -51,13 +56,13 @@ export const COMPOSE_SUBLAYOUT_SCHEMA = {
 
 export function sublayoutCapabilities() {
   return { version: SUBLAYOUT_VERSION, coordinate_output: false,
-    layout_tree_versions: ["1.0"], catalog: SUBLAYOUTS.map(x => x.id),
+    layout_tree_versions: ["1.0", "1.1"], automatic_selection: true, catalog: SUBLAYOUTS.map(x => x.id),
     feedback_owner: "deck_compiler", fallback: "existing_whole_slide_layouts" };
 }
 
 function capabilityTree(input) {
   const value = input?.layout_tree ?? input;
-  return value?.version === SUBLAYOUT_VERSION && value?.contract === "totalpipe.layout-tree" ? value : null;
+  return ['1.0', '1.1'].includes(value?.version) && value?.contract === "totalpipe.layout-tree" ? value : null;
 }
 
 function supports(tree, containers, native = [], graphicTypes = []) {
@@ -102,12 +107,18 @@ export function composeSublayout(input = {}) {
   const registry = input.content_refs;
   const tree = capabilityTree(input.consumer_capabilities);
   const native = [];
+  const tables = registry.tables ?? [];
+  if (tables.length) native.push('native_table');
+  if (tables.some(t => t.has_formulas)) native.push('native_equation');
   if (registry.blocks.some(b => b.component === "formula")) native.push("native_equation");
   if (registry.graphics.some(g => g.type === "path")) native.push("native_bezier");
   if (registry.graphics.some(g => ["process", "dag"].includes(g.type))) native.push("native_flowchart");
   const containers = [...spec.containers, ...groups.filter(g => g.arrangement === "image_grid").map(() => "image_grid")];
   if (!supports(tree, containers, native, registry.graphics.map(g => g.type))) {
     return failure("SUBLAYOUT_CAPABILITY_UNAVAILABLE", "Consumer cannot compile this structure. Retain legacy layout planning.");
+  }
+  if (tables.length && (tree.version !== '1.1' || !tree.leaves?.includes('table') || tables.length > (tree.limits?.max_tables ?? 0))) {
+    return failure('SUBLAYOUT_CAPABILITY_UNAVAILABLE', 'Native tables require the declared 1.1 table contract.');
   }
   if ((spec.containers.includes('columns') && groups.length > (tree.limits?.max_columns ?? 0))
       || registry.graphics.length > (tree.limits?.max_graphics ?? 0)
@@ -118,10 +129,11 @@ export function composeSublayout(input = {}) {
   const expected = [...registry.blocks.map(b => `block:${b.id}`),
     ...Array.from({ length: registry.figure_count }, (_, i) => `figure:${i}`),
     ...registry.graphics.map(g => `graphic:${g.id}`)];
+  expected.push(...tables.map(t => `table:${t.id}`));
   const actual = groups.flatMap(g => g.items.map(i => `${i.kind}:${i.ref}`));
   if (new Set(expected).size !== expected.length || expected.length !== actual.length
       || new Set(actual).size !== actual.length || expected.some(k => !actual.includes(k))) {
-    return failure("SUBLAYOUT_CONTENT_COVERAGE", "Every canonical block, figure and graphic must occur exactly once.");
+    return failure("SUBLAYOUT_CONTENT_COVERAGE", "Every canonical block, figure, graphic and table must occur exactly once.");
   }
   for (const block of registry.blocks.filter(b => b.anchor)) {
     const group = groups.find(g => g.items.some(i => i.kind === "block" && i.ref === block.id));
@@ -159,7 +171,7 @@ export function composeSublayout(input = {}) {
   }
   return { version: SUBLAYOUT_VERSION, status: "structure_planned", geometry_status: "requires_compiler_measurement",
     ...(input.layout_id ? { layout_id: input.layout_id } : {}),
-    composition_patch: { layout_tree: { version: SUBLAYOUT_VERSION, regions: { body: root } } },
+    composition_patch: { layout_tree: { version: tables.length ? '1.1' : '1.0', regions: { body: root } } },
     required_native_capabilities: native, next_action: "merge_into_canonical_composition_then_compile",
     feedback_file: "layout_feedback.json", content_mutated: false };
 }

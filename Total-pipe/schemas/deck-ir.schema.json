@@ -79,11 +79,13 @@
     "layout-tree": {
       "type": "object", "additionalProperties": false, "required": ["version", "regions"],
       "properties": {
-        "version": {"const": "1.0"},
+        "version": {"enum": ["1.0", "1.1"]},
         "regions": {"type": "object", "additionalProperties": false, "required": ["body"],
                     "properties": {"body": {"$ref": "#/$defs/region-node"}}}
       },
-      "description": "Bounded body tree: runtime enforces depth <= 6, nodes <= 64, exact content coverage and formula-anchor groups. No page coordinates."
+      "description": "Bounded body tree: depth <= 6, nodes <= 64; table references require 1.1. No page coordinates.",
+      "allOf": [{"if": {"properties": {"version": {"const": "1.0"}}},
+        "then": {"properties": {"regions": {"properties": {"body": {"$ref": "#/$defs/region-no-table"}}}}}}]
     },
     "region-node": {
       "allOf": [{"$ref": "#/$defs/region-depth-1"}],
@@ -113,7 +115,7 @@
                         "items": {"$ref": "#/$defs/region-figure"}},
            "gap": {"enum": ["compact", "standard", "spacious"]}}},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
-         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic"]},
+         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic", "table"]},
                         "ref": {"type": "string", "minLength": 1}}},
         {"$ref": "#/$defs/region-figure"}
       ]
@@ -133,6 +135,35 @@
       "type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
       "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"const": "figure"},
                      "ref": {"type": "integer", "minimum": 0}}
+    },
+    "region-no-table": {"properties": {
+      "type": {"not": {"const": "table"}}, "body": {"$ref": "#/$defs/region-no-table"},
+      "children": {"items": {"$ref": "#/$defs/region-no-table"}}}},
+    "native-table": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "row_count", "column_count", "cells", "origin"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "row_count": {"type": "integer", "minimum": 1, "maximum": 32},
+        "column_count": {"type": "integer", "minimum": 1, "maximum": 12},
+        "header_rows": {"type": "integer", "minimum": 0, "maximum": 32},
+        "column_weights": {"type": "array", "minItems": 1, "maxItems": 12,
+          "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
+        "origin": {"enum": ["paper", "generated"]},
+        "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "cells": {"type": "array", "minItems": 1, "maxItems": 384, "items": {
+          "type": "object", "additionalProperties": false, "required": ["id", "row", "column", "text"],
+          "properties": {
+            "id": {"$ref": "#/$defs/identifier"},
+            "row": {"type": "integer", "minimum": 0, "maximum": 31},
+            "column": {"type": "integer", "minimum": 0, "maximum": 11},
+            "row_span": {"type": "integer", "minimum": 1, "maximum": 32},
+            "column_span": {"type": "integer", "minimum": 1, "maximum": 12},
+            "kind": {"enum": ["text", "formula"]}, "text": {"type": "string"},
+            "align": {"enum": ["left", "center", "right"]}
+          }
+        }}
+      }
     },
     "academic-design": {
       "type": "object", "additionalProperties": false,
@@ -437,6 +468,7 @@
               }
             },
             "layout_tree": {"$ref": "#/$defs/layout-tree"},
+            "tables": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/native-table"}},
             "visual_intent": {
               "type": "object",
               "additionalProperties": false,

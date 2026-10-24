@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import { sublayoutCapabilities } from "./sublayouts.mjs";
 export { searchSublayouts, composeSublayout } from "./sublayouts.mjs";
+import { attachBodyCompositions } from "./automatic-sublayouts.mjs";
+export { planSublayout } from "./automatic-sublayouts.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTENT_MODEL_VERSION, createViolation, normalizeContentModel, normalizePaperWorkflowV4 } from "./content-model.mjs";
@@ -1106,6 +1108,11 @@ export async function createDeckPlan(input = {}) {
   }
 
   const designQa = evaluateDeckDesign(slides);
+  const bodyComposition = attachBodyCompositions(input.body_compositions, slides);
+  if (bodyComposition?.status === "needs_replan") {
+    if (planStatus !== "failed") planStatus = "needs_replan";
+    warnings.push("Body composition requires replanning; inspect body_composition.errors and slide.body_layout before compiling.");
+  }
 
   return {
     pipeline_status: PIPELINE_STATUS.plan,
@@ -1127,6 +1134,7 @@ export async function createDeckPlan(input = {}) {
     requested_slide_count: briefs.length,
     slide_count: slides.length,
     slides,
+    ...(bodyComposition ? { body_composition: bodyComposition } : {}),
     unplanned_slide_briefs: unplannedSlideBriefs,
     planning_contexts: planningContexts,
     deck_design_state: publicDeckDesignState(deckDesignState),
@@ -1134,7 +1142,9 @@ export async function createDeckPlan(input = {}) {
     warnings,
     renderer_contract: {
       slide_size_in: catalog.meta.slide_size_in,
-      coordinate_source: "Use each slot_specs[].pptx_in value without changing the layout hierarchy; bind content through slot_assignments[slot_id].",
+      coordinate_source: bodyComposition
+        ? "For slide.body_layout, merge composition_patch into the canonical Deck IR and let Deck Compiler allocate the body. Existing slot specifications remain the contract for other slides."
+        : "Use each slot_specs[].pptx_in value without changing the layout hierarchy; bind content through slot_assignments[slot_id].",
       reflow_policy: "Collapse unused optional slots and expand neighboring priority content before reducing font size.",
       final_check: "Call validate_slide before rendering, then validate_rendered_deck with actual font, footprint, empty-band, and visual telemetry after export.",
     },
@@ -1869,6 +1879,12 @@ export async function validateDeckPlan(input = {}) {
   for (let index = 0; index < slides.length; index += 1) {
     const slide = slides[index];
     const layoutId = slide.layout_id;
+    if (slide.body_layout && (slide.body_layout.status !== 'structure_planned' || !slide.body_layout.composition_patch?.layout_tree)) {
+      addIssue(deckIssues, 'error', 'BODY_COMPOSITION_REPLAN_REQUIRED',
+        `Slide ${slide.slide_id ?? index+1} has no legal body composition.`,
+        'Replan the full canonical groups and compile the returned composition_patch; preserve source content.',
+        { field: 'body_layout', slide_id: slide.slide_id, actual: slide.body_layout.status });
+    }
     const validation = await validateSlide({
       ...slide,
       ...(slide.content_metrics ?? {}),

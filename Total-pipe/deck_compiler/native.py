@@ -85,6 +85,13 @@ def inspect_pdf(pdf, layout):
             scale_x = page.width / layout_width
             scale_y = page.height / layout_height
             for e in slide['elements']:
+                if e['kind'] == 'table':
+                    for cell in e['cells']:
+                        x, y, width, height = cell['bbox']
+                        region = page.crop((x*scale_x, y*scale_y, (x+width)*scale_x, (y+height)*scale_y), strict=False)
+                        if normalize(cell['text']) != normalize(region.extract_text() or ''):
+                            add('NATIVE_TABLE_CELL_REVIEW', f"Native cell differs from {e['id']}.{cell['id']}", n, 'REVIEW', 'MEDIUM')
+                    continue
                 if e['kind'] != 'text':
                     continue
                 expected = normalize(e['text'])

@@ -201,7 +201,7 @@ def sequence_flow(composition):
             blocks[-1]["component"] == "result")
 
 
-TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.:/\\-]*(?:%|[×x])?|[^\S\n]+|.")
+TOKEN = re.compile(r"[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u00c0-\u02af\u0370-\u03ff\u1d2c-\u1d6a\u2070-\u209f¹²³]*(?:%|[×x])?|[^\S\n]+|.")
 # Kinsoku: a line may not begin with closing punctuation or a unit suffix. When the break would
 # land there, the previous character travels down with it instead. Two real review findings drove
 # this: a wrapped "1." / "19×" (the DECIMAL_SPLIT rule) and a line that consisted of "。" alone.
@@ -446,7 +446,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
            for _, value in graphic_texts(graphic)]
         + [node['title'] for slide in ir['slides']
            for _, node in walk_regions(
-               slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel'])
+               slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel']
+        + [cell['text'] for slide in ir['slides'] for table in slide['composition'].get('tables', [])
+           for cell in table['cells'] if cell.get('kind', 'text') == 'text'])
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
@@ -925,6 +927,26 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         figure(figs[entry['ref']], entry['bbox'], entry['ref']+1)
                     elif entry['type'] == 'graphic':
                         native_graphic(entry['bbox'], graphics_by_id[entry['ref']])
+                    elif entry['type'] == 'table':
+                        from .native_table import compile_table
+                        table = next(t for t in comp['tables'] if t['id'] == entry['ref'])
+                        try:
+                            rendered = compile_table(table, entry['bbox'], font_paths, theme, preserve_terms)
+                        except LayoutTreeError as error:
+                            error.detail['component'] = entry['component']
+                            raise
+                        elements.append(rendered)
+                        issues.append(issue('TABLE_CONTENT_REVIEW', 'REVIEW',
+                            'Confirm every table value, scientific term, unit and source reference.', n, rendered['id'],
+                            detector='scientific-review', confidence='MEDIUM'))
+                        if any(c.get('measured_exact') is False for c in rendered['cells']):
+                            issues.append(issue('FORMULA_MEASURE_APPROXIMATE', 'REVIEW',
+                                'Native table formulas use conservative structural metrics; verify cell bounds in PowerPoint.',
+                                n, rendered['id'], detector='geometric-preflight', confidence='LOW', font_metrics='heuristic'))
+                        if rendered.get('scientific_text_overflow'):
+                            issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                                'Native table retains complete scientific terminology beyond its nominal region.',
+                                n, rendered['id'], detector='geometric-preflight'))
                     for element in elements[first:]:
                         element.update(layout_component=entry['component'], layout_region=entry['bbox'])
                         ex, ey, ew, eh = element['bbox']

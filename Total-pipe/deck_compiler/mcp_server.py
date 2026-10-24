@@ -53,12 +53,14 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
     'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
-    'composition.layout_tree version 1.0 reuses the compiler body frame; columns/stack/panel/image_grid '
-    'contain block/figure/graphic references exactly once, with no page coordinates. '
-    'RPA search_sublayouts/compose_sublayout propose structure; the compiler measures every child. '
+    'composition.layout_tree versions 1.0/1.1 reuse the compiler body frame; columns/stack/panel/image_grid '
+    'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
+    'native table references to composition.tables, including merged headers and formula/matrix cells. '
+    'RPA search_sublayouts/compose_sublayout and automatic plan_sublayout propose structure; the compiler measures every child. '
     'Read layout_feedback.json for component paths, required/available sizes and replan actions. '
     'Keep deck academic_design; tree pages do not also carry a flat visual_plan. '
-    'No arbitrary table renderer is supported by this tree version.')
+    'Native tables enforce logical grid coverage, source evidence and an 18 pt font floor; '
+    'pure-text overflow preserves terms as REVIEW, formula tables must fit.')
 
 
 def capability_handler(arguments):

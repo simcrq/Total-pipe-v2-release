@@ -4,11 +4,12 @@ from dataclasses import dataclass
 import math
 import re
 
-VERSION = '1.0'
+VERSION = '1.1'
+VERSIONS = ('1.0', '1.1')
 MAX_DEPTH = 6
 MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
-LEAVES = ('block', 'figure', 'graphic')
+LEAVES = ('block', 'figure', 'graphic', 'table')
 GAPS = {'compact': 12., 'standard': 24., 'spacious': 32.}
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
@@ -16,11 +17,12 @@ IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
 def capabilities():
     return {'contract': 'totalpipe.layout-tree', 'version': VERSION,
+            'supported_versions': list(VERSIONS),
             'regions': ['body'], 'containers': list(CONTAINERS), 'leaves': list(LEAVES),
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
-                       'max_graphics': 8, 'max_grid_figures': 12},
+                       'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
-            'native': ['native_equation', 'native_flowchart', 'native_bezier'],
+            'native': ['native_equation', 'native_flowchart', 'native_bezier', 'native_table'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'legacy_flat_ir': True}
 
@@ -45,7 +47,7 @@ def validate_tree(tree, composition):
         errors.append(f'{path}: {message}')
     if not isinstance(tree, dict) or set(tree) != {'version', 'regions'}:
         return ['layout_tree requires only version and regions']
-    if tree.get('version') != VERSION:
+    if tree.get('version') not in VERSIONS:
         fail('layout_tree.version', f'unsupported version; expected {VERSION}')
     regions = tree.get('regions')
     if not isinstance(regions, dict) or set(regions) != {'body'}:
@@ -74,6 +76,8 @@ def validate_tree(tree, composition):
             fields |= {'title', 'body', 'padding', 'gap'}
         elif kind in LEAVES:
             fields |= {'ref'}
+            if kind == 'table' and tree.get('version') != '1.1':
+                fail(path, 'native tables require layout_tree version 1.1')
         else:
             fail(path, f'unsupported node type {kind!r}')
             return
@@ -121,6 +125,9 @@ def validate_tree(tree, composition):
     graphics = composition.get('graphics', [])
     expected += [('graphic', g['id']) for g in (graphics if isinstance(graphics, list) else [])
                  if isinstance(g, dict) and isinstance(g.get('id'), str)]
+    tables = composition.get('tables', [])
+    expected += [('table', t['id']) for t in (tables if isinstance(tables, list) else [])
+                 if isinstance(t, dict) and isinstance(t.get('id'), str)]
     actual = Counter(references)
     for key in expected:
         if actual[key] != 1:
@@ -165,6 +172,7 @@ class RegionCompiler:
         self.preserve = preserve_terms
         self.blocks = {b['id']: b for b in composition['blocks']}
         self.graphics = {g['id']: g for g in composition.get('graphics', [])}
+        self.tables = {t['id']: t for t in composition.get('tables', [])}
         self.cache = {}
         self.entries = []
 
@@ -263,6 +271,15 @@ class RegionCompiler:
                     'Scientific image cannot reach its existing panel floor without cropping.',
                     [required_w, height], available, ['widen_region', 'reduce_grid_columns', 'split_slide'])
             need = Need(height, max(height, width*asset['height']/asset['width']+caption+12), required_w)
+        elif kind == 'table':
+            from .native_table import measure_table
+            table = self.tables[node['ref']]
+            plan = measure_table(table, width, self.fonts)
+            if plan['min_width'] > width+.1:
+                raise LayoutTreeError(path, 'INSUFFICIENT_TABLE_SPACE', 'Native table cells need a wider region.',
+                    [plan['min_width'], plan['height']], available, ['widen_region', 'split_table_or_slide'])
+            soft = self.preserve and not any(c.get('kind') == 'formula' for c in table['cells'])
+            need = Need(46. if soft else plan['height'], plan['height'], plan['min_width'])
         elif kind == 'graphic':
             graphic = self.graphics[node['ref']]
             height = self.graphic_height(graphic, width, path, available)
@@ -308,7 +325,8 @@ class RegionCompiler:
         kind, gap = node['type'], GAPS[node.get('gap', 'standard')]
         if height < need.hard-.1:
             code = {'block': 'INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
-                    else 'INSUFFICIENT_TEXT_SPACE', 'figure': 'INSUFFICIENT_FIGURE_SPACE'}.get(kind, 'INSUFFICIENT_DRAWING_SPACE')
+                    else 'INSUFFICIENT_TEXT_SPACE', 'figure': 'INSUFFICIENT_FIGURE_SPACE',
+                    'table': 'INSUFFICIENT_TABLE_SPACE'}.get(kind, 'INSUFFICIENT_DRAWING_SPACE')
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
                                   [width, need.hard], [width, height])
         self.entries.append({'component': path, 'node_id': node['id'], 'type': kind, 'bbox': list(box),
@@ -369,5 +387,5 @@ class RegionCompiler:
 def compile_regions(composition, region, assets, fonts, theme, preserve_terms=False):
     compiler = RegionCompiler(composition, assets, fonts, theme, preserve_terms)
     compiler.allocate(composition['layout_tree']['regions']['body'], list(region), 'body')
-    return {'version': VERSION, 'regions': {'body': list(region)}, 'nodes': compiler.entries,
+    return {'version': composition['layout_tree']['version'], 'regions': {'body': list(region)}, 'nodes': compiler.entries,
             'reading_order': [e['node_id'] for e in compiler.entries if e['type'] in LEAVES]}

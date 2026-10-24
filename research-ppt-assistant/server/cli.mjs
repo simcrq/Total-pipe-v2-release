@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises";
 import { searchSublayouts, composeSublayout } from "./sublayouts.mjs";
+import { planSublayout } from "./automatic-sublayouts.mjs";
 import { assertSupportedNodeVersion } from "./runtime.mjs";
 import { runBenchmark } from "./benchmark.mjs";
 import { normalizeContentModel } from "./content-model.mjs";
@@ -98,6 +99,7 @@ Usage:
   node server/cli.mjs get RM-DUAL_FIGURE-01 --theme-id paper_blue
   node server/cli.mjs search-sublayouts --file sublayout-search.json
   node server/cli.mjs compose-sublayout --file sublayout-request.json
+  node server/cli.mjs plan-sublayout --file automatic-sublayout-request.json
   node server/cli.mjs normalize-content --file content-model-input.json
   node server/cli.mjs plan --presentation-type group_meeting --slide-count 12 --topic "研究进展"
   node server/cli.mjs plan --presentation-type group_meeting --allow-auto-split false --max-replan-attempts 3
@@ -125,6 +127,7 @@ const COMMAND_TOOL_NAMES = {
   search: "search_layouts",
   "search-sublayouts": "search_sublayouts",
   "compose-sublayout": "compose_sublayout",
+  "plan-sublayout": "plan_sublayout",
   get: "get_layout",
   "normalize-content": "normalize_content",
   plan: "create_deck_plan",
@@ -166,6 +169,9 @@ async function main() {
       break;
     case "compose-sublayout":
       result = composeSublayout(await readInput(commandOptions));
+      break;
+    case "plan-sublayout":
+      result = planSublayout(await readInput(commandOptions));
       break;
     case "get":
       result = await getLayout(positionals[1] ?? commandOptions.layout_id, commandOptions.theme_id, commandOptions.viewing_mode);

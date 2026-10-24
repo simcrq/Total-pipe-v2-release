@@ -91,6 +91,11 @@ def verify(path, layout):
                         add('NOTES_MISMATCH', 'Speaker notes differ from compiled layout', n)
                 shapes = root.findall('p:cSld/p:spTree/p:sp', NS)
                 actual = {s.find('p:nvSpPr/p:cNvPr', NS).get('name'): s for s in shapes}
+                table_frames = [f for f in root.findall('p:cSld/p:spTree/p:graphicFrame', NS)
+                                if f.find('a:graphic/a:graphicData/a:tbl', NS) is not None]
+                actual_tables = {f.find('p:nvGraphicFramePr/p:cNvPr', NS).get('name'): f for f in table_frames}
+                if sorted(actual_tables) != sorted(e['id'] for e in slide['elements'] if e['kind'] == 'table') or len(actual_tables) != len(table_frames):
+                    add('TABLE_OBJECT_MISMATCH', 'Native table names/count differ from compiled layout', n)
                 connectors = root.findall('p:cSld/p:spTree/p:cxnSp', NS)
                 actual_connectors = {s.find('p:nvCxnSpPr/p:cNvPr', NS).get('name'): s for s in connectors}
                 planned = {e['id']: e for e in slide['elements']}
@@ -111,6 +116,21 @@ def verify(path, layout):
                 boxes = []
                 routed, native_nodes, native_paths = [], [], []
                 for e in slide['elements']:
+                    if e['kind'] == 'table':
+                        frame = actual_tables.get(e['id'])
+                        if frame is None:
+                            add('TABLE_MISSING', 'Expected native DrawingML table absent', n, e['id'])
+                            continue
+                        xf = frame.find('p:xfrm', NS)
+                        off, ext = xf.find('a:off', NS), xf.find('a:ext', NS)
+                        box = [int(off.get('x'))/EMU, int(off.get('y'))/EMU, int(ext.get('cx'))/EMU, int(ext.get('cy'))/EMU]
+                        if any(abs(a-b) > .2 for a, b in zip(box, e['bbox'])):
+                            add('TABLE_GEOMETRY_MISMATCH', 'Native table bounds differ from layout', n, e['id'])
+                        table = frame.find('a:graphic/a:graphicData/a:tbl', NS)
+                        if _math_signature(table) != _math_signature(ET.fromstring(e['table_xml'])):
+                            add('TABLE_CONTENT_MISMATCH', 'Native table cells, merges, text, math or style differ from layout', n, e['id'])
+                        boxes.append((e['id'], box))
+                        continue
                     if e['kind'] == 'connector':
                         connector = actual_connectors.get(e['id'])
                         if connector is None:

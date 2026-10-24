@@ -1,0 +1,297 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "native-table-regression",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none",
+      "header_variant": "compact",
+      "type_scale": "compact"
+    }
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "merged-table",
+      "semantic": {
+        "title": "原生科研表格：多级表头、合并单元格与矩阵",
+        "purpose": "验证复合区域中内容完整性与原生对象边界",
+        "takeaway": "所有文字和数学表达式保留在可编辑的 PowerPoint 原生表格中。",
+        "evidence_refs": [
+          "fixture:composite-regions"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归用数学示例；不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [],
+        "figure_refs": [],
+        "tables": [
+          {
+            "id": "methods",
+            "row_count": 4,
+            "column_count": 4,
+            "header_rows": 2,
+            "column_weights": [
+              1.3,
+              1.3,
+              1.3,
+              1.8
+            ],
+            "origin": "generated",
+            "cells": [
+              {
+                "id": "cell-0-0",
+                "row": 0,
+                "column": 0,
+                "text": "数值求解方法",
+                "kind": "text",
+                "row_span": 2
+              },
+              {
+                "id": "cell-0-1",
+                "row": 0,
+                "column": 1,
+                "text": "数学关系",
+                "kind": "text",
+                "column_span": 2
+              },
+              {
+                "id": "cell-0-3",
+                "row": 0,
+                "column": 3,
+                "text": "适用条件与算例边界",
+                "kind": "text",
+                "row_span": 2
+              },
+              {
+                "id": "cell-1-1",
+                "row": 1,
+                "column": 1,
+                "text": "矩阵分解关系",
+                "kind": "text"
+              },
+              {
+                "id": "cell-1-2",
+                "row": 1,
+                "column": 2,
+                "text": "原生矩阵单元格",
+                "kind": "text"
+              },
+              {
+                "id": "cell-2-0",
+                "row": 2,
+                "column": 0,
+                "text": "平方根法（Cholesky 分解）",
+                "kind": "text"
+              },
+              {
+                "id": "cell-2-1",
+                "row": 2,
+                "column": 1,
+                "text": "A=LL^{T}",
+                "kind": "formula"
+              },
+              {
+                "id": "cell-2-2",
+                "row": 2,
+                "column": 2,
+                "text": "L=\\begin{bmatrix}2&0\\\\1&2\\end{bmatrix}",
+                "kind": "formula"
+              },
+              {
+                "id": "cell-2-3",
+                "row": 2,
+                "column": 3,
+                "text": "对称正定矩阵；平方根与转置运算保留完整含义。",
+                "kind": "text"
+              },
+              {
+                "id": "cell-3-0",
+                "row": 3,
+                "column": 0,
+                "text": "改进平方根法（LDLᵀ 分解）",
+                "kind": "text"
+              },
+              {
+                "id": "cell-3-1",
+                "row": 3,
+                "column": 1,
+                "text": "A=L_0DL_0^{T}",
+                "kind": "formula"
+              },
+              {
+                "id": "cell-3-2",
+                "row": 3,
+                "column": 2,
+                "text": "D=\\begin{bmatrix}4&0\\\\0&4\\end{bmatrix}",
+                "kind": "formula"
+              },
+              {
+                "id": "cell-3-3",
+                "row": 3,
+                "column": 3,
+                "text": "此处仅展示对称正定算例，未涉及主元交换。",
+                "kind": "text"
+              }
+            ]
+          }
+        ],
+        "layout_tree": {
+          "version": "1.1",
+          "regions": {
+            "body": {
+              "id": "table-ref",
+              "type": "table",
+              "ref": "methods"
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "table-in-two-panels",
+      "semantic": {
+        "title": "公式表格与正文在子区域内混排",
+        "purpose": "验证复合区域中内容完整性与原生对象边界",
+        "takeaway": "根号、指数与矩阵继续使用可编辑的原生公式。",
+        "evidence_refs": [
+          "fixture:composite-regions"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件回归用数学示例；不建立新的科学结论。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "figure_refs": [],
+        "blocks": [
+          {
+            "id": "context",
+            "component": "body",
+            "text": "先按单元格中的完整数学结构测量需求，再分配左侧表格与右侧解释区域。公式不经过普通文本换行。"
+          },
+          {
+            "id": "check",
+            "component": "formula",
+            "text": "q(0)=\\sqrt{2}",
+            "anchor": "context"
+          }
+        ],
+        "tables": [
+          {
+            "id": "operators",
+            "row_count": 3,
+            "column_count": 2,
+            "header_rows": 1,
+            "column_weights": [
+              1,
+              2.7
+            ],
+            "origin": "generated",
+            "cells": [
+              {
+                "id": "h-operation",
+                "row": 0,
+                "column": 0,
+                "text": "数学运算"
+              },
+              {
+                "id": "h-formula",
+                "row": 0,
+                "column": 1,
+                "text": "完整原生公式"
+              },
+              {
+                "id": "radical-label",
+                "row": 1,
+                "column": 0,
+                "text": "根号与分式"
+              },
+              {
+                "id": "radical",
+                "row": 1,
+                "column": 1,
+                "kind": "formula",
+                "text": "q(t)=\\sqrt{\\frac{1+e^{-t}}{1+t^{2}}}"
+              },
+              {
+                "id": "matrix-label",
+                "row": 2,
+                "column": 0,
+                "text": "矩阵与指数"
+              },
+              {
+                "id": "matrix",
+                "row": 2,
+                "column": 1,
+                "kind": "formula",
+                "text": "M=\\begin{pmatrix}x^{2}&\\sqrt{y}\\\\0&1\\end{pmatrix}"
+              }
+            ]
+          }
+        ],
+        "layout_tree": {
+          "version": "1.1",
+          "regions": {
+            "body": {
+              "id": "body-columns",
+              "type": "columns",
+              "weights": [
+                2.1,
+                1
+              ],
+              "children": [
+                {
+                  "id": "table-panel",
+                  "type": "panel",
+                  "title": "完整运算结构",
+                  "body": {
+                    "id": "table-leaf",
+                    "type": "table",
+                    "ref": "operators"
+                  }
+                },
+                {
+                  "id": "explanation-panel",
+                  "type": "panel",
+                  "title": "测量与数值核对",
+                  "body": {
+                    "id": "explanation-stack",
+                    "type": "stack",
+                    "gap": "compact",
+                    "children": [
+                      {
+                        "id": "context-leaf",
+                        "type": "block",
+                        "ref": "context"
+                      },
+                      {
+                        "id": "check-leaf",
+                        "type": "block",
+                        "ref": "check"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "presentation": {}
+    }
+  ]
+}

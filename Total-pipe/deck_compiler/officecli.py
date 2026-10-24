@@ -21,7 +21,7 @@ def _color(value):
     return value.lstrip('#') if value and value != 'none' else 'none'
 
 
-def preflight(executable='officecli', connectors=False):
+def preflight(executable='officecli', connectors=False, tables=False):
     """Pin the minimum tested CLI and verify its schema before writing a deck."""
     version = subprocess.run([executable, '--version'], capture_output=True, text=True,
                              encoding='utf-8', errors='replace', timeout=15)
@@ -42,6 +42,8 @@ def preflight(executable='officecli', connectors=False):
         required['connector'] = {key: 'add' for key in (
             'x', 'y', 'width', 'height', 'name', 'shape', 'from', 'to',
             'fromIdx', 'toIdx', 'color', 'lineWidth', 'headEnd', 'tailEnd')}
+    if tables:
+        required['table'] = {key: 'add' for key in ('x', 'y', 'width', 'height', 'rows', 'cols', 'name')}
     schemas = {}
     for element, props in required.items():
         response = subprocess.run([executable, 'help', 'pptx', element, '--json'],
@@ -110,6 +112,13 @@ def commands(layout):
             x, y, w, h = element['bbox']
             props = {'x': _px(x), 'y': _px(y), 'width': _px(w), 'height': _px(h)}
             kind = element['kind']
+            if kind == 'table':
+                props.update(name=element['id'], rows=str(element['row_count']), cols=str(element['column_count']))
+                result.append({'command': 'add', 'parent': parent, 'type': 'table', 'props': props})
+                result.append({'command': 'raw-set', 'part': parent,
+                    'xpath': f"//p:graphicFrame[p:nvGraphicFramePr/p:cNvPr[@name='{element['id']}']]/a:graphic/a:graphicData/a:tbl",
+                    'action': 'replace', 'xml': element['table_xml']})
+                continue
             if kind == 'image':
                 asset = layout['assets'][element['asset_id']]
                 props.update({'name': element['id'], 'src': asset['path'],

@@ -125,6 +125,10 @@ def validate(ir):
                 check(not pres.get(key), f'Use deck academic_design instead of per-slide {key}',
                       n, 'ACADEMIC_DESIGN_INVALID')
         has_tree = 'layout_tree' in comp
+        from .native_table import validate_tables
+        for message in validate_tables(comp.get('tables', []), sem.get('evidence_refs', [])):
+            check(False, message, n, 'TABLE_INVALID')
+        check(not comp.get('tables') or has_tree, 'Native tables require a region tree', n, 'TABLE_INVALID')
         check(archetype != 'composite-research' or has_tree,
               'composite-research requires composition.layout_tree', n, 'LAYOUT_TREE_INVALID')
         if has_tree:
@@ -323,7 +327,8 @@ def derive(ir, layout):
         "visual_manifest.json": {**provenance, "visuals": [{"slide_id": s["id"], **f}
             for s in ir["slides"] for f in s["composition"]["figure_refs"]],
             "graphics": [{"slide_id": s["id"], **g} for s in ir["slides"]
-                         for g in s["composition"].get("graphics", [])]},
+                         for g in s["composition"].get("graphics", [])],
+            "tables": [{"slide_id": s['id'], **t} for s in ir['slides'] for t in s['composition'].get('tables', [])]},
         "plan_to_layout.json": {**provenance, "deck_frame_variant": layout.get("deck_frame_variant"),
             **({'academic_design': layout['academic_design']} if layout.get('academic_design') else {}),
             "slides": [{"slide_id": s["id"], "elements": s["elements"],

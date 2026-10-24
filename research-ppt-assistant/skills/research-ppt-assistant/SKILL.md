@@ -84,14 +84,22 @@ Prefer these semantic roles when applicable: `headline`, `body_text`, `primary_v
 
 ## Rendering boundary and QA
 
-For a mixed body region, retain the existing whole-slide plan and use search_sublayouts / compose_sublayout
+For a mixed body region, retain the existing whole-slide plan and use search_sublayouts / compose_sublayout, or automatic plan_sublayout,
 with fresh consumer_capabilities from the Deck Compiler. Supply canonical content_refs and explicit groups;
-merge only the returned composition_patch into the canonical slide. Every block, figure and graphic must
+merge only the returned composition_patch into the canonical slide. Every block, figure, graphic and table must
 occur once, and an equation stays with its preceding explanation anchor. No page coordinates are emitted.
 structure_planned requires compiler measurement; inspect layout_feedback.json before rendering. Missing
-capabilities require legacy layout planning. create_deck_plan does not automatically select body trees.
+capabilities require legacy layout planning. create_deck_plan accepts optional body_compositions [{slide_id, request}]
+to run automatic selection for those canonical slide IDs; unknown or duplicate IDs require replanning.
+Optional group requirements and body_size_px are measured size demands, never positions. The compiler owns final fit.
+For feedback-based repair, pass the current full IR ir_sha256, matching compiler_feedback and rejected_sublayout_ids.
+Reject stale feedback, preserve all references, and bound caller-controlled compile/replan to three rounds.
 Keep the full scientific content model and existing Evidence gates. Source image dimensions and crop_allowed
-are metadata, not authorization to crop a scientific image. Complex tables are not part of tree v1.0.
+are metadata, not authorization to crop a scientific image. Native tables require tree v1.1, table leaves and
+native_table; formula cells also require native_equation. content_refs.tables declares id/has_formulas.
+Tables support complete merged grids, multirow headers and formula/matrix cells; retain source evidence and units.
+The compiler measures at an 18 pt floor. Pure-text overflow can retain terms as REVIEW, formula tables must fit.
+Existing v1.0 trees and whole-slide plans remain supported. See Total-pipe/docs/native-tables.md in the monorepo.
 
 Keep OCR and source extraction upstream. Accept PaperWorkflow output as an in-memory object only; do not invoke its Python/PDF handlers or read its artifact paths on behalf of the normalizer.
 

@@ -64,9 +64,27 @@ test("MCP stdio server initializes, lists tools, and calls content/layout tools"
   const listed = await request("tools/list");
   assert.deepEqual(
     listed.result.tools.map((tool) => tool.name),
-    ["catalog_summary", "audit_layout_library", "run_benchmark", "normalize_content", "search_layouts", "search_sublayouts", "compose_sublayout", "get_layout", "create_deck_plan", "validate_slide", "validate_deck_plan", "run_preflight", "validate_renderer_inputs", "run_visual_fit_preflight", "run_group_fit_preflight", "run_figure_placement", "assemble_render_telemetry", "evaluate_visual_quality", "validate_rendered_slide", "validate_rendered_deck"],
+    ["catalog_summary", "audit_layout_library", "run_benchmark", "normalize_content", "search_layouts", "search_sublayouts", "compose_sublayout", "plan_sublayout", "get_layout", "create_deck_plan", "validate_slide", "validate_deck_plan", "run_preflight", "validate_renderer_inputs", "run_visual_fit_preflight", "run_group_fit_preflight", "run_figure_placement", "assemble_render_telemetry", "evaluate_visual_quality", "validate_rendered_slide", "validate_rendered_deck"],
   );
   assert.ok(listed.result.tools.every((tool) => tool.inputSchema.properties.detail_level.enum.includes("compact")));
+
+  const bodyRequest = {
+    consumer_capabilities: { layout_tree: { contract: 'totalpipe.layout-tree', version: '1.0', regions: ['body'],
+      containers: ['columns', 'stack', 'panel', 'image_grid'], leaves: ['block', 'figure', 'graphic'],
+      native: [], graphic_types: [], limits: { max_depth: 6, max_nodes: 64, max_columns: 4, max_graphics: 8, max_grid_figures: 12 } } },
+    groups: [{ id: 'body', title: '完整科学术语', items: [{ kind: 'block', ref: 'context' }] }],
+    content_refs: { blocks: [{ id: 'context', component: 'body' }], figure_count: 0, graphics: [] },
+  };
+  const bodyPlan = await request('tools/call', { name: 'plan_sublayout', arguments: bodyRequest });
+  assert.equal(bodyPlan.result.isError, false);
+  assert.equal(bodyPlan.result.structuredContent.status, 'structure_planned');
+  const integratedBodyPlan = await request('tools/call', { name: 'create_deck_plan', arguments: {
+    presentation_type: 'custom', slide_briefs: [{ slide_id: 'SLIDE0001', title: '完整科研内容', category_hint: 'summary' }],
+    body_compositions: [{ slide_id: 'SLIDE0001', request: bodyRequest }],
+  } });
+  assert.equal(integratedBodyPlan.result.isError, false);
+  assert.equal(integratedBodyPlan.result.structuredContent.body_composition.status, 'structure_planned');
+  assert.equal(integratedBodyPlan.result.structuredContent.slides[0].body_layout.composition_patch.layout_tree.version, '1.0');
 
   const layoutAudit = await request("tools/call", { name: "audit_layout_library", arguments: {} });
   assert.equal(layoutAudit.result.isError, false);

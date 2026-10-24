@@ -78,6 +78,7 @@ function compactDeckPlan(payload) {
     theme_id: payload.theme?.id ?? payload.theme_id,
     requested_slide_count: payload.requested_slide_count,
     slide_count: payload.slide_count ?? payload.slides?.length ?? 0,
+    ...(payload.body_composition ? { body_composition: payload.body_composition } : {}),
     content_model: payload.content_model ? {
       schema_version: payload.content_model.schema_version,
       status: payload.content_model.status,
@@ -94,6 +95,7 @@ function compactDeckPlan(payload) {
       category: slide.category,
       layout_id: slide.layout_id,
       ...(slide.layout_contract ? { layout_contract: slide.layout_contract } : {}),
+      ...(slide.body_layout ? { body_layout: slide.body_layout } : {}),
       visual_treatment: slide.visual_treatment,
       decoration_profile: slide.decoration_profile?.id,
       aesthetic_score: slide.aesthetic_score?.score,

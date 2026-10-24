@@ -31,6 +31,23 @@ Paper / PaperWorkflow / Evidence
 RPA 输出的是规划和质量判断，不是最终页面几何。若使用 Total-pipe，需把 RPA 的
 语义与设计意图映射到 canonical `deck_ir.json`，再由 Deck Compiler 生成 PPTX。
 
+## 复合正文区域
+
+保留整页模板，使用 `search_sublayouts/compose_sublayout` 手工组合，或 `plan_sublayout` 自动选择
+双栏/三栏/四栏 Panel、纵向组或图片网格。输入是完整 groups、canonical content_refs 和新查询的
+Deck Compiler consumer_capabilities；输出 composition_patch，不写页面坐标。
+整页 `create_deck_plan` 的可选 body_compositions[{slide_id, request}] 接入同一自动选择过程，
+compact 也保留完整树。规范化后的实际 slide ID 必须匹配；失败返回 needs_replan。
+
+支持可选组尺寸下界、body_size_px、绑定当前 ir_sha256 的 compiler_feedback 及 rejected_sublayout_ids。
+结构成功仍要求编译器测量；RPA 不调用编译器，不改写科学术语或删除不能容纳的组。
+原生表格引用需声明 tree 1.1 / native_table，公式格另需 native_equation；旧消费者明确回退。
+详见 [复合区域协议](../Total-pipe/docs/composite-layouts.md) 和 [原生表格协议](../Total-pipe/docs/native-tables.md)。
+
+```bash
+node server/cli.mjs plan-sublayout --file automatic-sublayout-request.json
+```
+
 ## 运行要求
 
 - Node.js 22 或更高版本；

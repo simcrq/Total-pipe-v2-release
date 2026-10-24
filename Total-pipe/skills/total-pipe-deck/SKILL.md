@@ -161,17 +161,26 @@ Path 仅接受局部 view_box 与绝对 M/L/C/Q/Z，输出原生 custGeom；不�
 ### 可选的复合内容区域
 
 复杂混排需要子布局时，读 `Total-pipe/docs/composite-layouts.md`，先查询 totalpipe_capabilities
-（CLI：`python -m deck_compiler capabilities`）。再用 RPA search_sublayouts/compose_sublayout 选择结构，
+（CLI：`python -m deck_compiler capabilities`）。再用 RPA search_sublayouts/compose_sublayout 手工选择，
+或 plan_sublayout 自动选型；整页规划可传 body_compositions[{slide_id, request}]。
+request 提交完整 canonical groups/content_refs 和新查询的消费者能力；不从 compact 摘要恢复内容。
 把 composition_patch 合入 canonical slide。缺少能力则沿用旧整页布局，不以 compact slot 文本重写正文。
 
-composition.layout_tree 版本 1.0 支持 columns/stack/panel/image_grid，最多 6 层、64 节点。
-叶节点引用 block ID、figure_refs 零基索引或 graphic ID，每项恰好一次。显式 anchor 的公式与解释
+composition.layout_tree 1.0/1.1 支持 columns/stack/panel/image_grid，最多 6 层、64 节点。
+叶节点引用 block ID、figure_refs 零基索引、graphic ID，1.1 另支持 table ID；每项恰好一次。显式 anchor 的公式与解释
 在同一 stack、解释在前。不写页面坐标，不裁剪原图，不缩小图形绕过字号下限。树页仍需要整套
 academic_design，不再叠加 visual_plan/visual_intent。structure_planned 不能当成几何通过。
 
 编译后读 layout_feedback.json 的 slide_id、component、所需/实际尺寸和 suggested_actions，带原始完整
-内容回 RPA 调整结构。最多自主修订三次；同一问题仍存在则保留失败并向用户说明所缺空间，
-不继续无界循环或删改科学内容。复杂表格尚不受该树协议支持。
+内容回 RPA 调整结构。plan_sublayout 接收当前 ir_sha256 和 compiler_feedback，哈希必须绑定完整 IR，
+并传 rejected_sublayout_ids 排除已失败结构。未知/重复 slide_id、过期反馈、无合法候选均需重规划。
+最多自主修订三次；同一问题仍存在则保留失败并向用户说明所缺空间，不继续无界循环或删改科学内容。
+
+原生科研表格读 `Total-pipe/docs/native-tables.md`。composition.tables 保存完整 cells，支持多级表头、
+row_span/column_span 及 formula/矩阵格；每个逻辑位置必须恰好覆盖一次，不自动补零或推断数据。
+paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最多 32 行/12 列；字体下限 18 pt。
+纯文字表格超容量按 preserve-terms 保留 REVIEW；含公式表格尺寸不足需加宽或拆页。
+始终保留 TABLE_CONTENT_REVIEW 与近似公式测量审核，原生 PPTX/PDF 必须检查合并表头、公式及单位。
 
 ### 公式：必须走公式组件
 

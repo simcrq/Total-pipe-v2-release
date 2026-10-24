@@ -188,7 +188,8 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                 if file_hash(Path(asset['path'])) != asset['sha256']:
                     raise ValueError('Asset changed since compilation')
             officecli_runtime = officecli.preflight(officecli_executable, connectors=any(
-                e['kind'] == 'connector' for s in layout['slides'] for e in s['elements']))
+                e['kind'] == 'connector' for s in layout['slides'] for e in s['elements']), tables=any(
+                e['kind'] == 'table' for s in layout['slides'] for e in s['elements']))
             command_path = officecli.render(out/'layout.json', out/'candidate.pptx', officecli_executable)
             command_sha256 = file_hash(command_path)
             render_count = 1
