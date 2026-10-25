@@ -3,4 +3,4 @@ from pathlib import Path
 
 COMPONENT = Path(__file__).resolve().parents[1]
 ROOT = COMPONENT.parent
-VERSION = '1.0.0'
+VERSION = '1.0.1'

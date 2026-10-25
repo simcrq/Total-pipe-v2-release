@@ -183,6 +183,36 @@ def check_ir(value, normalized=None):
             for content in [brief.get('body', ''), *brief.get('key_points', [])]:
                 if content and ''.join(str(content).split()) not in corpus:
                     raise classify('CONTENT_LOSS', 'IR must retain each complete brief body and key_point in page text or speaker notes.', 'deck_ir')
+        for brief in normalized.get('slide_briefs', []):
+            compact = (brief.get('metadata') or {}).get('story_compact_process')
+            if not isinstance(compact, dict):
+                continue
+            items = [str(item) for item in compact.get('items', []) if str(item).strip()]
+            node_count = compact.get('node_count') or len(items)
+            if len(items) < 6:
+                continue
+            carried = False
+            for page in value['slides']:
+                for graphic in page.get('composition', {}).get('graphics', []) or []:
+                    if not isinstance(graphic, dict) or graphic.get('type') != 'process' \
+                            or graphic.get('layout') != 'compact':
+                        continue
+                    nodes = [node for node in graphic.get('nodes', []) if isinstance(node, dict)]
+                    if len(nodes) < node_count:
+                        continue
+                    titles = ''.join(''.join(str(node.get(key, '')).split())
+                                     for node in nodes for key in ('title', 'body'))
+                    if all(''.join(item.split()) in titles for item in items):
+                        carried = True
+                        break
+                if carried:
+                    break
+            if not carried:
+                raise classify(
+                    'CONTENT_LOSS',
+                    f'Story declared a {node_count}-step compact process, but the IR has no type=process/'
+                    'layout=compact graphic carrying every step; replace the RPA three-slot placeholder.',
+                    'deck_ir')
 
 
 def import_ir(source, destination):

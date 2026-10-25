@@ -29,6 +29,27 @@ class AdapterTests(AgentCase):
         with self.assertRaises(a.Failure):
             a.check_story(prompt, bad, workflow())
 
+    def test_compact_process_metadata_must_be_carried_into_ir(self):
+        ir = json.loads((a.COMPONENT/'examples/native-graphic.deck_ir.json').read_text(encoding='utf-8'))
+        page = ir['slides'][1]
+        page['id'] = 'compact-eight'
+        page['semantic']['evidence_refs'] = []
+        graphic = page['composition']['graphics'][0]
+        items = [f'Step {index}' for index in range(1, 9)]
+        graphic.update(layout='compact', direction='horizontal',
+                       nodes=[{'id': f'n{index}', 'title': item} for index, item in enumerate(items)],
+                       edges=[{'from': f'n{index}', 'to': f'n{index+1}'} for index in range(7)])
+        ir['slides'] = [page]
+        normalized = {'slide_briefs': [{'body': '', 'key_points': [], 'metadata': {
+            'story_compact_process': {'items': items, 'node_count': len(items)}}}], 'evidence': []}
+        a.check_ir(ir, normalized)
+
+        broken = json.loads(json.dumps(ir))
+        broken['slides'][0]['composition']['graphics'][0]['nodes'] = graphic['nodes'][:3]
+        broken['slides'][0]['composition']['graphics'][0]['edges'] = graphic['edges'][:2]
+        with self.assertRaisesRegex(a.Failure, 'compact process'):
+            a.check_ir(broken, normalized)
+
     def test_classification_targets_the_stage_that_can_repair_the_fault(self):
         for code, stage, target in [('KEY_POINTS_LOST','rpa','story'), ('SOURCE_TEXT_NOT_BOUND','deck_ir','deck_ir'),
                                       ('INSUFFICIENT_FORMULA_SPACE','build','deck_ir'),
