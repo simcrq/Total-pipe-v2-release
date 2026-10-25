@@ -53,6 +53,14 @@ class InfrastructureTests(unittest.TestCase):
         self.assertIsNone(fill(node))
     def test_text_floor(self):
         with self.assertRaises(ValueError): TextBoxContract('Arial', 18, '/font', font_floor=24)
+
+    def test_projected_caveat_stays_at_18pt(self):
+        ir = fixture()
+        ir['slides'] = ir['slides'][:1]
+        layout, _ = compile_deck(ir, ROOT)
+        caveat = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'caveats')
+        self.assertEqual(caveat['contract']['font_size'], 24)
+        self.assertGreaterEqual(caveat['contract']['font_floor'], 24)
     def test_concurrent_build_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             with locked(Path(d)):

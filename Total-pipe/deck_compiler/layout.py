@@ -37,7 +37,7 @@ DEFAULT_ACCENT = "#C2410C"
 # A caption strip is measured from the caption, not reserved at a fixed 62 px. A one-line caption in
 # a 692 px column needs 36 px; reserving 62 for it costs the picture 26 px on every page and was one
 # half of the "figure + caveat does not fit" dead end in the packer.
-CAPTION_FONT_SIZE = 22
+CAPTION_FONT_SIZE = 22  # captions may sit below the 18 pt body floor
 
 # One typographic scale, enforced instead of implied. Body copy, headings and labels are never set
 # below 18 pt; the annotation roles that support them (figure captions, caveats, step badges) are
@@ -736,7 +736,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 # dual-evidence slides, while keeping the caveat clear.
                 caveat_y, caveat_h = 622, 36
         if visible_caveats:
-            text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 20, 20, 2)
+            text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 24, 24, 2)
         top, bottom = body_region(slide, family, deck_frame, design, font_paths, preserve_terms)
         if takeaway_outer:
             top = max(top, takeaway_outer[1]+takeaway_outer[3]+20)

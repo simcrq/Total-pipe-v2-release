@@ -5,7 +5,7 @@
 
 **组件、当前版本和全流程入口见 [仓库 README](../README.md)。**
 插件清单版本为 `3.3.0+codex.20261021203000`；MCP 握手版本为 `3.2.0`，
-编译器 Python 模块仍声明 `2.3.1`。输入 Deck IR 为 `schema_version: "2.0"`，
+编译器 Python 模块仍声明 `2.3.2`。输入 Deck IR 为 `schema_version: "2.0"`，
 可选 layout tree 支持 `1.0 / 1.1 / 1.2`。这些版本属于不同对象。
 
 ## 入口与职责
