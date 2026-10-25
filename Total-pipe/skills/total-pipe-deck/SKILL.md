@@ -31,7 +31,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
 | 独立公式 `formula` | 展示式推导 | 过高会挤压正文 |
 | 原生表格 | 多材料/多条件对照 | ≤4 表/页、≤32 行 × 12 列、字号 ≥18 pt |
-| `process` | 3–4 步线性流程 | 节点数硬限制 3–4 |
+| `process` | 3–4 步线性流程 | 节点数硬限制 3–4；支持 `direction=vertical` 和横向 `layout=staggered`，节点可 `tone=emphasis`；纵向 4 步需短标题 |
 | `dag` | 分支、并行、汇合 | 同层节点高度必须塞进图形区，正文压到一两行才过 |
 | `path`（含 `C`/`Q` 贝塞尔） | 示意曲线、能带/势垒示意、自定义几何 | label 必须落在 `view_box` 内且够大；须标“示意图” |
 | `mechanism`/`architecture`/`funnel`/`composite` | 机制关系、层叠结构、筛选漏斗 | 关系必须显式声明，不推断 |

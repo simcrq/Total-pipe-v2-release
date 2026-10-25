@@ -1,10 +1,10 @@
 # 原生可编辑流程图
 
 Native Graphic v2（`feat/native-graphic-connectors`）支持独立的 `native-graphic` 页面：
-3–4 个横向节点、相邻节点间的原生连接符，
-以及独立的标题和正文文本框。图形区域使用现有页面 frame，内部由
-`deck_compiler/graphic_layout.py` 确定性布局，经现有 OfficeCLI 输出。
-没有新增渲染器或依赖。
+3–4 个节点、相邻节点间的原生连接符，以及独立的标题和正文文本框。
+`process` 现在支持横向链式、横向错位和纵向链式；节点可单独标 `tone` 强调。
+图形区域使用现有页面 frame，内部由 `deck_compiler/graphic_layout.py` 确定性布局，
+经现有 OfficeCLI 输出。没有新增渲染器或依赖。
 
 **编辑边界：** 节点形状、文字、关系标签、T 端帽和层容器仍是独立对象，没有 `p:grpSp` 编组。
 移动节点不会自动带走独立文字；连接符可能被 PowerPoint 重新布线。持久修改优先改 canonical IR
@@ -56,9 +56,16 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
 }
 ```
 
-- 节点按数组顺序从左到右排列。必须显式连接每对相邻节点，且恰好一次；
-  `kind` 可省略，当前只接受 `arrow`。不推断、补写或改变科学关系。
+- `direction` 支持 `horizontal`（默认，从左到右）和 `vertical`（从上到下）；
+  纵向链在正文区高度有限，3 步更稳，4 步请只用短标题或省略 `body`。
+- `layout` 支持 `chain`（默认）和 `staggered`；`staggered` 只用于横向，
+  相邻节点上下错开约 28 px，连接符使用三折弯头，便于在宽页上打破“一条直线”。
+- 节点按数组顺序排列；横向从左到右、纵向从上到下。必须显式连接每对相邻节点，
+  且恰好一次；`kind` 可省略，当前只接受 `arrow`。不推断、补写或改变科学关系。
 - `shape` 支持 `rect`、`rounded-rect`（默认）、`ellipse`、`diamond`、`hexagon`。
+  纵向链的 `hexagon` 使用最接近上/下顶点的连接点，不假装存在边中点。
+- 节点可带 `tone: "default" | "emphasis"`；`emphasis` 只加深主题色 tint 并加粗描边，
+  仍是同一套 theme，不是新的配色。用于标出结论步或关键分支。
 - `title` 必填，最多 80 字符；`body` 可省略，最多 180 字符。
   实际可容纳字数取决于形状和文本宽度；菱形内部空间较小。
 - 图形和节点 ID 使用 1–64 个英文字母、数字、连字符或下划线。

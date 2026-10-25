@@ -11,12 +11,17 @@ IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 # hexagon six; they do not share the rectangle's ordering.
 # https://github.com/apache/poi/blob/trunk/poi/src/main/resources/org/apache/poi/sl/draw/geom/presetShapeDefinitions.xml
 CONNECTION_SITES = {
-    'rect': {'right': 3, 'left': 1},
-    'roundRect': {'right': 3, 'left': 1},
-    'ellipse': {'right': 6, 'left': 2},
-    'diamond': {'right': 3, 'left': 1},
-    'hexagon': {'right': 0, 'left': 3},
+    'rect': {'right': 3, 'left': 1, 'top': 0, 'bottom': 2},
+    'roundRect': {'right': 3, 'left': 1, 'top': 0, 'bottom': 2},
+    'ellipse': {'right': 6, 'left': 2, 'top': 0, 'bottom': 4},
+    'diamond': {'right': 3, 'left': 1, 'top': 0, 'bottom': 2},
+    # A hexagon has vertices rather than top/bottom edge midpoints; the nearest
+    # upper/lower vertices keep a vertical chain editable without pretending a
+    # centre site exists.
+    'hexagon': {'right': 0, 'left': 3, 'top': 5, 'bottom': 2},
 }
+NODE_TONES = ('default', 'emphasis')
+PROCESS_LAYOUTS = ('chain', 'staggered')
 EMBEDDED_ARCHETYPES = frozenset({'process-flow', 'figure-parameters'})
 
 
@@ -54,13 +59,25 @@ def validate_graphics(graphics, archetype, region_tree=False):
     if graphic.get('type') in ('mechanism', 'architecture', 'funnel', 'path', 'composite'):
         from .graphic_components import validate_component
         return validate_component(graphic)
-    if set(graphic) - {'id', 'type', 'direction', 'nodes', 'edges'}:
+    if set(graphic) - {'id', 'type', 'direction', 'layout', 'nodes', 'edges'}:
         errors.append('Unknown graphic fields; geometry is computed by the compiler')
     if not isinstance(graphic.get('id'), str) or not IDENTIFIER.fullmatch(graphic['id']):
         errors.append('Graphic id must use 1-64 letters, digits, hyphens or underscores')
     kind = graphic.get('type')
-    if kind not in ('process', 'dag') or graphic.get('direction') != 'horizontal':
-        errors.append('Use type=process or dag, direction=horizontal')
+    direction = graphic.get('direction', 'horizontal')
+    layout = graphic.get('layout', 'chain')
+    if kind not in ('process', 'dag'):
+        errors.append('Use type=process or dag')
+    elif kind == 'dag' and direction != 'horizontal':
+        errors.append('A DAG uses direction=horizontal; use a vertical process for a top-down chain')
+    elif direction not in ('horizontal', 'vertical'):
+        errors.append('direction must be horizontal or vertical')
+    if kind == 'process' and layout not in PROCESS_LAYOUTS:
+        errors.append(f'layout must be one of {PROCESS_LAYOUTS}')
+    elif kind == 'dag' and layout != 'chain':
+        errors.append('A DAG uses layout=chain; staggered is a process layout')
+    elif layout == 'staggered' and direction != 'horizontal':
+        errors.append('staggered requires direction=horizontal')
     nodes = graphic.get('nodes')
     lower, upper = (1, 16) if kind == 'dag' else (3, 4)
     if not isinstance(nodes, list) or not lower <= len(nodes) <= upper:
@@ -71,7 +88,7 @@ def validate_graphics(graphics, archetype, region_tree=False):
         if not isinstance(node, dict):
             errors.append(prefix + 'must be an object')
             continue
-        if set(node) - {'id', 'shape', 'title', 'body'}:
+        if set(node) - {'id', 'shape', 'title', 'body', 'tone'}:
             errors.append(prefix + 'unknown fields; do not supply coordinates')
         nid = node.get('id')
         if not isinstance(nid, str) or not IDENTIFIER.fullmatch(nid):
@@ -81,6 +98,9 @@ def validate_graphics(graphics, archetype, region_tree=False):
         shape = node.get('shape', 'rounded-rect')
         if not isinstance(shape, str) or shape not in SHAPES:
             errors.append(prefix + f'unsupported shape; choose from {", ".join(SHAPES)}')
+        tone = node.get('tone', 'default')
+        if tone not in NODE_TONES:
+            errors.append(prefix + f'tone must be one of {NODE_TONES}')
         title = node.get('title')
         if not isinstance(title, str) or not title.strip() or len(title) > 80:
             errors.append(prefix + 'title must contain 1-80 characters')
@@ -218,16 +238,21 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None):
     foreground = theme.get('foreground', '#142735')
     background = theme.get('background', '#FFFFFF')
     # A restrained theme tint, computed once; the PPTX still carries a solid editable fill.
-    fill = '#' + ''.join(f'{round(int(accent[k:k+2], 16)*.08 + int(background[k:k+2], 16)*.92):02X}'
+    # `tone=emphasis` is a stronger tint plus a heavier rule, not a new palette.
+    tone = node.get('tone', 'default')
+    mix = .18 if tone == 'emphasis' else .08
+    fill = '#' + ''.join(f'{round(int(accent[k:k+2], 16)*mix + int(background[k:k+2], 16)*(1-mix)):02X}'
                          for k in (1, 3, 5))
     elements = []
     prefix = f"graphic:{graphic_id}:node:{node['id']}"
     metadata = {'graphic_id': graphic_id, 'node_id': node['id']}
+    if tone != 'default':
+        metadata['tone'] = tone
     geometry = SHAPES[node.get('shape', 'rounded-rect')]
     elements.append({'id': prefix, 'kind': 'shape', 'role': 'graphic-node',
                      'bbox': [nx, node_y, node_width, node_height],
                      'geometry': geometry, 'fill': fill, 'line': accent,
-                     'line_width': 2, **metadata})
+                     'line_width': 3.5 if tone == 'emphasis' else 2, **metadata})
     # A rectangle inside each preset's contour, including a diamond's sloping sides.
     sx, sy = {'diamond': (.5, .5), 'ellipse': (.66, .66),
               'hexagon': (.66, .76)}.get(geometry, (.84, .78))
@@ -259,17 +284,65 @@ def compile_graphic(graphic, region, theme, font_paths=None):
         return compile_dag(graphic, region, theme, font_paths)
     x, y, width, height = region
     count = len(graphic['nodes'])
-    gap = 64.0
-    node_width = (width - gap*(count-1))/count
-    node_height = min(272.0, height-32)
-    if node_width < 200 or node_height < 240:
-        raise ValueError('Process graphic needs at least 200 px per node and 272 px of height')
-    node_y = y + (height-node_height)/2
+    direction = graphic.get('direction', 'horizontal')
+    layout = graphic.get('layout', 'chain')
     accent = theme.get('accent', '#C2410C')
     elements = []
+
+    if direction == 'vertical':
+        gap = 20.0
+        node_height = (height-gap*(count-1))/count
+        # Keep a vertical flow readable as a column of cards; letting each node
+        # take the full body width turns ellipses and diamonds into flat bands.
+        node_width = min(width-32, 560.0)
+        if node_width < 240 or node_height < 84:
+            raise ValueError('Vertical process needs at least 240 px width and 84 px per node')
+        node_x = x+(width-node_width)/2
+        for index, node in enumerate(graphic['nodes']):
+            ny = y+index*(node_height+gap)
+            elements.extend(node_elements(graphic['id'], node, [node_x, ny, node_width, node_height], theme))
+        nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
+        for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
+            start, end = nodes[source['id']], nodes[target['id']]
+            sx, sy, sw, sh = start['bbox']
+            tx, ty, tw, th = end['bbox']
+            start_point, end_point = [sx+sw/2, sy+sh], [tx+tw/2, ty]
+            # A straight preset is diagonal once its bbox has both width and
+            # height.  A two-pixel three-segment elbow is visually vertical but
+            # keeps the orthogonal route audit and a valid positive extent.
+            bbox = [start_point[0]-1.0, start_point[1], 2.0, end_point[1]-start_point[1]]
+            adjustments = {'adj1': 50000}
+            edge = {'id': f"graphic:{graphic['id']}:edge:{source['id']}:{target['id']}",
+                    'kind': 'connector', 'role': 'graphic-edge', 'graphic_id': graphic['id'],
+                    'source_id': start['id'], 'target_id': end['id'],
+                    'start_site': CONNECTION_SITES[start['geometry']]['bottom'],
+                    'end_site': CONNECTION_SITES[end['geometry']]['top'],
+                    'start': start_point, 'end': end_point, 'bbox': bbox,
+                    'geometry': 'bentConnector3', 'adjustments': adjustments, 'flip_v': False,
+                    'line': accent, 'line_width': 2.5,
+                    'head_end': 'none', 'tail_end': 'triangle'}
+            from .dag_layout import connector_points
+            edge['route'] = connector_points(bbox, 'bentConnector3', adjustments, False)
+            elements.append(edge)
+        return elements
+
+    gap = 64.0
+    node_width = (width - gap*(count-1))/count
+    if layout == 'staggered':
+        offset = 28.0
+        node_height = min(240.0, height-32-2*offset)
+        if node_width < 200 or node_height < 180:
+            raise ValueError('Staggered process needs at least 200 px per node and 212 px of height')
+        base_y = y+(height-node_height)/2
+    else:
+        node_height = min(272.0, height-32)
+        if node_width < 200 or node_height < 240:
+            raise ValueError('Process graphic needs at least 200 px per node and 272 px of height')
+        base_y = y+(height-node_height)/2
     for index, node in enumerate(graphic['nodes']):
         nx = x + index*(node_width+gap)
-        elements.extend(node_elements(graphic['id'], node, [nx, node_y, node_width, node_height], theme))
+        ny = base_y + (-offset if index % 2 == 0 else offset) if layout == 'staggered' else base_y
+        elements.extend(node_elements(graphic['id'], node, [nx, ny, node_width, node_height], theme))
     nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
     # Emit after the nodes, in visual order even if the IR edge list is permuted.
     for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
@@ -277,13 +350,35 @@ def compile_graphic(graphic, region, theme, font_paths=None):
         sx, sy, sw, sh = start['bbox']
         tx, ty, _, th = end['bbox']
         start_point, end_point = [sx+sw, sy+sh/2], [tx, ty+th/2]
-        elements.append({'id': f"graphic:{graphic['id']}:edge:{source['id']}:{target['id']}",
-                         'kind': 'connector', 'role': 'graphic-edge', 'graphic_id': graphic['id'],
-                         'source_id': start['id'], 'target_id': end['id'],
-                         'start_site': CONNECTION_SITES[start['geometry']]['right'],
-                         'end_site': CONNECTION_SITES[end['geometry']]['left'],
-                         'start': start_point, 'end': end_point,
-                         'bbox': [start_point[0], start_point[1], tx-start_point[0], 0],
-                         'geometry': 'straightConnector1', 'line': accent, 'line_width': 2.5,
-                         'head_end': 'none', 'tail_end': 'triangle'})
+        if layout == 'staggered':
+            top, dy = min(start_point[1], end_point[1]), abs(end_point[1]-start_point[1])
+            width = tx-start_point[0]
+            bbox = [start_point[0], top, width, dy]
+            # A diagonal straight connector is rejected by the orthogonal route
+            # audit; a three-segment elbow keeps the staggered rhythm editable.
+            adjustments = {'adj1': round((width/2)/width*100000)}
+            geometry = 'bentConnector3'
+            flip_v = end_point[1] < start_point[1]
+            edge = {'id': f"graphic:{graphic['id']}:edge:{source['id']}:{target['id']}",
+                    'kind': 'connector', 'role': 'graphic-edge', 'graphic_id': graphic['id'],
+                    'source_id': start['id'], 'target_id': end['id'],
+                    'start_site': CONNECTION_SITES[start['geometry']]['right'],
+                    'end_site': CONNECTION_SITES[end['geometry']]['left'],
+                    'start': start_point, 'end': end_point, 'bbox': bbox,
+                    'geometry': geometry, 'adjustments': adjustments, 'flip_v': flip_v,
+                    'line': accent, 'line_width': 2.5,
+                    'head_end': 'none', 'tail_end': 'triangle'}
+            from .dag_layout import connector_points
+            edge['route'] = connector_points(bbox, geometry, adjustments, flip_v)
+            elements.append(edge)
+        else:
+            elements.append({'id': f"graphic:{graphic['id']}:edge:{source['id']}:{target['id']}",
+                             'kind': 'connector', 'role': 'graphic-edge', 'graphic_id': graphic['id'],
+                             'source_id': start['id'], 'target_id': end['id'],
+                             'start_site': CONNECTION_SITES[start['geometry']]['right'],
+                             'end_site': CONNECTION_SITES[end['geometry']]['left'],
+                             'start': start_point, 'end': end_point,
+                             'bbox': [start_point[0], start_point[1], tx-start_point[0], 0],
+                             'geometry': 'straightConnector1', 'line': accent, 'line_width': 2.5,
+                             'head_end': 'none', 'tail_end': 'triangle'})
     return elements

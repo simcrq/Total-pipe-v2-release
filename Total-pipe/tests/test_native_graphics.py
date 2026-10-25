@@ -47,7 +47,7 @@ class GraphicTests(unittest.TestCase):
             'blank title': lambda g: g['nodes'][0].update(title='  '),
             'title too long': lambda g: g['nodes'][0].update(title='x'*81),
             'body too long': lambda g: g['nodes'][0].update(body='x'*181),
-            'unsupported direction': lambda g: g.update(direction='vertical'),
+            'unsupported direction': lambda g: g.update(direction='diagonal'),
             'unsupported type': lambda g: g.update(type='cycle'),
             'too few nodes': lambda g: g.update(nodes=g['nodes'][:2]),
             'backward edge': lambda g: g['edges'][0].update(**{'from': 'check', 'to': 'input'}),
@@ -104,6 +104,65 @@ class GraphicTests(unittest.TestCase):
             self.assertEqual(e['start'][1], e['end'][1])
             self.assertEqual(e['bbox'], [*e['start'], e['end'][0]-e['start'][0], 0])
             self.assertEqual((e['head_end'], e['tail_end']), ('none', 'triangle'))
+
+    def test_vertical_process_flows_top_down(self):
+        ir = fixture()
+        ir['slides'] = [ir['slides'][0]]
+        g = graphic(ir)
+        g['direction'] = 'vertical'
+        g.pop('layout', None)
+        for node in g['nodes']:
+            node.pop('body', None)
+            node['shape'] = 'rounded-rect'
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        nodes = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-node']
+        self.assertEqual(len(nodes), 3)
+        self.assertLess(nodes[0]['bbox'][1], nodes[1]['bbox'][1])
+        self.assertLess(nodes[1]['bbox'][1], nodes[2]['bbox'][1])
+        edges = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-edge']
+        for edge in edges:
+            self.assertAlmostEqual(edge['start'][0], edge['end'][0])
+            self.assertGreater(edge['end'][1], edge['start'][1])
+
+    def test_staggered_process_alternates_nodes_and_keeps_diagonal_edges(self):
+        ir = fixture()
+        ir['slides'] = [ir['slides'][1]]
+        g = graphic(ir)
+        g['layout'] = 'staggered'
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        nodes = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-node']
+        self.assertEqual(len(nodes), 4)
+        self.assertNotEqual(nodes[0]['bbox'][1], nodes[1]['bbox'][1])
+        self.assertNotEqual(nodes[1]['bbox'][1], nodes[2]['bbox'][1])
+        edges = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-edge']
+        self.assertTrue(all(edge['bbox'][3] > 0 for edge in edges))
+
+    def test_process_layout_rejects_incompatible_combinations_and_tones(self):
+        for name, mutate in {
+            'vertical staggered': lambda g: g.update(direction='vertical', layout='staggered'),
+            'dag staggered': lambda g: g.update(type='dag', layout='staggered'),
+            'unknown tone': lambda g: g['nodes'][0].update(tone='bold'),
+        }.items():
+            with self.subTest(name=name):
+                ir = fixture()
+                mutate(graphic(ir))
+                self.assertTrue(any(i['rule'] == 'GRAPHIC_INVALID' for i in validate(ir)))
+
+    def test_emphasis_tone_changes_only_the_node_fill_and_rule(self):
+        plain = fixture()
+        plain_layout, _ = compile_deck(plain, ROOT)
+        plain_node = next(e for e in plain_layout['slides'][0]['elements']
+                          if e.get('role') == 'graphic-node')
+        emphasised = copy.deepcopy(plain)
+        graphic(emphasised)['nodes'][0]['tone'] = 'emphasis'
+        emphasised_layout, issues = compile_deck(emphasised, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        strong_node = next(e for e in emphasised_layout['slides'][0]['elements']
+                           if e.get('role') == 'graphic-node')
+        self.assertNotEqual(plain_node['fill'], strong_node['fill'])
+        self.assertGreater(strong_node['line_width'], plain_node['line_width'])
 
     def test_no_unintended_overlap_or_out_of_bounds(self):
         layout, _ = compile_deck(fixture(), ROOT)
