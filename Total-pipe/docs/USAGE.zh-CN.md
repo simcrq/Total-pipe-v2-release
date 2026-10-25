@@ -339,8 +339,11 @@ python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
 默认生成候选；需要尝试原生渲染才加 `--native`。MCP 的 `totalpipe_compile` 仅编译布局和 QA，
 `totalpipe_build` 生成候选和 QA，`totalpipe_review` 按需检查现有构建并导出截图。
 
-默认提供方 `packer` 只建议几何，编译器执行文字适配、容量、原图尺寸与碰撞门禁；建议不通过
-时记录回退原因。有 visual_plan 的页由编译器执行设计候选，不能被提供方覆盖，也不静默回退。
+默认提供方 `packer` 为受支持的平面正文建议几何，编译器执行文字适配、容量、原图尺寸与碰撞门禁。
+递归区域、visual_plan、公式 / 行内公式、显式原生列表和原生图形页由编译器布局，记为
+`COMPILER_OWNED`，不计作提供方失败。`layout_provider.json` 分别统计 packed / owned / fallback /
+rejected；coverage 只计算可请求页面，全部 owned 时为 null。已请求但无提案或出错时才记录回退原因；
+批量异常会按页重试，单页错误不使其它页丢失建议。visual_plan 不能被提供方覆盖，也不静默回退。
 用 `--layout-provider compiler` 只运行编译器，外部提供方用 `module:factory`；旧 v26 模型已移除。
 查看 layout 的 requested/selected 和候选失败原因，确认设计决定进入实际区域。
 详见 [布局提供方](layout-provider.md) 与 [OfficeCLI 后端](officecli-backend.zh-CN.md)。

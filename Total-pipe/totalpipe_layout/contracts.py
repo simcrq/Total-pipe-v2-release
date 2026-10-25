@@ -286,7 +286,8 @@ def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
     return result
 
 
-def read_requests(path, root=None):
+def read_requests(path, root=None, *, layout=None, compile_issues=None):
+    """Construct requests, optionally reusing a matching compiler baseline and findings."""
     module = compiler(root)
     path = Path(path).resolve()
     ir = json.loads(path.read_text(encoding='utf-8'))
@@ -294,7 +295,12 @@ def read_requests(path, root=None):
     issues = validate(ir)
     if any(i['severity'] == 'FAIL' for i in issues):
         raise ValueError(json.dumps(issues, ensure_ascii=False))
-    layout, compile_issues = module.compile_deck(copy.deepcopy(ir), path.parent)
+    if layout is None:
+        layout, compile_issues = module.compile_deck(copy.deepcopy(ir), path.parent)
+    elif layout.get('ir_sha256') != digest(ir):
+        raise ValueError('Baseline layout does not match the canonical Deck IR')
+    if compile_issues is None:
+        compile_issues = issues
     if layout is None:
         raise ValueError(json.dumps(compile_issues, ensure_ascii=False))
     requests = []
@@ -347,6 +353,10 @@ def read_requests(path, root=None):
             request['compiler_owned'] = 'measured_native_list'
         elif slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
             request['compiler_owned'] = 'native_graphic_composition'
+        elif slide['composition']['archetype'] == 'native-graphic':
+            request['compiler_owned'] = 'graphic_page'
+        elif not units:
+            request['compiler_owned'] = 'no_units'
         if (len(units) > MAX_UNITS and not request.get('compiler_owned')) or len({u['id'] for u in units}) != len(units):
             raise ValueError('CAPACITY_OR_ID_COLLISION: no units may be truncated')
         requests.append(request)

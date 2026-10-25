@@ -158,7 +158,7 @@ class EmbeddedGraphicTests(unittest.TestCase):
             record = layout['layout_provider']['slides'][0]
             self.assertEqual(record['reason'], 'native_graphic_composition')
             if isinstance(provider, SpyProvider):
-                self.assertEqual(provider.requests, [])
+                self.assertFalse(hasattr(provider, 'requests'))
 
     def test_capacity_failures_preserve_ir_instead_of_shrinking_evidence_or_truncating(self):
         for target in ('context', 'node', 'image'):

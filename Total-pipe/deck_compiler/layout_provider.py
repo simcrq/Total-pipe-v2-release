@@ -27,6 +27,7 @@ import copy
 import importlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -130,6 +131,56 @@ def load_provider(specification=None, totalpipe_root=None) -> LayoutProvider:
     return provider
 
 
+def _propose(provider, requests):
+    """Keep the batch API, retrying pages independently if a batch raises."""
+    eligible = [(number, request) for number, request in enumerate(requests, 1)
+                if not request.get('compiler_owned') and request.get('units')]
+    if not eligible or isinstance(provider, CompilerProvider):
+        return {}, set(), []
+    warnings, failed = [], set()
+    name = getattr(provider, 'name', 'unknown')
+
+    def ask(batch):
+        result = provider.propose(copy.deepcopy(batch))
+        if result is None:
+            return {}
+        if not isinstance(result, dict):
+            raise TypeError('propose(requests) must return a slide-id dictionary or None')
+        return result
+
+    def failure(number, request, error):
+        failed.add(request['slide_id'])
+        warnings.append(issue('LAYOUT_PROVIDER_FAILED', 'WARNING',
+                              f'{type(error).__name__}: {error}', number,
+                              detector='layout-provider', provider=name))
+
+    try:
+        return ask([request for _, request in eligible]), failed, warnings
+    except Exception as error:  # external providers must not break unrelated pages
+        if len(eligible) == 1:
+            failure(*eligible[0], error)
+            return {}, failed, warnings
+        warnings.append(issue('LAYOUT_PROVIDER_BATCH_RETRY', 'WARNING',
+                              f'{type(error).__name__}: {error}; retrying individual pages',
+                              detector='layout-provider', provider=name))
+    proposed = {}
+    for number, request in eligible:
+        try:
+            answer = ask([request])
+            if request['slide_id'] in answer:
+                proposed[request['slide_id']] = answer[request['slide_id']]
+        except Exception as error:
+            failure(number, request, error)
+    return proposed, failed, warnings
+
+
+def _finite_number(value):
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    except (ValueError, OverflowError):
+        return False
+
+
 def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
     """Compile a deck, letting ``provider`` propose the body layout.
 
@@ -144,35 +195,44 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
     if provider is None:
         provider = load_provider(totalpipe_root=totalpipe_root)
     from totalpipe_layout.contracts import check, digest as request_digest, read_requests
-    requests, meta = read_requests(ir_path, totalpipe_root or ROOT)
+    requests, meta = read_requests(ir_path, totalpipe_root or ROOT,
+                                   layout=baseline, compile_issues=baseline_issues)
     proposals: dict = {}
     records = []
-    warnings = []
-    try:
-        proposed = provider.propose(copy.deepcopy([r for r in requests if not r.get('compiler_owned')])) or {}
-    except Exception as error:                       # a provider must not break the build
-        proposed = {}
-        warnings.append(issue('LAYOUT_PROVIDER_FAILED', 'WARNING', f'{type(error).__name__}: {error}',
-                              detector='layout-provider', provider=getattr(provider, 'name', 'unknown')))
-    for index, request in enumerate(requests):
+    proposed, failed, warnings = _propose(provider, requests)
+    for request in requests:
         proposal = proposed.get(request['slide_id'])
         record = {'slide_id': request['slide_id'], 'request_sha256': request_digest(request),
-                  'status': 'COMPILER_FALLBACK'}
-        if request.get('compiler_owned'):
-            record['reason'] = request['compiler_owned']
+                  'status': 'COMPILER_FALLBACK',
+                  'reason': 'provider_error' if request['slide_id'] in failed else 'no_proposal'}
+        owned = request.get('compiler_owned') or ('provider_disabled' if isinstance(provider, CompilerProvider) else None)
+        if owned or not request.get('units'):
+            record.update(status='COMPILER_OWNED', reason=owned or 'no_units')
             records.append(record)
             continue
-        if request.get('units') and proposal:
+        if proposal is not None:
+            if not isinstance(proposal, dict):
+                record.update(status='REJECTED_GATES', reason='invalid_proposal',
+                              violations=['MALFORMED_PROPOSAL'])
+                records.append(record)
+                continue
             units = proposal.get('units') or {}
             expected = [unit['id'] for unit in request['units']]
-            if set(units) != set(expected):
-                record['status'] = 'REJECTED_UNIT_MISMATCH'
+            if not isinstance(units, dict) or set(units) != set(expected):
+                record.update(status='REJECTED_UNIT_MISMATCH', reason='unit_mismatch')
             else:
-                boxes = [units[unit_id].get('bbox') for unit_id in expected]
+                boxes = [units[unit_id].get('bbox') if isinstance(units[unit_id], dict) else None
+                         for unit_id in expected]
                 violations = check(request, boxes) if all(
-                    isinstance(box, (list, tuple)) and len(box) == 4 for box in boxes) else ['MALFORMED_BBOX']
+                    isinstance(box, (list, tuple)) and len(box) == 4 and all(_finite_number(v) for v in box)
+                    for box in boxes) else ['MALFORMED_BBOX']
+                if any(unit['role'] == 'figure' and units[unit['id']].get('caption_height') is not None
+                       and (not _finite_number(units[unit['id']]['caption_height'])
+                            or units[unit['id']]['caption_height'] < 0)
+                       for unit in request['units'] if isinstance(units[unit['id']], dict)):
+                    violations.append('MALFORMED_CAPTION_HEIGHT')
                 if violations:
-                    record['status'] = 'REJECTED_GATES'
+                    record.update(status='REJECTED_GATES', reason='geometric_gates')
                     record['violations'] = violations[:8]
                 else:
                     kept = {}
@@ -186,22 +246,28 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
                     proposals[request['slide_id']] = {'units': kept, 'status': 'PACKED',
                                                       'provider': getattr(provider, 'name', 'unknown')}
                     record['status'] = 'PACKED'
+                    record.pop('reason', None)
         records.append(record)
-    result, findings = compile_deck(ir, ir_path.parent, proposals=proposals)
+    result, findings = (compile_deck(ir, ir_path.parent, proposals=proposals)
+                        if proposals else (baseline, list(baseline_issues)))
     # A compiler failure is never attributed to the provider silently: retry those pages with the
     # deterministic templates and keep whatever failure remains visible.
     rejected = {finding.get('slide') for finding in findings if finding['severity'] == 'FAIL'}
+    changed = False
     for number in rejected:
         if isinstance(number, int) and 1 <= number <= len(records):
             slide_id = records[number - 1]['slide_id']
             if slide_id in proposals:
                 proposals.pop(slide_id)
+                changed = True
                 records[number - 1]['status'] = 'COMPILER_FALLBACK'
+                records[number - 1]['reason'] = 'compiler_rejected'
                 records[number - 1]['rejected_rules'] = [
                     finding['rule'] for finding in findings
                     if finding.get('slide') == number and finding['severity'] == 'FAIL']
-    if rejected:
-        result, findings = compile_deck(ir, ir_path.parent, proposals=proposals)
+    if changed:
+        result, findings = (compile_deck(ir, ir_path.parent, proposals=proposals)
+                            if proposals else (baseline, list(baseline_issues)))
     findings = warnings + findings
     if result:
         sources = [Path(__file__), ROOT/'deck_compiler/layout.py',
@@ -212,15 +278,19 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
                    *sorted((ROOT/'totalpipe_layout').glob('*.py'))]
         if getattr(provider, 'source_files', None):
             sources.extend(Path(path) for path in provider.source_files)
+        packed = sum(r['status'] == 'PACKED' for r in records)
+        owned = sum(r['status'] == 'COMPILER_OWNED' for r in records)
+        offered = len(records) - owned
         result['layout_provider'] = {
             'name': getattr(provider, 'name', 'unknown'),
             'kind': type(provider).__name__,
             'ir_sha256': digest(ir),
             'compiler_sha256': meta.get('compiler_sha256'),
             'slides': records,
-            'counts': {'packed': sum(r['status'] == 'PACKED' for r in records),
+            'counts': {'packed': packed, 'owned': owned,
                        'fallback': sum(r['status'] == 'COMPILER_FALLBACK' for r in records),
-                       'rejected': sum(r['status'].startswith('REJECTED') for r in records)},
+                       'rejected': sum(r['status'].startswith('REJECTED') for r in records),
+                       'coverage': packed / offered if offered else None},
             'source_sha256': {str(path.relative_to(ROOT)) if ROOT in Path(path).resolve().parents
                               else str(path): file_hash(path) for path in sources if Path(path).is_file()},
         }

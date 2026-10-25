@@ -1,0 +1,168 @@
+{
+  "archived_on": "2026-10-24",
+  "source_commit": "2d20361",
+  "entries": [
+    {
+      "original_path": "AI_USAGE_GUIDE.md",
+      "archive_path": "docs/archive/AI_USAGE_GUIDE.md",
+      "original_sha256": "927a4f7189c32e9ead6f8619b9e0af91a927a6395768e2d398996601cdf53830",
+      "active_replacement": null,
+      "archived_sha256": "3971174c3d92114662313216d5779739fef1742d9f215c5dbd2c3bbf49e484b6"
+    },
+    {
+      "original_path": "CONTENT_CAPACITY_ANALYSIS.md",
+      "archive_path": "docs/archive/CONTENT_CAPACITY_ANALYSIS.md",
+      "original_sha256": "26e7daacfe38e813489dbf62ca2942eb10b182a900bcff33041998bb455c07f6",
+      "active_replacement": null,
+      "archived_sha256": "6a5ce35f5a4f6c49e582d9867bd7653f7964205dc683c34a9c67832c82949acd"
+    },
+    {
+      "original_path": "FIXES_SUMMARY.md",
+      "archive_path": "docs/archive/FIXES_SUMMARY.md",
+      "original_sha256": "4c25f4cb7dbaeefa8409f523ee20da43f31ec56afcc541194de7f3f9ebfa1a05",
+      "active_replacement": null,
+      "archived_sha256": "3cf17fccbd540670d1a94d390a85088ed2017a7a13ad1f5450f2fe87ba05eacd"
+    },
+    {
+      "original_path": "IMPLEMENTATION_SUMMARY.md",
+      "archive_path": "docs/archive/IMPLEMENTATION_SUMMARY.md",
+      "original_sha256": "a9c98386ba6ca0251778402743f31270709a71c990fd9b8dc02c8bf383e735b0",
+      "active_replacement": null,
+      "archived_sha256": "a40b9759c6d7ed4710f0a4b5e413405a398ea8fed35709ee507d6fa80b56f004"
+    },
+    {
+      "original_path": "README_FINAL.md",
+      "archive_path": "docs/archive/README_FINAL.md",
+      "original_sha256": "850ac179d50040112c6f9119892a89094ea623c41f58edb7357693b739b720e1",
+      "active_replacement": null,
+      "archived_sha256": "b2d9d60c31fd313515b735c56134abb576be73501d9d3e37d4aa93973995aea4"
+    },
+    {
+      "original_path": "RELEASE_README.md",
+      "archive_path": "docs/archive/RELEASE_README.md",
+      "original_sha256": "de5f1aecc029eb65d61656d233138e31be2ac59b0fd45f26381a563e1e962d36",
+      "active_replacement": null,
+      "archived_sha256": "2737b108800e35bd81ed75e8e355aec443c1fe2c8e9efffc319af4f6e7c7f4c6"
+    },
+    {
+      "original_path": "SOLUTION_COMPLETE.md",
+      "archive_path": "docs/archive/SOLUTION_COMPLETE.md",
+      "original_sha256": "10231242a184d656cd113cf6e47ff059fe30e1856ef6576b5ed8ff014b76025f",
+      "active_replacement": null,
+      "archived_sha256": "862bc176ee46ffa27888514fe80463c847fe7235c5a82b1ac55167a809ca4915"
+    },
+    {
+      "original_path": "TESTING_GUIDE.md",
+      "archive_path": "docs/archive/TESTING_GUIDE.md",
+      "original_sha256": "c96c3246347adee61ea0eb87bfeec8bfec39779539a082a1b66d042d5d90de1c",
+      "active_replacement": null,
+      "archived_sha256": "b9b8f3140c3944edad41f7c828e81f0651fbfbe16453ebd8aacbb02c0b6a2505"
+    },
+    {
+      "original_path": "V3_EXPERIMENT_REPORT.md",
+      "archive_path": "docs/archive/V3_EXPERIMENT_REPORT.md",
+      "original_sha256": "9884d3b5e4a55d9ec208b705ed8c562604c509ee023e42225e4fd560f8e9891c",
+      "active_replacement": null,
+      "archived_sha256": "aeeb18265b5890bdcc487ecf7536613deef226543d4dd9ef2a1e2cc4ff7b7e8f"
+    },
+    {
+      "original_path": "VISUAL_SUMMARY.md",
+      "archive_path": "docs/archive/VISUAL_SUMMARY.md",
+      "original_sha256": "1f0fd9b5c8fd710c7a2541f9533c210178d2a89937c5a42a8436894396d661d5",
+      "active_replacement": null,
+      "archived_sha256": "6a5891c8d16f1eb36ef61df3ae96d8112fab38b3d4efbc0351f5fd3e428b47e5"
+    },
+    {
+      "original_path": "COMMIT_MESSAGE.txt",
+      "archive_path": "docs/archive/COMMIT_MESSAGE.txt",
+      "original_sha256": "60e32bac50d4adff9fb217e4cc416be560561de71d6e61d437073a98b3013241",
+      "active_replacement": null,
+      "archived_sha256": "60e32bac50d4adff9fb217e4cc416be560561de71d6e61d437073a98b3013241"
+    },
+    {
+      "original_path": "V3_INTEGRATION_MANIFEST.json",
+      "archive_path": "docs/archive/V3_INTEGRATION_MANIFEST.json",
+      "original_sha256": "8a14f1528fa9c200a4099db284359417aa8d840c021c83c075eb62f5d1dd42d7",
+      "active_replacement": null,
+      "archived_sha256": "8a14f1528fa9c200a4099db284359417aa8d840c021c83c075eb62f5d1dd42d7"
+    },
+    {
+      "original_path": "SHA256SUMS",
+      "archive_path": "docs/archive/SHA256SUMS",
+      "original_sha256": "242012b5a899d3497a551bef6e088607bc39940688d285c7f295168a7cce28b2",
+      "active_replacement": null,
+      "archived_sha256": "242012b5a899d3497a551bef6e088607bc39940688d285c7f295168a7cce28b2"
+    },
+    {
+      "original_path": "Total-pipe/IMPLEMENTATION_COMPLETE.md",
+      "archive_path": "docs/archive/Total-pipe/IMPLEMENTATION_COMPLETE.md",
+      "original_sha256": "7d596e98b702be64f38137368787a68ea7fd84a8497cfc61eb76fc02e73d382b",
+      "active_replacement": null,
+      "archived_sha256": "1d8e2462487b2290275ad0e5ab22e766d9b490951890d304cf802d7169abae97"
+    },
+    {
+      "original_path": "Total-pipe/PRIORITY_1_2_IMPLEMENTATION.md",
+      "archive_path": "docs/archive/Total-pipe/PRIORITY_1_2_IMPLEMENTATION.md",
+      "original_sha256": "3ebce267d2899b4cc2eedbc7dbbf118b4e571e22ed7994b0187bde0e65221cca",
+      "active_replacement": null,
+      "archived_sha256": "7a3560052b5b4b150a5b38914f09d96f8563a478e57e3d7619a7ac7174f0bd70"
+    },
+    {
+      "original_path": "Total-pipe/SUMMARY.md",
+      "archive_path": "docs/archive/Total-pipe/SUMMARY.md",
+      "original_sha256": "5bdfa2f3d0ac1b78663d014ebb9d0ef770722b4d2fa74156121b7838f5b39584",
+      "active_replacement": null,
+      "archived_sha256": "b793ce1eade3a3f354f4310f8f3456ee52807f37492aeed240bae7aaefccac48"
+    },
+    {
+      "original_path": "Total-pipe/DOCUMENTATION_INDEX.md",
+      "archive_path": "docs/archive/Total-pipe/DOCUMENTATION_INDEX.md",
+      "original_sha256": "7b76b355d254cff448d0ceca9d9d8884a90baad8d4abbdc02ed288b8e12fdb0a",
+      "active_replacement": "Total-pipe/DOCUMENTATION_INDEX.md",
+      "archived_sha256": "c6249b706ed215befc65c336a4592ddc02f2a8398e0bbe4387a9b7f1e8162e90"
+    },
+    {
+      "original_path": "Total-pipe/docs/QUALITY_METRICS.md",
+      "archive_path": "docs/archive/Total-pipe/docs/QUALITY_METRICS.md",
+      "original_sha256": "4cb80f59a0bdcd5b494771984916d0c1f324d6e0e482eaf6da585d770f202e02",
+      "active_replacement": "Total-pipe/docs/QUALITY_METRICS.md",
+      "archived_sha256": "53b339680d6b6a95433bd385ae4c5078213b067ac1b5120fffdad4300150ccaf"
+    },
+    {
+      "original_path": "Total-pipe/docs/composite-layout-development.md",
+      "archive_path": "docs/archive/Total-pipe/docs/composite-layout-development.md",
+      "original_sha256": "3d46120ffeb0004cd77eb45118119f0751645cbcaf7ad6391e2fdce614b56eef",
+      "active_replacement": null,
+      "archived_sha256": "ee51b4eb87c9273e6bef1aff4b43de0b475f1a9f4bc3dc0518e446fae1f02ab7"
+    },
+    {
+      "original_path": "Total-pipe/docs/next-stage-tasks.md",
+      "archive_path": "docs/archive/Total-pipe/docs/next-stage-tasks.md",
+      "original_sha256": "df76db7874ecd0c4d5019163d6b37d50915f4b7fdce8d57776e298cbbe0d4094",
+      "active_replacement": null,
+      "archived_sha256": "450b2821035187cb9b79b218ce2ff725f1f17309646aa2458f1e6378c562c2d4"
+    },
+    {
+      "original_path": "Total-pipe/docs/v3-experiment.md",
+      "archive_path": "docs/archive/Total-pipe/docs/v3-experiment.md",
+      "original_sha256": "a734882eac509b6f7a8c0b4eae3582df7f02fadfcd23d3b061f967b8c5959887",
+      "active_replacement": null,
+      "archived_sha256": "a7316d455b848a2032974eeb00ecab1a6e9a4073cef1da4ad1b6ec50a521b7ce"
+    },
+    {
+      "original_path": "Total-pipe/docs/inline-math.md",
+      "archive_path": "docs/archive/Total-pipe/docs/inline-math.md",
+      "original_sha256": "559b81c7375ae346ece5102f3ac64d27cc6e7a4526f6ececc9d97b3264ca1d3d",
+      "active_replacement": "Total-pipe/docs/inline-math.md",
+      "archived_sha256": "588cfac4cceea90dcaa442cf6ec18428756095b30f6acb375e698c960db583fc"
+    },
+    {
+      "original_path": "Total-pipe/docs/layout-provider.md",
+      "archive_path": "docs/archive/Total-pipe/docs/layout-provider.md",
+      "original_sha256": "e3a10d0c4d8695102c3e8698343899346d955b524b1a9f4570e24b81def8c56c",
+      "active_replacement": "Total-pipe/docs/layout-provider.md",
+      "archived_sha256": "05383410a8e6e6332543db231303ca6bab9e1e1dce0ac29c9b7d8d4ff79d9af6"
+    }
+  ],
+  "updated_on": "2026-10-25"
+}

@@ -23,7 +23,7 @@
         "title": "公式直接写进 PPTX",
         "purpose": "证明公式是可编辑的原生对象，而不是图片",
         "takeaway": "公式由 LaTeX 子集解析成 AST，再直写 OMML；在 PowerPoint 里能点开、能改、能重新排版。",
-        "evidence_refs": ["Total-pipe/docs/next-stage-tasks.md"],
+        "evidence_refs": ["docs/archive/Total-pipe/docs/next-stage-tasks.md"],
         "caveats": ["字形尺寸由 matplotlib 的 mathtext 测量，最终渲染以 PowerPoint 为准。"],
         "speaker_notes": "这页的两个公式都是 OMML，不是图片；选中后会出现公式编辑器。"
       },

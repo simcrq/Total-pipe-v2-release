@@ -125,7 +125,7 @@ class LayoutTreeTests(unittest.TestCase):
         provider = Provider()
         layout, issues = compile_with_provider(EXAMPLE, provider, ROOT)
         self.assertFalse([i for i in issues if i['severity'] == 'FAIL'])
-        self.assertEqual(provider.requests, [])
+        self.assertFalse(hasattr(provider, 'requests'))
         self.assertTrue(all(r['reason'] == 'recursive_regions' for r in layout['layout_provider']['slides']))
 
     def test_feedback_is_sha_bound_and_replaces_previous_success(self):

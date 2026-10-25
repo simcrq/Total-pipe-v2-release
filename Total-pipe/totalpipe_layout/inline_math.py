@@ -98,11 +98,16 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                 'width': w, 'ascent': metrics.height-metrics.depth+2, 'descent': metrics.depth+2})
             exact = exact and metrics.exact
         else:
-            for token in TOKEN.findall(span.text):
+            # Line breaks are layout controls, not glyphs. In particular, Raqm-backed
+            # Pillow 13 fonts reject getlength('\n') and getlength('\r'). Normalize
+            # authored Windows/Mac breaks locally; the canonical source stays intact.
+            prose = span.text.replace('\r\n', '\n').replace('\r', '\n')
+            for token in TOKEN.findall(prose):
                 pieces = list(token) if token != '\n' and font.getlength(token) > width else [token]
                 for piece in pieces:
                     atoms.append({'kind': 'text', 'text': piece, 'plain': piece,
-                        'width': font.getlength(piece), 'ascent': ascent, 'descent': descent})
+                        'width': 0.0 if piece == '\n' else font.getlength(piece),
+                        'ascent': ascent, 'descent': descent})
 
     lines, current = [], []
     def finish():
@@ -146,7 +151,7 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         if atom['width'] > width+.01:
             raise InlineWidthError(atom['width'], width)
         current.append(atom)
-    if current or not lines or source.endswith('\n'): finish()
+    if current or not lines or source.endswith(('\n', '\r')): finish()
     return {'lines': lines, 'height': sum(line['height'] for line in lines),
             'min_width': minimum, 'formula_count': sum(s.kind == 'formula' for s in parse_inline(source)),
             'measured_exact': exact, 'font_size_px': size, 'text': '\n'.join(line['text'] for line in lines)}

@@ -1,3 +1,6 @@
+> **历史归档，非当前操作指引。** 2026-10-24 整理；原路径：`AI_USAGE_GUIDE.md`。
+> 文中的版本、命令、测试数量和完成状态仅代表当时记录。当前入口见[仓库 README](../../README.md)和[文档索引](../README.md)。
+
 # AI Usage Guide: Total-pipe v3 PPT Generation Suite
 
 ## Quick Start for AI Agents

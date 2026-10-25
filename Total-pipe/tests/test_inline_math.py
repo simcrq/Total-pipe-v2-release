@@ -71,6 +71,32 @@ class InlineMathTests(unittest.TestCase):
         self.assertLess(plan['height'], 3*b['height'])
         self.assertTrue(all(line['height'] >= line['ascent']+line['descent'] for line in plan['lines']))
 
+    def test_line_breaks_never_reach_glyph_measurement(self):
+        # Model Pillow 13 + Raqm even on wheels built without Raqm. Also verify
+        # Windows CRLF and bare CR keep the same explicit lines and capacity.
+        class StrictFont:
+            def getmetrics(inner):
+                return self.font.getmetrics()
+
+            def getlength(inner, text):
+                if '\n' in text or '\r' in text:
+                    raise RuntimeError('raqm_layout() failed')
+                return self.font.getlength(text)
+
+        expected = None
+        for separator in ('\n', '\r\n', '\r'):
+            with self.subTest(separator=repr(separator)):
+                source = separator + '说明 $x^2$' + separator + separator + '完整术语' + separator
+                plan = measure_inline(source, 1100, StrictFont(), 24)
+                self.assertEqual(len(plan['lines']), 5)
+                self.assertEqual(plan['formula_count'], 1)
+                self.assertEqual([line['text'] for line in plan['lines']], ['', '说明 x²', '', '完整术语', ''])
+                self.assertAlmostEqual(plan['height'], sum(line['height'] for line in plan['lines']))
+                if expected is None:
+                    expected = plan
+                else:
+                    self.assertEqual(plan, expected)
+
     def test_formulas_stay_atomic_across_wrapped_text_and_matrices(self):
         source = r'先定义 $M=\begin{bmatrix}x^2&0\\1&\sqrt{y}\end{bmatrix}$，再保留完整说明和 $q(t)=e^{-t}$。'
         plan = measure_inline(source, 360, self.font, 24)

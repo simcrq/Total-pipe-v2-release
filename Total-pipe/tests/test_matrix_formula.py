@@ -254,7 +254,7 @@ class DenseFormulaLayoutTests(unittest.TestCase):
             provider = Provider()
             layout, issues = compile_with_provider(path, provider, ROOT)
         self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
-        self.assertEqual(provider.requests, [])
+        self.assertFalse(hasattr(provider, 'requests'))
         self.assertEqual(layout['layout_provider']['slides'][0]['reason'], 'measured_formula_flow')
         self.assertEqual(sum(e['kind'] == 'math' for e in layout['slides'][0]['elements']), 18)
 

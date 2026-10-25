@@ -20,6 +20,8 @@
 
 编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
 `packer` 是默认布局建议提供方，也可选 `compiler` 或外部 `module:factory`。
+它只接管受支持的平面正文建议；递归区域、视觉计划、公式、显式列表与原生图形等页面由编译器布局，
+逐页记为 `COMPILER_OWNED`，不计作提供方回退。状态和 coverage 定义见[提供方协议](docs/layout-provider.md)。
 旧 v26 扩散模型已移除，当前运行无需 torch。
 
 ## 环境
@@ -79,7 +81,7 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | 文件 | 含义 |
 | --- | --- |
 | `deck_ir.json` | 本次构建冻结的科学内容输入 |
-| `layout.json`、`layout_provider.json` | 最终几何、文本契约、提供方与回退记录 |
+| `layout.json`、`layout_provider.json` | 最终几何、文本契约、提供方采用 / owned / 回退 / 拒绝记录及覆盖率 |
 | `derived/` | 从输入派生的规划、资源清单与 QA expectation |
 | `layout_feedback.json` | 绑定 IR 哈希的组件尺寸错误及上游修订建议 |
 | `candidate.pptx`、`staging.pptx` | 可编辑候选与字节一致的验收副本 |
@@ -107,5 +109,5 @@ OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
 旧平面 IR、layout tree 1.0 和未启用行内公式的文字仍兼容。
 文字容量例外允许保留全文；公式真实宽高、图形可读性和原图尺寸门禁继续执行。
 
-完整操作见 [USAGE.zh-CN.md](docs/USAGE.zh-CN.md)；开发与验收记录见
-[composite-layout-development.md](docs/composite-layout-development.md)。
+完整操作见 [USAGE.zh-CN.md](docs/USAGE.zh-CN.md)，协议导航见[当前文档索引](../docs/README.md)。
+旧开发计划和验收记录统一保留于[历史归档](../docs/archive/README.md)，不作为当前操作步骤。

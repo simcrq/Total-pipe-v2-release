@@ -1,3 +1,6 @@
+> **历史归档，非当前操作指引。** 2026-10-24 整理；原路径：`Total-pipe/docs/v3-experiment.md`。
+> 文中的版本、命令、测试数量和完成状态仅代表当时记录。当前入口见[仓库 README](../../../../README.md)和[文档索引](../../../README.md)。
+
 > **Historical.** The v26 diffusion experiment described here has been removed from the code
 > base (2026-10-21). See `docs/layout-provider.md` for the interface that replaced it and for the
 > measured comparison between the bundled packer and the compiler templates.

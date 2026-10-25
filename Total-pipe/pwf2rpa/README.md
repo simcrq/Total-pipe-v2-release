@@ -210,7 +210,7 @@ one (`crowded_pages`), which avoids false alarms.
 ### Known limits of the simulation
 
 - RPA assigns layouts **greedily by score**, so it can strand a page even when
-  a perfect matching exists. The adapter under-warns in that case (2/72 above).
+  a perfect matching exists. The adapter under-warns in that case.
   This is the safe direction: RPA still plans and warns itself.
 - Slot ids and Chinese labels also contribute to binding affinity; ignoring
   them can only make the simulation *more* conservative, never falsely optimistic.

@@ -111,7 +111,8 @@ class PackerQualityTests(unittest.TestCase):
         base, layout, issues = self.compile_with(PackerProvider())
         self.assertEqual([i for i in issues if i['severity'] == 'FAIL'], [])
         counts = layout['layout_provider']['counts']
-        self.assertEqual(counts, {'packed': 2, 'fallback': 0, 'rejected': 0})
+        self.assertEqual(counts, {'packed': 2, 'owned': 0, 'fallback': 0,
+                                  'rejected': 0, 'coverage': 1.0})
         measured = measure(layout, base/'deck_ir.json')
         self.assertTrue(measured['slack'])
         self.assertLessEqual(max(measured['slack']), 1.30)

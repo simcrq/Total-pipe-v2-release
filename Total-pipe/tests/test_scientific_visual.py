@@ -283,7 +283,7 @@ class ScientificVisualTests(unittest.TestCase):
         provider = Provider()
         layout, issues = compile_with_provider(path, provider, ROOT)
         self.assertFalse([i for i in issues if i['severity'] == 'FAIL'])
-        self.assertEqual(provider.requests, [])
+        self.assertFalse(hasattr(provider, 'requests'))
         self.assertEqual(layout['slides'], self.compile_ok(ir)[0]['slides'])
         self.assertEqual(layout['layout_provider']['slides'][0]['reason'], 'scientific_visual_plan')
 

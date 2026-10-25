@@ -64,6 +64,8 @@ preserve-terms 下，正文或标题可保留超出名义区域的完整混排�
 
 数学与正文使用不同字体；部分结构采用保守测量，保留 INLINE_MATH_MEASUREMENT_REVIEW。
 PowerPoint 原生视觉检查仍必需，尤其检查基线、列边界和高公式前后的实际行距。
+显式换行支持 LF、CRLF 和 CR，按断行控制处理而不送入字体字形测量；连续空行和末尾换行
+均参与高度计算。原始 IR 文本保留不变，适用于 Pillow 13 / Raqm 对换行测量的严格行为。
 旧式纯文本溢出自动拆页不会处理行内混排页，避免按 OfficeCLI 的统一行高估计切开公式或科学分组；
 需要调整时将完整内容及当前反馈交回规划层。
 
@@ -88,10 +90,12 @@ python -m deck_compiler build --ir examples/inline-math.deck_ir.json \
   --out ../builds/inline-math --skip-native
 ```
 
-本轮 716 项通过、1 项因缺少原有 Li Markdown 样例跳过。
-三页 PowerPoint 直接检查、同次原生 PDF 和独立 PNG 复核均通过；旧复合布局与表格的几何、XML 和内容逐项相同。
-构建记录位于忽略目录 builds/inline-math/initial/。候选 QA 为 0 FAIL、2 WARNING、37 REVIEW；
-OfficeCLI 的两条溢出估计和科学/数学/字体审核记录均保留，不自动晋级 final。
+每次验收以当前构建的 QA 与原生渲染证据为准。早期开发样例的测试数量和构建记录见
+[历史快照](../../docs/archive/Total-pipe/docs/inline-math.md)，不作为当前版本的验证结果。
 
 PowerPoint 的 TextMath 支持正文中的 inline math zone，实际写入为 a:r 与 a14:m/m:oMath 交错，
 独立公式继续使用 m:oMathPara。参见 [Microsoft TextMath 文档](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.office2010.drawing.textmath?view=openxml-3.0.1)。
+
+当前数学片段使用 Cambria Math，正文仍按主题字体排版。Times New Roman 普通文字字体不能保证
+完整替代专用数学字体；根号、可伸缩括号和矩阵等结构需要相应数学字体支持。修改公式字体时必须
+同时核对度量与 PowerPoint 原生渲染，不能只替换字体名称并沿用已有容量结果。

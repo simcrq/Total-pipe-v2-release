@@ -1,3 +1,6 @@
+> **历史归档，非当前操作指引。** 2026-10-24 整理；原路径：`RELEASE_README.md`。
+> 文中的版本、命令、测试数量和完成状态仅代表当时记录。当前入口见[仓库 README](../../README.md)和[文档索引](../README.md)。
+
 # Total-pipe v2 release preparation bundle
 
 This directory is a source snapshot for release preparation. It contains the complete v2 toolchain without local Git metadata, caches, paper inputs, generated OCR/output directories, virtual environments, or credential-bearing configuration.

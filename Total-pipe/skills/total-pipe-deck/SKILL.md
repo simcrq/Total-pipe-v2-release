@@ -290,7 +290,9 @@ python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
 
 MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选与 QA；
 `totalpipe_review` 按需检查现有构建并截图。提供方只建议几何，编译器执行真实字体、容量、
-碰撞、原图下限与科学关系门禁，OfficeCLI 写 PPTX。查看 `layout_provider.json` 的回退原因，
+碰撞、原图下限与科学关系门禁，OfficeCLI 写 PPTX。`layout_provider.json` 的 `COMPILER_OWNED`
+表示递归区域、视觉计划、公式、显式列表或图形等页面按设计由编译器布局；不要把 owned 当成提供方失败。
+查看 packed / owned / fallback / rejected、coverage 及具体回退原因，
 `layout.json/derived/plan_to_layout.json` 的 requested/selected 是否执行了设计决定。
 
 普通生成任务交付 `candidate.pptx` 路径、FAIL/WARNING/REVIEW 数量及关键未解决项，

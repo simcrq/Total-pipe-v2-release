@@ -6,10 +6,27 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 **完整流程入口：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。
 **操作手册：** [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)。
 **环境与安装：** [环境清单](Total-pipe/环境清单.md)。
+**按任务查文档：** [当前文档索引](docs/README.md)；Agent 阅读规则见 [AGENTS.md](AGENTS.md)。
+
+## 生成效果
+
+以下为实际生成的 PPTX 经 Microsoft PowerPoint 原生导出的幻灯片画面，均为软件功能示例。
+
+**复杂科研混排：参考图片、测量边框、原生列表、矩阵、行内公式与可编辑 Bézier 图形。**
+
+![复杂科研混排单页](docs/images/complex-mixed.png)
+
+[下载可编辑 PPTX](Total-pipe/examples/complex-mixed/complex-mixed.pptx) · [源 IR 与重建说明](Total-pipe/examples/complex-mixed/README.zh-CN.md)
+
+**原生科研表格：多级表头、跨行跨列、公式格与矩阵。**
+
+![原生科研表格与矩阵](docs/images/native-table.png)
+
+[表格源 IR](Total-pipe/examples/native-table.deck_ir.json) · [展示图来源与隐私检查](docs/images/README.md)
 
 ## 当前版本
 
-以下为当前仓库声明的版本，核对日期为 **2026-10-24**。产品、组件与文件协议分别版本化；
+以下为当前仓库声明的版本，核对日期为 **2026-10-25**。产品、组件与文件协议分别版本化；
 复合布局、原生科研表格和行内公式已在当前源码中实现。
 
 | 对象 | 当前声明 | 版本来源 |
@@ -35,7 +52,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 规范化内容、选择整页版式和子布局、绑定原文、验证规划；提供 320 个版式、40 类语义和 16 套主题 |
 | Scientific Visual Planner | 当前 Agent 的 Design 阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
 | Deck Compiler / Deck IR | [Total-pipe/deck_compiler/](Total-pipe/README.md) | 校验科学内容契约、递归分配区域、测量文本与公式、检查几何，生成确定坐标及 `layout_feedback.json` / `qa_report.json` |
-| 布局提供方 | [totalpipe_layout/](Total-pipe/totalpipe_layout/)、[提供方接口](Total-pipe/docs/layout-provider.md) | 内置 `packer` 提供确定性几何建议；也可选 `compiler` 或外部 `module:factory`，最终约束由编译器执行 |
+| 布局提供方 | [totalpipe_layout/](Total-pipe/totalpipe_layout/)、[提供方接口](Total-pipe/docs/layout-provider.md) | 内置 `packer` 为受支持的平面正文提供确定性几何建议；复杂测量页由编译器布局，单独记录 owned；也可选 `compiler` 或外部 `module:factory` |
 | OfficeCLI | 外部安装的命令行程序 | 按编译结果写入文字、图片、原生公式、表格、流程图、连接符与贝塞尔路径等 PowerPoint 对象 |
 | Microsoft PowerPoint | macOS / Windows 桌面程序 | 逐页检查实际排版并导出原生 PDF，供正式交付验收 |
 
@@ -168,5 +185,5 @@ OfficeCLI 的 `Text overflow` 提示保留在 QA 中，再以实际 PowerPoint �
 | [原生图形](Total-pipe/docs/native-graphics.md) / [科研组件与路径](Total-pipe/docs/native-components.md) | 可编辑流程、机制、架构与贝塞尔图形 |
 | [开发后文档同步 Skill](Total-pipe/skills/total-pipe-doc-sync/SKILL.md) | 开发收尾时核对 README、中文用法、环境与协议，提交前清理过时说明 |
 
-根目录的 `RELEASE_README.md`、`README_FINAL.md`、`IMPLEMENTATION_SUMMARY.md`、
-`V3_INTEGRATION_MANIFEST.json` 等保留历史实现记录；安装和运行以本 README、当前使用说明及源码为准。
+过时开发总结、旧 Agent 指南、v26 实验和旧发布清单已统一移入[历史归档](docs/archive/README.md)，
+保留原文和原路径索引；默认检索不包含归档。安装和运行以本 README、当前使用说明及源码为准。
