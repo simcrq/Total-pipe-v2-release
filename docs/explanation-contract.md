@@ -41,7 +41,7 @@
 | `parallel_items` | 并列扫读 2–6 条、顺序可换 | 原生列表 / 表格 |
 | `grouped_panels` | 看见 2–4 组层级或分组 | `layout_tree` 的 panel / columns |
 | `comparison` | ≥2 个对象在 ≥2 个维度上并排 | 原生表格 / 双列 |
-| `ordered_steps` | 跟 2–5 步固定顺序 | `process` / `dag` |
+| `ordered_steps` | 跟 2–8 步固定顺序（>5 用 compact process） | `process` / `dag` |
 | `relation` | 追显式节点与有向边 | `mechanism` / `dag` |
 | `curve` | 读一条示意趋势 | `path`（C/Q 贝塞尔） |
 | `image_evidence` | 读一张实测原图 | `figure_refs` + `visual_plan` |

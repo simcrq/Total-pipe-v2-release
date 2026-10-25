@@ -88,7 +88,7 @@ CAPABILITY_CARD = {
          "fallback": "columns with one object each"},
         {"kind": "ordered_steps", "reader_task": "trace",
          "carriers": ["process", "dag"],
-         "requires": "2-5 steps with a fixed order",
+         "requires": "2-8 steps with a fixed order; >5 uses compact IR graphic",
          "limit": "the process component holds 3-4 nodes",
          "fallback": "ordered list, or split the page"},
         {"kind": "relation", "reader_task": "explain",
@@ -201,7 +201,7 @@ def _content_errors(kind: str, content: Any) -> list[str]:
         if not (_text(content.get("latex")) or _text(content.get("text"))):
             errors.append("quantity content needs latex or text")
     elif kind in ("parallel_items", "ordered_steps"):
-        maximum = 6 if kind == "parallel_items" else 5
+        maximum = 6 if kind == "parallel_items" else 8
         items = _string_list(content.get("items"))
         if not 2 <= len(items) <= maximum:
             errors.append(f"{kind} content.items needs 2-{maximum} non-empty strings")
@@ -395,7 +395,13 @@ def _form_from_explain(explain: Mapping[str, Any] | None) -> tuple[str, dict[str
             continue
         content = obligation.get("content") if isinstance(obligation.get("content"), Mapping) else {}
         if obligation.get("kind") == "ordered_steps":
-            return "sequence", {"process_steps": _string_list(content.get("items"))[:5]}
+            items = _string_list(content.get("items"))
+            # RPA's process layout pool tops out at five nodes.  A longer
+            # ordered chain stays in explain for the compact IR graphic instead
+            # of being truncated into a form slot.
+            if 2 <= len(items) <= 5:
+                return "sequence", {"process_steps": items}
+            continue
         if obligation.get("kind") == "comparison":
             return "compare", {"comparison_dimensions": _string_list(content.get("dimensions"))}
     return "", {}
@@ -967,7 +973,8 @@ def build_story_prompt(
         "关于 explain：explain 不是版式，而是‘读者必须看见什么’。\n"
         "must_show 每条从这 8 类里选一个：quantity（必须精确读出或比较的量/公式）、"
         "parallel_items（2-6 条并列、顺序可换）、grouped_panels（2-4 组层级或分组）、"
-        "comparison（≥2 个对象在同一组维度上并排）、ordered_steps（2-5 步有先后）、"
+        "comparison（≥2 个对象在同一组维度上并排）、ordered_steps（2-8 步有先后；"
+        "超过 5 步不要写 form，留给下游 compact process）、"
         "relation（显式节点与有向边，边要能标 evidence/hypothesis）、"
         "curve（示意曲线或趋势，content.schematic=true）、image_evidence（必须读一张实测图）。\n"
         "每条必须绑定本 node 的 evidence；content 写清 items/objects/dimensions/groups/nodes/edges；"

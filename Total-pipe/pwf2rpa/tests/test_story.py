@@ -308,6 +308,22 @@ class StoryExplanationTests(unittest.TestCase):
                          ["Expose the device", "Record the waveform", "Fit the edge"])
         self.assertEqual(specs[2]["metadata"]["story_form"], "sequence")
 
+    def test_eight_step_explain_stays_out_of_rpa_process_slots(self):
+        story = make_story()
+        items = [f"Step {index}" for index in range(1, 9)]
+        story["story"][1]["explain"] = {
+            "must_show": [{
+                "kind": "ordered_steps",
+                "content": {"items": items},
+                "evidence": ["EV0002"],
+            }],
+        }
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertNotIn("process_steps", specs[2])
+        self.assertNotIn("story_form", specs[2]["metadata"])
+        self.assertEqual(len(specs[2]["metadata"]["story_explain"]["must_show"][0]["content"]["items"]), 8)
+
     def test_comparison_without_form_selects_table_category(self):
         story = make_story()
         story["story"][1]["explain"] = {

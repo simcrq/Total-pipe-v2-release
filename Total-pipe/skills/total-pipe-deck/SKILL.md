@@ -133,7 +133,7 @@ RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的
 更推荐写 `explain`：它不选组件，只声明“读者必须看见什么”。`must_show` 的词表是
 `quantity`（必须精确读出的量或公式）、`parallel_items`（2–6 条并列、顺序可换）、
 `grouped_panels`（2–4 组层级/分组）、`comparison`（≥2 对象 × ≥2 维度）、
-`ordered_steps`（2–5 步固定顺序）、`relation`（显式节点与有向边）、
+`ordered_steps`（2–8 步固定顺序；超过 5 步不写 `form`，用 compact process）、`relation`（显式节点与有向边）、
 `curve`（示意曲线，`content.schematic=true`）、`image_evidence`（必须读一张实测图）。
 每条必须绑定本 node 的 `evidence`；`source_quote` 可选，但必须是引用证据中的原文片段。
 一页最多一个 `primary`；没有结构需求时写 `must_show: []` 和 `prose_ok_reason`。
