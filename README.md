@@ -34,7 +34,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | --- | --- | --- |
 | Total-pipe 插件 | `3.3.0+codex.20261021203000` | [插件清单](Total-pipe/.codex-plugin/plugin.json) |
 | Agent 接入层 / 默认 MCP | `1.0.1`；四工具 | [接入层](Total-pipe/agent/__init__.py)、[实施修订](Total-pipe/docs/agent-adapter-design.md) |
-| Total-pipe 低层 MCP / Deck Compiler Python 模块 | `3.2.0` / `2.3.2` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
+| Total-pipe 低层 MCP / Deck Compiler Python 模块 | `3.2.0` / `2.4.0` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
 | PaperWorkflow 插件 / MCP / Python 项目 | `0.2.0+codex.20260928131752` / `0.3.0` / `0.1.0` | [插件清单](PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](PaperWorkflow/mcp_server.py)、[pyproject.toml](PaperWorkflow/pyproject.toml) |
 | pwf2rpa | `1.4.2` | [模块版本](Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | `0.6.3-rc1`；插件构建 `0.6.3-rc1+codex.20260920125419` | [package.json](research-ppt-assistant/package.json)、[插件清单](research-ppt-assistant/.codex-plugin/plugin.json) |
@@ -177,6 +177,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **讲解契约**：Story 的 `explain` 逐条绑定证据，声明读者必须看见的量、并列项、分组、对照、顺序、关系或示意曲线；IR 带进 `semantic.explanation`，编译生成 `derived/explanation_coverage.json`。required 义务缺原生载体时保留 REVIEW，不静默当纯文字页。见 [讲解契约](docs/explanation-contract.md)。
 - **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
 - **可测量边框容器**：layout tree `1.2` 为 panel 增加原生边框与标题色带；takeaway 可独立框选。描边、内边距和完整内容参与容量计算，支持嵌套并保留旧树。见 [容器协议](Total-pipe/docs/framed-containers.md)。
+- **垂直分配**：平面文字栏、公式流、图侧文字栈和 packer 栏在保持实测字号/换行的前提下，把剩余正文高度按上/中/下各三分之一分配，不再把内容顶在上边、留出一整块下空白；表注仍允许低于 18 pt，其余投屏文字守住 18 pt 下限。
 - **可追溯反馈**：`layout_feedback.json` 给出组件路径、所需 / 可用尺寸与建议，供上游用完整内容重规划。
 - **复杂页复审**：stack 保留默认贴合内容，可显式居中或分配余量，留白超过 15% 时给出 REVIEW 与相对权重建议；候选支持逐项签收和待复核视图，内容 / 几何变化后相关记录失效。见[复杂页 QA](Total-pipe/docs/complex-page-qa.md)。
 - **科学术语优先**：`preserve-terms` 保留长标题与正文，超预算可带 REVIEW 生成候选；公式真实宽高、图形可读性和原图尺寸仍执行容量门禁。

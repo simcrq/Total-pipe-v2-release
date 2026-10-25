@@ -155,7 +155,9 @@ class DenseFormulaLayoutTests(unittest.TestCase):
         self.assertTrue(all(e['font_size_px'] >= 24 for e in equations))
         flow = next(a for a in layout['slides'][0]['adaptation_log'] if a['action'] == 'formula_flow')
         self.assertEqual(flow['columns'], 2)
-        self.assertLess(equations[0]['bbox'][1], 280, 'equations start near the body top, not centered in tall columns')
+        self.assertGreaterEqual(equations[0]['bbox'][1], 280,
+                                'equations follow the balanced body band, not a hard top pin')
+        self.assertLessEqual(equations[0]['bbox'][1], 340)
         self.assertLess(max(flow['column_heights_px']), 400)
 
     def test_tall_matrix_and_parallel_matrices_fit_their_real_regions(self):

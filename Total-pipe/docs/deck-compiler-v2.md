@@ -232,12 +232,16 @@ templates. `examples/formula.deck_ir.json` is the reference deck. Note that
 `officecli view screenshot --render html` shows the fallback text; use `--render native` to see the
 typeset formula.
 
-For text-only column slides with at least three blocks, geometric preflight estimates the
+Flat text columns, formula-flow rows, figure-side text stacks and packer columns now keep their
+measured content height and distribute the spare body height above, between and below the blocks
+(one third / one third / one third) instead of pinning text to the body top. This is a geometry
+change only: text is not enlarged, rewrapped or padded to fill the region.
+`TEXT_ONLY_LOWER_WHITESPACE` remains for layouts that cannot distribute (for example a
+`layout_tree` stack with explicit weights), where geometric preflight estimates the
 visible bottom of the laid-out text rather than treating the full reserved textbox as occupied.
-When the empty lower band is at least 160 CSS px and 40% of the body area, it emits
-`TEXT_ONLY_LOWER_WHITESPACE` as a slide-specific `WARNING` with measured bounds in
-`qa_report.json`; the CLI also includes it in `design_notices` with the slide number. This is a
-design notice, not an instruction to invent filler content or a
+When the empty lower band is at least 160 CSS px and 40% of the body area, it emits the slide-specific
+`WARNING` with measured bounds in `qa_report.json`; the CLI also includes it in `design_notices`.
+This is a design notice, not an instruction to invent filler content or a
 promotion blocker; PowerPoint visual review remains the final judgment.
 
 ## Lifecycle

@@ -248,8 +248,9 @@ def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
     * every text box is at most ``factor x content + pad`` tall;
     * text boxes that sit side by side share one height, the tallest content in that row, so a card
       row has one baseline instead of a staircase;
-    * boxes in one column are re-stacked at 24 px gaps from the column's own top, so the space
-      between rows is the grid gutter rather than leftover template slack.
+    * boxes in one column keep the 24 px gutter, then distribute the remaining
+      body height above, between and below the rows instead of pinning them
+      to the top and leaving one empty lower band.
 
     Figures are left alone: their rectangles are already sized to the picture. Returns None when the
     result would leave the region, so the caller can drop that candidate instead of proposing it.
@@ -277,11 +278,29 @@ def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
     bottom_limit = request['region'][1]+request['region'][3]+.5
     for members in columns.values():
         members.sort(key=lambda index: result[index][1])
-        cursor = min(result[index][1] for index in members)
+        top = min(result[index][1] for index in members)
+        content = sum(result[index][3] for index in members)+gap*max(0, len(members)-1)
+        leftover = bottom_limit-(top+content)
+        if leftover < -0.5:
+            return None
+        # Keep the measured content, but do not pin it to the top of the body
+        # band. One box centres; a multi-row column gets a third above, a third
+        # distributed between rows, and a third below.
+        if leftover > 0:
+            if len(members) == 1:
+                top += leftover/2
+                column_gap = gap
+            else:
+                top_pad = leftover/3
+                top += top_pad
+                column_gap = gap+(leftover-2*top_pad)/(len(members)-1)
+        else:
+            column_gap = gap
+        cursor = top
         for index in members:
             result[index][1] = cursor
-            cursor += result[index][3]+gap
-        if cursor-gap > bottom_limit:
+            cursor += result[index][3]+column_gap
+        if cursor-column_gap > bottom_limit+.5:
             return None
     return result
 
@@ -512,7 +531,7 @@ def check(request, boxes):
                     abs(box[2] - members[0][2]) > 2 or
                     (equal_feasible and abs(box[3] - members[0][3]) > 2)
                     for box in members[1:]) or
-                    any(abs(gap - 24) > 2 for gap in gaps)):
+                    (gaps and any(gap < 22 or abs(gap - gaps[0]) > 2 for gap in gaps))):
                 errors.append('SAME_LEVEL_RHYTHM')
         textual=[(u,b) for u,b in zip(units,boxes) if u['role']!='figure']
         if request['archetype']=='process-flow':

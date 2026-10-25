@@ -219,17 +219,16 @@ class CompilerTests(unittest.TestCase):
         layout,items=compile_deck(ir,ROOT)
         self.assertIn('\n',layout['slides'][0]['elements'][0]['text'])
         self.assertNotIn('TITLE_WRAPPED',{i['rule'] for i in items})
-    def test_text_only_lower_whitespace_notice(self):
+    def test_vertical_balance_removes_text_only_lower_band(self):
         layout,items=compile_deck(fixture(),ROOT)
+        # The flat columns now centre their measured content in the body band,
+        # so the previous lower-band warning no longer fires for this fixture.
         notices=[i for i in items if i['rule']=='TEXT_ONLY_LOWER_WHITESPACE']
-        self.assertEqual(len(notices),1)
-        self.assertEqual(notices[0]['slide'],2)
-        self.assertEqual(notices[0]['severity'],'WARNING')
-        self.assertEqual(notices[0]['diagnosis'],'design')
-        self.assertGreaterEqual(notices[0]['source']['empty_lower_px'],160)
-        # The reserved body boxes run to y=640; the notice follows drawn lines.
-        self.assertEqual(max(e['bbox'][1]+e['bbox'][3] for e in layout['slides'][1]['elements']
-                             if e['role']=='body'),640)
+        self.assertEqual(notices,[])
+        body=[e for e in layout['slides'][1]['elements'] if e['role']=='body']
+        self.assertTrue(body)
+        self.assertGreater(min(e['bbox'][1] for e in body), 260)
+        self.assertLessEqual(max(e['bbox'][1]+e['bbox'][3] for e in body),640)
     def test_filled_text_columns_do_not_warn_about_lower_band(self):
         layout,_=compile_deck(fixture(),ROOT)
         elements=copy.deepcopy(layout['slides'][1]['elements'])

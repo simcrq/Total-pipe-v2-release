@@ -947,6 +947,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     available_width_px=box[2], available_height_px=box[3]))
                 return
             by_id = {b['id']: b for b in bs}
+            heights = plan.get('column_heights_px') or []
+            if heights:
+                offset = max(0.0, box[3]-max(heights))/2
+                if offset > .5:
+                    for item in plan['boxes'].values():
+                        item[1] += offset
+                    plan['vertical_offset_px'] = round(offset, 2)
             for bid in plan['reading_order']:
                 block(by_id[bid], plan['boxes'][bid], plan['font_size_px'], 'left')
             adaptations.append({'action': 'formula_flow', 'region': list(box), **plan})
@@ -957,10 +964,21 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if any(b.get('component') == 'formula' or b.get('inline_math') for b in bs):
                 formula_flow(bs, box)
                 return
+            from .academic_layout import block_height
             gap = 24 if comp['archetype'] == 'figure-parameters' else 18
-            h = (box[3]-gap*(len(bs)-1))/len(bs)
-            for k, b in enumerate(bs):
-                block(b, [box[0], box[1]+k*(h+gap), box[2], h])
+            needs = [block_height(b, box[2], font_paths, comp['archetype'],
+                                  list_gap_ratio=list_gap_ratio, bullet_style=bullet_style) for b in bs]
+            total = sum(needs)+gap*(len(bs)-1)
+            extra = max(0.0, box[3]-total)
+            # Keep the content block at the top, share the remaining height as
+            # breathing room above, between and below the blocks. This is the
+            # same measured content, never a stretched text box.
+            top_pad = extra/3
+            gap_extra = (extra-2*top_pad)/max(1, len(bs)-1)
+            cursor = box[1]+top_pad
+            for b, need in zip(bs, needs):
+                block(b, [box[0], cursor, box[2], need])
+                cursor += need+gap+gap_extra
         def figure(f, box, k, caption_top=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
@@ -1369,8 +1387,26 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         else:
             if blocks:
                 w = (1168-32*(len(blocks)-1))/len(blocks)
+                column_start = len(elements)
                 for k, b in enumerate(blocks):
                     block(b, [56+k*(w+32), top, w, bh])
+                # Flat columns otherwise pin every label to the body top and
+                # leave the lower band empty. Centre the measured content in
+                # the body band without enlarging or re-wrapping it.
+                if len(blocks) > 1 and not figs and not comp.get('graphics') and not show_sequence:
+                    created = elements[column_start:]
+                    visible = [e for e in created if e['kind'] in ('text', 'list', 'math')
+                               and e['role'] in ('heading', 'body', 'formula')]
+                    if visible:
+                        content_top = min(e['bbox'][1] for e in visible)
+                        content_bottom = max(text_visible_bottom(e) for e in visible)
+                        empty = bh-(content_bottom-content_top)
+                        if empty > 60:
+                            shift = empty/2
+                            limit = top+bh
+                            for e in created:
+                                e['bbox'][1] += shift
+                                e['bbox'][3] = max(1, min(e['bbox'][3], limit-e['bbox'][1]))
         if show_sequence:
             rows = [next((e for e in elements if e["id"] == b["id"]), None) for b in blocks]
             if all(rows):
