@@ -2,16 +2,18 @@
 import unittest
 
 from totalpipe_layout.contracts import check, snap_rhythm
+from deck_compiler.fonts import resolve_theme_fonts
 
-from test_deck_compiler import fixture
+from test_deck_compiler import ROOT, fixture
 
 
 class LayoutRhythmTests(unittest.TestCase):
     def test_peer_column_and_figure_caption_slack_are_corrected(self):
         theme = fixture()['theme']
+        regular, bold, _ = resolve_theme_fonts(theme, ROOT/'examples')
         request = {
             'archetype': 'figure-parameters', 'region': [56, 236, 1168, 404],
-            'font': theme['font_file'], 'bold_font': theme['bold_font_file'],
+            'font': regular, 'bold_font': bold,
             'font_family': theme['font_family'], 'frame': [],
             'units': [
                 {'id': name, 'role': 'process-step', 'text': value}

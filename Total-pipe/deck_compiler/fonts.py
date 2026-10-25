@@ -50,6 +50,11 @@ def font_search_dirs() -> List[Path]:
     for directory in directories:
         if directory not in unique and directory.is_dir():
             unique.append(directory)
+            if system not in ('Windows', 'Darwin'):
+                # Linux distributions install families below truetype/ and opentype/,
+                # including Noto CJK collections that are absent from the old flat scan.
+                unique.extend(child for child in sorted(directory.rglob('*'))
+                              if child.is_dir() and child not in unique)
     return unique
 
 
@@ -431,7 +436,7 @@ def _discover_macos_fonts() -> Dict[str, Dict[str, str]]:
 
 def _discover_linux_fonts() -> Dict[str, Dict[str, str]]:
     """Discover fonts on Linux."""
-    fonts = {}
+    fonts = _discover_platform_fonts()
     font_dirs = [
         Path('/usr/share/fonts/truetype'),
         Path('/usr/share/fonts/TTF'),
@@ -457,6 +462,8 @@ def _discover_linux_fonts() -> Dict[str, Dict[str, str]]:
     }
 
     for family, search_paths in font_searches.items():
+        if family in fonts:
+            continue
         family_fonts = {}
         variants = ['regular', 'bold']
 

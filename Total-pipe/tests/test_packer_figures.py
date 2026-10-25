@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from deck_compiler.layout import caption_height
+from deck_compiler.fonts import resolve_theme_fonts
 from totalpipe_layout.contracts import (check, figure_box_height, figure_caption_height,
                                         figure_picture_size, required_height)
 
@@ -20,9 +21,9 @@ REGION = [56, 236, 1168, 352]
 
 def request(units):
     theme = fixture()['theme']
+    regular, bold, _ = resolve_theme_fonts(theme, ROOT/'examples')
     return {'archetype': 'figure-left', 'region': REGION, 'units': units,
-            'font': str((ROOT/'examples'/theme['font_file']).resolve()),
-            'bold_font': str((ROOT/'examples'/theme['bold_font_file']).resolve()),
+            'font': regular, 'bold_font': bold,
             'font_family': theme['font_family'], 'frame': [], 'slide_id': 'fixture',
             'sequence_flow': False, 'ir_sha256': 'x'}
 

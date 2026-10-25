@@ -46,6 +46,7 @@ jobs:
       - name: Run compiler regression tests
         run: python -m unittest discover -s Total-pipe/tests -v
       - name: Record backend check scope
+        if: always()
         run: |
           echo 'OfficeCLI-dependent tests may skip in this job. Inspect unittest skip reasons.' >> "$GITHUB_STEP_SUMMARY"
           echo 'PowerPoint UI and native PDF acceptance run separately on macOS or Windows.' >> "$GITHUB_STEP_SUMMARY"
