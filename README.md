@@ -3,7 +3,8 @@
 从论文证据和科研叙事生成可编辑 PowerPoint 的模块化流水线。Agent 按 Skill 调度各组件，
 RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，OfficeCLI 写入原生 PPTX。
 
-**完整流程入口：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。
+**默认入口：** [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) 与四工具接入层。
+**完整流程规范：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。
 **操作手册：** [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)。
 **环境与安装：** [环境清单](Total-pipe/环境清单.md)。
 **按任务查文档：** [当前文档索引](docs/README.md)；Agent 阅读规则见 [AGENTS.md](AGENTS.md)。
@@ -32,7 +33,8 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | 对象 | 当前声明 | 版本来源 |
 | --- | --- | --- |
 | Total-pipe 插件 | `3.3.0+codex.20261021203000` | [插件清单](Total-pipe/.codex-plugin/plugin.json) |
-| Total-pipe MCP / Deck Compiler Python 模块 | `3.2.0` / `2.0.0` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
+| Agent 接入层 / 默认 MCP | `1.0.0`；四工具 | [接入层](Total-pipe/agent/__init__.py)、[实施修订](Total-pipe/docs/agent-adapter-design.md) |
+| Total-pipe 低层 MCP / Deck Compiler Python 模块 | `3.2.0` / `2.0.0` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
 | PaperWorkflow 插件 / MCP / Python 项目 | `0.2.0+codex.20260928131752` / `0.3.0` / `0.1.0` | [插件清单](PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](PaperWorkflow/mcp_server.py)、[pyproject.toml](PaperWorkflow/pyproject.toml) |
 | pwf2rpa | `1.2.0` | [模块版本](Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | `0.6.3-rc1`；插件构建 `0.6.3-rc1+codex.20260920125419` | [package.json](research-ppt-assistant/package.json)、[插件清单](research-ppt-assistant/.codex-plugin/plugin.json) |
@@ -46,6 +48,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | 组件 | 位置 / 入口 | 负责的内容与产物 |
 | --- | --- | --- |
 | 总调度 Skill | [Total-pipe/skills/total-pipe-deck/](Total-pipe/skills/total-pipe-deck/SKILL.md) | 调度证据、Story、RPA、Design、编译与验收；组织失败后的修订 |
+| Agent 接入层 | [Total-pipe/agent/](Total-pipe/agent/)、[轻量 Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) | 以现有组件推进阶段、准备完整提示、验证与恢复 job；不编写科学内容 |
 | PaperWorkflow（PWF） | [PaperWorkflow/](PaperWorkflow/README.md)；`mcp_server.py` | PDF OCR / Markdown 接入、证据检索、图片与尺寸元数据；产出 `workflow.json`、`evidence.md` 和可搬移资源包 |
 | Story Planner | Skill 调度的独立 Agent 阶段；[提示包接口](Total-pipe/pwf2rpa/pwf2rpa/story.py) | 依据证据组织 `question / answer / evidence / next` 和可选 `key_points`，产出 `story_plan.json` |
 | pwf2rpa | [Total-pipe/pwf2rpa/](Total-pipe/pwf2rpa/README.md) | 确定性校验、内容与元数据传输；把 Story 转成 RPA 输入，产出 `rpa_input.json` |
@@ -77,11 +80,13 @@ Story Planner 和 Scientific Visual Planner 是 Agent 工作阶段；提示包�
 
 ### 1. 从论文开始：Agent + Skill
 
-加载三个 MCP 服务：`paperworkflow`、`research_ppt`、`total_pipe_v3`，再使用
-[total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。例如：
+在完整仓库根目录执行 `python3.12 install.py --client codex`（Claude 使用 `--client claude`），
+默认注册 `total_pipe`，只暴露 doctor / start / advance / status 四工具。
+使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提供 Agent 产物与用户选择。
+已有 IR / workflow 可从对应阶段继续；安装、状态与恢复详见[接入层说明](Total-pipe/docs/agent-adapter.md)。例如：
 
 ```text
-使用 total-pipe-deck，将 /absolute/path/paper.pdf 制作为中文研究汇报。
+使用 total-pipe-agent，将 /absolute/path/paper.pdf 制作为中文研究汇报。
 围绕研究问题、方法、关键结果和局限组织证据与故事，完成整套 Design。
 保留完整科学术语、原图和原生公式，交付可编辑候选及 QA 报告。
 ```
@@ -121,13 +126,18 @@ python -m deck_compiler build --ir designed.deck_ir.json --out build/my-deck \
 
 ### 3. MCP 服务入口
 
+默认服务在 `<repo>/Total-pipe` 执行 `python -m agent.mcp_server`，配置为
+[Total-pipe/.mcp.json](Total-pipe/.mcp.json)。原低层三服务保留在
+[.mcp.advanced.json](Total-pipe/.mcp.advanced.json)，用 `install.py --profile advanced` 注册，
+以下是各低层服务的独立启动方式：
+
 | 服务 | 服务进程的工作目录 | 启动命令 | 配置 |
 | --- | --- | --- | --- |
 | `paperworkflow` | `<repo>/PaperWorkflow` | `python mcp_server.py` | [PaperWorkflow/.mcp.json](PaperWorkflow/.mcp.json) |
 | `research_ppt` | `<repo>/research-ppt-assistant` | `node server/mcp-server.mjs` | [research-ppt-assistant/.mcp.json](research-ppt-assistant/.mcp.json) |
-| `total_pipe_v3` | `<repo>/Total-pipe` | `python -m deck_compiler.mcp_server` | [Total-pipe/.mcp.json](Total-pipe/.mcp.json) |
+| `total_pipe_v3` | `<repo>/Total-pipe` | `python -m deck_compiler.mcp_server` | [Total-pipe/.mcp.advanced.json](Total-pipe/.mcp.advanced.json) |
 
-客户端须加载这三份配置，并把相对 cwd 解析到对应组件目录；手动配置时填写实际绝对路径，
+advanced 客户端将相对 cwd 解析到对应组件目录；手动配置时填写实际绝对路径，
 Python 指向已安装依赖的虚拟环境。Total-pipe 服务包含 pwf2rpa 的五个工具，以及
 `totalpipe_capabilities / totalpipe_visual_prompt / totalpipe_apply_visual_plan / totalpipe_compile / totalpipe_build / totalpipe_review`，
 以及候选复审工具 `totalpipe_qa / totalpipe_ack_review`。
@@ -179,6 +189,7 @@ OfficeCLI 的 `Text overflow` 警告估计在 QA 中记为 INFO，保留原始 i
 | 文档 | 内容 |
 | --- | --- |
 | [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md) | 从证据到候选 / final 的完整操作、门禁和修订流程 |
+| [Agent 接入层](Total-pipe/docs/agent-adapter.md) / [修订设计](Total-pipe/docs/agent-adapter-design.md) | 默认四工具、安装、恢复、实际组件契约与设计评审 |
 | [环境清单](Total-pipe/环境清单.md) | 安装、配置、平台范围与服务启动 |
 | [编译器入口](Total-pipe/README.md) | Deck IR 编译命令与产物 |
 | [Scientific Visual Planner](Total-pipe/docs/scientific-visual-planner.md) | 必做 Design、视觉提案及术语容量策略 |

@@ -8,7 +8,8 @@
 | 任务 | 文档 |
 | --- | --- |
 | 了解组件、版本和完整入口 | [仓库 README](../README.md)、[快速开始](../QUICKSTART.md) |
-| Agent 端到端生成或修订 | [总调度 Skill](../Total-pipe/skills/total-pipe-deck/SKILL.md)、[中文使用说明](../Total-pipe/docs/USAGE.zh-CN.md) |
+| Agent 端到端生成或修订 | [轻量接入 Skill](../Total-pipe/skills/total-pipe-agent/SKILL.md)、[四工具与恢复](../Total-pipe/docs/agent-adapter.md)；[完整规范](../Total-pipe/skills/total-pipe-deck/SKILL.md) |
+| Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
 | 安装、环境、字体和平台要求 | [环境清单](../Total-pipe/环境清单.md) |
 | 从 canonical Deck IR 编译 | [编译器 README](../Total-pipe/README.md)、[Deck IR / 公式协议](../Total-pipe/docs/deck-compiler-v2.md) |
 | 开发、检查或更新文档 | [开发与文档维护](development.md)、[文档同步 Skill](../Total-pipe/skills/total-pipe-doc-sync/SKILL.md) |

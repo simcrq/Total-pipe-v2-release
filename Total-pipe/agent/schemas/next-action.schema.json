@@ -1,0 +1,10 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Agent next action v1",
+ "type":"object","required":["type","reason"],"properties":{
+ "type":{"enum":["author_artifact","invoke_subagent","provide_input","replan","resolve_dependency","review_required","none"]},
+ "reason":{"type":"string","minLength":1}},"allOf":[
+ {"if":{"properties":{"type":{"const":"replan"}}},"then":{"required":["target_stage","feedback_path","constraints"]}},
+ {"if":{"properties":{"type":{"enum":["author_artifact","invoke_subagent"]}}},"then":{"required":["artifact_kind","expected_output","instructions_ref"]}},
+ {"if":{"properties":{"type":{"const":"provide_input"}}},"then":{"required":["fields"]}},
+ {"if":{"properties":{"type":{"const":"resolve_dependency"}}},"then":{"required":["remedy"]}},
+ {"if":{"properties":{"type":{"const":"review_required"}}},"then":{"required":["qa_report"]}}
+ ]}

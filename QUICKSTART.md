@@ -5,8 +5,16 @@
 
 ## 从论文开始
 
-加载 `paperworkflow`、`research_ppt` 和 `total_pipe_v3` 三个 MCP 服务，
-使用 [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md) 调度：
+在完整仓库根目录安装并注册默认四工具入口：
+
+```bash
+python3.12 install.py --client codex
+```
+
+Claude 使用 `--client claude`，先检查配置可加 `--dry-run`。
+使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提交 queries、
+真实 Story 子代理产物、IR 与视觉提案；用户选择的模型和完整科学内容必须保留。
+需要低层三服务时用 `--profile advanced`；[安装与恢复](Total-pipe/docs/agent-adapter.md)。
 
 ```text
 PWF 证据 → Story → pwf2rpa → RPA → canonical Deck IR
@@ -16,6 +24,13 @@ PWF 证据 → Story → pwf2rpa → RPA → canonical Deck IR
 ## 从已有 Deck IR 开始
 
 在 `Total-pipe/` 目录运行：
+
+```bash
+python -m agent start --source /abs/deck_ir.json --out-dir /abs/output \
+  --language zh --presentation-type group_meeting
+```
+
+也可继续使用原编译 CLI：
 
 ```bash
 python -m deck_compiler visual-prompt --ir deck_ir.json --out visual_prompt.json

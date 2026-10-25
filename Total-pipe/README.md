@@ -15,7 +15,8 @@
 | [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
 | `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
-| `python -m deck_compiler.mcp_server` | Total-pipe stdio MCP，配置为 [.mcp.json](.mcp.json)，服务名 `total_pipe_v3` |
+| `python -m agent.mcp_server` | 默认四工具入口 [.mcp.json](.mcp.json)，服务名 `total_pipe`；[用法](docs/agent-adapter.md) |
+| `python -m deck_compiler.mcp_server` | 低层 Total-pipe stdio MCP，配置为 [.mcp.advanced.json](.mcp.advanced.json)，服务名 `total_pipe_v3` |
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
 编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。

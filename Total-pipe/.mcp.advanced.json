@@ -1,0 +1,8 @@
+{"mcpServers":{
+ "paperworkflow":{"command":"python","args":["mcp_server.py"],"cwd":"../PaperWorkflow",
+ "env_vars":["PATH","PAPERWORKFLOW_CONFIG","MINERU_TOKEN","DEEPSEEK_API_KEY","OPENAI_API_KEY"],"startup_timeout_sec":20,"tool_timeout_sec":1800},
+ "research_ppt":{"command":"node","args":["./server/mcp-server.mjs"],"cwd":"../research-ppt-assistant",
+ "env_vars":["PATH"],"startup_timeout_sec":20,"tool_timeout_sec":120},
+ "total_pipe_v3":{"command":"python","args":["-m","deck_compiler.mcp_server"],"cwd":".",
+ "env":{"PYTHONUTF8":"1"},"startup_timeout_sec":20,"tool_timeout_sec":600}
+}}

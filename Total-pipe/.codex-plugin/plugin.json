@@ -1,7 +1,7 @@
 {
   "name": "total-pipe-v3",
   "version": "3.3.0+codex.20261021203000",
-  "description": "Research presentation pipeline: Deck IR, pluggable layout providers, geometric gates and OfficeCLI output.",
+  "description": "Four-tool Agent entry for evidence-grounded decks, resumable jobs and existing compiler/OfficeCLI output; advanced component tools remain available.",
   "author": {
     "name": "Total-pipe"
   },
@@ -10,7 +10,7 @@
   "interface": {
     "displayName": "Total-pipe v3",
     "shortDescription": "Agent tools for evidence-grounded decks with deterministic layout.",
-    "longDescription": "Research presentation pipeline with pluggable layout providers (packer, compiler or module:factory), compiler-owned geometry and OfficeCLI output.",
+    "longDescription": "Resumable Agent entry with doctor/start/advance/status, explicit user-selected Story subagents, full IR/Design prompts and candidate QA. Advanced profiles retain existing component tools and CLI-only final validation.",
     "developerName": "Total-pipe",
     "category": "Productivity",
     "capabilities": [

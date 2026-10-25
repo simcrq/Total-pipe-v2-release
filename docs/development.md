@@ -18,6 +18,8 @@ OfficeCLI、字体和可选素材影响对应检查；缺少素材造成的 skip
 仓库根目录的 [Deck Compiler CI](../.github/workflows/deck-compiler.yml) 在 Ubuntu 的 Python
 3.12 / 3.13 上安装当前满足依赖声明的 Pillow wheel、确认 Raqm 可用后运行编译器测试。
 该作业不安装 OfficeCLI；相关原生后端测试会按自身条件跳过，需另在本地执行。
+接入层的状态、安装配置与 stdio 握手测试同属该作业，使用 Node.js 22；
+实际 IR / Markdown 到 PPTX 的接入层集成测试需要 OfficeCLI，本地另运行。
 PowerPoint UI / 原生 PDF 验收仍在 macOS 或 Windows 单独完成。
 
 ## 当前验收依据

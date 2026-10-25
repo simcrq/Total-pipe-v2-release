@@ -20,7 +20,8 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 
 先定位实际仓库，不猜测安装缓存路径。本文路径相对仓库：
 
-- Deck Compiler 命令在 `Total-pipe/` 运行；配置是 `Total-pipe/.mcp.json`。
+- Deck Compiler 命令在 `Total-pipe/` 运行；低层服务在 `Total-pipe/.mcp.advanced.json`。
+- 默认 `Total-pipe/.mcp.json` 为四工具 Agent 接入层；轻量入口见 `Total-pipe/skills/total-pipe-agent/SKILL.md`，本文是按需读取的完整规范。
 - pwf2rpa 命令在 `Total-pipe/pwf2rpa/` 运行。
 - RPA 命令在仓库根目录运行，入口为 `research-ppt-assistant/server/cli.mjs`。
 - MCP 的 `ir`、`out`、`proposal` 等路径必须为绝对路径；CLI 可用相对路径。

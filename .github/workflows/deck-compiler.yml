@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'Total-pipe/**'
+      - 'install.py'
       - '.github/workflows/deck-compiler.yml'
   pull_request:
     paths:
       - 'Total-pipe/**'
+      - 'install.py'
       - '.github/workflows/deck-compiler.yml'
   workflow_dispatch:
 
@@ -29,6 +31,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Install fonts and current runtime dependencies
         run: |
           sudo apt-get update

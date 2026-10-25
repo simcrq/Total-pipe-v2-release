@@ -4,6 +4,10 @@
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
 组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
+默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始；
+`python3.12 install.py --client codex` 注册服务。按 next_action 读取完整产物提示，模型选择仍来自用户。
+[安装、推进与恢复](agent-adapter.md)；下文保留完整规范与低层 CLI 操作。
+
 ## 1. 输入、工作目录与产物
 
 ```text
@@ -21,11 +25,13 @@
 | 操作 | 工作目录 |
 | --- | --- |
 | `python -m deck_compiler …`、`python totalpipe.py …` | `<repo>/Total-pipe` |
+| `python -m agent …` | `<repo>/Total-pipe` |
 | `python -m pwf2rpa …` | `<repo>/Total-pipe/pwf2rpa` |
 | `node research-ppt-assistant/server/cli.mjs …` | `<repo>` |
 
 命令中的尖括号表示需替换的实际文件或参数。CLI 可用相对路径，MCP 的文件路径必须绝对。
-MCP 配置在 [../.mcp.json](../.mcp.json)，入口为 `deck_compiler.mcp_server`；确认配置的
+默认 MCP 配置在 [../.mcp.json](../.mcp.json)，入口为 `agent.mcp_server`；
+低层 `deck_compiler.mcp_server` 在 [advanced 配置](../.mcp.advanced.json) 中；确认配置的
 Python 和 cwd 指向当前副本。运行中的旧服务不会自动重读代码或工具 schema；重载前可用 CLI。
 
 | 构建目录文件 | 含义 |

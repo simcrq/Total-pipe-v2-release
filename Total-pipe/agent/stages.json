@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "stages": [
+    {"id":"intake","kind":"input","requires":["source","out_dir","language","presentation_type"]},
+    {"id":"queries","kind":"agent","artifact":"queries","sources":["pdf","markdown"],"instructions_ref":"queries","max_attempts":3},
+    {"id":"evidence","kind":"component","adapter":"evidence","sources":["pdf","markdown","workflow"],"timeout_sec":1200},
+    {"id":"model_selection","kind":"input","requires":["model","reasoning_effort","selected_by_user"],"sources":["pdf","markdown","workflow"]},
+    {"id":"story_prompt","kind":"component","adapter":"story_prompt","sources":["pdf","markdown","workflow"],"timeout_sec":120},
+    {"id":"story","kind":"agent","artifact":"story_plan","sources":["pdf","markdown","workflow"],"instructions_ref":"story","max_attempts":2},
+    {"id":"rpa","kind":"component","adapter":"rpa","sources":["pdf","markdown","workflow"],"timeout_sec":600},
+    {"id":"deck_ir","kind":"agent","artifact":"deck_ir","instructions_ref":"ir","max_attempts":3},
+    {"id":"design","kind":"component","adapter":"design","skip_if":"design_complete","timeout_sec":120},
+    {"id":"visual_design","kind":"agent","artifact":"visual_proposal","skip_if":"design_complete","instructions_ref":"design","max_attempts":3},
+    {"id":"build","kind":"component","adapter":"build","timeout_sec":660},
+    {"id":"candidate_ready","kind":"terminal"}
+  ],
+  "instructions": {
+    "queries":"agent/schemas/queries.schema.json",
+    "story":"skills/total-pipe-deck/SKILL.md#2-科学故事story-planner",
+    "ir":"work/ir_prompt.json",
+    "design":"work/visual_prompt.json"
+  }
+}
