@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 COMPONENT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,13 @@ def main():
     os.chdir((COMPONENT/server['cwd']).resolve())
     environment = {**os.environ, **server.get('env', {}), 'PYTHONIOENCODING': 'utf-8'}
     command = sys.executable if server['command'] == 'python' else server['command']
-    os.execvpe(command, [command, *server['args']], environment)
+    # Do not os.exec*: on Windows that overlays the process, so the PID the host
+    # spawned exits immediately and its inherited stdio pipes are lost. A stdio
+    # host then sees a clean exit with no initialize response and reports a
+    # timeout. Running as a child keeps the spawned PID and the pipes alive.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    raise SystemExit(subprocess.call([command, *server['args']], env=environment))
 
 
 if __name__ == '__main__':
