@@ -16,6 +16,47 @@ PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa �
 Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都是只读派生物。
 用户本轮或此前已给出的模型、语言和汇报要求继续有效。
 
+## 0. 先看能力，再动手
+
+本文大部分篇幅在讲门禁与协议，容易让人只记住“不能违反什么”。这里先给出**这套流水线能做出哪些页面**，
+以及每项能力的适用条件与代价。写 IR 之前先过一遍，再决定这一页长什么样。
+
+| 能力 | 什么讲解需要它 | 代价 / 限制 |
+|---|---|---|
+| 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
+| `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
+| 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
+| 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
+| 独立公式 `formula` | 展示式推导 | 过高会挤压正文 |
+| 原生表格 | 多材料/多条件对照 | ≤4 表/页、≤32 行 × 12 列、字号 ≥18 pt |
+| `process` | 3–4 步线性流程 | 节点数硬限制 3–4 |
+| `dag` | 分支、并行、汇合 | 同层节点高度必须塞进图形区，正文压到一两行才过 |
+| `path`（含 `C`/`Q` 贝塞尔） | 示意曲线、能带/势垒示意、自定义几何 | label 必须落在 `view_box` 内且够大；须标“示意图” |
+| `mechanism`/`architecture`/`funnel`/`composite` | 机制关系、层叠结构、筛选漏斗 | 关系必须显式声明，不推断 |
+| `takeaway_frame` / `takeaway_marker` | 结论强调 | 只有 4 种组合：底色框 / 空心描边 / 符号引导 / 纯文本；形状不可选 |
+| 设计开关：`density`/`figure_treatment`/`decoration_policy`/`header_variant`/`type_scale`/`variant`/`list_gap` | 整套基调 | 只有这些开关，没有更多版式流派 |
+
+### 0.1 三条设计决策
+
+写 IR 前先答，答案写进工作记录（与 Story provenance 一样可追溯）：
+
+1. **能力**：逐页问四件事——这页的论证里有没有可测量的数学量？有没有 ≥2 条并列、顺序可换的内容？
+   有没有 ≥2 张证据要并排或图文要分层？有没有明确的流程、分支汇合或需要示意的曲线？
+   命中才用对应能力；**都不命中就保持平面页，并写一句为什么不用**。
+   判据是“这一页的讲解需要什么”，不是“这套 deck 还没用过什么”；为用上某能力而拆散一条连续论证，
+   与默认不用同样算错。
+2. **基调**：整套定一次三个颜色与一个 accent 理由（见 §5）。accent 说不出理由就是默认值，应重新选。
+3. **层级**：一套 deck 通常 2–3 层——常规内容页、证据密集页、收束页。同层用同一处理，跨层允许不同。
+   “统一”指系统一致，不是每页一模一样。
+
+### 0.2 反模式
+
+- 每页同一个框、同一种卡片、同一个强调位置
+- 抄上一套 deck 的 theme、配色或 takeaway 处理
+- 一页两个主角（图 + 大表 + 长文同时抢注意力）
+- 正文塞满、留白全堆在底部
+- 为用能力而拆散一条连续论证
+
 ## 工作目录与入口
 
 先定位实际仓库，不猜测安装缓存路径。本文路径相对仓库：
@@ -124,6 +165,8 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 
 ## 4. Canonical Deck IR：正文、图片、图形和公式
 
+按 §0 的四问逐页选能力：命中才读下面小节对应的协议；都不命中就保持平面页，并写明为什么不用。
+
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
 - `semantic`：完整展示标题、purpose、takeaway、证据、论文边界、讲稿。
@@ -139,7 +182,8 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 `design_ir.text_flow.mode` 到 block 的 `text_flow`；不要为了触发列表样式改写科研内容。
 证据编号和运行记录进入备注，不放到面向听众的标题、结论或 caveat。
 
-整套采用同一 frame（`default/spacious`）。有硬流程 layout_contract 时，映射实际 block ID：
+整套 `presentation.variant` 统一（`default/spacious`）；`takeaway` 的处理按 §0.1 的层级区分，
+不是每页同一个框。有硬流程 layout_contract 时，映射实际 block ID：
 
 ```json
 {"relation":"process","members":["b1","b2","b3","b4"],"orientation":"vertical","preserve_order":true,"emphasis":"b4"}
@@ -253,6 +297,13 @@ table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字�
 
 ## 5. Design 阶段：Scientific Visual Planner（默认必做）
 
+整套视觉基调在这里定一次，之后不再逐页改：`theme.foreground/background/accent` 与
+`academic_design.accent_color`（后者覆盖前者）是每套 deck 的决策，不是模板常量。
+accent 从内容里取——论文图的既有色、材料/波段、器件类型的惯用色都可以，但要能说出理由；
+一套只用一个 accent，只用于强调、细线、连接符、列表符号，不铺大面积底色；
+说不出理由就是默认值，应重新选；同一用户的多套 deck 不要连续复用同一组色。
+配色与构图属于判断项，容量、字号下限、证据绑定属于硬门禁，两者分开执行。
+
 Canonical IR 完成后，由当前 Agent 读取完整内容并设计一次整套 Deck；不需要新模型服务。
 
 1. 调 `totalpipe_visual_prompt(ir, out, requirements)`，或运行 `visual-prompt`。
@@ -302,6 +353,8 @@ MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选
 `layout.json/derived/plan_to_layout.json` 的 requested/selected 是否执行了设计决定。
 
 普通生成任务交付 `candidate.pptx` 路径、FAIL/WARNING/REVIEW 数量及关键未解决项，
+并附一行**设计记录**：用了哪些能力（哪几页、对应什么讲解需要）、accent 及其理由、
+`takeaway` 分了哪几层。这行记录用于复核设计判断，不替代 QA 与原生验收。
 不把候选叫 final。`FORMULA_CONTENT_MISMATCH/FORMULA_MISSING` 等失败须修复；
 公式不仅要存在，还须保留被开方项、根指数和所有上下标结构。
 OfficeCLI 的 `Text overflow` 警告估计记为 INFO，保留原 issue，检查实际页面，不据此压缩或删除科学内容。
