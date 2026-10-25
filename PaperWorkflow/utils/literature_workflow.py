@@ -13,7 +13,7 @@ import os
 import re
 import tempfile
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -119,11 +119,22 @@ SUPPLEMENT_TOKENS = (
     "附录",
 )
 QUERY_INTENT_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # Most specific first: a question that names a limitation stays a limitation
+    # even when it also mentions bandwidth or performance.
+    (
+        "limitations",
+        re.compile(
+            r"limitations?|drawbacks?|future outlook|uncertaint|trade-?off|"
+            r"局限|不足|未来展望|限制|约束|权衡|代价",
+            re.IGNORECASE,
+        ),
+    ),
     (
         "sample_preparation",
         re.compile(
             r"sample.*(?:prepar|fabricat|synthesi)|prepar.*sample|fabrication procedure|"
-            r"样品.*(?:制备|合成)|制备方法|合成流程|前处理",
+            r"device (?:structure|fabrication)|layer stack|deposition|grown|growth|anneal|lithograph|"
+            r"样品.*(?:制备|合成)|制备方法|合成流程|前处理|如何制备|怎么制备|制备流程|器件制备|器件结构|层序|工艺",
             re.IGNORECASE,
         ),
     ),
@@ -131,21 +142,17 @@ QUERY_INTENT_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
         "physical_mechanism",
         re.compile(
             r"physical picture|working principle|mechanism|morphology|field distribution|"
-            r"物理图像|物理机制|作用机理|微观形貌",
+            r"barrier|carrier transport|band (?:structure|diagram)|charge (?:accumulation|depletion)|tunnel|"
+            r"物理图像|物理机制|作用机理|微观形貌|势垒|载流子|能带|隧穿|调制机制",
             re.IGNORECASE,
         ),
     ),
     (
         "key_results",
         re.compile(
-            r"key results?|main findings?|performance|关键.*结果|核心结论|性能数据",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "limitations",
-        re.compile(
-            r"limitations?|drawbacks?|future outlook|uncertaint|局限|不足|未来展望",
+            r"key results?|main findings?|performance|responsivity|detectivity|bandwidth|"
+            r"rectification|efficienc|"
+            r"关键.*结果|核心结论|性能数据|性能指标|响应度|探测率|带宽|效率|整流比",
             re.IGNORECASE,
         ),
     ),
@@ -158,21 +165,22 @@ INTENT_QUERY_EXPANSIONS: dict[str, str] = {
         "substrate printing coating curing processing measurement simulation"
     ),
     "sample_preparation": (
-        "sample preparation fabrication synthesis polymerization materials substrate substrates pretreatment plasma hydrophobic silane "
-        "reagent styrene acrylic acid methyl methacrylate PDMS formamide ink formulation "
-        "printing coating curing peeling transfer rolling winding processing experimental details"
+        "sample preparation fabrication synthesis polymerization device structure layer stack "
+        "substrate electrode deposition growth transfer annealing patterning lithography etching "
+        "plasma printing coating curing processing measurement experimental details"
     ),
     "physical_mechanism": (
-        "physical mechanism structure morphology optical field distribution light propagation "
-        "photonic bandgap total internal reflection interference simulation working principle"
+        "physical mechanism working principle structure field distribution carrier transport "
+        "band structure barrier accumulation depletion tunneling simulation energy diagram "
+        "light propagation interference"
     ),
     "key_results": (
-        "results conclusions demonstrate achieve yield resolution stability performance "
-        "scalability tunability cycle metre-scale"
+        "results conclusions demonstrate achieve performance metrics yield stability "
+        "efficiency comparison range repeatability"
     ),
     "limitations": (
-        "limitation constraint challenge uncertainty requirement depends recommended viewing "
-        "illumination angle substrate background assumption future supplementary information discussions evidence dependency unavailable"
+        "limitation constraint challenge trade-off uncertainty assumption future outlook "
+        "supplementary information discussions evidence dependency unavailable"
     ),
 }
 
@@ -610,7 +618,7 @@ def _expanded_query(query: str, intent: str) -> str:
 
 
 def build_evidence_queries(
-    custom_queries: Iterable[str],
+    custom_queries: Iterable[str | Mapping[str, Any]],
     *,
     include_defaults: bool = True,
 ) -> list[dict[str, Any]]:
@@ -624,12 +632,22 @@ def build_evidence_queries(
             query_specs.append(spec)
 
     seen = {item["query"].casefold() for item in query_specs}
-    for index, query in enumerate(custom_queries, start=1):
-        normalised = re.sub(r"\s+", " ", query.strip())
+    for index, item in enumerate(custom_queries, start=1):
+        # Accept plain strings or {"query": ..., "intent": ...} objects. An
+        # explicit intent is honoured; otherwise it is inferred from the text.
+        if isinstance(item, Mapping):
+            raw = str(item.get("query") or "")
+            declared = item.get("intent")
+        else:
+            raw = str(item)
+            declared = None
+        normalised = re.sub(r"\s+", " ", raw.strip())
         if not normalised or normalised.casefold() in seen:
             continue
         seen.add(normalised.casefold())
-        intent = infer_query_intent(normalised)
+        declared_intent = declared.strip() if isinstance(declared, str) else ""
+        declared_ok = declared_intent in INTENT_QUERY_EXPANSIONS or declared_intent == "general"
+        intent = declared_intent if declared_ok else infer_query_intent(normalised)
         expanded = _expanded_query(normalised, intent)
         query_specs.append(
             {
@@ -637,6 +655,7 @@ def build_evidence_queries(
                 "label": f"Custom question {index}",
                 "query": normalised,
                 "intent": intent,
+                "intent_source": "declared" if declared_ok else "inferred",
                 "expanded_query": expanded,
                 "query_expansion_applied": expanded != normalised,
                 "language_bridge_applied": bool(
@@ -831,9 +850,15 @@ def build_literature_workflow(
     supplementary_content_included: bool = False,
     top_k: int = 5,
     chunk_chars: int = 6000,
+    domain: str | None = None,
     ingestion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build and persist one end-to-end literature hand-off package."""
+    """Build and persist one end-to-end literature hand-off package.
+
+    ``domain`` selects an optional facet pack from ``DOMAIN_FACETS``. Leave it
+    unset for arbitrary papers: facet coverage is then reported as not checked
+    and the gate falls back to the domain-neutral retrieval signals.
+    """
 
     original_markdown_path = markdown_path.expanduser().resolve()
     source_path = source_path.expanduser().resolve()
@@ -874,6 +899,8 @@ def build_literature_workflow(
         for chunk in graph["chunks"]
     ]
     metadata = extract_metadata(markdown, source_path)
+    if domain:
+        metadata["coverage_domain"] = domain
     extraction_audit = audit_extraction(markdown, len(outline))
     structure_audit = audit_structure_enhanced(markdown, extraction_audit, manifest)
     quantity_audit = audit_quantities(markdown)
@@ -927,7 +954,7 @@ def build_literature_workflow(
             }
         )
     evidence_registry = build_evidence_registry(evidence)
-    retrieval_audit = audit_retrieval_enhanced(evidence, evidence_registry)
+    retrieval_audit = audit_retrieval_enhanced(evidence, evidence_registry, domain)
     synthesis_audit = synthesis_gate(
         extraction_audit,
         structure_audit,

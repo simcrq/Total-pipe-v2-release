@@ -221,8 +221,12 @@ def execute(stage, job):
             outputs = [Path(p) for p, hashed in resources(workflow).items() if hashed is not None]
         else:
             args = work/'evidence_args.json'
+            # Forward the declared intent when present; PaperWorkflow honours it
+            # instead of re-inferring from the wording.
+            queries = [{'query': q['query'], **({'intent': q['intent']} if q.get('intent') else {})}
+                       for q in read(work/'queries.json')]
             write(args, {'source_path': request['source'], 'output_dir': str(out/'evidence'),
-                         'queries': [query['query'] for query in read(work/'queries.json')],
+                         'queries': queries,
                          'supplementary_paths': request.get('supplementary_paths', []),
                          'supplementary_content_included': request.get('supplementary_content_included', False)})
             result = run([sys.executable, Path(__file__).parent/'bridges/paperworkflow_bridge.py',
@@ -239,7 +243,19 @@ def execute(stage, job):
         except AdapterError as error:
             raise Failure('EVIDENCE_INVALID', str(error), 'replan', 'evidence' if request['source_kind'] == 'workflow' else 'queries') from error
         if value.get('synthesis_readiness', {}).get('readiness') != 'ready':
-            write(work/'evidence_feedback.json', value.get('synthesis_readiness', {}))
+            # Keep the failing gate, but also carry per-query diagnostics so the
+            # replan action says which query to fix instead of "revise queries".
+            feedback = dict(value.get('synthesis_readiness') or {})
+            retrieval = (value.get('quality_dimensions') or {}).get('retrieval') or {}
+            feedback['retrieval'] = {k: retrieval.get(k) for k in
+                                     ('score', 'readiness', 'mean_coverage_ratio', 'coverage_domain',
+                                      'precision_ratio', 'support_span_exposure_ratio', 'warnings')}
+            feedback['per_query'] = [
+                {**{k: item.get(k) for k in ('query_id', 'intent', 'status', 'precision_ratio')},
+                 'coverage': item.get('coverage')}
+                for item in retrieval.get('diagnostics') or []
+            ]
+            write(work/'evidence_feedback.json', feedback)
             raise Failure('EVIDENCE_NOT_READY', 'Evidence synthesis requires source / supplementary review; inspect evidence_feedback.json. '
                           'Repair the original evidence bundle or revise queries / source material before advancing.', 'replan',
                           'evidence' if request['source_kind'] == 'workflow' else 'queries')

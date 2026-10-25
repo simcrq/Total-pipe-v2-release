@@ -14,38 +14,44 @@ TEMPERATURE_RANGE_RE = re.compile(
 )
 TEMPERATURE_RE = re.compile(r"(?<![\d.])(?P<value>-?\d+(?:\.\d+)?)\s*°\s*C", re.I)
 
-COVERAGE_FACETS: dict[str, dict[str, re.Pattern[str]]] = {
-    "sample_preparation": {
-        "materials": re.compile(r"\bmaterials?\b|styrene|PDMS|polystyrene|reagent", re.I),
-        "particle_synthesis": re.compile(r"synthesi|emulsion polymerization|nanospheres?|core.shell|nanoparticles? were", re.I),
-        "ink_formulation": re.compile(r"formamide|viscosity|surface tension|ultrason|colloidal nanoparticle ink", re.I),
-        "substrate_preparation": re.compile(r"substrate|plasma|hydrophobic|contact angle|silane", re.I),
-        "printing": re.compile(r"inkjet|print(?:ed|ing)|nozzle|droplet", re.I),
-        "embedding_or_coating": re.compile(r"coat|blade|embed|penetrate|prepolymer", re.I),
-        "curing": re.compile(r"cur(?:e|ed|ing)|polymerization of PDMS|irradiated", re.I),
-        "peeling_or_transfer": re.compile(r"peel|transfer|flipped|rolled up", re.I),
-        "roll_to_roll": re.compile(r"roll-to-roll|R2R|winding|rolling|continuous", re.I),
-    },
-    "physical_mechanism": {
-        "multiscale_structure": re.compile(r"nanoscale|microscale|n lattice|nanolattice|concave|hemispher", re.I),
-        "photonic_bandgap": re.compile(r"photonic bandgap|\bPBG\b|Bragg|wavelength-selective", re.I),
-        "total_internal_reflection": re.compile(r"total internal reflection|\bTIRs?\b|guided-wave", re.I),
-        "interference_or_dispersion": re.compile(r"interference|dispersion|optical path|phase", re.I),
-        "field_or_simulation": re.compile(r"field distribution|field enhancement|simulat|FDTD|calculated", re.I),
-        "observable_mapping": re.compile(r"rim|centre|central colour|reflectance|angle-dependent|colour", re.I),
-    },
-    "key_results": {
-        "scale_or_throughput": re.compile(r"metre-scale|million|orders of magnitude|roll-to-roll|scalab", re.I),
-        "yield_or_resolution": re.compile(r"yield|dots per inch|dpi|single-pixel|uniformity", re.I),
-        "optical_tunability": re.compile(r"tunable|tunability|redshift|colour mixing|separation|integration", re.I),
-        "stability": re.compile(r"stability|resistance|ultraviolet|temperature|solvent|washing", re.I),
-        "mechanical_robustness": re.compile(r"cycle|stretch|bend|twist|mechanical|elongation", re.I),
-    },
-    "limitations": {
-        "illumination_geometry": re.compile(r"collimated|incident light|illumination|viewing conditions", re.I),
-        "observation_geometry": re.compile(r"observation point|observer|distance|angle-dependent|receiving angle", re.I),
-        "background_or_substrate": re.compile(r"black (?:background|substrate)|background reflection", re.I),
-        "evidence_dependency": re.compile(r"Supplementary|more .*details|online version", re.I),
+# Facet packs are domain plugins, not global truth. A pack describes what a
+# complete answer looks like *for one family of papers*; applying it to another
+# domain measures the wrong thing. Select one explicitly (``domain=``) or leave
+# it unset, in which case facet coverage is reported as "not checked".
+DOMAIN_FACETS: dict[str, dict[str, dict[str, re.Pattern[str]]]] = {
+    "structural_color": {
+        "sample_preparation": {
+            "materials": re.compile(r"\bmaterials?\b|styrene|PDMS|polystyrene|reagent", re.I),
+            "particle_synthesis": re.compile(r"synthesi|emulsion polymerization|nanospheres?|core.shell|nanoparticles? were", re.I),
+            "ink_formulation": re.compile(r"formamide|viscosity|surface tension|ultrason|colloidal nanoparticle ink", re.I),
+            "substrate_preparation": re.compile(r"substrate|plasma|hydrophobic|contact angle|silane", re.I),
+            "printing": re.compile(r"inkjet|print(?:ed|ing)|nozzle|droplet", re.I),
+            "embedding_or_coating": re.compile(r"coat|blade|embed|penetrate|prepolymer", re.I),
+            "curing": re.compile(r"cur(?:e|ed|ing)|polymerization of PDMS|irradiated", re.I),
+            "peeling_or_transfer": re.compile(r"peel|transfer|flipped|rolled up", re.I),
+            "roll_to_roll": re.compile(r"roll-to-roll|R2R|winding|rolling|continuous", re.I),
+        },
+        "physical_mechanism": {
+            "multiscale_structure": re.compile(r"nanoscale|microscale|n lattice|nanolattice|concave|hemispher", re.I),
+            "photonic_bandgap": re.compile(r"photonic bandgap|\bPBG\b|Bragg|wavelength-selective", re.I),
+            "total_internal_reflection": re.compile(r"total internal reflection|\bTIRs?\b|guided-wave", re.I),
+            "interference_or_dispersion": re.compile(r"interference|dispersion|optical path|phase", re.I),
+            "field_or_simulation": re.compile(r"field distribution|field enhancement|simulat|FDTD|calculated", re.I),
+            "observable_mapping": re.compile(r"rim|centre|central colour|reflectance|angle-dependent|colour", re.I),
+        },
+        "key_results": {
+            "scale_or_throughput": re.compile(r"metre-scale|million|orders of magnitude|roll-to-roll|scalab", re.I),
+            "yield_or_resolution": re.compile(r"yield|dots per inch|dpi|single-pixel|uniformity", re.I),
+            "optical_tunability": re.compile(r"tunable|tunability|redshift|colour mixing|separation|integration", re.I),
+            "stability": re.compile(r"stability|resistance|ultraviolet|temperature|solvent|washing", re.I),
+            "mechanical_robustness": re.compile(r"cycle|stretch|bend|twist|mechanical|elongation", re.I),
+        },
+        "limitations": {
+            "illumination_geometry": re.compile(r"collimated|incident light|illumination|viewing conditions", re.I),
+            "observation_geometry": re.compile(r"observation point|observer|distance|angle-dependent|receiving angle", re.I),
+            "background_or_substrate": re.compile(r"black (?:background|substrate)|background reflection", re.I),
+            "evidence_dependency": re.compile(r"Supplementary|more .*details|online version", re.I),
+        },
     },
 }
 
@@ -399,18 +405,25 @@ def audit_source_dependencies(
     }
 
 
-def coverage_for_intent(intent: str, texts: Iterable[str]) -> dict[str, Any]:
-    facets = COVERAGE_FACETS.get(intent, {})
+def coverage_for_intent(intent: str, texts: Iterable[str], domain: str | None = None) -> dict[str, Any]:
+    """Score one intent against a domain facet pack.
+
+    ``coverage_ratio`` is ``None`` when no pack applies. That is deliberately
+    different from ``1.0``: "not checked" must never look like "passed", or a
+    domain without a pack silently scores full marks.
+    """
+
+    facets = (DOMAIN_FACETS.get(domain or "") or {}).get(intent, {})
     joined = "\n".join(texts)
     hits = {name: bool(pattern.search(joined)) for name, pattern in facets.items()}
     covered = [name for name, found in hits.items() if found]
     missing = [name for name, found in hits.items() if not found]
-    ratio = len(covered) / len(facets) if facets else 1.0
     return {
         "facet_count": len(facets),
         "covered_facets": covered,
         "missing_facets": missing,
-        "coverage_ratio": round(ratio, 3),
+        "coverage_ratio": round(len(covered) / len(facets), 3) if facets else None,
+        "domain": domain if facets else None,
     }
 
 
@@ -467,6 +480,7 @@ def build_evidence_registry(evidence: list[dict[str, Any]]) -> list[dict[str, An
 def audit_retrieval_enhanced(
     evidence: list[dict[str, Any]],
     registry: list[dict[str, Any]],
+    domain: str | None = None,
 ) -> dict[str, Any]:
     """Report retrieval precision, facet coverage and supporting-span exposure separately."""
 
@@ -481,11 +495,11 @@ def audit_retrieval_enhanced(
         total_results += len(results)
         exposed_results += sum(bool(item.get("evidence_ids")) for item in results)
         texts = [registry_by_id[item]["text"] for item in group.get("evidence_ids", []) if item in registry_by_id]
-        coverage = coverage_for_intent(group.get("intent", "general"), texts)
+        coverage = coverage_for_intent(group.get("intent", "general"), texts, domain)
         group["coverage"] = coverage
         if coverage["facet_count"]:
             coverage_values.append(coverage["coverage_ratio"])
-        intent_facets = COVERAGE_FACETS.get(group.get("intent", "general"), {})
+        intent_facets = (DOMAIN_FACETS.get(domain or "") or {}).get(group.get("intent", "general"), {})
         precision_hits = 0
         for item in results:
             result_text = "\n".join(
@@ -520,10 +534,16 @@ def audit_retrieval_enhanced(
             "coverage": coverage,
         })
     exposure = exposed_results / total_results if total_results else 1.0
-    mean_coverage = sum(coverage_values) / len(coverage_values) if coverage_values else 1.0
+    mean_coverage = sum(coverage_values) / len(coverage_values) if coverage_values else None
     query_success = acceptable / len(evidence) if evidence else 1.0
     mean_precision = sum(item["precision_ratio"] for item in diagnostics) / max(1, len(diagnostics))
-    score = round(100 * (0.20 * query_success + 0.30 * mean_precision + 0.30 * mean_coverage + 0.20 * exposure))
+    # Facet coverage only participates when a domain pack was selected; otherwise
+    # the remaining weights are renormalised so an unchecked facet never moves
+    # the score in either direction.
+    if mean_coverage is None:
+        score = round(100 * (0.20 * query_success + 0.30 * mean_precision + 0.20 * exposure) / 0.70)
+    else:
+        score = round(100 * (0.20 * query_success + 0.30 * mean_precision + 0.30 * mean_coverage + 0.20 * exposure))
     warnings: list[dict[str, str]] = []
     missing = [item["query_id"] for item in diagnostics if item["status"] == "no_match"]
     partial = [item["query_id"] for item in diagnostics if item["status"] in {"partial", "weak"}]
@@ -540,7 +560,8 @@ def audit_retrieval_enhanced(
         "query_count": len(evidence),
         "acceptable_count": acceptable,
         "precision_ratio": round(mean_precision, 3),
-        "mean_coverage_ratio": round(mean_coverage, 3),
+        "mean_coverage_ratio": round(mean_coverage, 3) if mean_coverage is not None else None,
+        "coverage_domain": domain if mean_coverage is not None else None,
         "support_span_exposure_ratio": round(exposure, 3),
         "unique_evidence_count": len(registry),
         "diagnostics": diagnostics,
@@ -566,7 +587,7 @@ def synthesis_gate(
     gate("reading_order_integrity", "review" if reading["score"] < 85 else "pass", "Scientific prose must not be silently reordered by layout streams.")
     exposure = retrieval["support_span_exposure_ratio"]
     gate("support_span_exposure", "block" if exposure < 0.5 else "review" if exposure < 0.95 else "pass", "Every retrieved item must expose an exact sentence/span and offsets.")
-    gate("evidence_coverage", "review" if retrieval["mean_coverage_ratio"] < 0.7 or retrieval["readiness"] != "ready" else "pass", "Required workflow facets must be covered, not merely represented in top-k.")
+    gate("evidence_coverage", "review" if retrieval["readiness"] != "ready" or (retrieval.get("mean_coverage_ratio") is not None and retrieval["mean_coverage_ratio"] < 0.7) else "pass", "Required workflow facets must be covered, not merely represented in top-k. Facets are scored only for a selected domain pack.")
     gate("supplementary_dependencies", "review" if dependencies["missing_required_count"] else "pass", "Required supplementary evidence must be locally available for a complete mechanism audit.")
     gate("quantity_and_symbol_consistency", "review" if quantities["readiness"] == "review" else "pass", "Linked quantities and symbol definitions require contextual consistency.")
 

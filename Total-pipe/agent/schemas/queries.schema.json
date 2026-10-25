@@ -1,5 +1,6 @@
 {"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Topic-specific evidence queries",
- "description":"Agent-written questions about the actual paper; no default generic filler.",
+ "description":"Agent-written questions about the actual paper; no default generic filler. 'intent' is optional: omitted means it is inferred from the wording. It selects the retrieval expansion and, only under an explicitly selected domain pack, the facet coverage check.",
  "type":"array","minItems":1,"maxItems":32,"items":{"type":"object","additionalProperties":false,
  "required":["id","query"],"properties":{"id":{"type":"string","minLength":1},
- "query":{"type":"string","minLength":1},"intent":{"type":"string"}}}}
+ "query":{"type":"string","minLength":1},
+ "intent":{"type":"string","enum":["general","objective","methods","sample_preparation","physical_mechanism","key_results","limitations"]}}}}
