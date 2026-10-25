@@ -56,6 +56,7 @@
 - 写了 `explain` 可以省略 `form`；required 的 `ordered_steps` / `comparison` 会推导 RPA 的
   `process_steps` / `comparison_dimensions` 计数，保留进入流程/表格布局池的能力。
 - `form` 仍是兼容入口，但不表达列表、嵌套和曲线；新任务优先写 `explain`。
+  注意 `form=relation` 是旧的“公式/可测关系”含义，`kind=relation` 指节点与有向边。
 
 ## Deck IR：`semantic.explanation`
 

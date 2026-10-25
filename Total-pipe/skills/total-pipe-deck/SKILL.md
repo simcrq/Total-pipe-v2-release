@@ -138,7 +138,8 @@ RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的
 每条必须绑定本 node 的 `evidence`；`source_quote` 可选，但必须是引用证据中的原文片段。
 一页最多一个 `primary`；没有结构需求时写 `must_show: []` 和 `prose_ok_reason`。
 写了 `explain` 可省略 `form`：required 的 `ordered_steps` / `comparison` 会推导 RPA 计数；
-两者都写时仍按上面的 `form` 规则进入类别池。
+两者都写时仍按上面的 `form` 规则进入类别池。注意 `form=relation` 是旧的“公式/可测关系”，
+`explain.kind=relation` 指节点与有向边，两者不是同一件事。
 
 ```json
 {"title":"...","question":"...","answer":"...","evidence":["EV0002"],"next":"...",
