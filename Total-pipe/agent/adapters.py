@@ -110,7 +110,8 @@ def run(argv, cwd, out, name, timeout=120, json_output=True):
             match = re.search(r'\b(STORY_[A-Z_]+|[A-Z_]*CAPACITY[A-Z_]*|SOURCE_TEXT_NOT_BOUND|KEY_POINTS_LOST)\b', stderr)
             code = match.group(1) if match else 'COMPONENT_FAILED'
         raise classify(code, first.get('message') or stderr[-1000:] or 'Component rejected this input; inspect its log.',
-                       'rpa' if name.startswith('rpa') else 'build' if name == 'build' else None, str(log))
+                       'rpa' if name.startswith('rpa') or name == 'pwf2rpa'
+                       else 'build' if name == 'build' else None, str(log))
     return value
 
 

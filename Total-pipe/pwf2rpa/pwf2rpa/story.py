@@ -414,6 +414,14 @@ def _first_obligation(explain: Mapping[str, Any] | None, kind: str) -> dict[str,
                  if isinstance(item, Mapping) and item.get("kind") == kind), None)
 
 
+def _compact_items(explain: Mapping[str, Any] | None) -> list[str]:
+    """Return a >5-step ordered chain that must bypass RPA's process pool."""
+    ordered = _first_obligation(explain, "ordered_steps")
+    content = ordered.get("content") if isinstance(ordered, Mapping) else None
+    items = _string_list(content.get("items")) if isinstance(content, Mapping) else []
+    return items if len(items) > 5 else []
+
+
 def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[Problem]]:
     """Validate and normalize one Story Planner result.
 
@@ -807,7 +815,11 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
                 for field, values in derived_slots.items():
                     if values:
                         slots.setdefault(field, list(values))
-        category = _category_for(node["question"], index, form)
+        compact_items = _compact_items(explain)
+        # RPA's process pools stop at five slots.  A longer chain is a compact
+        # compiler graphic, so use a text-only discussion page as the brief
+        # carrier and never let RPA substitute a three-slot process placeholder.
+        category = "discussion" if compact_items and not form else _category_for(node["question"], index, form)
         title_limit = max((layout.title_chars or 0) for layout in fit.CATEGORIES[category].layouts) or 34
         # The planner may write its own slide title. RPA still needs one that fits its slot, so the
         # brief carries the truncated form and the metadata keeps the full sentence for the Deck IR.
@@ -849,16 +861,10 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
             spec["metadata"]["story_form"] = form
         if explain is not None:
             spec["metadata"]["story_explain"] = explain
-            ordered = _first_obligation(explain, "ordered_steps")
-            content = ordered.get("content") if isinstance(ordered, Mapping) else None
-            items = _string_list(content.get("items")) if isinstance(content, Mapping) else []
-            if len(items) > 5:
-                # RPA's process pool tops out at three/five slots.  Mark the full
-                # chain explicitly so the IR mapper builds the compact graphic
-                # instead of copying the smaller RPA placeholder page.
+            if compact_items:
                 spec["metadata"]["story_compact_process"] = {
-                    "items": items,
-                    "node_count": len(items),
+                    "items": compact_items,
+                    "node_count": len(compact_items),
                 }
         specs.append(spec)
 

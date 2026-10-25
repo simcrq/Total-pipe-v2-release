@@ -322,6 +322,7 @@ class StoryExplanationTests(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertNotIn("process_steps", specs[2])
         self.assertNotIn("story_form", specs[2]["metadata"])
+        self.assertEqual(specs[2]["category_hint"], "discussion")
         self.assertEqual(len(specs[2]["metadata"]["story_explain"]["must_show"][0]["content"]["items"]), 8)
         self.assertEqual(specs[2]["metadata"]["story_compact_process"]["node_count"], 8)
 
