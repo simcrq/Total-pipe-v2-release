@@ -221,6 +221,48 @@ class StoryChainTests(unittest.TestCase):
         specs, _warnings = story_to_specs(story, self.workflow)
         self.assertEqual(len(specs), 6)
 
+    def test_declared_form_selects_structural_category(self):
+        # Without a form the keyword fallback only ever reaches the prose pools, so a
+        # procedure or a comparison lost the structure it needed before reaching RPA.
+        story = make_story()
+        story["story"][1]["form"] = "sequence"
+        story["story"][1]["process_steps"] = ["Measure at each temperature", "Fit the slope"]
+        story["story"][2]["form"] = "compare"
+        story["story"][2]["comparison_dimensions"] = ["Contact resistance", "Barrier symmetry"]
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(specs[2]["category_hint"], "workflow")
+        self.assertEqual(specs[3]["category_hint"], "table")
+        self.assertEqual(specs[2]["metadata"]["story_form"], "sequence")
+        self.assertEqual(specs[2]["process_steps"], ["Measure at each temperature", "Fit the slope"])
+
+    def test_form_slots_reach_rpa_brief_as_counts(self):
+        # RPA derives process_step_count from the brief and treats it as a hard
+        # retrieval constraint; an empty list is what kept every page off the pools
+        # that carry a process or table region.
+        story = make_story()
+        story["story"][1]["form"] = "sequence"
+        story["story"][1]["process_steps"] = ["Step one", "Step two", "Step three"]
+        payload, warnings = convert(self.workflow, story=story, strict_fit=False)
+        self.assertEqual(warnings, [])
+        brief = payload["slide_briefs"][2]
+        self.assertEqual(brief["process_steps"], ["Step one", "Step two", "Step three"])
+        self.assertEqual(brief["process_step_count"], 3)
+        self.assertEqual(brief["metadata"]["story_form"], "sequence")
+
+    def test_unknown_form_warns_without_failing(self):
+        story = make_story()
+        story["story"][1]["form"] = "mindmap"
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertIn("STORY_FORM_UNKNOWN", [warning.code for warning in warnings])
+        self.assertNotIn("story_form", specs[2]["metadata"])
+
+    def test_form_without_its_slots_is_flagged(self):
+        story = make_story()
+        story["story"][1]["form"] = "sequence"
+        _specs, warnings = story_to_specs(story, self.workflow)
+        self.assertIn("STORY_FORM_UNFILLED", [warning.code for warning in warnings])
+
 
 if __name__ == "__main__":
     unittest.main()

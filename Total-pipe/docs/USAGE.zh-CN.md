@@ -100,6 +100,40 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 化学态、单位与限定词，不为容量截断或强行缩写。`ending.limitation` 只记录论文边界；
 输入文件是否取得、SI 是否审阅等进入工作记录。
 
+### 节点的讲解形态
+
+Story 只决定“这一步怎么讲清楚”，不选版式；但形态要说出来，否则下游只能把它当纯文字页。
+节点可带 `form` 与对应结构字段：
+
+```json
+{
+  "title": "四个候选机制里，只有一个与实验同量级",
+  "question": "纳秒响应由什么限制？",
+  "answer": "只有漂移渡越的时间常数与实测吻合。",
+  "form": "branch",
+  "key_points": ["RC 估算约 10^-4 ps", "陷阱：电阻不随光强变", "扩散：只在漏端金属下"],
+  "evidence": ["EV0008"],
+  "next": "这套归因能否换材料复现？"
+}
+```
+
+| `form` | 用于 | 必带字段 |
+|---|---|---|
+| `sequence` | 有序步骤或因果链 | `process_steps`（2–5 条，每条一句） |
+| `compare` | ≥2 个对象在同一组指标上并排 | `comparison_dimensions`（2 条以上） |
+| `branch` | 多个候选说法各自被检验后收敛 | 候选写进 `key_points` |
+| `relation` | 答案是一个可测量的关系或公式 | 公式用 `$…$` 写在 answer 或 key_points |
+| `evidence` | 答案要读一张实测图 | — |
+
+`process_steps` / `comparison_dimensions` / `timeline_events` 会原样进入 slide brief 的同名字段，
+RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的硬约束，空着就检索不到带流程或
+表格区域的布局。类别映射：`sequence`→`workflow`、`compare`→`table`、`branch`→`discussion`。
+`relation`/`evidence` 指向需要图片资产的类别，本阶段不保证有图，因此只记进 `metadata.story_form`，
+类别仍按问句措辞回退。不声明 `form` 时行为与旧版完全一致。
+
+校验只告警不阻断：`STORY_FORM_UNKNOWN`（取值不在表内）、`STORY_FORM_UNFILLED`（声明了形态却没写结构）、
+`STORY_FORM_SLOTS_INVALID`（少于 2 条或含空串）、`STORY_FORM_SLOTS_TOO_LONG`（流程超过 5 步）。
+
 ### 可选的科研流程意图
 
 恰好四条 key_points 存在明确步骤关系时，DesignIntentPlanner 可生成：

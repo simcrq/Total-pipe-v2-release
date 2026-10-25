@@ -27,8 +27,24 @@ __all__ = [
 
 HIGH_REASONING_EFFORTS = frozenset({"high", "xhigh", "max", "ultra"})
 _ROOT_FIELDS = frozenset({"planner", "core_question", "main_message", "story", "ending"})
+# Explanation forms the Story Planner may declare.  Each one names what the reader
+# needs to see, not which slide component to use: layout choice stays downstream.
+# Only forms whose layout pool is text-only are mapped to a category here --
+# figure-bound pools (figure_text, dual_figure, architecture) need visual assets
+# this stage cannot promise, so those forms keep their intent in metadata for the
+# Deck IR stage and fall back to the keyword rotation.
+_FORMS = frozenset({"sequence", "compare", "branch", "relation", "evidence", "prose"})
+_FORM_CATEGORY = {
+    "sequence": "workflow",
+    "compare": "table",
+    "branch": "discussion",
+}
+_FORM_SLOTS = {"sequence": "process_steps", "compare": "comparison_dimensions"}
+_SLOT_FIELDS = ("process_steps", "comparison_dimensions", "timeline_events")
+
 _PLANNER_FIELDS = frozenset({"mode", "model", "reasoning_effort", "selected_by_user"})
-_NODE_FIELDS = frozenset({"title", "question", "answer", "key_points", "evidence", "next"})
+_NODE_FIELDS = frozenset({"title", "question", "answer", "key_points", "evidence", "next",
+                        "form", "process_steps", "comparison_dimensions", "timeline_events"})
 _ENDING_FIELDS = frozenset({"takeaway", "limitation"})
 
 _GENERIC_NEXT = re.compile(
@@ -225,6 +241,65 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             key_points = []
         else:
             key_points = list(raw_key_points)
+        form = _text(node_raw.get("form")).lower()
+        if form and form not in _FORMS:
+            problems.append(
+                Problem(
+                    "STORY_FORM_UNKNOWN",
+                    f"{path}.form",
+                    "declare one of the explanation forms this pipeline can render, or omit form.",
+                    actual=form,
+                    expected=sorted(_FORMS),
+                    severity="warning",
+                )
+            )
+            form = ""
+        slots: dict[str, list[str]] = {}
+        for field in _SLOT_FIELDS:
+            raw_list = node_raw.get(field)
+            if raw_list is None:
+                continue
+            values = (
+                [item.strip() for item in raw_list if isinstance(item, str) and item.strip()]
+                if isinstance(raw_list, list)
+                else []
+            )
+            if len(values) < 2:
+                problems.append(
+                    Problem(
+                        "STORY_FORM_SLOTS_INVALID",
+                        f"{path}.{field}",
+                        f"{field} must be an array of at least 2 non-empty strings.",
+                        severity="warning",
+                    )
+                )
+                continue
+            if field == "process_steps" and len(values) > 5:
+                # process_step_count is a hard retrieval constraint and the widest
+                # process layout holds 5 nodes; more than that drops the page off the
+                # category. Say so here, where the planner can still merge steps.
+                problems.append(
+                    Problem(
+                        "STORY_FORM_SLOTS_TOO_LONG",
+                        f"{path}.{field}",
+                        "a process strip holds at most 5 steps; merge the rest into the answer.",
+                        actual=len(values),
+                        expected="<= 5",
+                        severity="warning",
+                    )
+                )
+            slots[field] = values
+        required_slot = _FORM_SLOTS.get(form)
+        if required_slot and required_slot not in slots:
+            problems.append(
+                Problem(
+                    "STORY_FORM_UNFILLED",
+                    f"{path}.{required_slot}",
+                    "this form needs its structure written out, or the page degrades to plain text.",
+                    severity="warning",
+                )
+            )
+
         evidence_ids = _string_list(node_raw.get("evidence"))
         if not evidence_ids:
             problems.append(
@@ -291,6 +366,9 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             node["title"] = title
         if key_points:
             node["key_points"] = key_points
+        if form:
+            node["form"] = form
+        node.update(slots)
         nodes.append(node)
 
     ending_raw = raw.get("ending")
@@ -343,10 +421,19 @@ def _truncate(text: str, limit: int) -> str:
     return text[: max(1, limit - 1)].rstrip() + "…"
 
 
-def _category_for(question: str, index: int) -> str:
-    lower = question.lower()
+def _category_for(question: str, index: int, form: str = "") -> str:
+    """Pick a layout category from the declared form first, then from keywords.
+
+    The keyword branch is a fallback for nodes that did not declare a form.  It
+    can only see question wording, so a page whose argument is a procedure or a
+    comparison used to land on a text pool and lose the structure it needed.
+    """
     if index == 0:
         return "question"
+    mapped = _FORM_CATEGORY.get(form)
+    if mapped:
+        return mapped
+    lower = question.lower()
     if any(token in lower for token in ("为什么", "机制", "原因", "解释", "why", "mechanism", "explain")):
         return "discussion"
     if any(token in lower for token in ("如何", "方法", "策略", "how", "method", "approach")):
@@ -395,7 +482,7 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
     ]
 
     for index, node in enumerate(plan["story"]):
-        category = _category_for(node["question"], index)
+        category = _category_for(node["question"], index, node.get("form", ""))
         title_limit = max((layout.title_chars or 0) for layout in fit.CATEGORIES[category].layouts) or 34
         # The planner may write its own slide title. RPA still needs one that fits its slot, so the
         # brief carries the truncated form and the metadata keeps the full sentence for the Deck IR.
@@ -421,6 +508,14 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
         }
         if node.get("key_points"):
             spec["key_points"] = list(node["key_points"])
+        # Structural slots go to RPA top-level: its planner derives process_step_count
+        # and comparison_dimension_count from them, and those counts are what let a
+        # layout with a process or table region be retrieved at all.
+        for field in _SLOT_FIELDS:
+            if node.get(field):
+                spec[field] = list(node[field])
+        if node.get("form"):
+            spec["metadata"]["story_form"] = node["form"]
         specs.append(spec)
 
     final_evidence = list(dict.fromkeys(
@@ -501,7 +596,10 @@ def build_story_prompt(
         "main_message": "string",
         "story": [
             {"title": "string, optional", "question": "string", "answer": "string",
-             "evidence": ["EV0001"], "next": "string, optional on the last node"}
+             "evidence": ["EV0001"], "next": "string, optional on the last node",
+             "form": "sequence|compare|branch|relation|evidence, optional",
+             "process_steps": ["one step per item, required when form=sequence"],
+             "comparison_dimensions": ["one dimension per item, required when form=compare"]}
         ],
         "ending": {"takeaway": "string", "limitation": "string, optional"},
     }
@@ -520,10 +618,20 @@ def build_story_prompt(
         "5. next 说明当前证据留下的疑问或待验证机制，除最后一个 node 外必填；"
         "最后一个 node 不需要为了形式补一句“下一步看什么”。不得写成‘然后看 Fig.4’。\n"
         "6. 允许删除重复、展示性或弱相关证据，目标是最短、最清晰的核心证据链。\n"
-        "7. 不决定 PPT 页数、布局、配色、裁图或完整实验参数。\n"
+        "7. 不决定页数、版式细节、配色与裁图；但要说明这一步的答案需要什么形态（见下），"
+        "否则下游只能把它当纯文字页。\n"
         "8. 相邻节点应能用‘因此/但是/为了验证/为了排除/如果该解释成立’连接。\n\n"
         "关于 ending：takeaway 必填；limitation 可选，只写论文自身的边界（样本、条件、方法假设）。"
         "不要写你这次拿到了哪些文件、SI 是否取得或是否审阅——那是工作记录，不是科学结论。\n\n"
+        "关于形态：这套管线能把一页做成不同形态。你的任务不是挑版式，而是判断这一步的答案需要哪一种形态，"
+        "并把它的结构写出来——写不出来，下游只能把它当纯文字页。\n"
+        "form 取值：sequence（有序步骤或因果链，配 process_steps）、"
+        "compare（≥2 个对象在同一组指标上并排，配 comparison_dimensions）、"
+        "branch（多个候选说法各自被检验后收敛，候选写进 key_points）、"
+        "relation（答案是一个可测量的关系或公式，公式用 $…$ 写）、"
+        "evidence（答案要读一张实测图）。都不成立就不写 form。\n"
+        "process_steps / comparison_dimensions 每条一句、2-5 条，只写证据支持的内容；"
+        "它们描述“这一步怎么讲清楚”，不涉及页数、配色、裁图或实验参数。\n\n"
         "当一句 answer 会抹掉必须保留的连续内容时，可在该 node 添加 key_points 字符串数组；"
         "逐条保留证据支持的细节，不要求每个 node 都添加，也不限制条数。\n\n"
         "自检：删掉任一 node 后，下一 node 是否仍只因为论文顺序而出现？如果是，重写链条。"

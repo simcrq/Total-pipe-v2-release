@@ -23,6 +23,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 
 | 能力 | 什么讲解需要它 | 代价 / 限制 |
 |---|---|---|
+| **Story 节点形态 `form`**（`sequence`/`compare`/`branch`/`relation`/`evidence`） | 在 Story 阶段就把“这一步要讲成什么形态”说出来，并写出结构 | 它决定 RPA 的布局类别；不写就退回按问句措辞猜，通常落到纯文字池 |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
 | 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
@@ -45,6 +46,8 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
    命中才用对应能力；**都不命中就保持平面页，并写一句为什么不用**。
    判据是“这一页的讲解需要什么”，不是“这套 deck 还没用过什么”；为用上某能力而拆散一条连续论证，
    与默认不用同样算错。
+   这四个问题在 Story 阶段就要有答案：写进节点的 `form` 与对应结构字段（见「Story」节）。
+   只在 IR 阶段想，能力就只能拿来装饰已经定型的文字页。
 2. **基调**：整套定一次三个颜色与一个 accent 理由（见 §5）。accent 说不出理由就是默认值，应重新选。
 3. **层级**：一套 deck 通常 2–3 层——常规内容页、证据密集页、收束页。同层用同一处理，跨层允许不同。
    “统一”指系统一致，不是每页一模一样。
@@ -109,6 +112,22 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 省略时取 question；不要为了标题形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
+
+节点可带 `form` 声明这一步的讲解形态，并写出对应结构：
+
+| form | 用于 | 必带字段 |
+|---|---|---|
+| `sequence` | 有序步骤或因果链 | `process_steps`（2–5 条，每条一句） |
+| `compare` | ≥2 个对象在同一组指标上并排 | `comparison_dimensions`（2 条以上） |
+| `branch` | 多个候选说法各自被检验后收敛 | 候选写进 `key_points` |
+| `relation` | 答案是一个可测量的关系或公式 | 公式用 `$…$` 写在 answer 或 key_points |
+| `evidence` | 答案要读一张实测图 | — |
+
+`process_steps` / `comparison_dimensions` / `timeline_events` 会原样进入 slide brief 同名字段，
+RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的**硬约束**，
+空着就检索不到带流程或表格区域的布局。`sequence` 落到 `workflow` 类别、`compare` 落到 `table`、
+`branch` 落到 `discussion`；`relation`/`evidence` 指向需要图片资产的类别，本阶段不保证有图，
+因此只记进 `metadata.story_form`，类别仍按问句措辞回退。不声明 `form` 时行为与旧版一致。
 
 顶层记录真实 provenance：
 
