@@ -139,11 +139,32 @@ class GraphicTests(unittest.TestCase):
         edges = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-edge']
         self.assertTrue(all(edge['bbox'][3] > 0 for edge in edges))
 
+    def test_compact_process_holds_eight_square_rect_nodes(self):
+        ir = fixture()
+        ir['slides'] = [ir['slides'][1]]
+        g = graphic(ir)
+        g['layout'] = 'compact'
+        g['direction'] = 'horizontal'
+        g['nodes'] = [{'id': f'n{index}', 'title': f'步骤{index}'} for index in range(8)]
+        g['edges'] = [{'from': f'n{index}', 'to': f'n{index+1}'} for index in range(7)]
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        nodes = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-node']
+        self.assertEqual(len(nodes), 8)
+        self.assertTrue(all(node['geometry'] == 'rect' for node in nodes))
+        self.assertTrue(all(abs(node['bbox'][2] - node['bbox'][3]) < .1 for node in nodes))
+        edges = [e for e in layout['slides'][0]['elements'] if e.get('role') == 'graphic-edge']
+        self.assertEqual(len(edges), 7)
+
     def test_process_layout_rejects_incompatible_combinations_and_tones(self):
         for name, mutate in {
             'vertical staggered': lambda g: g.update(direction='vertical', layout='staggered'),
+            'vertical compact': lambda g: g.update(direction='vertical', layout='compact'),
             'dag staggered': lambda g: g.update(type='dag', layout='staggered'),
             'unknown tone': lambda g: g['nodes'][0].update(tone='bold'),
+            'compact non-square shape': lambda g: g.update(layout='compact') or g['nodes'][0].update(shape='ellipse'),
+            'compact too many nodes': lambda g: g.update(layout='compact', nodes=[{'id': f'n{i}', 'title': 'x'} for i in range(9)],
+                                                         edges=[{'from': f'n{i}', 'to': f'n{i+1}'} for i in range(8)]),
         }.items():
             with self.subTest(name=name):
                 ir = fixture()

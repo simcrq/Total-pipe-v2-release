@@ -303,8 +303,8 @@
         "type": {"enum": ["process", "dag"]},
         "direction": {"enum": ["horizontal", "vertical"],
           "description": "process supports top-down vertical chains; dag remains horizontal."},
-        "layout": {"enum": ["chain", "staggered"],
-          "description": "Horizontal process may stagger alternate nodes; vertical and dag use chain."},
+        "layout": {"enum": ["chain", "staggered", "compact"],
+          "description": "Horizontal process may stagger alternate nodes or use compact square nodes; vertical and dag use chain."},
         "nodes": {
           "type": "array", "minItems": 1, "maxItems": 16,
           "items": {
@@ -335,8 +335,8 @@
       },
       "allOf": [{
         "if": {"properties": {"type": {"const": "process"}}},
-        "then": {"properties": {"nodes": {"minItems": 3, "maxItems": 4},
-                                "edges": {"minItems": 2, "maxItems": 3}}}
+        "then": {"properties": {"nodes": {"minItems": 3, "maxItems": 8},
+                                "edges": {"minItems": 2, "maxItems": 7}}}
       }, {
         "if": {"properties": {"type": {"const": "dag"}}},
         "then": {"properties": {"direction": {"const": "horizontal"},

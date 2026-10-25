@@ -34,7 +34,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | --- | --- | --- |
 | Total-pipe 插件 | `3.3.0+codex.20261021203000` | [插件清单](Total-pipe/.codex-plugin/plugin.json) |
 | Agent 接入层 / 默认 MCP | `1.0.0`；四工具 | [接入层](Total-pipe/agent/__init__.py)、[实施修订](Total-pipe/docs/agent-adapter-design.md) |
-| Total-pipe 低层 MCP / Deck Compiler Python 模块 | `3.2.0` / `2.2.0` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
+| Total-pipe 低层 MCP / Deck Compiler Python 模块 | `3.2.0` / `2.3.0` | [MCP 服务](Total-pipe/deck_compiler/mcp_server.py)、[模块版本](Total-pipe/deck_compiler/__init__.py) |
 | PaperWorkflow 插件 / MCP / Python 项目 | `0.2.0+codex.20260928131752` / `0.3.0` / `0.1.0` | [插件清单](PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](PaperWorkflow/mcp_server.py)、[pyproject.toml](PaperWorkflow/pyproject.toml) |
 | pwf2rpa | `1.3.0` | [模块版本](Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | `0.6.3-rc1`；插件构建 `0.6.3-rc1+codex.20260920125419` | [package.json](research-ppt-assistant/package.json)、[插件清单](research-ppt-assistant/.codex-plugin/plugin.json) |
@@ -172,7 +172,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **原生数学内容**：分式、根号、上下标、嵌套指数、六种矩阵环境；密集多步推导按实际单双栏区域测量。
 - **显式行内公式**：正文、标题 / takeaway、表格文字格可选开启；文字与数学片段按逐行宽度、上伸和下伸高度计算容量。图注、图形标签和 panel 标题暂不解析行内公式。
 - **复合区域与表格**：`columns / stack / panel / image_grid` 递归布局；layout tree `1.1` 增加原生表格，含合并表头、跨行跨列和公式格；保留旧平面 IR 与 `1.0` 树。
-- **原生科研图形**：流程、DAG、机制、分层架构、漏斗和贝塞尔路径；`process` 支持横向、纵向与错位布局，节点可单独强调；关系由上游显式声明，编译器分配区域。
+- **原生科研图形**：流程、DAG、机制、分层架构、漏斗和贝塞尔路径；`process` 支持横向、纵向、错位和 3–8 步全方形紧凑布局，节点可单独强调；关系由上游显式声明，编译器分配区域。
 - **原生列表**：整套或 block 独立设置符号样式与颜色，takeaway 可单独加前导标记；最低宽度 520 CSS px，高度按完整条目实测，术语保留策略不删除项目符号。见 [列表协议](Total-pipe/docs/native-lists.md)。
 - **讲解契约**：Story 的 `explain` 逐条绑定证据，声明读者必须看见的量、并列项、分组、对照、顺序、关系或示意曲线；IR 带进 `semantic.explanation`，编译生成 `derived/explanation_coverage.json`。required 义务缺原生载体时保留 REVIEW，不静默当纯文字页。见 [讲解契约](docs/explanation-contract.md)。
 - **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。

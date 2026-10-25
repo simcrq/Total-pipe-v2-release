@@ -58,12 +58,17 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
 
 - `direction` 支持 `horizontal`（默认，从左到右）和 `vertical`（从上到下）；
   纵向链在正文区高度有限，3 步更稳，4 步请只用短标题或省略 `body`。
-- `layout` 支持 `chain`（默认）和 `staggered`；`staggered` 只用于横向，
+- `layout` 支持 `chain`（默认）、`staggered` 和 `compact`；`staggered` 只用于横向，
   相邻节点上下错开约 28 px，连接符使用三折弯头，便于在宽页上打破“一条直线”。
+- `compact` 是“更多步骤、全方形”的横向布局：支持 3–8 个 `rect` 节点，
+  节点边长最大 180 px、最小 96 px，按可用宽度等比缩小，整体居中；
+  字号用 24 CSS px（18 pt）下限，标题保持短，`body` 尽量省略。
+  它强制 `shape=rect`（可省略 `shape`），不接受 ellipse/diamond/hexagon。
 - 节点按数组顺序排列；横向从左到右、纵向从上到下。必须显式连接每对相邻节点，
   且恰好一次；`kind` 可省略，当前只接受 `arrow`。不推断、补写或改变科学关系。
 - `shape` 支持 `rect`、`rounded-rect`（默认）、`ellipse`、`diamond`、`hexagon`。
-  纵向链的 `hexagon` 使用最接近上/下顶点的连接点，不假装存在边中点。
+  `compact` 只用 `rect`；纵向链的 `hexagon` 使用最接近上/下顶点的连接点，
+  不假装存在边中点。
 - 节点可带 `tone: "default" | "emphasis"`；`emphasis` 只加深主题色 tint 并加粗描边，
   仍是同一套 theme，不是新的配色。用于标出结论步或关键分支。
 - `title` 必填，最多 80 字符；`body` 可省略，最多 180 字符。

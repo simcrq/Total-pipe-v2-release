@@ -21,7 +21,7 @@ CONNECTION_SITES = {
     'hexagon': {'right': 0, 'left': 3, 'top': 5, 'bottom': 2},
 }
 NODE_TONES = ('default', 'emphasis')
-PROCESS_LAYOUTS = ('chain', 'staggered')
+PROCESS_LAYOUTS = ('chain', 'staggered', 'compact')
 EMBEDDED_ARCHETYPES = frozenset({'process-flow', 'figure-parameters'})
 
 
@@ -75,11 +75,16 @@ def validate_graphics(graphics, archetype, region_tree=False):
     if kind == 'process' and layout not in PROCESS_LAYOUTS:
         errors.append(f'layout must be one of {PROCESS_LAYOUTS}')
     elif kind == 'dag' and layout != 'chain':
-        errors.append('A DAG uses layout=chain; staggered is a process layout')
-    elif layout == 'staggered' and direction != 'horizontal':
-        errors.append('staggered requires direction=horizontal')
+        errors.append('A DAG uses layout=chain; staggered/compact are process layouts')
+    elif layout in ('staggered', 'compact') and direction != 'horizontal':
+        errors.append(f'{layout} requires direction=horizontal')
     nodes = graphic.get('nodes')
-    lower, upper = (1, 16) if kind == 'dag' else (3, 4)
+    if kind == 'dag':
+        lower, upper = 1, 16
+    elif layout == 'compact':
+        lower, upper = 3, 8
+    else:
+        lower, upper = 3, 4
     if not isinstance(nodes, list) or not lower <= len(nodes) <= upper:
         return errors + [f'A {kind} graphic requires {lower}-{upper} nodes']
     ids = []
@@ -95,7 +100,13 @@ def validate_graphics(graphics, archetype, region_tree=False):
             errors.append(prefix + 'id must use 1-64 letters, digits, hyphens or underscores')
         else:
             ids.append(nid)
-        shape = node.get('shape', 'rounded-rect')
+        raw_shape = node.get('shape')
+        if layout == 'compact':
+            if raw_shape not in (None, 'rect'):
+                errors.append(prefix + 'compact uses square rect nodes; omit shape or use rect')
+            shape = 'rect'
+        else:
+            shape = raw_shape if raw_shape is not None else 'rounded-rect'
         if not isinstance(shape, str) or shape not in SHAPES:
             errors.append(prefix + f'unsupported shape; choose from {", ".join(SHAPES)}')
         tone = node.get('tone', 'default')
@@ -231,7 +242,8 @@ def graphic_obstacle_collisions(connectors, elements):
     return findings
 
 
-def node_elements(graphic_id, node, bbox, theme, text_heights=None):
+def node_elements(graphic_id, node, bbox, theme, text_heights=None, shape_override=None,
+                  title_size=30, body_size=26):
     """The v2 node/label renderer, also used by measured DAG nodes."""
     nx, node_y, node_width, node_height = bbox
     accent = theme.get('accent', '#C2410C')
@@ -248,7 +260,7 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None):
     metadata = {'graphic_id': graphic_id, 'node_id': node['id']}
     if tone != 'default':
         metadata['tone'] = tone
-    geometry = SHAPES[node.get('shape', 'rounded-rect')]
+    geometry = SHAPES[shape_override or node.get('shape', 'rounded-rect')]
     elements.append({'id': prefix, 'kind': 'shape', 'role': 'graphic-node',
                      'bbox': [nx, node_y, node_width, node_height],
                      'geometry': geometry, 'fill': fill, 'line': accent,
@@ -265,12 +277,12 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None):
         title_h = (inner_h-8)*title_need/(title_need+body_need)
     elements.append({'id': prefix+':title', 'kind': 'text', 'role': 'heading',
                      'text': node['title'], 'bbox': [inner_x, inner_y, inner_w, title_h],
-                     'font_size': 30, 'max_lines': 2, 'color': foreground, **metadata})
+                     'font_size': title_size, 'max_lines': 2, 'color': foreground, **metadata})
     if body.strip():
         elements.append({'id': prefix+':body', 'kind': 'text', 'role': 'body',
                          'text': body, 'bbox': [inner_x, inner_y+title_h+8, inner_w,
                                                inner_h-title_h-8],
-                         'font_size': 26, 'max_lines': 4, 'color': foreground, **metadata})
+                         'font_size': body_size, 'max_lines': 4, 'color': foreground, **metadata})
     return elements
 
 
@@ -324,6 +336,35 @@ def compile_graphic(graphic, region, theme, font_paths=None):
             from .dag_layout import connector_points
             edge['route'] = connector_points(bbox, 'bentConnector3', adjustments, False)
             elements.append(edge)
+        return elements
+
+    if layout == 'compact':
+        gap = 16.0
+        node_size = min(180.0, (width-gap*(count-1))/count, height-32)
+        if node_size < 96:
+            raise ValueError('Compact process needs at least 96 px per square node')
+        total = node_size*count+gap*(count-1)
+        start_x = x+(width-total)/2
+        node_y = y+(height-node_size)/2
+        for index, node in enumerate(graphic['nodes']):
+            nx = start_x+index*(node_size+gap)
+            elements.extend(node_elements(graphic['id'], node, [nx, node_y, node_size, node_size],
+                                          theme, shape_override='rect', title_size=24, body_size=24))
+        nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
+        for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
+            start, end = nodes[source['id']], nodes[target['id']]
+            sx, sy, sw, sh = start['bbox']
+            tx, ty, _, th = end['bbox']
+            start_point, end_point = [sx+sw, sy+sh/2], [tx, ty+th/2]
+            elements.append({'id': f"graphic:{graphic['id']}:edge:{source['id']}:{target['id']}",
+                             'kind': 'connector', 'role': 'graphic-edge', 'graphic_id': graphic['id'],
+                             'source_id': start['id'], 'target_id': end['id'],
+                             'start_site': CONNECTION_SITES[start['geometry']]['right'],
+                             'end_site': CONNECTION_SITES[end['geometry']]['left'],
+                             'start': start_point, 'end': end_point,
+                             'bbox': [start_point[0], start_point[1], tx-start_point[0], 0],
+                             'geometry': 'straightConnector1', 'line': accent, 'line_width': 2.5,
+                             'head_end': 'none', 'tail_end': 'triangle'})
         return elements
 
     gap = 64.0
