@@ -212,7 +212,10 @@ def ir_prompt(workflow, rpa_input, normalized, plan):
         'evidence_refs. Set carrier to the native object actually used and status=bound; if a required obligation '
         'cannot be carried, use status=waived or unsupported with a note, never drop it silently. Use inline_math or '
         'formula for quantity, a native list/table/layout_tree for parallel_items, layout_tree for grouped_panels, '
-        'table/columns for comparison, process/dag for ordered_steps, mechanism/dag for relation and path for curve.'}
+        'table/columns for comparison, process/dag for ordered_steps, mechanism/dag for relation and path for curve. '
+        'If a brief has metadata.story_compact_process, ignore the smaller RPA process placeholder and write one '
+        'type=process graphic with layout=compact, one square rect node per declared item, in the declared order; '
+        'do not collapse the chain to the RPA three-slot page.'}
 
 
 def execute(stage, job):

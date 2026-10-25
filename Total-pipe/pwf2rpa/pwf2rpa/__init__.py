@@ -28,7 +28,7 @@ from .story import (CAPABILITY_CARD, EXPLANATION_KINDS, build_story_prompt, load
                     story_to_specs, validate_story)
 from .workflow import Evidence, Workflow
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 __all__ = [
     "AdapterError",

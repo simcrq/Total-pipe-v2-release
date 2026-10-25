@@ -849,6 +849,17 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
             spec["metadata"]["story_form"] = form
         if explain is not None:
             spec["metadata"]["story_explain"] = explain
+            ordered = _first_obligation(explain, "ordered_steps")
+            content = ordered.get("content") if isinstance(ordered, Mapping) else None
+            items = _string_list(content.get("items")) if isinstance(content, Mapping) else []
+            if len(items) > 5:
+                # RPA's process pool tops out at three/five slots.  Mark the full
+                # chain explicitly so the IR mapper builds the compact graphic
+                # instead of copying the smaller RPA placeholder page.
+                spec["metadata"]["story_compact_process"] = {
+                    "items": items,
+                    "node_count": len(items),
+                }
         specs.append(spec)
 
     final_evidence = list(dict.fromkeys(

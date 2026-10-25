@@ -215,6 +215,8 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 - `semantic.explanation`：把 brief 的 `metadata.story_explain` 原样带过来，逐个义务写
   `id / kind / required / content / evidence_refs`，并把 `carrier` 设为实际使用的原生对象。
   不能静默丢 required 义务；确实不做时写 `status=waived` 或 `unsupported` 和 `note`。
+  若 brief 有 `metadata.story_compact_process`（超过 5 步），不要沿用 RPA 的 3 槽占位页；
+  写一张 `type=process`、`layout=compact` 的图，按 items 顺序放 3–8 个方形 `rect` 节点。
 - `composition`：稳定 archetype、完整 blocks、原图 figure_refs、显式原生 graphics。
 - `presentation`：整套 frame、文字策略与设计决策，不复制第二份科学内容。
 
