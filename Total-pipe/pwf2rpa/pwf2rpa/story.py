@@ -18,6 +18,8 @@ from .errors import Problem, StoryError
 from .workflow import Workflow
 
 __all__ = [
+    "CAPABILITY_CARD",
+    "EXPLANATION_KINDS",
     "HIGH_REASONING_EFFORTS",
     "build_story_prompt",
     "load_story",
@@ -42,9 +44,83 @@ _FORM_CATEGORY = {
 _FORM_SLOTS = {"sequence": "process_steps", "compare": "comparison_dimensions"}
 _SLOT_FIELDS = ("process_steps", "comparison_dimensions", "timeline_events")
 
+# The closed vocabulary the reader-facing contract may name.  These are visible
+# structures, not renderer components: a story says "four peers must be scanned
+# together", and the downstream binder chooses a native list, a table or a panel.
+EXPLANATION_KINDS = (
+    "quantity",
+    "parallel_items",
+    "grouped_panels",
+    "comparison",
+    "ordered_steps",
+    "relation",
+    "curve",
+    "image_evidence",
+)
+
+# A compact capability card for the story subagent.  It is intentionally small:
+# the full Skill document is not available inside this prompt, and a card that
+# drifts from the compiler is worse than no card.  The binder and the compiler
+# still own the concrete carrier and the measured capacity.
+CAPABILITY_CARD = {
+    "version": "1",
+    "contract": "totalpipe.explanation-contract",
+    "moves": [
+        {"kind": "quantity", "reader_task": "quantify",
+         "carriers": ["inline_math", "formula"],
+         "requires": "a number, unit, symbol or relation that must be read exactly",
+         "limit": "native math baseline still needs a PowerPoint check",
+         "fallback": "plain text with REVIEW"},
+        {"kind": "parallel_items", "reader_task": "distinguish",
+         "carriers": ["native_list", "table"],
+         "requires": "2-6 peer items whose order does not carry meaning",
+         "limit": "native list needs at least 520 px width",
+         "fallback": "table or measured prose"},
+        {"kind": "grouped_panels", "reader_task": "locate",
+         "carriers": ["layout_tree"],
+         "requires": "2-4 groups or levels that must stay visibly nested",
+         "limit": "panel title band consumes height",
+         "fallback": "stack / columns"},
+        {"kind": "comparison", "reader_task": "compare",
+         "carriers": ["table", "layout_tree"],
+         "requires": "at least 2 objects over at least 2 shared dimensions",
+         "limit": "native table is at most 32 rows x 12 columns",
+         "fallback": "columns with one object each"},
+        {"kind": "ordered_steps", "reader_task": "trace",
+         "carriers": ["process", "dag"],
+         "requires": "2-5 steps with a fixed order",
+         "limit": "the process component holds 3-4 nodes",
+         "fallback": "ordered list, or split the page"},
+        {"kind": "relation", "reader_task": "explain",
+         "carriers": ["mechanism", "dag"],
+         "requires": "explicit nodes and directed edges with a basis",
+         "limit": "edges must be evidence or hypothesis; no inferred mechanism",
+         "fallback": "text plus REVIEW"},
+        {"kind": "curve", "reader_task": "read",
+         "carriers": ["path"],
+         "requires": "a schematic trend or shape, not a measured curve",
+         "limit": "labels stay inside view_box; caption says schematic",
+         "fallback": "no drawn curve"},
+        {"kind": "image_evidence", "reader_task": "read",
+         "carriers": ["figure"],
+         "requires": "one real source figure the reader must inspect",
+         "limit": "source figure and caption remain bound",
+         "fallback": "text plus REVIEW"},
+    ],
+    "traps": [
+        {"archetype": "process-flow", "is_not": "a native process graphic"},
+        {"archetype": "metric-comparison", "is_not": "a native table"},
+        {"archetype": "figure-parameters", "is_not": "a visual_plan"},
+    ],
+}
+
+_EXPLAIN_FIELDS = frozenset({"reader_task", "must_show", "must_not_lose", "prose_ok_reason"})
+_OBLIGATION_FIELDS = frozenset({"id", "kind", "required", "primary", "content", "evidence", "source_quote"})
+
 _PLANNER_FIELDS = frozenset({"mode", "model", "reasoning_effort", "selected_by_user"})
 _NODE_FIELDS = frozenset({"title", "question", "answer", "key_points", "evidence", "next",
-                        "form", "process_steps", "comparison_dimensions", "timeline_events"})
+                        "form", "process_steps", "comparison_dimensions", "timeline_events",
+                        "explain"})
 _ENDING_FIELDS = frozenset({"takeaway", "limitation"})
 
 _GENERIC_NEXT = re.compile(
@@ -107,6 +183,229 @@ def _required_text(raw: Mapping[str, Any], key: str, path: str, problems: list[P
             )
         )
     return value
+
+
+def _content_errors(kind: str, content: Any) -> list[str]:
+    """Validate the shape of one obligation's visible content.
+
+    The contract is deliberately about content, not about a component name.  A
+    story says what the reader must see; the binder and the compiler choose how
+    to draw it.
+    """
+    if isinstance(content, str):
+        content = {"text": content}
+    if not isinstance(content, Mapping):
+        return ["content must be an object"]
+    errors: list[str] = []
+    if kind == "quantity":
+        if not (_text(content.get("latex")) or _text(content.get("text"))):
+            errors.append("quantity content needs latex or text")
+    elif kind in ("parallel_items", "ordered_steps"):
+        maximum = 6 if kind == "parallel_items" else 5
+        items = _string_list(content.get("items"))
+        if not 2 <= len(items) <= maximum:
+            errors.append(f"{kind} content.items needs 2-{maximum} non-empty strings")
+    elif kind == "grouped_panels":
+        groups = content.get("groups")
+        if not isinstance(groups, list) or not 2 <= len(groups) <= 4:
+            errors.append("grouped_panels content.groups needs 2-4 group objects")
+        else:
+            for position, group in enumerate(groups):
+                if not isinstance(group, Mapping) or not _text(group.get("title")):
+                    errors.append(f"groups[{position}] needs a title")
+                    continue
+                if not (_string_list(group.get("items")) or _text(group.get("text"))):
+                    errors.append(f"groups[{position}] needs items or text")
+    elif kind == "comparison":
+        objects, dimensions = _string_list(content.get("objects")), _string_list(content.get("dimensions"))
+        if len(objects) < 2:
+            errors.append("comparison content.objects needs at least 2 objects")
+        if len(dimensions) < 2:
+            errors.append("comparison content.dimensions needs at least 2 dimensions")
+    elif kind == "relation":
+        nodes = content.get("nodes")
+        node_ids: list[str] = []
+        if isinstance(nodes, list):
+            for node in nodes:
+                if isinstance(node, Mapping):
+                    node_id = _text(node.get("id"))
+                else:
+                    node_id = _text(node)
+                if node_id:
+                    node_ids.append(node_id)
+        if len(node_ids) < 2:
+            errors.append("relation content.nodes needs at least 2 node ids")
+        edges = content.get("edges")
+        if not isinstance(edges, list) or not edges:
+            errors.append("relation content.edges needs at least one directed edge")
+        else:
+            for position, edge in enumerate(edges):
+                if not isinstance(edge, Mapping):
+                    errors.append(f"edges[{position}] must be an object")
+                    continue
+                source, target, relation = (_text(edge.get("from")), _text(edge.get("to")),
+                                            _text(edge.get("kind")))
+                if not source or not target or not relation:
+                    errors.append(f"edges[{position}] needs from, to and kind")
+                elif node_ids and (source not in node_ids or target not in node_ids):
+                    errors.append(f"edges[{position}] references a node outside content.nodes")
+    elif kind == "curve":
+        if not _text(content.get("shape")):
+            errors.append("curve content.shape is required (for example rise-then-plateau)")
+    elif kind == "image_evidence":
+        if not (_text(content.get("what_to_look_at")) or _text(content.get("text"))):
+            errors.append("image_evidence content needs what_to_look_at")
+    return errors
+
+
+def _normalize_obligation(raw: Any, path: str, position: int, node_evidence: list[str],
+                           workflow: Workflow, problems: list[Problem]) -> dict[str, Any] | None:
+    if not isinstance(raw, Mapping):
+        problems.append(Problem("STORY_EXPLAIN_OBLIGATION_NOT_OBJECT", path,
+                                "each must_show entry must be an object."))
+        return None
+    problems.extend(_unknown_fields(raw, _OBLIGATION_FIELDS, path))
+    kind = _text(raw.get("kind")).lower()
+    if kind not in EXPLANATION_KINDS:
+        problems.append(Problem("STORY_EXPLAIN_KIND_UNKNOWN", path,
+                                "declare one of the visible explanation kinds.", actual=kind,
+                                expected=list(EXPLANATION_KINDS)))
+        return None
+    content = raw.get("content")
+    for message in _content_errors(kind, content):
+        problems.append(Problem("STORY_EXPLAIN_CONTENT_INVALID", f"{path}.content", message))
+    if not isinstance(content, Mapping):
+        content = {"text": content} if isinstance(content, str) else {}
+    if kind == "curve" and content.get("schematic") is not True:
+        problems.append(Problem("STORY_EXPLAIN_CURVE_SCHEMATIC_UNMARKED", f"{path}.content",
+                                "a curve drawn by the pipeline must declare schematic=true.",
+                                severity="warning"))
+    evidence = _string_list(raw.get("evidence"))
+    if not evidence:
+        problems.append(Problem("STORY_EXPLAIN_EVIDENCE_EMPTY", f"{path}.evidence",
+                                "each visible obligation needs at least one Evidence id."))
+    resolved: list[str] = []
+    for evidence_id in evidence:
+        if evidence_id in resolved:
+            continue
+        if not workflow.has_evidence(evidence_id):
+            problems.append(Problem("STORY_EXPLAIN_UNKNOWN_EVIDENCE", f"{path}.evidence",
+                                    "obligation cites an id outside this workflow's Evidence Store.",
+                                    actual=evidence_id, expected=workflow.evidence_ids))
+            continue
+        if evidence_id not in node_evidence:
+            problems.append(Problem("STORY_EXPLAIN_EVIDENCE_NOT_ON_NODE", f"{path}.evidence",
+                                    "an obligation may only cite Evidence already listed on its node.",
+                                    actual=evidence_id, expected=node_evidence))
+            continue
+        resolved.append(evidence_id)
+    source_quote = _text(raw.get("source_quote"))
+    if source_quote:
+        corpus = " ".join(
+            workflow.get(evidence_id).text
+            for evidence_id in resolved
+            if workflow.get(evidence_id) is not None
+        )
+        if " ".join(source_quote.split()).casefold() not in " ".join(corpus.split()).casefold():
+            problems.append(Problem("STORY_EXPLAIN_QUOTE_NOT_FOUND", f"{path}.source_quote",
+                                    "source_quote is not an exact substring of the cited evidence.",
+                                    actual=source_quote[:120], severity="warning"))
+    required = raw.get("required", True)
+    if type(required) is not bool:
+        problems.append(Problem("STORY_EXPLAIN_REQUIRED_INVALID", f"{path}.required",
+                                "required must be boolean.", actual=required))
+        required = True
+    primary = raw.get("primary", False)
+    if type(primary) is not bool:
+        problems.append(Problem("STORY_EXPLAIN_PRIMARY_INVALID", f"{path}.primary",
+                                "primary must be boolean.", actual=primary))
+        primary = False
+    obligation_id = _text(raw.get("id")) or f"ob-{position + 1}"
+    return {
+        "id": obligation_id,
+        "kind": kind,
+        "required": required,
+        "primary": primary,
+        "content": dict(content),
+        "evidence": resolved,
+        **({"source_quote": source_quote} if source_quote else {}),
+    }
+
+
+def _normalize_explain(raw: Any, path: str, node_evidence: list[str],
+                       workflow: Workflow, problems: list[Problem]) -> dict[str, Any] | None:
+    if not isinstance(raw, Mapping):
+        problems.append(Problem("STORY_EXPLAIN_NOT_OBJECT", path,
+                                "explain must be an object."))
+        return None
+    problems.extend(_unknown_fields(raw, _EXPLAIN_FIELDS, path))
+    raw_obligations = raw.get("must_show", [])
+    if not isinstance(raw_obligations, list):
+        problems.append(Problem("STORY_EXPLAIN_MUST_SHOW_INVALID", f"{path}.must_show",
+                                "must_show must be an array of obligation objects."))
+        raw_obligations = []
+    if len(raw_obligations) > 6:
+        problems.append(Problem("STORY_EXPLAIN_TOO_MANY", f"{path}.must_show",
+                                "keep at most six visible obligations on one page; move the rest to notes "
+                                "or another node.", actual=len(raw_obligations), severity="warning"))
+    obligations: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for position, item in enumerate(raw_obligations):
+        obligation = _normalize_obligation(item, f"{path}.must_show[{position}]", position,
+                                           node_evidence, workflow, problems)
+        if obligation is None:
+            continue
+        if obligation["id"] in seen:
+            problems.append(Problem("STORY_EXPLAIN_DUPLICATE_ID", f"{path}.must_show[{position}].id",
+                                    "obligation ids must be unique within a node.",
+                                    actual=obligation["id"]))
+            continue
+        seen.add(obligation["id"])
+        obligations.append(obligation)
+    primary = [item for item in obligations if item["primary"]]
+    if len(primary) > 1:
+        problems.append(Problem("STORY_EXPLAIN_MULTIPLE_PRIMARY", f"{path}.must_show",
+                                "only one obligation may be primary; the first one is kept.",
+                                actual=[item["id"] for item in primary], severity="warning"))
+        for item in obligations:
+            item["primary"] = False
+        primary[0]["primary"] = True
+    elif not primary and obligations:
+        first_required = next((item for item in obligations if item["required"]), obligations[0])
+        first_required["primary"] = True
+    prose_ok_reason = _text(raw.get("prose_ok_reason"))
+    if not obligations and not prose_ok_reason:
+        problems.append(Problem("STORY_EXPLAIN_PROSE_REASON_MISSING", f"{path}.prose_ok_reason",
+                                "when must_show is empty, say why continuous prose is the right form.",
+                                severity="warning"))
+    return {
+        "reader_task": _text(raw.get("reader_task")),
+        "must_show": obligations,
+        "must_not_lose": _string_list(raw.get("must_not_lose")),
+        "prose_ok_reason": prose_ok_reason,
+    }
+
+
+def _form_from_explain(explain: Mapping[str, Any] | None) -> tuple[str, dict[str, list[str]]]:
+    """Derive the legacy RPA category form when the story only wrote explain."""
+    if not isinstance(explain, Mapping):
+        return "", {}
+    for obligation in explain.get("must_show", []):
+        if not isinstance(obligation, Mapping) or not obligation.get("required", True):
+            continue
+        content = obligation.get("content") if isinstance(obligation.get("content"), Mapping) else {}
+        if obligation.get("kind") == "ordered_steps":
+            return "sequence", {"process_steps": _string_list(content.get("items"))[:5]}
+        if obligation.get("kind") == "comparison":
+            return "compare", {"comparison_dimensions": _string_list(content.get("dimensions"))}
+    return "", {}
+
+
+def _first_obligation(explain: Mapping[str, Any] | None, kind: str) -> dict[str, Any] | None:
+    if not isinstance(explain, Mapping):
+        return None
+    return next((item for item in explain.get("must_show", [])
+                 if isinstance(item, Mapping) and item.get("kind") == kind), None)
 
 
 def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[Problem]]:
@@ -356,6 +655,11 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
                 )
             )
 
+        explain = None
+        if "explain" in node_raw:
+            explain = _normalize_explain(node_raw.get("explain"), f"{path}.explain",
+                                         resolved, workflow, problems)
+
         node = {
             "question": question,
             "answer": answer,
@@ -368,6 +672,8 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             node["key_points"] = key_points
         if form:
             node["form"] = form
+        if explain is not None:
+            node["explain"] = explain
         node.update(slots)
         nodes.append(node)
 
@@ -482,7 +788,20 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
     ]
 
     for index, node in enumerate(plan["story"]):
-        category = _category_for(node["question"], index, node.get("form", ""))
+        form = _text(node.get("form"))
+        slots = {field: list(node[field]) for field in _SLOT_FIELDS if node.get(field)}
+        explain = node.get("explain") if isinstance(node.get("explain"), Mapping) else None
+        # A story that wrote only explain still has to reach the RPA category pools
+        # that carry a process or a table.  Keep the explicit form when present;
+        # derive it from the required obligation otherwise.
+        if explain and not form:
+            derived_form, derived_slots = _form_from_explain(explain)
+            if derived_form:
+                form = derived_form
+                for field, values in derived_slots.items():
+                    if values:
+                        slots.setdefault(field, list(values))
+        category = _category_for(node["question"], index, form)
         title_limit = max((layout.title_chars or 0) for layout in fit.CATEGORIES[category].layouts) or 34
         # The planner may write its own slide title. RPA still needs one that fits its slot, so the
         # brief carries the truncated form and the metadata keeps the full sentence for the Deck IR.
@@ -508,14 +827,22 @@ def story_to_specs(raw: Any, workflow: Workflow) -> tuple[list[dict[str, Any]], 
         }
         if node.get("key_points"):
             spec["key_points"] = list(node["key_points"])
+        elif explain:
+            parallel = _first_obligation(explain, "parallel_items")
+            content = parallel.get("content") if isinstance(parallel, Mapping) else None
+            items = _string_list(content.get("items")) if isinstance(content, Mapping) else []
+            if items:
+                spec["key_points"] = items
         # Structural slots go to RPA top-level: its planner derives process_step_count
         # and comparison_dimension_count from them, and those counts are what let a
         # layout with a process or table region be retrieved at all.
-        for field in _SLOT_FIELDS:
-            if node.get(field):
-                spec[field] = list(node[field])
-        if node.get("form"):
-            spec["metadata"]["story_form"] = node["form"]
+        for field, values in slots.items():
+            if values:
+                spec[field] = list(values)
+        if form:
+            spec["metadata"]["story_form"] = form
+        if explain is not None:
+            spec["metadata"]["story_explain"] = explain
         specs.append(spec)
 
     final_evidence = list(dict.fromkeys(
@@ -597,9 +924,24 @@ def build_story_prompt(
         "story": [
             {"title": "string, optional", "question": "string", "answer": "string",
              "evidence": ["EV0001"], "next": "string, optional on the last node",
-             "form": "sequence|compare|branch|relation|evidence, optional",
+             "form": "sequence|compare|branch|relation|evidence, optional; derived from explain when omitted",
              "process_steps": ["one step per item, required when form=sequence"],
-             "comparison_dimensions": ["one dimension per item, required when form=compare"]}
+             "comparison_dimensions": ["one dimension per item, required when form=compare"],
+             "explain": {
+                 "reader_task": "quantify|compare|trace|locate|distinguish|read|explain, optional",
+                 "must_show": [
+                     {"id": "ob-1", "kind": "quantity|parallel_items|grouped_panels|comparison|"
+                                        "ordered_steps|relation|curve|image_evidence",
+                      "required": True, "primary": True,
+                      "content": {"latex": "\\varepsilon_A \\approx 0.21"} or
+                                 {"items": ["first peer", "second peer"]} or
+                                 {"objects": ["A", "B"], "dimensions": ["BER", "rate"]},
+                      "evidence": ["EV0001"],
+                      "source_quote": "exact substring of the cited evidence, optional"}
+                 ],
+                 "must_not_lose": ["units", "uncertainty"],
+                 "prose_ok_reason": "required when must_show is empty"
+             }}
         ],
         "ending": {"takeaway": "string", "limitation": "string, optional"},
     }
@@ -618,20 +960,24 @@ def build_story_prompt(
         "5. next 说明当前证据留下的疑问或待验证机制，除最后一个 node 外必填；"
         "最后一个 node 不需要为了形式补一句“下一步看什么”。不得写成‘然后看 Fig.4’。\n"
         "6. 允许删除重复、展示性或弱相关证据，目标是最短、最清晰的核心证据链。\n"
-        "7. 不决定页数、版式细节、配色与裁图；但要说明这一步的答案需要什么形态（见下），"
-        "否则下游只能把它当纯文字页。\n"
+        "7. 每个 node 必须写 explain，说明听众必须看见什么；它不决定页数、版式、配色或裁图。\n"
         "8. 相邻节点应能用‘因此/但是/为了验证/为了排除/如果该解释成立’连接。\n\n"
         "关于 ending：takeaway 必填；limitation 可选，只写论文自身的边界（样本、条件、方法假设）。"
         "不要写你这次拿到了哪些文件、SI 是否取得或是否审阅——那是工作记录，不是科学结论。\n\n"
-        "关于形态：这套管线能把一页做成不同形态。你的任务不是挑版式，而是判断这一步的答案需要哪一种形态，"
-        "并把它的结构写出来——写不出来，下游只能把它当纯文字页。\n"
-        "form 取值：sequence（有序步骤或因果链，配 process_steps）、"
-        "compare（≥2 个对象在同一组指标上并排，配 comparison_dimensions）、"
-        "branch（多个候选说法各自被检验后收敛，候选写进 key_points）、"
-        "relation（答案是一个可测量的关系或公式，公式用 $…$ 写）、"
-        "evidence（答案要读一张实测图）。都不成立就不写 form。\n"
-        "process_steps / comparison_dimensions 每条一句、2-5 条，只写证据支持的内容；"
-        "它们描述“这一步怎么讲清楚”，不涉及页数、配色、裁图或实验参数。\n\n"
+        "关于 explain：explain 不是版式，而是‘读者必须看见什么’。\n"
+        "must_show 每条从这 8 类里选一个：quantity（必须精确读出或比较的量/公式）、"
+        "parallel_items（2-6 条并列、顺序可换）、grouped_panels（2-4 组层级或分组）、"
+        "comparison（≥2 个对象在同一组维度上并排）、ordered_steps（2-5 步有先后）、"
+        "relation（显式节点与有向边，边要能标 evidence/hypothesis）、"
+        "curve（示意曲线或趋势，content.schematic=true）、image_evidence（必须读一张实测图）。\n"
+        "每条必须绑定本 node 的 evidence；content 写清 items/objects/dimensions/groups/nodes/edges；"
+        "source_quote 可选，但必须是引用证据中的原文片段。一页最多一个 primary。"
+        "没有结构需求时写 must_show: [] 和 prose_ok_reason，不要为用能力硬造结构。\n"
+        "form 仍可选，只是 RPA 类别提示；写了 explain 就可以省略 form，"
+        "下游会从 required 的 ordered_steps / comparison 推导。"
+        "如果仍写 form，sequence 配 process_steps、compare 配 comparison_dimensions，规则同旧版。\n"
+        "陷阱：process-flow archetype 不是原生流程图，metric-comparison 不是原生表格，"
+        "figure-parameters 不是 visual_plan。不要因为选了这些名字就以为结构已经存在。\n\n"
         "当一句 answer 会抹掉必须保留的连续内容时，可在该 node 添加 key_points 字符串数组；"
         "逐条保留证据支持的细节，不要求每个 node 都添加，也不限制条数。\n\n"
         "自检：删掉任一 node 后，下一 node 是否仍只因为论文顺序而出现？如果是，重写链条。"
@@ -646,6 +992,7 @@ def build_story_prompt(
             "selected_by_user": True,
         },
         "instructions": instructions,
+        "capability_card": CAPABILITY_CARD,
         "output_shape": output_shape,
         "paper": {"title": workflow.title, "source_fingerprint": workflow.fingerprint},
         "evidence_store": evidence,

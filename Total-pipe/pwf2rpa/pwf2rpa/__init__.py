@@ -24,15 +24,18 @@ from .design_intent import load_design_intent
 from .errors import AdapterError, BriefError, Problem, StoryError, WorkflowError
 from .fallback import fallback_specs
 from .fit import PageShape, category_ids, evaluate, is_known_category
-from .story import build_story_prompt, load_story, story_to_specs, validate_story
+from .story import (CAPABILITY_CARD, EXPLANATION_KINDS, build_story_prompt, load_story,
+                    story_to_specs, validate_story)
 from .workflow import Evidence, Workflow
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     "AdapterError",
     "BriefError",
+    "CAPABILITY_CARD",
     "CATEGORIES",
+    "EXPLANATION_KINDS",
     "Evidence",
     "LAYOUT_LIBRARY_VERSION",
     "PageShape",

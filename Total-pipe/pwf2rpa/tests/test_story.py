@@ -264,5 +264,130 @@ class StoryChainTests(unittest.TestCase):
         self.assertIn("STORY_FORM_UNFILLED", [warning.code for warning in warnings])
 
 
+class StoryExplanationTests(unittest.TestCase):
+    def setUp(self):
+        self.workflow = make_workflow()
+
+    def test_parallel_items_reach_brief_as_native_list_material(self):
+        story = make_story()
+        items = ["Contact resistance", "Device conductance", "Source-drain swap"]
+        story["story"][0]["explain"] = {
+            "reader_task": "distinguish",
+            "must_show": [{
+                "kind": "parallel_items",
+                "required": True,
+                "content": {"items": items},
+                "evidence": ["EV0001"],
+                "source_quote": "Observation 1 leaves a distinct unresolved question.",
+            }],
+            "must_not_lose": ["units"],
+        }
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(specs[1]["key_points"], items)
+        self.assertEqual(specs[1]["metadata"]["story_explain"]["must_show"][0]["kind"],
+                         "parallel_items")
+        self.assertTrue(specs[1]["metadata"]["story_explain"]["must_show"][0]["primary"])
+        payload, convert_warnings = convert(self.workflow, story=story, strict_fit=False)
+        self.assertEqual(convert_warnings, [])
+        self.assertEqual(payload["slide_briefs"][1]["key_points"], items)
+
+    def test_ordered_steps_without_form_selects_workflow_category(self):
+        story = make_story()
+        story["story"][1]["explain"] = {
+            "must_show": [{
+                "kind": "ordered_steps",
+                "content": {"items": ["Expose the device", "Record the waveform", "Fit the edge"]},
+                "evidence": ["EV0002"],
+            }],
+        }
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(specs[2]["category_hint"], "workflow")
+        self.assertEqual(specs[2]["process_steps"],
+                         ["Expose the device", "Record the waveform", "Fit the edge"])
+        self.assertEqual(specs[2]["metadata"]["story_form"], "sequence")
+
+    def test_comparison_without_form_selects_table_category(self):
+        story = make_story()
+        story["story"][1]["explain"] = {
+            "must_show": [{
+                "kind": "comparison",
+                "content": {
+                    "objects": ["80 Mbps", "110 Mbps"],
+                    "dimensions": ["BER", "eye opening"],
+                },
+                "evidence": ["EV0002"],
+            }],
+        }
+        specs, warnings = story_to_specs(story, self.workflow)
+        self.assertEqual(warnings, [])
+        self.assertEqual(specs[2]["category_hint"], "table")
+        self.assertEqual(specs[2]["comparison_dimensions"], ["BER", "eye opening"])
+
+    def test_explain_rejects_evidence_not_listed_on_its_node(self):
+        story = make_story()
+        story["story"][0]["explain"] = {
+            "must_show": [{
+                "kind": "quantity",
+                "content": {"latex": "\\\\varepsilon_A \\\\approx 0.21"},
+                "evidence": ["EV0002"],
+            }],
+        }
+        with self.assertRaises(StoryError) as caught:
+            story_to_specs(story, self.workflow)
+        self.assertIn("STORY_EXPLAIN_EVIDENCE_NOT_ON_NODE", str(caught.exception))
+
+    def test_explain_rejects_unknown_kind(self):
+        story = make_story()
+        story["story"][0]["explain"] = {
+            "must_show": [{
+                "kind": "mindmap",
+                "content": {"items": ["a", "b"]},
+                "evidence": ["EV0001"],
+            }],
+        }
+        with self.assertRaises(StoryError) as caught:
+            story_to_specs(story, self.workflow)
+        self.assertIn("STORY_EXPLAIN_KIND_UNKNOWN", str(caught.exception))
+
+    def test_curve_must_declare_schematic(self):
+        story = make_story()
+        story["story"][0]["explain"] = {
+            "must_show": [{
+                "kind": "curve",
+                "content": {"shape": "rise-then-plateau"},
+                "evidence": ["EV0001"],
+            }],
+        }
+        _specs, warnings = story_to_specs(story, self.workflow)
+        self.assertIn("STORY_EXPLAIN_CURVE_SCHEMATIC_UNMARKED",
+                      [warning.code for warning in warnings])
+
+    def test_empty_explain_needs_a_prose_reason(self):
+        story = make_story()
+        story["story"][0]["explain"] = {"must_show": []}
+        _specs, warnings = story_to_specs(story, self.workflow)
+        self.assertIn("STORY_EXPLAIN_PROSE_REASON_MISSING",
+                      [warning.code for warning in warnings])
+
+    def test_prompt_carries_capability_card_and_explain_shape(self):
+        prompt = build_story_prompt(
+            self.workflow,
+            model="capable-model",
+            reasoning_effort="high",
+            selected_by_user=True,
+        )
+        card = prompt["capability_card"]
+        self.assertEqual(card["contract"], "totalpipe.explanation-contract")
+        self.assertEqual([move["kind"] for move in card["moves"]],
+                         ["quantity", "parallel_items", "grouped_panels", "comparison",
+                          "ordered_steps", "relation", "curve", "image_evidence"])
+        self.assertIn("explain", prompt["output_shape"]["story"][0])
+        self.assertIn("parallel_items", prompt["instructions"])
+        self.assertIn("must_show", prompt["instructions"])
+        self.assertNotIn("\\\\n", prompt["instructions"])
+
+
 if __name__ == "__main__":
     unittest.main()
