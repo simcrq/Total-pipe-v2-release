@@ -207,7 +207,12 @@ def ir_prompt(workflow, rpa_input, normalized, plan):
         'instructions': 'Write canonical Deck IR. Preserve complete scientific body, key_points, figures, equations, '
         'units and uncertainty. Source paths are relative to workflow_root; use absolute paths in work/deck_ir.json. '
         'Retain original body/key_points in speaker_notes when a display expression changes their literal notation. '
-        'Do not write page bboxes. Keep full evidence refs; use native formulas and explicit graph relationships.'}
+        'Do not write page bboxes. Keep full evidence refs; use native formulas and explicit graph relationships. '
+        'For every brief with metadata.story_explain, write semantic.explanation with the same obligations and '
+        'evidence_refs. Set carrier to the native object actually used and status=bound; if a required obligation '
+        'cannot be carried, use status=waived or unsupported with a note, never drop it silently. Use inline_math or '
+        'formula for quantity, a native list/table/layout_tree for parallel_items, layout_tree for grouped_panels, '
+        'table/columns for comparison, process/dag for ordered_steps, mechanism/dag for relation and path for curve.'}
 
 
 def execute(stage, job):

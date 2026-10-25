@@ -5,6 +5,8 @@ from . import audience
 from .catalog import ARCHETYPES, COMPONENTS
 from .capacity import FORMULA_MIN_ANCHOR_CHARS, FORMULA_MIN_TEXT_CHARS
 from .contracts import digest, issue
+from .explanation import coverage as explanation_coverage
+from .explanation import validate_explanation
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
 
@@ -186,6 +188,7 @@ def validate(ir):
                   n, 'LAYOUT_TREE_INVALID')
         for message in validate_graphics(comp.get("graphics", []), archetype, region_tree=has_tree):
             check(False, message, n, "GRAPHIC_INVALID")
+        errors.extend(validate_explanation(sem.get("explanation"), sem, comp, n))
         if isinstance(comp.get('graphics'), list):
             for graphic in comp['graphics']:
                 for edge in mechanism_edges(graphic):
@@ -394,7 +397,7 @@ def validate(ir):
 def derive(ir, layout):
     """Disposable projections; never accepted as compiler input."""
     provenance = {"derived_from": "deck_ir.json", "ir_sha256": digest(ir), "read_only": True}
-    return {
+    result = {
         "deck_plan.json": {**provenance, "slides": [{"index": n, "slide_id": s["id"],
             "title": s["semantic"]["title"], "layout_id": s["composition"]["archetype"],
             "evidence_ids": s["semantic"]["evidence_refs"]} for n, s in enumerate(ir["slides"], 1)]},
@@ -417,3 +420,7 @@ def derive(ir, layout):
         "qa_expectation.json": {**provenance, "slide_count": len(ir["slides"]),
                                 "required_renderer": "powerpoint"},
     }
+    ledger = explanation_coverage(ir)
+    if ledger["slides"]:
+        result["explanation_coverage.json"] = ledger
+    return result

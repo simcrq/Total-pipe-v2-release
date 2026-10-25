@@ -454,6 +454,37 @@
         }
       }
     },
+    "explanation-obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "required", "content", "evidence_refs"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["quantity", "parallel_items", "grouped_panels", "comparison",
+                          "ordered_steps", "relation", "curve", "image_evidence"]},
+        "required": {"type": "boolean"},
+        "primary": {"type": "boolean"},
+        "carrier": {"enum": ["inline_math", "formula", "native_list", "table", "layout_tree",
+                             "process", "dag", "mechanism", "path", "figure"]},
+        "status": {"enum": ["bound", "waived", "unsupported"]},
+        "content": {"type": "object"},
+        "evidence_refs": {"type": "array", "minItems": 1, "uniqueItems": true,
+                          "items": {"type": "string", "minLength": 1}},
+        "source_quote": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obligations"],
+      "properties": {
+        "reader_task": {"type": "string"},
+        "must_not_lose": {"type": "array", "items": {"type": "string"}},
+        "obligations": {"type": "array", "minItems": 1, "maxItems": 6,
+                        "items": {"$ref": "#/$defs/explanation-obligation"}}
+      }
+    },
     "slide": {
       "type": "object",
       "additionalProperties": false,
@@ -472,6 +503,8 @@
             "takeaway": {"type": "string", "minLength": 1},
             "inline_math": {"type": "array", "uniqueItems": true, "items": {"enum": ["title", "takeaway"]},
               "description": "Opt in selected semantic fields to measured $...$ or \\(...\\) native inline math. Other fields stay literal."},
+            "explanation": {"$ref": "#/$defs/explanation",
+              "description": "Evidence-bound reader obligations copied from Story explain. The compiler measures coverage; this is not a layout request."},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
             "caveats": {"type": "array", "items": {"type": "string"}},
             "run_notes": {"type": "array", "items": {"type": "string"}},
