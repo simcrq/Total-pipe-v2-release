@@ -134,6 +134,35 @@ RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的
 校验只告警不阻断：`STORY_FORM_UNKNOWN`（取值不在表内）、`STORY_FORM_UNFILLED`（声明了形态却没写结构）、
 `STORY_FORM_SLOTS_INVALID`（少于 2 条或含空串）、`STORY_FORM_SLOTS_TOO_LONG`（流程超过 5 步）。
 
+### 更完整的讲解契约：explain
+
+`form` 只覆盖流程、表格和分支；列表、嵌套、曲线和行内公式需要 `explain`。它仍然不选版式，
+只声明听众必须看见什么：
+
+```json
+{
+  "question": "电学对照是否支持场诱导势垒？",
+  "answer": "...",
+  "evidence": ["EV0007", "EV0013"],
+  "next": "...",
+  "explain": {
+    "reader_task": "distinguish",
+    "must_show": [{
+      "id": "ob-1", "kind": "parallel_items", "required": true, "primary": true,
+      "content": {"items": ["Ti/Au–Si 接触 ≈10² Ω", "器件导通 ≈10⁵ Ω", "换源漏后整流近不变"]},
+      "evidence": ["EV0007", "EV0013"]
+    }]
+  }
+}
+```
+
+`kind` 取 `quantity / parallel_items / grouped_panels / comparison / ordered_steps / relation /
+curve / image_evidence`。每条必须绑定本 node 的 evidence；一页最多一个 primary；没有结构需求时
+写 `must_show: []` 和 `prose_ok_reason`。写了 `explain` 可省略 `form`，required 的
+`ordered_steps` / `comparison` 会推导 RPA 计数。IR 把 brief 的 `metadata.story_explain` 带成
+`semantic.explanation`，编译生成 `derived/explanation_coverage.json`；required 义务没有原生载体时
+保留 REVIEW，不静默当纯文字页。完整字段与覆盖规则见[讲解契约](../../docs/explanation-contract.md)。
+
 ### 可选的科研流程意图
 
 恰好四条 key_points 存在明确步骤关系时，DesignIntentPlanner 可生成：

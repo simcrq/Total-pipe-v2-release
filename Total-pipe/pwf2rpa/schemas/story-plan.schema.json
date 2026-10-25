@@ -21,13 +21,14 @@
     "main_message": {"type": "string", "minLength": 1},
     "story": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 8,
+      "minItems": 4,
+      "maxItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "answer", "evidence", "next"],
+        "required": ["question", "answer", "evidence"],
         "properties": {
+          "title": {"type": "string", "minLength": 1},
           "question": {"type": "string", "minLength": 1},
           "answer": {"type": "string", "minLength": 1},
           "key_points": {
@@ -40,17 +41,57 @@
             "uniqueItems": true,
             "items": {"type": "string", "pattern": "^EV[0-9]{4}$"}
           },
-          "next": {"type": "string", "minLength": 1}
+          "next": {"type": "string", "minLength": 1,
+                   "description": "Required on every node except the last one."},
+          "form": {"enum": ["sequence", "compare", "branch", "relation", "evidence", "prose"]},
+          "process_steps": {"type": "array", "minItems": 2, "maxItems": 5,
+                            "items": {"type": "string", "minLength": 1}},
+          "comparison_dimensions": {"type": "array", "minItems": 2,
+                                    "items": {"type": "string", "minLength": 1}},
+          "timeline_events": {"type": "array", "minItems": 2,
+                              "items": {"type": "string", "minLength": 1}},
+          "explain": {"$ref": "#/$defs/explain"}
         }
       }
     },
     "ending": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["takeaway", "limitation"],
+      "required": ["takeaway"],
       "properties": {
         "takeaway": {"type": "string", "minLength": 1},
         "limitation": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "content", "evidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["quantity", "parallel_items", "grouped_panels", "comparison",
+                          "ordered_steps", "relation", "curve", "image_evidence"]},
+        "required": {"type": "boolean", "default": true},
+        "primary": {"type": "boolean", "default": false},
+        "content": {"type": "object"},
+        "evidence": {"type": "array", "minItems": 1, "uniqueItems": true,
+                     "items": {"type": "string", "pattern": "^EV[0-9]{4}$"}},
+        "source_quote": {"type": "string"}
+      }
+    },
+    "explain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["must_show"],
+      "properties": {
+        "reader_task": {"type": "string"},
+        "must_show": {"type": "array", "maxItems": 6,
+                      "items": {"$ref": "#/$defs/obligation"}},
+        "must_not_lose": {"type": "array", "items": {"type": "string"}},
+        "prose_ok_reason": {"type": "string",
+                            "description": "Required when must_show is empty."}
       }
     }
   }

@@ -6,6 +6,7 @@ import unittest
 
 from deck_compiler.explanation import coverage
 from deck_compiler.ir import derive, validate
+from deck_compiler.visual_planner import planning_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,6 +90,11 @@ class ExplanationContractTests(unittest.TestCase):
         derived = derive(ir, {'slides': []})
         self.assertIn('explanation_coverage.json', derived)
         self.assertEqual(derived['explanation_coverage.json']['summary']['total'], 1)
+
+    def test_visual_prompt_target_lists_obligations(self):
+        targets = planning_targets(base_ir())
+        self.assertEqual(targets[0]['explanation_obligations'][0]['kind'], 'parallel_items')
+        self.assertEqual(targets[0]['reason'], 'explanation_requires_text_structure')
 
     def test_schema_accepts_explanation(self):
         try:

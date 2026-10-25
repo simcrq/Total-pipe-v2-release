@@ -103,13 +103,21 @@ silently or write the Story itself. The output records:
   "main_message": "...",
   "story": [
     {"question": "...", "answer": "...", "evidence": ["EV0001"], "next": "..."},
-    {"question": "...", "answer": "...", "key_points": ["观察 A", "分析 B"], "evidence": ["EV0002"], "next": "..."}
+    {"question": "...", "answer": "...", "key_points": ["观察 A", "分析 B"], "evidence": ["EV0002"], "next": "...",
+     "explain": {
+       "reader_task": "distinguish",
+       "must_show": [
+         {"id": "ob-1", "kind": "parallel_items", "required": true, "primary": true,
+          "content": {"items": ["对照 A", "对照 B", "对照 C"]},
+          "evidence": ["EV0002"]}
+       ]
+     }}
   ],
   "ending": {"takeaway": "...", "limitation": "..."}
 }
 ```
 
-Five to eight nodes are required. A node is a scientific reasoning step, not a
+Four to ten nodes are required. A node is a scientific reasoning step, not a
 Figure and not necessarily one final slide. `allow_auto_split` remains enabled
 for ordinary reasoning nodes. An explicitly declared hard process group is
 kept together; if it cannot fit, RPA returns a replan state.
@@ -119,6 +127,18 @@ in `slide_briefs`; `evidence_texts` remains source material. Brief `body` text
 keeps paragraph breaks. There is no required point count; `key_points` is omitted
 from briefs when the Story node has none. Both `key_points` and `body` count
 toward layout capacity.
+
+`explain` is optional but is the preferred reader-facing contract. It says what
+the audience must see, not which component to use. The closed vocabulary is
+`quantity`, `parallel_items`, `grouped_panels`, `comparison`, `ordered_steps`,
+`relation`, `curve` and `image_evidence`. Each obligation binds its own
+`evidence`; `source_quote` is checked against the cited Evidence text when
+present. The bridge carries the normalized object in
+`slide_briefs[].metadata.story_explain`. When `form` is omitted, a required
+`ordered_steps` or `comparison` also derives the RPA `process_steps` /
+`comparison_dimensions` counts, so the structural layout pools remain reachable.
+A required obligation is a contract the Deck IR and its coverage ledger must
+satisfy; it is not permission to invent content.
 The full machine-readable contract is in `schemas/story-plan.schema.json`.
 
 The validator blocks when the model was not user-selected, execution was not a

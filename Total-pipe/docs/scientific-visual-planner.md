@@ -105,6 +105,11 @@ MCP 对应入口为 `totalpipe_visual_prompt`、`totalpipe_apply_visual_plan`，
 强调来源只解析 `semantic.title`、`semantic.takeaway`、`composition.blocks.<id>.text`、
 `composition.graphics.<id>.nodes.<id>.title/body`。强调文字必须精确存在于引用的可见原文中。
 讲稿不能被用来绕过这一验证。V6 不接受未实现的每页 `theme_tokens/component_variants`。
+
+页面带 `semantic.explanation` 时，required 义务是硬输入：`visual_plan` 只能在不遮挡、不丢失
+现有载体的前提下选构图，不能把列表/嵌套/公式页改回纯文字。当前三种 `visual_job` 只覆盖
+图、机制和双图；纯文字/列表/嵌套页由 IR 映射成 `layout_tree` 或原生列表，最终由
+`derived/explanation_coverage.json` 验收，而不是由视觉提案声称完成。
 硬 `composition.visual_intent` 流程组不与 visual_plan 混用。
 
 ## 容量与科学术语

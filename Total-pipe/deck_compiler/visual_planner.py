@@ -37,6 +37,9 @@ dashboard tiles, poster-sized numbers, background textures and decoration withou
 Use planning_targets to cover every selected eligible page; do not stop after a sample of the deck.
 Omit plans for unsupported pages. For a deck with no eligible pages, return slides: [] and still choose
 academic_design. Do not invent a source figure or mechanism to satisfy this stage.
+Slides may carry semantic.explanation. Required obligations are hard reader requirements: choose a
+composition that keeps them visible and never claim a text-only page is covered. planning_targets lists
+the obligations for each page; the compiler's explanation_coverage ledger is authoritative.
 Do not use per-slide colors/fonts, theme_tokens, component_variants,
 page coordinates or geometry overrides. If a plan cannot fit, revise its design choices; never trim
 content, weaken panel floors, split a hard group, or silently ignore VISUAL_PLAN_UNSATISFIABLE.
@@ -49,13 +52,24 @@ def checked(ir):
         raise ValueError(json.dumps(failures, ensure_ascii=False))
 
 
+def _obligations(slide):
+    explanation = slide.get('semantic', {}).get('explanation')
+    if not isinstance(explanation, dict):
+        return []
+    return [{key: item.get(key) for key in ('id', 'kind', 'required', 'primary')}
+            for item in explanation.get('obligations', []) if isinstance(item, dict)]
+
+
 def planning_targets(ir):
     """Discover supported jobs using the same validation as the compiler, without inventing a plan."""
     targets = []
     for slide in ir['slides']:
+        obligations = _obligations(slide)
+        with_obligations = {'explanation_obligations': obligations} if obligations else {}
         if slide['composition'].get('layout_tree'):
             targets.append({'slide_id': slide['id'], 'visual_jobs': [], 'reason': 'body_layout_tree',
-                            'layout_tree_version': slide['composition']['layout_tree']['version']})
+                            'layout_tree_version': slide['composition']['layout_tree']['version'],
+                            **with_obligations})
             continue
         jobs = []
         for job, compositions in COMPOSITIONS.items():
@@ -65,7 +79,9 @@ def planning_targets(ir):
             if not validate_plan(plan, {**slide, 'presentation': {}}):
                 jobs.append(job)
         targets.append({'slide_id': slide['id'], 'visual_jobs': jobs,
+                        **with_obligations,
                         **({'reason': 'hard_process_group' if slide['composition'].get('visual_intent')
+                            else 'explanation_requires_text_structure' if obligations
                             else 'no_supported_visual_job'} if not jobs else {})})
     return targets
 

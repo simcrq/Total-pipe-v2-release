@@ -24,6 +24,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | 能力 | 什么讲解需要它 | 代价 / 限制 |
 |---|---|---|
 | **Story 节点形态 `form`**（`sequence`/`compare`/`branch`/`relation`/`evidence`） | 在 Story 阶段就把“这一步要讲成什么形态”说出来，并写出结构 | 它决定 RPA 的布局类别；不写就退回按问句措辞猜，通常落到纯文字池 |
+| **讲解契约 `explain`**（`quantity`/`parallel_items`/`grouped_panels`/`comparison`/`ordered_steps`/`relation`/`curve`/`image_evidence`） | 把“读者必须看见什么”写成逐条义务，覆盖列表、嵌套、曲线、公式等 `form` 表达不了的结构 | 不选组件；required 缺原生载体是 REVIEW；覆盖账本写 `derived/explanation_coverage.json` |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
 | 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
@@ -46,8 +47,8 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
    命中才用对应能力；**都不命中就保持平面页，并写一句为什么不用**。
    判据是“这一页的讲解需要什么”，不是“这套 deck 还没用过什么”；为用上某能力而拆散一条连续论证，
    与默认不用同样算错。
-   这四个问题在 Story 阶段就要有答案：写进节点的 `form` 与对应结构字段（见「Story」节）。
-   只在 IR 阶段想，能力就只能拿来装饰已经定型的文字页。
+   这四个问题在 Story 阶段就要有答案：写进节点的 `explain`（首选）或 `form` 与对应结构字段
+   （见「Story」节）。只在 IR 阶段想，能力就只能拿来装饰已经定型的文字页。
 2. **基调**：整套定一次三个颜色与一个 accent 理由（见 §5）。accent 说不出理由就是默认值，应重新选。
 3. **层级**：一套 deck 通常 2–3 层——常规内容页、证据密集页、收束页。同层用同一处理，跨层允许不同。
    “统一”指系统一致，不是每页一模一样。
@@ -129,6 +130,27 @@ RPA 据此派生 `process_step_count` 等计数；这些计数是布局检索的
 `branch` 落到 `discussion`；`relation`/`evidence` 指向需要图片资产的类别，本阶段不保证有图，
 因此只记进 `metadata.story_form`，类别仍按问句措辞回退。不声明 `form` 时行为与旧版一致。
 
+更推荐写 `explain`：它不选组件，只声明“读者必须看见什么”。`must_show` 的词表是
+`quantity`（必须精确读出的量或公式）、`parallel_items`（2–6 条并列、顺序可换）、
+`grouped_panels`（2–4 组层级/分组）、`comparison`（≥2 对象 × ≥2 维度）、
+`ordered_steps`（2–5 步固定顺序）、`relation`（显式节点与有向边）、
+`curve`（示意曲线，`content.schematic=true`）、`image_evidence`（必须读一张实测图）。
+每条必须绑定本 node 的 `evidence`；`source_quote` 可选，但必须是引用证据中的原文片段。
+一页最多一个 `primary`；没有结构需求时写 `must_show: []` 和 `prose_ok_reason`。
+写了 `explain` 可省略 `form`：required 的 `ordered_steps` / `comparison` 会推导 RPA 计数；
+两者都写时仍按上面的 `form` 规则进入类别池。
+
+```json
+{"title":"...","question":"...","answer":"...","evidence":["EV0002"],"next":"...",
+ "explain":{"reader_task":"distinguish",
+   "must_show":[{"id":"ob-1","kind":"parallel_items","required":true,"primary":true,
+     "content":{"items":["对照 A","对照 B","对照 C"]},"evidence":["EV0002"]}]}}
+```
+
+`explain` 会进入 `metadata.story_explain`，并在 IR 阶段变成 `semantic.explanation`；
+编译器检查每个 required 义务是否真的有原生载体，写出 `derived/explanation_coverage.json`。
+它不替代容量门禁：放不下仍回上游重规划，不静默丢义务。
+
 顶层记录真实 provenance：
 
 ```json
@@ -189,6 +211,9 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
 - `semantic`：完整展示标题、purpose、takeaway、证据、论文边界、讲稿。
+- `semantic.explanation`：把 brief 的 `metadata.story_explain` 原样带过来，逐个义务写
+  `id / kind / required / content / evidence_refs`，并把 `carrier` 设为实际使用的原生对象。
+  不能静默丢 required 义务；确实不做时写 `status=waived` 或 `unsupported` 和 `note`。
 - `composition`：稳定 archetype、完整 blocks、原图 figure_refs、显式原生 graphics。
 - `presentation`：整套 frame、文字策略与设计决策，不复制第二份科学内容。
 
@@ -373,7 +398,9 @@ MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选
 
 普通生成任务交付 `candidate.pptx` 路径、FAIL/WARNING/REVIEW 数量及关键未解决项，
 并附一行**设计记录**：用了哪些能力（哪几页、对应什么讲解需要）、accent 及其理由、
-`takeaway` 分了哪几层。这行记录用于复核设计判断，不替代 QA 与原生验收。
+`takeaway` 分了哪几层。有 `semantic.explanation` 时先读 `derived/explanation_coverage.json`，
+报告 satisfied / waived / missing 数量；missing 的 required 义务要说明是补载体还是书面豁免。
+这行记录用于复核设计判断，不替代 QA 与原生验收。
 不把候选叫 final。`FORMULA_CONTENT_MISMATCH/FORMULA_MISSING` 等失败须修复；
 公式不仅要存在，还须保留被开方项、根指数和所有上下标结构。
 OfficeCLI 的 `Text overflow` 警告估计记为 INFO，保留原 issue，检查实际页面，不据此压缩或删除科学内容。
