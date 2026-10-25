@@ -155,7 +155,9 @@ def _content_strings(kind, content):
 
 
 def _visible(strings, corpus):
-    return any(_text(value).casefold() in corpus for value in strings if len(_text(value)) >= 3)
+    # Two-character Chinese labels (采集, 清洗) are complete visible terms; a
+    # three-character floor would falsely mark a compact eight-step flow as missing.
+    return any(_text(value).casefold() in corpus for value in strings if len(_text(value)) >= 2)
 
 
 def validate_explanation(value, semantic, composition, slide_number=None):

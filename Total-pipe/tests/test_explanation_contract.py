@@ -79,6 +79,15 @@ class ExplanationContractTests(unittest.TestCase):
         ir['slides'][0]['semantic']['explanation']['obligations'][0]['evidence_refs'] = ['other']
         self.assertIn('EXPLANATION_EVIDENCE_INVALID', rules(ir))
 
+    def test_two_character_chinese_labels_are_visible(self):
+        ir = base_ir()
+        items = ['采集', '清洗', '建模']
+        ir['slides'][0]['semantic']['explanation']['obligations'][0]['content'] = {'items': items}
+        ir['slides'][0]['composition']['blocks'][0].update(
+            text='\n'.join(items), text_flow='distributed_arrow_list')
+        self.assertNotIn('EXPLANATION_CONTENT_NOT_VISIBLE', rules(ir))
+        self.assertEqual(coverage(ir)['summary']['satisfied'], 1)
+
     def test_declared_content_must_be_visible(self):
         ir = base_ir()
         ir['slides'][0]['semantic']['explanation']['obligations'][0]['content'] = {
