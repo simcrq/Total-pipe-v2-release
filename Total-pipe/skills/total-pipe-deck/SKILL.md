@@ -186,6 +186,11 @@ composition.layout_tree 1.0/1.1/1.2 支持 columns/stack/panel/image_grid，最�
 在同一 stack、解释在前。不写页面坐标，不裁剪原图，不缩小图形绕过字号下限。树页仍需要整套
 academic_design，不再叠加 visual_plan/visual_intent。structure_planned 不能当成几何通过。
 
+stack 默认 start 贴合内容；要居中或分配余量可显式写 align=center/distribute。
+weights 是各项 `[0.1,10]` 的相对值，本身铺满且不与 center/distribute 同用。
+PAGE_UNDERFILL 只提示未加权贴顶 stack 超过 15% 的剩余高度，读取 underfill_px 与可行的
+suggested_weights；调整结构后重编，或真实审核后接受有意留白，不自动拉伸全部页面。
+
 需要外框、标题色带或结论框时，读 `Total-pipe/docs/framed-containers.md`。在 canonical 映射阶段
 为 panel 声明 frame.border（可选 fill/title_fill/title_color/title_align），并将树版本改为 1.2；
 未声明 frame 的 panel 仍不绘制背景。单页 presentation.takeaway_frame 为完整结论独立加框，
@@ -298,7 +303,11 @@ MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选
 普通生成任务交付 `candidate.pptx` 路径、FAIL/WARNING/REVIEW 数量及关键未解决项，
 不把候选叫 final。`FORMULA_CONTENT_MISMATCH/FORMULA_MISSING` 等失败须修复；
 公式不仅要存在，还须保留被开方项、根指数和所有上下标结构。
-OfficeCLI 的 `Text overflow` 有误报/漏报：保留原 issue，检查实际页面，不据此压缩或删除科学内容。
+OfficeCLI 的 `Text overflow` 警告估计记为 INFO，保留原 issue，检查实际页面，不据此压缩或删除科学内容。
+其他警告和错误不降级。用 totalpipe_qa（CLI qa）查看未签收项，真实审核后用 totalpipe_ack_review
+（CLI ack-review）提交明确 review_ids、reviewer 和 note。候选签收按未变页面证据保留，变化后失效；
+报告给出 REVIEW 总数及 unacked_count，不自动接受审核项，不能用候选笔记代替正式 final 的产物绑定签收。
+操作与图形维护限制见 `Total-pipe/docs/complex-page-qa.md`。
 
 只有用户要求正式 final 才执行 `Total-pipe/docs/deck-compiler-v2.md` 的完整验收与 promote：
 直接在 PowerPoint 逐页检查当前 staging，记录绑定实际文件哈希的 UI review，再用该文件导出的

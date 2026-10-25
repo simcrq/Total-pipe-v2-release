@@ -1187,6 +1187,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             n, framed['id'], detector='geometric-preflight', component=prefix,
                             original_bbox=entry['bbox'], expanded_bbox=outer))
                 adaptations.append({'action': 'layout_tree', **plan})
+                for entry in plan['nodes']:
+                    if entry.get('underfill'):
+                        issues.append(issue('PAGE_UNDERFILL', 'REVIEW',
+                            'A stack leaves more than 15% of its allocated height unused. '
+                            'Review intentional whitespace or adjust relative weights / stack alignment.',
+                            n, 'region:'+entry['node_id'], detector='geometric-preflight',
+                            component=entry['component'], **entry['underfill']))
                 adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
             except LayoutTreeError as error:

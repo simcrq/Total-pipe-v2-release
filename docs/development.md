@@ -24,7 +24,8 @@ PowerPoint UI / 原生 PDF 验收仍在 macOS 或 Windows 单独完成。
 
 - 输入和内容绑定：当前 Schema、语义校验与 RPA 内容模型。
 - 几何和容量：`layout.json`、`layout_feedback.json` 及当前 QA；完整术语按指定文字策略保留。
-- PPTX：实际导出文件的结构检查和原始 OfficeCLI issues。启发式 `Text overflow` 要在实际 PowerPoint 中核对。
+- PPTX：实际导出文件的结构检查和原始 OfficeCLI issues。启发式 `Text overflow` 警告估计记为 INFO，要在实际 PowerPoint 中核对。
+- 候选复审：`qa` / `ack-review` 按页面证据保留审核笔记；留白建议与失效规则见[复杂页 QA](../Total-pipe/docs/complex-page-qa.md)。
 - 正式 final：直接 PowerPoint UI 复核、绑定当前文件的原生 PDF、REVIEW 审核与晋级门禁。
   详见[使用说明](../Total-pipe/docs/USAGE.zh-CN.md#6-正式-finalpowerpoint-验收与晋级)。
 

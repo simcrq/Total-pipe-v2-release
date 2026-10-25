@@ -38,6 +38,7 @@
 | 机制、架构、漏斗、Bézier 与 Path | [科研图形组件](../Total-pipe/docs/native-components.md) |
 | 外部布局建议和回退 | [布局提供方](../Total-pipe/docs/layout-provider.md) |
 | OfficeCLI 写入与实际结构 QA | [OfficeCLI 后端](../Total-pipe/docs/officecli-backend.zh-CN.md) |
+| 复杂页溢出提示、留白与候选逐项签收 | [复杂页 QA 与维护](../Total-pipe/docs/complex-page-qa.md) |
 | 可选的启发式质量分析 | [质量指标](../Total-pipe/docs/QUALITY_METRICS.md)，不能替代真实验收 |
 | 输入及上游反馈的机器契约 | [Deck IR Schema](../Total-pipe/schemas/deck-ir.schema.json)、[布局反馈 Schema](../Total-pipe/schemas/layout-feedback.schema.json) |
 

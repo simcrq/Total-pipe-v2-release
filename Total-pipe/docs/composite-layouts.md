@@ -38,7 +38,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 | 类型 | 输入 | 分配方式 |
 |---|---|---|
 | columns | children，可选 weights | 扣除间距后按相对权重分宽 |
-| stack | children，可选 weights | 默认贴合实测内容；显式权重控制相对行高 |
+| stack | children，可选 weights、align | 默认 start 贴合实测内容；center 居中，distribute 按实测高度比例分配余量；显式权重控制相对行高 |
 | panel | title、body，可选 padding、frame（1.2） | 测量完整标题、内边距及描边；声明 frame 才绘制背景 / 边框，可带标题色带 |
 | image_grid | columns、figure children | 按行测量图片及图注，原图等比 contain |
 | block | ref 为 block ID | 原有正文或原生 OMML 公式 |
@@ -53,6 +53,12 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 最多 6 层、64 节点、4 列；单个 grid 最多 12 图；canonical graphics 最多 8 项。
 每个 block、figure_ref、graphic、table 必须恰好引用一次。显式 anchor 的公式与解释是同一 stack 的兄弟节点，
 解释在前。树页不同时使用分配正文区域的 visual_plan/visual_intent。
+
+`weights` 是相对值，各项须在 `[0.1,10]`，不能填写绝对像素。显式 weights 按比例铺满区域，
+此时 align 只能省略或设 start。align 仅用于 stack；默认 start 保持既有 hug 几何。
+未加权的 start stack 剩余高度超过该区域 15% 时产生 `PAGE_UNDERFILL` REVIEW；
+`layout_feedback.json` 给出 `underfill_px`、`underfill_ratio` 和可行时的 `suggested_weights`。
+调整权重或对齐后重新编译；留白测量与逐项复审见[复杂页 QA](complex-page-qa.md)。
 
 ## RPA：保留整页版式，另选子布局
 

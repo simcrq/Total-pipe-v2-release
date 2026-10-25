@@ -64,7 +64,10 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Insufficient space requires replanning. '
     'Image origins are paper, generated or reference; reference crops require nonblank reference_source, '
     'forbid paper source_figure and retain source/readability REVIEW without requiring a schematic caption. '
-    'OfficeCLI Text overflow issues are unreliable; keep them and verify actual slide appearance.')
+    'OfficeCLI Text overflow warning estimates are INFO; keep original issues and verify actual slide appearance. '
+    'Candidate totalpipe_qa hides acknowledged REVIEW notes by default. '
+    'Use totalpipe_ack_review only after actual review, with explicit ids, reviewer and note; '
+    'notes survive unchanged page evidence and never replace artifact-bound final approval.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
     'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
     'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
@@ -74,6 +77,8 @@ transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree com
     'Frames follow compiled content and never grant page-coordinate control. '
     'RPA search_sublayouts/compose_sublayout and automatic plan_sublayout propose structure; the compiler measures every child. '
     'Read layout_feedback.json for component paths, required/available sizes and replan actions. '
+    'Default stacks hug content at start; align=center or distribute is explicit, and weights fill proportionally. '
+    'PAGE_UNDERFILL reports stack whitespace above 15% with legal relative suggested_weights. '
     'Keep deck academic_design; tree pages do not also carry a flat visual_plan. '
     'Native tables enforce logical grid coverage, source evidence and an 18 pt font floor; '
     'pure-text overflow preserves terms as REVIEW, formula tables must fit.')
@@ -102,6 +107,10 @@ def invoke(command, arguments):
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
         argv += ['--officecli', arguments.get('officecli', 'officecli')]
+    if command == 'qa' and arguments.get('include_acked'):
+        argv += ['--include-acked']
+    if command == 'ack-review':
+        argv += ['--reviewer', arguments['reviewer'], '--note', arguments['note'], '--ids', *arguments['review_ids']]
     result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
                             encoding='utf-8', errors='replace', timeout=540)
     if result.returncode not in (0, 1):
@@ -119,6 +128,8 @@ for name, command, description in (
     ('totalpipe_compile', 'compile', 'Compile designed canonical Deck IR with the bundled packer. Requires academic_design and visual plans for eligible slides; otherwise returns VISUAL_DESIGN_REQUIRED with a full agent prompt. No PPTX rendering.'),
     ('totalpipe_build', 'build', 'Generate a PPTX candidate and QA through OfficeCLI from designed canonical Deck IR. Missing design returns VISUAL_DESIGN_REQUIRED and the prompt before rendering. Defaults to the bundled packer.'),
     ('totalpipe_review', 'review-officecli', 'Inspect an existing build and export slide screenshots, schema, and issues on demand. OfficeCLI Text overflow is an unreliable heuristic.'),
+    ('totalpipe_qa', 'qa', 'Read candidate QA and pending REVIEW count; acknowledged notes are hidden unless include_acked=true. Does not change final approval.'),
+    ('totalpipe_ack_review', 'ack-review', 'Record actual candidate review of explicit REVIEW ids with reviewer and note. Unchanged page evidence retains notes on rebuild; final still needs artifact-bound approval.'),
 ):
     properties = {'out': {'type':'string', 'description':'Absolute build directory path.'}}
     required = ['out']
@@ -128,15 +139,27 @@ for name, command, description in (
                            'skip_visual_design':{'type':'boolean','default':False,
                                'description':'Explicit legacy mode only; bypass the default visual design stage.'}})
         required.append('ir')
-    if command != 'compile':
+    if command in ('build', 'review-officecli'):
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}
+    if command == 'qa':
+        properties['include_acked'] = {'type': 'boolean', 'default': False}
+    if command == 'ack-review':
+        properties.update({'reviewer': {'type': 'string', 'minLength': 1},
+                           'note': {'type': 'string', 'minLength': 1},
+                           'review_ids': {'type': 'array', 'minItems': 1,
+                                          'items': {'type': 'string', 'minLength': 1}}})
+        required += ['reviewer', 'note', 'review_ids']
     def handler(arguments, command=command, properties=properties, required=required):
         if set(arguments)-set(properties) or any(k not in arguments for k in required):
             raise ValueError('Missing or unknown arguments')
         for key, value in arguments.items():
-            if key == 'skip_visual_design':
+            if key in ('skip_visual_design', 'include_acked'):
                 if not isinstance(value, bool):
-                    raise ValueError('skip_visual_design must be a boolean')
+                    raise ValueError(f'{key} must be a boolean')
+                continue
+            if key == 'review_ids':
+                if not isinstance(value, list) or not value or not all(isinstance(v, str) and v.strip() for v in value):
+                    raise ValueError('review_ids must be a nonempty list of REVIEW ids')
                 continue
             if not isinstance(value, str):
                 raise ValueError(f'{key} must be a string')

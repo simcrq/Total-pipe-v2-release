@@ -248,6 +248,15 @@ requires matching IR, layout, structural QA and PowerPoint evidence hashes. `WAR
 block promotion. `REVIEW` requires an acknowledgement tied to the artifact hash. `FAIL` always
 blocks promotion.
 
+Candidate review notes are separate: `qa` shows unacknowledged findings by default;
+`ack-review --reviewer ... --note ... --ids ...` records explicit REVIEW notes in
+`qa_acknowledgements.json`. Unchanged page evidence retains these notes across rebuilds;
+content, geometry or relevant backend evidence changes invalidate them. The full report keeps
+all REVIEW items and totals, plus `acked_count` / `unacked_count`. These notes never replace
+the artifact-bound final acknowledgement above. See [complex-page QA](complex-page-qa.md).
+OfficeCLI FORMAT `Text overflow` warning estimates become INFO with native-verification
+metadata; errors and other warnings retain their severity and raw issues are preserved.
+
 OfficeCLI is the only PPTX writer. `build --officecli <executable>` checks version 1.0.152+
 and the required PPTX schemas, maps compiled 96 dpi CSS px coordinates to OfficeCLI's `px`
 dimensions, converts CSS px text sizes to points, atomically runs a JSON batch, and validates

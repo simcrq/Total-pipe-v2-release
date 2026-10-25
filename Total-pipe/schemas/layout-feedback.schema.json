@@ -21,6 +21,10 @@
             "component": {"type": "string"}, "message": {"type": "string"},
             "required_size_px": {"$ref": "#/$defs/size"}, "available_size_px": {"$ref": "#/$defs/size"},
             "measurement": {"type": "string"}, "cause": {"type": "string"},
+            "underfill_px": {"type": "number", "minimum": 0},
+            "underfill_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+            "suggested_weights": {"type": "array", "minItems": 1, "maxItems": 12,
+              "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
             "suggested_actions": {"type": "array", "items": {"type": "string"}}
           }
         }}

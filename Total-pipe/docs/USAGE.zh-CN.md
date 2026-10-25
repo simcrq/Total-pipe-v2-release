@@ -190,6 +190,11 @@ Path 和 composite 见 [native-components.md](native-components.md)。所有关�
 或 1.1 的 table ID。已有 1.0 树保持兼容。
 每项内容恰好引用一次，不复制正文或填写页面坐标。新混排页可用 `composite-research`。
 
+stack 默认 `align: start` 贴合实测内容；可显式 center 居中或 distribute 按比例分配余量。
+weights 各项为 `[0.1,10]` 的相对值，按比例铺满，不能与 center / distribute 同用。
+未加权贴顶 stack 留白超过其高度 15% 时返回 `PAGE_UNDERFILL` REVIEW、`underfill_px`
+及可行的 `suggested_weights`，按实际意图调整或审核接受。
+
 先查询 `totalpipe_capabilities`（CLI：`python -m deck_compiler capabilities`），再让 RPA
 `search_sublayouts/compose_sublayout` 手工组合，或用 `plan_sublayout` 自动选型。
 自动接口提交完整 groups/content_refs/consumer_capabilities，可选 body_size_px 与组的实测尺寸需求；
@@ -349,9 +354,24 @@ rejected；coverage 只计算可请求页面，全部 owned 时为 null。已请
 详见 [布局提供方](layout-provider.md) 与 [OfficeCLI 后端](officecli-backend.zh-CN.md)。
 
 候选可作为普通生成任务的交付结果，但须标明状态与未解决项，不能称为正式 final。
-FAIL 必须处理；WARNING 保留；REVIEW 需要相应审核。OfficeCLI `Text overflow` 可能误报或漏报，
-保留原 issue 并检查实际页面，不据此删改科研内容。`FORMULA_MISSING/FORMULA_CONTENT_MISMATCH`
+FAIL 必须处理；WARNING 保留；REVIEW 需要相应审核。OfficeCLI `Text overflow` 警告估计记为 INFO，
+保留原 issue 并检查实际页面，不据此删改科研内容。其他警告和错误不降级。`FORMULA_MISSING/FORMULA_CONTENT_MISMATCH`
 表示原生公式缺失或结构改变，不能靠存在一个公式标签就当成功。
+
+候选阶段可以逐项记录真实审核：
+
+```bash
+python -m deck_compiler qa --out <build-dir>
+python -m deck_compiler ack-review --out <build-dir> \
+  --reviewer '<审核者>' --note '<核对说明>' --ids <review-id>
+python -m deck_compiler qa --out <build-dir> --include-acked
+```
+
+MCP 对应 `totalpipe_qa` / `totalpipe_ack_review`，后者传 reviewer、note、review_ids。
+`qa_report.json` 保留全部 REVIEW 与 `ack: {by,at,note}`，`counts.REVIEW` 是原始总数，
+`unacked_count` / `acked_count` 给出待复核与已签收数。默认 qa 视图隐藏已签收项。
+`qa_acknowledgements.json` 跨重建保留未改变页面的记录，相关内容、几何或后端证据变化后失效。
+候选笔记不代替下一节正式 final 的当前文件哈希审核。完整绑定与维护限制见[复杂页 QA](complex-page-qa.md)。
 
 ## 6. 正式 final：PowerPoint 验收与晋级
 

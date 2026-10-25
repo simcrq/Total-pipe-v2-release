@@ -7,6 +7,8 @@ from .pipeline import (build, compile_input, ingest_native, locked, promote,
 
 def qa_summary(qa, out):
     return {'status': qa['status'], 'counts': qa['counts'],
+            'unacked_count': qa.get('unacked_count', qa['counts']['REVIEW']),
+            'acked_count': qa.get('acked_count', 0),
             'report': str(out/'qa_report.json'),
             'layout_feedback': str(out/'layout_feedback.json'),
             **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
@@ -48,6 +50,14 @@ def main():
     p = commands.add_parser('promote')
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--ack', type=Path)
+    p = commands.add_parser('qa', help='Show pending candidate QA findings')
+    p.add_argument('--out', required=True, type=Path)
+    p.add_argument('--include-acked', action='store_true')
+    p = commands.add_parser('ack-review', help='Record candidate REVIEW notes; does not satisfy final promotion')
+    p.add_argument('--out', required=True, type=Path)
+    p.add_argument('--reviewer', required=True)
+    p.add_argument('--note', required=True)
+    p.add_argument('--ids', nargs='+', required=True, help='Explicit current REVIEW issue ids')
     p = commands.add_parser('validate-native')
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--pdf', required=True, type=Path)
@@ -89,8 +99,19 @@ def main():
         if args.command == 'review-officecli':
             from .officecli_review import review
             result = review(out, args.officecli, args.render)
-            print(json.dumps({'status':result['status'], 'issue_count':result['issue_count'], 'pages':len(result['pages']), 'report':str(out/'officecli_review.json')}))
+            print(json.dumps({'status':result['status'], 'issue_count':result['issue_count'],
+                'issue_counts': result['issue_counts'], 'pages':len(result['pages']), 'report':str(out/'officecli_review.json')}))
             return 1 if result['status'] == 'REJECT' else 0
+        if args.command in ('qa', 'ack-review'):
+            from .qa_review import show_qa, acknowledge_reviews
+            if args.command == 'qa':
+                with locked(out):
+                    qa = show_qa(out, args.include_acked)
+                print(json.dumps(qa, ensure_ascii=False))
+            else:
+                qa = acknowledge_reviews(out, args.reviewer, args.note, args.ids)
+                print(json.dumps(qa_summary(qa, out), ensure_ascii=False))
+            return 1 if qa['counts']['FAIL'] else 0
         if args.command == 'promote':
             print(promote(out, json.loads(args.ack.read_text(encoding='utf-8')) if args.ack else None))
             return 0

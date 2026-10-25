@@ -3,7 +3,6 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import time
@@ -23,6 +22,13 @@ def write_json(path, value):
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n',
                     encoding='utf-8')
     os.replace(temp, path)
+
+
+def write_qa(out, qa, ir, layout):
+    from .qa_review import attach_acknowledgements
+    qa['layout_sha256'] = file_hash(out/'layout.json') if layout else None
+    attach_acknowledgements(out, qa, ir, layout)
+    write_json(out/'qa_report.json', qa)
 
 
 POWERPOINT_REVIEW_CHECKS = [
@@ -72,7 +78,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             qa['next_action'] = {'action': 'author_visual_proposal', 'apply_tool': 'totalpipe_apply_visual_plan',
                                  'prompt': str(prompt_path.resolve()),
                                  'ir': str(ir_path.resolve()), **pending}
-            write_json(out/'qa_report.json', qa)
+            write_qa(out, qa, ir, None)
             write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
     provider_name = (layout_options or {}).get('name', 'compiler')
@@ -155,7 +161,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
         for name, value in derive(ir, layout).items():
             write_json(out/'derived'/name, value)
     qa = report(issues, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': layout is not None})
-    write_json(out/'qa_report.json', qa)
+    write_qa(out, qa, ir, layout)
     write_json(out/'layout_feedback.json', make_feedback(ir, layout, issues))
     return ir, layout, qa
 
@@ -197,22 +203,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
             items += verify(out/'staging.pptx', layout)
             officecli_report = officecli.inspect(out/'staging.pptx', officecli_executable)
             write_json(out/'officecli_issues.json', officecli_report)
-            for finding in officecli_report['issues']:
-                severity = {'0': 'FAIL', '1': 'WARNING', '2': 'INFO',
-                            'error': 'FAIL', 'warning': 'WARNING', 'info': 'INFO'}.get(
-                                str(finding.get('severity')).lower())
-                if not severity:
-                    raise ValueError(f'OfficeCLI returned unknown issue severity: {finding}')
-                path = finding.get('path') or ''
-                slide = re.search(r'/slide\[(\d+)\]', path)
-                category = finding.get('subtype') or {0: 'FORMAT', 1: 'CONTENT', 2: 'STRUCTURE'}.get(
-                    finding.get('type'), str(finding.get('type') or 'ISSUE'))
-                rule = 'OFFICECLI_' + re.sub(r'[^A-Z0-9]+', '_',
-                    category.upper()).strip('_')
-                items.append(issue(rule, severity, finding.get('message') or '',
-                                   int(slide.group(1)) if slide else None, path or None,
-                                   detector='officecli-view-issues', backend='officecli',
-                                   officecli_issue_id=finding.get('id')))
+            items += officecli.qa_findings(officecli_report['issues'])
             structural_complete = True
             if native_render and not any(i['severity']=='FAIL' for i in items):
                 native_evidence, native_items = native.render(out/'staging.pptx', out/'native.pdf')
@@ -233,8 +224,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                     'officecli_issues': structural_complete,
                     'officecli_runtime': officecli_runtime,
                     'officecli_commands_sha256': command_sha256})
-        qa['layout_sha256'] = file_hash(out/'layout.json')
-        write_json(out/'qa_report.json', qa)
+        write_qa(out, qa, ir, layout)
         write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         write_json(out/'state.json', {'phase': 'failed' if qa['counts']['FAIL'] else 'awaiting_validation',
                                      'artifact_sha256': sha, 'previous_final_sha256': old_final})
@@ -361,8 +351,7 @@ def ingest_native(out, pdf, reviewer=None):
             'officecli_runtime': prior.get('checks', {}).get('officecli_runtime'),
             'officecli_commands_sha256': prior.get('checks', {}).get('officecli_commands_sha256'),
         })
-        qa['layout_sha256'] = file_hash(layout_path)
-        write_json(out/'qa_report.json', qa)
+        write_qa(out, qa, ir, layout)
         metrics_path = out/'metrics.json'
         if metrics_path.exists():
             metrics = json.loads(metrics_path.read_text(encoding='utf-8'))

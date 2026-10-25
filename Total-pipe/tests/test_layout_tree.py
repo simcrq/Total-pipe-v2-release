@@ -187,6 +187,72 @@ class LayoutTreeTests(unittest.TestCase):
         self.assertEqual(len(math), 6)
         self.assertTrue(all(0 <= b['bbox'][1]-a['bbox'][1]-a['bbox'][3] < 40 for a, b in zip(math, math[1:])))
 
+    def short_stack(self):
+        ir = fixture()
+        ir['slides'] = ir['slides'][:1]
+        ir['slides'][0]['composition'] = {'archetype': 'composite-research', 'figure_refs': [],
+            'blocks': [{'id': name, 'component': 'body', 'text': text}
+                       for name, text in [('first', 'First complete scientific finding.'),
+                                          ('second', 'Second complete scientific finding.')]],
+            'layout_tree': {'version': '1.2', 'regions': {'body': {'id': 'stack', 'type': 'stack',
+                'children': [{'id': name+'-leaf', 'type': 'block', 'ref': name} for name in ('first', 'second')]}}}}
+        return ir
+
+    def test_stack_underfill_feedback_and_legal_weights_resolve_it(self):
+        from deck_compiler.layout_feedback import make_feedback
+        import jsonschema
+        ir = self.short_stack()
+        layout, issues = self.compile_ok(ir)
+        finding = next(i for i in issues if i['rule'] == 'PAGE_UNDERFILL')
+        self.assertEqual(finding['severity'], 'REVIEW')
+        detail = finding['source']
+        self.assertEqual(detail['component'], 'body')
+        self.assertGreater(detail['underfill_ratio'], .15)
+        self.assertAlmostEqual(detail['underfill_px']/detail['available_size_px'][1], detail['underfill_ratio'], places=3)
+        feedback = make_feedback(ir, layout, issues)
+        jsonschema.validate(feedback, json.loads((ROOT/'schemas/layout-feedback.schema.json').read_text()))
+        error = next(e for e in feedback['slides'][0]['errors'] if e['code'] == 'PAGE_UNDERFILL')
+        self.assertEqual(error['suggested_weights'], detail['suggested_weights'])
+        self.assertTrue(all(.1 <= w <= 10 for w in detail['suggested_weights']))
+        ir['slides'][0]['composition']['layout_tree']['regions']['body']['weights'] = detail['suggested_weights']
+        _, weighted_issues = self.compile_ok(ir)
+        self.assertNotIn('PAGE_UNDERFILL', [i['rule'] for i in weighted_issues])
+
+    def test_stack_align_center_and_distribute_are_explicit_and_keep_content(self):
+        ir = self.short_stack()
+        baseline, _ = self.compile_ok(ir)
+        def nodes(layout):
+            return next(a['nodes'] for a in layout['slides'][0]['adaptation_log'] if a['action'] == 'layout_tree')
+        start = nodes(baseline)
+        remaining = start[0]['bbox'][1]+start[0]['bbox'][3]-sum(start[-1]['bbox'][1::2])
+        for alignment in ('center', 'distribute'):
+            ir['slides'][0]['composition']['layout_tree']['regions']['body']['align'] = alignment
+            layout, issues = self.compile_ok(ir)
+            plan = nodes(layout)
+            self.assertNotIn('PAGE_UNDERFILL', [i['rule'] for i in issues])
+            if alignment == 'center':
+                self.assertAlmostEqual(plan[1]['bbox'][1]-start[1]['bbox'][1], remaining/2)
+                self.assertEqual(plan[1]['bbox'][3], start[1]['bbox'][3])
+            else:
+                self.assertAlmostEqual(sum(plan[-1]['bbox'][1::2]), sum(plan[0]['bbox'][1::2]))
+            for block in ir['slides'][0]['composition']['blocks']:
+                element = next(e for e in layout['slides'][0]['elements'] if e['id'] == block['id'])
+                self.assertEqual(element['source_text'], block['text'])
+
+    def test_stack_alignment_schema_matches_runtime(self):
+        import jsonschema
+        schema = json.loads((ROOT/'schemas/deck-ir.schema.json').read_text())
+        for value, weights, kind in [('unknown', None, 'stack'), ('center', [1, 1], 'stack'),
+                                      ('start', None, 'columns')]:
+            ir = self.short_stack()
+            node = ir['slides'][0]['composition']['layout_tree']['regions']['body']
+            node.update(type=kind, align=value)
+            if weights:
+                node['weights'] = weights
+            self.assertTrue(validate_tree(ir['slides'][0]['composition']['layout_tree'], ir['slides'][0]['composition']))
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(ir, schema)
+
     def test_rpa_composition_compiles_without_content_changes(self):
         ir = fixture()
         comp = ir['slides'][0]['composition']

@@ -129,7 +129,8 @@ python -m deck_compiler build --ir designed.deck_ir.json --out build/my-deck \
 
 客户端须加载这三份配置，并把相对 cwd 解析到对应组件目录；手动配置时填写实际绝对路径，
 Python 指向已安装依赖的虚拟环境。Total-pipe 服务包含 pwf2rpa 的五个工具，以及
-`totalpipe_capabilities / totalpipe_visual_prompt / totalpipe_apply_visual_plan / totalpipe_compile / totalpipe_build / totalpipe_review`。
+`totalpipe_capabilities / totalpipe_visual_prompt / totalpipe_apply_visual_plan / totalpipe_compile / totalpipe_build / totalpipe_review`，
+以及候选复审工具 `totalpipe_qa / totalpipe_ack_review`。
 MCP 文件参数使用绝对路径。更新源码后重载服务。
 
 ## 环境需求
@@ -166,10 +167,11 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
 - **可测量边框容器**：layout tree `1.2` 为 panel 增加原生边框与标题色带；takeaway 可独立框选。描边、内边距和完整内容参与容量计算，支持嵌套并保留旧树。见 [容器协议](Total-pipe/docs/framed-containers.md)。
 - **可追溯反馈**：`layout_feedback.json` 给出组件路径、所需 / 可用尺寸与建议，供上游用完整内容重规划。
+- **复杂页复审**：stack 保留默认贴合内容，可显式居中或分配余量，留白超过 15% 时给出 REVIEW 与相对权重建议；候选支持逐项签收和待复核视图，内容 / 几何变化后相关记录失效。见[复杂页 QA](Total-pipe/docs/complex-page-qa.md)。
 - **科学术语优先**：`preserve-terms` 保留长标题与正文，超预算可带 REVIEW 生成候选；公式真实宽高、图形可读性和原图尺寸仍执行容量门禁。
 
 编译阶段只维护 canonical Deck IR；`layout.json`、`derived/` 和后端 batch 都由编译器派生。
-OfficeCLI 的 `Text overflow` 提示保留在 QA 中，再以实际 PowerPoint 页面核对。
+OfficeCLI 的 `Text overflow` 警告估计在 QA 中记为 INFO，保留原始 issue，再以实际 PowerPoint 页面核对。
 正式晋级要求零 FAIL、当前文件绑定的原生验收，以及全部 REVIEW 的真实审核记录。
 
 ## 文档导航

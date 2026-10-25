@@ -4,6 +4,11 @@ v5 继续使用 `composition.graphics`、OfficeCLI 和现有 QA。`native-graphi
 `process-flow` / `figure-parameters` 混排页都可使用下列类型；旧 `process` / `dag`
 布局和输出行为保持兼容。没有新增依赖、SVG 渲染器或第二套科学评分体系。
 
+**编辑边界：** 这些组件输出独立的形状、文字、标签、端帽和容器，尚无 PowerPoint 编组。
+移动节点时独立对象不会整体跟随，连接符也可能重新布线。优先在 canonical IR 调整结构、
+weights、gap 或 align 后重建；手工微调应选全相关对象，必要时自行组合，之后复查路由。
+不存在需要先解开的组；手改不会回写 IR。详见[复杂页 QA 与维护](complex-page-qa.md)。
+
 内部组件接口位于 `deck_compiler/graphic_components.py`：
 
 ```python

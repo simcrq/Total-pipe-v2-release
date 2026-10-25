@@ -420,7 +420,8 @@ Examples:
             print(f"\n{status_icon} Status: {qa['status']}")
             print(f"    FAIL: {qa['counts']['FAIL']}")
             print(f"    WARNING: {qa['counts']['WARNING']}")
-            print(f"    REVIEW: {qa['counts']['REVIEW']}")
+            print(f"    REVIEW: {qa.get('unacked_count', qa['counts']['REVIEW'])} pending "
+                  f"({qa.get('acked_count', 0)} acknowledged, {qa['counts']['REVIEW']} total)")
             if qa.get('next_action'):
                 print(f"[DESIGN] Read {qa['next_action']['prompt']}, author a visual proposal, "
                       "then run python -m deck_compiler apply-visual-plan and retry with the merged IR.")

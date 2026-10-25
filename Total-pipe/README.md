@@ -86,13 +86,17 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | `layout_feedback.json` | 绑定 IR 哈希的组件尺寸错误及上游修订建议 |
 | `candidate.pptx`、`staging.pptx` | 可编辑候选与字节一致的验收副本 |
 | `qa_report.json`、`officecli_issues.json` | 统一 QA 和保留的 OfficeCLI 原始问题 |
+| `qa_acknowledgements.json` | 候选逐项审核笔记，按未变化的页面证据保留；不替代正式 final 审核 |
 | `powerpoint_review.json`、`native.pdf`、`native.json` | 当前 staging 的直接 UI 检查与 PowerPoint 原生证据 |
 | `final.pptx`、`state.json` | 完成验收 / REVIEW 审核 / promote 后的交付及状态 |
 
 修改页面从 canonical Deck IR 开始；派生文件由编译器重建。
 候选可以交付并注明未解决项；正式 final 按 [使用说明第 6 节](docs/USAGE.zh-CN.md#6-正式-finalpowerpoint-验收与晋级)
 完成逐页 PowerPoint 检查、PDF 绑定及 REVIEW acknowledgement，再 promote。
-OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
+OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页面。
+候选用 `python -m deck_compiler qa --out <build-dir>` 查看待复核项，真实审核后用
+`ack-review --out <build-dir> --reviewer '<审核者>' --note '<核对说明>' --ids <review-id>` 逐项签收。
+原始 REVIEW 总数保留，摘要另给 `unacked_count` / `acked_count`；完整规则见[复杂页 QA](docs/complex-page-qa.md)。
 
 ## 当前能力与协议
 
@@ -101,6 +105,7 @@ OfficeCLI `Text overflow` 是排查线索，真实效果需看实际页面。
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
+- [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、15% 留白反馈、合法相对权重与增量候选签收。
 - [边框容器](docs/framed-containers.md)：panel 原生描边、填充与标题色带；独立 takeaway 框选；内边距、描边与完整内容共同测量。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
 - [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。

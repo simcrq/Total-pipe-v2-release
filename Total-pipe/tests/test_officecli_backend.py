@@ -119,6 +119,51 @@ class OfficeCliProtocolTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'count'):
                 officecli.inspect('staging.pptx')
 
+    def test_only_heuristic_text_warnings_become_info(self):
+        findings = [{'severity': severity, 'type': 0, 'path': '/slide[2]/shape[@id=7]',
+                     'message': message, 'id': index}
+                    for index, (severity, message) in enumerate([
+                        ('warning', 'Text overflow: 3 lines need 79pt, usable 52pt.'),
+                        ('error', 'text overflow: corrupt text contract'),
+                        (1, 'Objects overlap'), (2, 'Unused style')])]
+        before = json.dumps(findings)
+        items = officecli.qa_findings(findings)
+        self.assertEqual([i['severity'] for i in items], ['INFO', 'FAIL', 'WARNING', 'INFO'])
+        self.assertEqual(items[0]['source']['original_severity'], 'warning')
+        self.assertTrue(items[0]['source']['native_verification_required'])
+        self.assertIn('verify in PowerPoint', items[0]['message'])
+        self.assertEqual(items[0]['slide'], 2)
+        self.assertEqual(json.dumps(findings), before)
+
+    def test_review_export_does_not_reject_advisory_estimates(self):
+        from deck_compiler.officecli_review import review
+        from deck_compiler.contracts import digest, file_hash
+        from deck_compiler.pipeline import write_json
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out/'staging.pptx').write_bytes(b'candidate')
+            ir = {'slides': [{'id': 'one'}]}
+            layout = {'ir_sha256': digest(ir), 'slides': [{'id': 'one'}]}
+            write_json(out/'deck_ir.json', ir)
+            write_json(out/'layout.json', layout)
+            write_json(out/'qa_report.json', {'artifact_sha256': file_hash(out/'staging.pptx'),
+                'layout_sha256': file_hash(out/'layout.json'), 'ir_sha256': digest(ir), 'checks': {}})
+            for message, expected in [('text overflow: need 79pt, usable 52pt', 'AWAITING_VISUAL_REVIEW'),
+                                      ('Objects overlap', 'REJECT')]:
+                def run(argv, **kwargs):
+                    data = {}
+                    if argv[1] == 'validate': data = {'count': 0}
+                    if argv[1] == 'view' and argv[3] == 'issues':
+                        data = {'count': 1, 'issues': [{'severity': 1, 'type': 0, 'message': message}]}
+                    if '-o' in argv: Path(argv[argv.index('-o')+1]).write_bytes(b'\x89PNG\r\n\x1a\n')
+                    return CompletedProcess(argv, 0, json.dumps({'success': True, 'data': data}), '')
+                with patch('deck_compiler.officecli_review.subprocess.run', side_effect=run), \
+                     patch('deck_compiler.officecli_review.verify', return_value=[]):
+                    result = review(out)
+                self.assertEqual(result['status'], expected)
+                self.assertEqual(result['issue_count'], 1)
+                self.assertEqual(result['issue_counts']['INFO' if expected == 'AWAITING_VISUAL_REVIEW' else 'WARNING'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

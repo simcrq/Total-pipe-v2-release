@@ -11,10 +11,9 @@ OfficeCLI 是 Deck Compiler v2 唯一的 PPTX 写入后端。它读取从 canoni
 本项目随附的 OfficeCLI 源码目录本身不是可执行文件；若只克隆了源码，需要先按
 OfficeCLI 项目说明构建或安装。编译器在写入前检查版本及所需 PPTX 属性 schema，
 并把版本和 schema 哈希写入 QA。Python 依赖见
-`deck_compiler/requirements.txt`。Deck IR 的 `theme.font_file` 与
-`theme.bold_font_file` 必须指向**当前机器实际存在**的字体文件；发布包中的
-`examples/research.deck_ir.json` 使用 macOS Arial 路径，在 Windows 上需先复制并
-替换为本机字体路径。
+`deck_compiler/requirements.txt`。Deck IR 的 `theme.font_file` 与 `theme.bold_font_file`
+须能在本机解析；可用绝对路径或字体文件名，依次从 IR 所在目录、`TOTALPIPE_FONT_DIR`
+及系统字体目录查找。示例使用可移植文件名；字体替代和缺字进入 QA。
 
 ## 2. agent 的调用顺序
 
@@ -41,13 +40,19 @@ python -m deck_compiler build --ir C:\path\deck_ir.json --out C:\path\build `
 ## 3. 版本化边界
 
 输入协议是 Deck Compiler v2 的 `layout.json`（长度均为 96 dpi CSS px），
-OfficeCLI 后端只处理已编译的三类元素：
+OfficeCLI 后端处理已编译的原生元素：
 
 | layout kind | OfficeCLI batch 操作 | 保留的契约 |
 |---|---|---|
 | `text` | `add /slide[N] --type shape`，必要时 `set` 与 `raw-set` | 名称、文本、字体及东亚字体槽、字号、固定行距、颜色、位置、四边 inset、无自动缩放和 `wrap=none` |
 | `shape` | `add /slide[N] --type shape` | 名称、预设几何、填充、描边和位置 |
 | `image` | `add /slide[N] --type picture` | 原始素材路径、名称、alt、按编译结果保持比例的位置 |
+| `math` | 原生公式与 OMML | 数学 AST、上下标、矩阵、字号与边界 |
+| `list` | 原生文字与项目符号 | 完整条目、标记样式 / 颜色与文字契约 |
+| `connector` | 原生连接符及端点绑定 | 节点身份、连接点与路由 |
+| `table` | 原生 table / cell | 合并网格、完整单元格、公式与尺寸 |
+
+显式行内公式随 text / table 文字片段写入 OMML；Path 随 shape 写入原生 custom geometry。
 
 后端先 `create candidate.pptx`，再写入 `candidate.officecli.batch.json`，通过
 `officecli batch ... --input ... --stop-on-error --json` 原子执行。每页先添加
@@ -57,8 +62,9 @@ OfficeCLI 后端只处理已编译的三类元素：
 复制 candidate 后，对 `staging.pptx` 再调用 `validate --json` 和
 `view issues --json`；原始 issue 结果写入
 `officecli_issues.json`，逐条并入统一 `qa_report.json`（Error→FAIL、Warning→WARNING、
-Info→INFO）。
-其中 `Text overflow` 为不准确的启发式判断，可能误报或漏报；保留原始 issue，
+Info→INFO；唯一例外是 FORMAT 中的 `Text overflow` 警告估计→INFO）。
+统一项保留原始严重度、启发式标记和需要原生核对的说明。
+`Text overflow` 可能误报或漏报；保留原始 issue，
 再以实际 PPTX 页面和 PowerPoint 逐页眼检确认。不要因此删减科学正文或
 `key_points`；确认真实溢出时调整布局或拆页。
 `batch` 外层 `success`、每项 `success`、`summary.succeeded/total` 和逐项 warning
@@ -71,11 +77,14 @@ OfficeCLI 将其映射为新的 DrawingML 段落。科学图在 layout 阶段已
 
 `candidate.officecli.batch.json` 是可复查的后端命令记录，不是第二份页面真源；
 不要编辑并重放它替代 `deck_ir.json`。每次重新 `build` 会清理旧 candidate、staging、
-原生证据和 review 记录，避免旧证据混入新构建。
+原生证据和正式 PowerPoint review 记录，避免旧证据混入新构建。
+候选 `qa_acknowledgements.json` 保留；只有绑定相同发现与页面证据的逐项笔记才恢复。
+`qa` 默认显示未签收项，`ack-review` 记录真实候选复核，二者不代替正式 final 验收。
+`review-officecli` 不因启发式溢出或其他 INFO 拒绝候选；操作见[复杂页 QA](complex-page-qa.md)。
 
 ## 4. 能力和边界
 
-- OfficeCLI 后端支持当前 catalog 产生的文本、矩形及图片元素、背景、画布和讲者备注。
+- OfficeCLI 后端支持当前 catalog 产生的文本、原生列表、公式、表格、图形、路径、连接符和图片，以及背景、画布和讲者备注。
 - 只读结构校验 `verify()` 检查实际 PPTX 的图片字节、文本、坐标、字体、背景和碰撞。
 - `qa_report.json.checks` 与 `metrics.json` 记录固定后端 `officecli`、运行版本、
   schema 哈希和原子命令清单哈希。

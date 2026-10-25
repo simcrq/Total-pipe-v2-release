@@ -3,8 +3,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from .contracts import digest, file_hash
-from .officecli import schema_error_count
+from .contracts import digest, file_hash, report
+from .officecli import schema_error_count, qa_findings
 from .pipeline import locked, write_json
 from .structural import verify
 
@@ -70,15 +70,19 @@ def review(out, executable='officecli', render='native'):
         if file_hash(staging) != sha:
             raise ValueError('Review unexpectedly changed staging bytes')
         issue_count = issue_data['count']
-        # A successful export is not visual acceptance. Raw warnings stay visible.
+        normalized = qa_findings(issue_data['issues'])
+        issue_counts = report(normalized)['counts']
+        rejected = bool(issue_counts['FAIL'] or issue_counts['WARNING'] or schema_count or
+                        any(i['severity'] == 'FAIL' for i in structural))
+        # An export is not visual acceptance. Advisory estimates do not reject a candidate.
         record = {'schema_version':'officecli-review-1', 'method':'officecli-cli',
             'requested_render':render, 'artifact_sha256':sha,
             'layout_sha256':file_hash(layout_path), 'ir_sha256':digest(ir),
             'officecli_runtime':qa['checks'].get('officecli_runtime'),
             'schema_count':schema_count, 'issue_count':issue_count,
+            'issue_counts':issue_counts, 'issues':normalized,
             'structural_items':structural, 'pages':pages,
-            'status':'REJECT' if issue_count or schema_count or any(i['severity']=='FAIL' for i in structural)
-                     else 'AWAITING_VISUAL_REVIEW',
+            'status':'REJECT' if rejected else 'AWAITING_VISUAL_REVIEW',
             'powerpoint_ui_review':False, 'final_promotion':False}
         write_json(evidence_dir/'commands.json', commands)
         record['commands_sha256'] = file_hash(evidence_dir/'commands.json')

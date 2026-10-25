@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from .contracts import issue
 
 _A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 
@@ -308,3 +309,34 @@ def inspect(pptx_path, executable='officecli'):
     if data.get('count') != len(data['issues']):
         raise ValueError('OfficeCLI view issues count differs from its issue list')
     return data
+
+
+def qa_findings(findings):
+    """Keep backend diagnostics, distinguishing heuristic text estimates from defects."""
+    items = []
+    for finding in findings:
+        original = finding.get('severity')
+        severity = {'0': 'FAIL', '1': 'WARNING', '2': 'INFO',
+                    'error': 'FAIL', 'warning': 'WARNING', 'info': 'INFO'}.get(str(original).lower())
+        if not severity:
+            raise ValueError(f'OfficeCLI returned unknown issue severity: {finding}')
+        path = finding.get('path') or ''
+        slide = re.search(r'/slide\[(\d+)\]', path)
+        category = finding.get('subtype') or {0: 'FORMAT', 1: 'CONTENT', 2: 'STRUCTURE'}.get(
+            finding.get('type'), str(finding.get('type') or 'ISSUE'))
+        rule = 'OFFICECLI_' + re.sub(r'[^A-Z0-9]+', '_', category.upper()).strip('_')
+        message = finding.get('message') or ''
+        heuristic = rule == 'OFFICECLI_FORMAT' and bool(re.search(r'\btext\s+overflow\b', message, re.I))
+        source = {'backend': 'officecli', 'officecli_issue_id': finding.get('id'),
+                  'original_severity': original}
+        if heuristic:
+            source.update(measurement='officecli_heuristic', native_verification_required=True)
+            # Backend errors remain errors. Only its supplemental warning estimate is advisory.
+            if severity == 'WARNING':
+                severity = 'INFO'
+            message = ('Heuristic text estimate; verify in PowerPoint before changing content or font size. '
+                       + message)
+        items.append(issue(rule, severity, message, int(slide.group(1)) if slide else None,
+                           path or None, detector='officecli-view-issues',
+                           confidence='LOW' if heuristic else 'HIGH', **source))
+    return items

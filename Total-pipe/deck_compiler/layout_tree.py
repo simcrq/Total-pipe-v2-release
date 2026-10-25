@@ -11,6 +11,8 @@ MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
 LEAVES = ('block', 'figure', 'graphic', 'table')
 GAPS = {'compact': 12., 'standard': 24., 'spacious': 32.}
+STACK_ALIGNMENTS = ('start', 'center', 'distribute')
+UNDERFILL_RATIO = .15
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
@@ -22,6 +24,8 @@ def capabilities():
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
                        'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
+            'stack_alignment': {'values': list(STACK_ALIGNMENTS), 'default': 'start',
+                                'underfill_review_ratio': UNDERFILL_RATIO},
             'container_frames': {'panel': {'min_tree_version': '1.2', 'native_rectangle': True,
                                           'title_band': True}, 'takeaway': {'measured': True}},
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
@@ -72,6 +76,8 @@ def validate_tree(tree, composition):
         fields = {'id', 'type'}
         if kind in ('columns', 'stack'):
             fields |= {'children', 'weights', 'gap'}
+            if kind == 'stack':
+                fields.add('align')
         elif kind == 'image_grid':
             fields |= {'children', 'columns', 'gap'}
         elif kind == 'panel':
@@ -87,6 +93,11 @@ def validate_tree(tree, composition):
             fail(path, f'unknown fields {sorted(set(node)-fields)}; page coordinates are forbidden')
         if not isinstance(node.get('gap', 'standard'), str) or node.get('gap', 'standard') not in GAPS:
             fail(path, 'gap must be compact, standard or spacious')
+        if kind == 'stack':
+            if node.get('align', 'start') not in STACK_ALIGNMENTS:
+                fail(path, 'stack.align must be start, center or distribute')
+            if 'weights' in node and node.get('align', 'start') != 'start':
+                fail(path, 'explicit weights already fill the stack; align must be start or omitted')
         if kind == 'panel':
             if 'frame' in node:
                 from .container_frames import validate_frame
@@ -371,11 +382,12 @@ class RegionCompiler:
                     kind, 'INSUFFICIENT_DRAWING_SPACE')
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
                                   [width, need.hard], [width, height])
-        self.entries.append({'component': path, 'node_id': node['id'], 'type': kind, 'bbox': list(box),
+        entry = {'component': path, 'node_id': node['id'], 'type': kind, 'bbox': list(box),
             'requirements': {'min_height_px': need.hard, 'preferred_height_px': need.preferred,
                              'min_width_px': need.min_width, 'measured_at_width_px': width,
                              'measurement': 'conservative_minimum'},
-            **({'ref': node['ref']} if kind in LEAVES else {})})
+            **({'ref': node['ref']} if kind in LEAVES else {})}
+        self.entries.append(entry)
         if kind in LEAVES:
             return
         if kind == 'panel':
@@ -420,9 +432,26 @@ class RegionCompiler:
             extra, demand = max(0, usable-sum(minimums)), sum(max(0, p-m) for p, m in zip(preferred, minimums))
             heights = [m+(min(1., extra/demand)*(p-m) if demand else 0)
                        for m, p in zip(minimums, preferred)]
-            if len(rows) == 1 and (kind == 'image_grid' or children[0]['type'] != 'block'):
+            if (len(rows) == 1 and (kind == 'image_grid' or children[0]['type'] != 'block')
+                    and node.get('align', 'start') == 'start'):
                 heights = [usable]
-        cursor = y
+        remaining = max(0., usable-sum(heights))
+        alignment = node.get('align', 'start')
+        if kind == 'stack' and not weights and alignment == 'distribute':
+            total = sum(heights)
+            heights = [h+remaining*h/total for h in heights]
+        elif kind == 'stack' and not weights and alignment == 'start' and remaining > height*UNDERFILL_RATIO:
+            # Suggest legal relative weights, never pixel values. Check that rounding and the
+            # schema's 100:1 ratio limit still leave every child above its measured hard floor.
+            suggested = [round(max(.1, h/max(heights)*10), 6) for h in heights]
+            entry['underfill'] = {'underfill_px': round(remaining, 2),
+                'underfill_ratio': round(remaining/height, 4),
+                'available_size_px': [width, height], 'measurement': 'allocated_stack_regions',
+                'suggested_actions': ['set_stack_weights', 'set_stack_align_center',
+                                      'set_stack_align_distribute', 'review_intentional_whitespace']}
+            if all(usable*w/sum(suggested) >= m-.1 for w, m in zip(suggested, minimums)):
+                entry['underfill']['suggested_weights'] = suggested
+        cursor = y+(remaining/2 if kind == 'stack' and alignment == 'center' else 0)
         for row, row_h in enumerate(heights):
             for col in range(columns):
                 index = row*columns+col

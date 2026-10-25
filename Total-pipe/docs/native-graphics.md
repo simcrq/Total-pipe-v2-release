@@ -6,6 +6,11 @@ Native Graphic v2（`feat/native-graphic-connectors`）支持独立的 `native-g
 `deck_compiler/graphic_layout.py` 确定性布局，经现有 OfficeCLI 输出。
 没有新增渲染器或依赖。
 
+**编辑边界：** 节点形状、文字、关系标签、T 端帽和层容器仍是独立对象，没有 `p:grpSp` 编组。
+移动节点不会自动带走独立文字；连接符可能被 PowerPoint 重新布线。持久修改优先改 canonical IR
+的结构、weights、gap 或 align 后重建。必须手改时选全相关对象、必要时自行组合，再检查文字与路由；
+重建不会保留手改产物。原文件没有组，无需先解组。详见[复杂页维护说明](complex-page-qa.md#图形编辑与-provider-边界)。
+
 `feat/native-graphic-dag-layout` 在同一入口增加显式的 `type: "dag"`，支持分支、
 并行路径、汇合和跨层连接。`type: "process"` 的 v2 布局与输出命令保持不变。
 
@@ -159,7 +164,7 @@ DAG 不支持循环；v5 机制组件可以显式声明返回前层的反馈边�
 证据上方的有限区域方案。`figure-parameters` 优先保留原图在左的阅读顺序。
 只分配整个图形的 bbox，再交给 `graphic_layout.py` / DAG 布局器计算内部节点和连线。
 本版混排页由编译器直接排版，packer / 外部提供方不接管节点或覆盖混排区域；
-`layout_provider.json` 记录 `COMPILER_FALLBACK` 与
+`layout_provider.json` 记录 `COMPILER_OWNED` 与
 `reason: native_graphic_composition`。普通页面仍使用已选布局提供方。
 
 原图仍使用原来的 `assets` / `figure_refs` 来源契约、原始图片字节和最小 panel 尺寸，
