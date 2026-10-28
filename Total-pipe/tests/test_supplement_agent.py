@@ -60,6 +60,13 @@ class SupplementAgentTests(unittest.TestCase):
             a.check_ir(ir, normalized(text), 'inline')
         self.assertEqual(caught.exception.code, 'SUPPLEMENT_PAPER_LEAK')
 
+    def test_supplement_page_title_is_checked(self):
+        ir = supplement_ir(all_supplement=True)
+        ir['slides'][0]['semantic']['title'] = '效率达到 10^5 Ω'
+        with self.assertRaises(a.Failure) as caught:
+            a.check_ir(ir, normalized(), 'pages')
+        self.assertEqual(caught.exception.code, 'SUPPLEMENT_PAPER_LEAK')
+
     def test_unrelated_supplement_is_allowed(self):
         ir = supplement_ir(all_supplement=False, supplement_text='这只是一个通用说明。')
         n = normalized('The device reaches 10^5 Ω.')

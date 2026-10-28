@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import unittest
 
+from deck_compiler.explanation import coverage, validate_explanation
 from deck_compiler.ir import validate
 from deck_compiler.provenance import validate as validate_provenance
 from deck_compiler.quality_metrics import analyze_completeness
@@ -152,6 +153,39 @@ class SupplementProvenanceTests(unittest.TestCase):
         self.assertIn('SUPPLEMENT_RATIO_HIGH', [item['rule'] for item in found])
         self.assertEqual(next(item['severity'] for item in found
                               if item['rule'] == 'SUPPLEMENT_RATIO_HIGH'), 'INFO')
+
+
+class SupplementExplanationTests(unittest.TestCase):
+    def setup(self, basis, refs=None):
+        semantic = {'title': '补充页', 'takeaway': '这是补充结论。', 'evidence_refs': []}
+        composition = {'blocks': [{'id': 'b1', 'component': 'body', 'text': '计算\n更新',
+                                   'text_flow': 'distributed_arrow_list'}]}
+        obligation = {'id': 'ob-1', 'kind': 'parallel_items', 'required': True,
+                      'basis': basis, 'content': {'items': ['计算', '更新']}}
+        if refs is not None:
+            obligation['evidence_refs'] = refs
+        return {'reader_task': 'distinguish', 'obligations': [obligation]}, semantic, composition
+
+    def test_supplement_obligation_does_not_need_evidence(self):
+        value, semantic, composition = self.setup('supplement')
+        self.assertEqual(validate_explanation(value, semantic, composition, 1), [])
+
+    def test_supplement_obligation_rejects_evidence(self):
+        value, semantic, composition = self.setup('supplement', refs=['EV0001'])
+        found = validate_explanation(value, semantic, composition, 1)
+        self.assertIn('EXPLANATION_EVIDENCE_FORBIDDEN', [item['rule'] for item in found])
+
+    def test_paper_obligation_still_needs_evidence(self):
+        value, semantic, composition = self.setup('paper')
+        found = validate_explanation(value, semantic, composition, 1)
+        self.assertIn('EXPLANATION_INVALID', [item['rule'] for item in found])
+
+    def test_coverage_ledger_records_basis(self):
+        value, semantic, composition = self.setup('supplement')
+        ir = {'slides': [{'id': 's1', 'semantic': {**semantic, 'explanation': value},
+                          'composition': composition}]}
+        ledger = coverage(ir)
+        self.assertEqual(ledger['slides'][0]['obligations'][0]['basis'], 'supplement')
 
 
 class SupplementQualityMetricsTests(unittest.TestCase):

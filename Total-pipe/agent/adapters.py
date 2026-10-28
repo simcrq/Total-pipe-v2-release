@@ -288,6 +288,8 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
             'Never put evidence_refs on a supplement block; never put a paper number, unit, figure or a long verbatim '
             'passage from the evidence into a supplement block. If a supplement page uses a paper figure, keep a paper '
             'block with the correct evidence on that page. A constructed example needs a visible 示意/构造/简化/示例 label. '
+            'A supplement page may write semantic.explanation; each obligation uses "basis":"supplement" and no '
+            'evidence_refs, while paper obligations keep "basis":"paper" and their evidence. '
             'supplement=inline allows blocks on existing pages only; pages/both also allow standalone supplement pages.')
     return prompt
 

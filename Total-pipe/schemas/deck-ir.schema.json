@@ -478,13 +478,15 @@
     "explanation-obligation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "required", "content", "evidence_refs"],
+      "required": ["id", "kind", "required", "content"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "kind": {"enum": ["quantity", "parallel_items", "grouped_panels", "comparison",
                           "ordered_steps", "relation", "curve", "image_evidence"]},
         "required": {"type": "boolean"},
         "primary": {"type": "boolean"},
+        "basis": {"enum": ["paper", "supplement"], "default": "paper",
+                  "description": "paper obligations need evidence_refs; supplement obligations do not."},
         "carrier": {"enum": ["inline_math", "formula", "native_list", "table", "layout_tree",
                              "process", "dag", "mechanism", "path", "figure"]},
         "status": {"enum": ["bound", "waived", "unsupported"]},
@@ -493,7 +495,14 @@
                           "items": {"type": "string", "minLength": 1}},
         "source_quote": {"type": "string"},
         "note": {"type": "string"}
-      }
+      },
+      "allOf": [{
+        "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+        "then": {"not": {"required": ["evidence_refs"]}}
+      }, {
+        "if": {"not": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}},
+        "then": {"required": ["evidence_refs"]}
+      }]
     },
     "explanation": {
       "type": "object",

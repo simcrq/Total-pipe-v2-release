@@ -194,6 +194,11 @@ object:
 - The agent-level `supplement` flag is `off` by default. `inline` allows blocks on
   existing pages only; `pages`/`both` also allow standalone supplement pages. With
   `off`, supplement blocks are rejected before compilation.
+- A supplement page may declare `semantic.explanation`; each obligation carries
+  `basis: "supplement"` and no `evidence_refs`. Paper obligations remain
+  `basis: "paper"` with non-empty `evidence_refs` bound to the slide. A supplement
+  obligation with evidence is `EXPLANATION_EVIDENCE_FORBIDDEN`; a paper obligation
+  without evidence is `EXPLANATION_INVALID`.
 - QA codes: `SUPPLEMENT_SPEC_MISSING`, `SUPPLEMENT_KIND_INVALID`,
   `SUPPLEMENT_BASIS_INVALID`, `SUPPLEMENT_EVIDENCE_FORBIDDEN`,
   `SUPPLEMENT_ON_PAPER_BLOCK`, `SUPPLEMENT_PAPER_FIGURE` (FAIL);

@@ -58,6 +58,7 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 `supplement` 取 `off`（默认）/ `inline` / `pages` / `both`，只影响 Deck IR 阶段：允许模型
 添加论文之外的背景、类比、构造示例、推导说明、示意图或对照。补充块标
 `basis=supplement`，不写 EV；`inline` 只允许页内块，`pages/both` 才允许独立补充页（页数不限）。
+补充页可写 `semantic.explanation`，义务写 `basis=supplement`、不写 `evidence_refs`；paper 义务不变。
 论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
 `slide_count` 仍按 RPA 论文 brief 计，补充页是额外页。
 

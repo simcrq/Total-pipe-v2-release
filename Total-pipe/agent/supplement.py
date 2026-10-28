@@ -41,16 +41,6 @@ def _evidence_texts(normalized):
     return result
 
 
-def _blocks(ir):
-    for slide in ir.get("slides", []) or []:
-        if not isinstance(slide, dict):
-            continue
-        comp = slide.get("composition") if isinstance(slide.get("composition"), dict) else {}
-        for block in comp.get("blocks", []) or []:
-            if isinstance(block, dict) and block.get("basis") == "supplement":
-                yield slide, block
-
-
 def _number_tokens(text):
     return {token.casefold().replace(" ", "") for token in
             _NUMBER.findall(text) + _DECIMAL.findall(text)}
@@ -80,8 +70,27 @@ def _latin_overlap(needle, haystack, words=8):
     return ""
 
 
+def _scan(text, speaker, slide_id, evidence, evidence_numbers):
+    if not text:
+        return []
+    messages = []
+    for token in sorted(_number_tokens(text)):
+        if token in evidence_numbers:
+            messages.append(
+                f"slide {slide_id} {speaker}: supplement reuses the paper value "
+                f"{token!r}; cite the paper block and its evidence, or remove the value")
+    for evidence_id, source in evidence:
+        fragment = _cjk_overlap(text, source) or _latin_overlap(text, source)
+        if fragment:
+            messages.append(
+                f"slide {slide_id} {speaker}: supplement repeats {evidence_id} "
+                f"verbatim ({fragment[:40]!r}); use a paper block or paraphrase")
+            break
+    return messages
+
+
 def leak_messages(ir, normalized):
-    """Return FAIL-level messages for supplement blocks that reuse paper content."""
+    """Return FAIL-level messages for supplement content that reuses paper material."""
     if not isinstance(ir, dict) or not isinstance(normalized, dict):
         return []
     evidence = _evidence_texts(normalized)
@@ -89,22 +98,27 @@ def leak_messages(ir, normalized):
         return []
     evidence_numbers = {token for _, text in evidence for token in _number_tokens(text)}
     messages = []
-    for slide, block in _blocks(ir):
-        text = _text(block.get("text"))
-        if not text:
+    for slide in ir.get("slides", []) or []:
+        if not isinstance(slide, dict):
             continue
+        comp = slide.get("composition") if isinstance(slide.get("composition"), dict) else {}
+        blocks = [block for block in comp.get("blocks", []) or [] if isinstance(block, dict)]
+        supplements = [block for block in blocks if block.get("basis") == "supplement"]
+        if not supplements:
+            continue
+        sem = slide.get("semantic") if isinstance(slide.get("semantic"), dict) else {}
         slide_id = slide.get("id") or "?"
-        block_id = block.get("id") or "?"
-        for token in sorted(_number_tokens(text)):
-            if token in evidence_numbers:
-                messages.append(
-                    f"slide {slide_id} block {block_id}: supplement reuses the paper value "
-                    f"{token!r}; cite the paper block and its evidence, or remove the value")
-        for evidence_id, source in evidence:
-            fragment = _cjk_overlap(text, source) or _latin_overlap(text, source)
-            if fragment:
-                messages.append(
-                    f"slide {slide_id} block {block_id}: supplement repeats {evidence_id} "
-                    f"verbatim ({fragment[:40]!r}); use a paper block or paraphrase")
-                break
+        for block in supplements:
+            speaker = f"block {block.get('id') or '?'}"
+            messages.extend(_scan(_text(block.get("text")), speaker, slide_id,
+                                  evidence, evidence_numbers))
+            messages.extend(_scan(_text(block.get("label")), speaker + " label", slide_id,
+                                  evidence, evidence_numbers))
+        # A page made only of supplement blocks owns its title and takeaway too.
+        # A mixed page may keep a paper claim in the title, so only block text is
+        # checked there.
+        if len(supplements) == len(blocks):
+            for key in ("title", "takeaway"):
+                messages.extend(_scan(_text(sem.get(key)), f"semantic.{key}", slide_id,
+                                      evidence, evidence_numbers))
     return messages

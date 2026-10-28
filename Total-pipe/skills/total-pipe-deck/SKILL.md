@@ -252,8 +252,9 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
   补充页数超过论文页数只产生 `SUPPLEMENT_RATIO_HIGH` INFO，不阻塞。
 - 构造示例必须有可见“示意/构造/简化/示例”标注；只有 supplement 块的页面不能使用论文图。
 - 补充块不能写入论文数值/单位、论文图或 EV 长原文；Agent 会报 `SUPPLEMENT_PAPER_LEAK`。
-- `supplement=inline` 只允许页内块；`pages/both` 才允许独立页。补充页暂不声明 `explain`，
-  直接写原生 block/graphic；需要讲解契约时另开协议。
+- `supplement=inline` 只允许页内块；`pages/both` 才允许独立页。补充页可声明
+  `semantic.explanation`，但义务写 `"basis":"supplement"`、不写 `evidence_refs`；paper 义务仍是
+  `basis=paper` + EV。补充义务的载体/可见性仍按讲解契约检查。
 - 结构检查在 `deck_compiler/provenance.py`，Agent 开关与泄漏检查在 `agent/adapters.py` /
   `agent/supplement.py`。字段与 QA 码见 `Total-pipe/docs/deck-compiler-v2.md` 的 Supplement content。
 

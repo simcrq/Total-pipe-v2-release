@@ -30,7 +30,7 @@
 - 不做 teaching plan / 教学规划器 / 受众模型。
 - 不做来源注册表、逐条核实、联网核验。
 - 不做 Story/pwf2rpa/RPA 改动。
-- 不做 explanation 契约扩展（补充页暂不声明 `explain`）。
+- v0.6 已追加 explanation 的 `basis=supplement` 义务；paper 义务规则不变。
 - 不做完整混合图形页（论文图 + 教学图 + 示例表同页）；只做“论文内容 + 1–2 个补充文字块”的轻混合。
 - 不做纯补充 deck（必须有论文页；补充页是附加）。
 
@@ -71,7 +71,7 @@
 - **补充页**：`semantic.evidence_refs: []`；所有 block 都是 `basis=supplement`；至少 1 个 block。
 - **混合页**：既有 `basis=paper` 块，也有 `basis=supplement` 块；`semantic.evidence_refs` 只放论文块的 EV。
 - **论文页**：保持现状，无 supplement 块。
-- 补充页可以没有 `semantic.explanation`；有的话按现有 paper 规则校验（v0 不新增 basis）。
+- 补充页可以没有 `semantic.explanation`；有的话义务写 `basis=supplement`、不写 `evidence_refs`，paper 义务仍是 `basis=paper` + EV。
 - 补充页的 `semantic.title/takeaway` 也是补充内容，不要求 EV。
 
 ### 3.3 页面数量
@@ -255,7 +255,7 @@ def supplement_leaks(ir, normalized):
 
 - **独立补充页不经过 RPA**：版式由 Agent 手写 IR，容量靠编译器；复杂页可能多迭代一次。v0 建议补充页用 1 个主图形 + 3–5 个短块。
 - **没有来源核实**：`source` 只是一行文本，未写标 INFO；不承诺“外部事实已验证”。
-- **没有 explanation 契约**：补充页暂不声明 `must_show`；需要时 v0.6 再加 `basis=supplement` 的义务（小改动）。
+- **explanation 已支持 `basis=supplement`**：补充页可声明 `must_show`，不写 EV；不承诺论文式来源审计。
 - **泄漏检测是启发式**：数字/长引用/论文图能抓，语义改写抓不到；需要人工抽查。
 - **Agent 可能过度添加**：不设硬上限；`SUPPLEMENT_RATIO_HIGH` 只在补充页超过论文页数时给 INFO，由 Agent/用户判断是否精简；`supplement=inline` 时只允许页内块。
 - **混合页容量**：只支持 1–2 个文字块；图 + 图 + 表同页放 v0.6。
