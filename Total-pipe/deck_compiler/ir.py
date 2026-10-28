@@ -8,6 +8,7 @@ from .contracts import digest, issue
 from .explanation import coverage as explanation_coverage
 from .explanation import validate_explanation
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
+from .provenance import validate as validate_provenance
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
 
 
@@ -391,6 +392,7 @@ def validate(ir):
                   n, "RUN_STATE_CAVEAT", severity="REVIEW")
         check(not pres.get("optional_overrides"), "Geometry overrides unsupported in v2.0; choose a variant", n)
         check(pres.get("variant", "default") in ("default", "spacious"), "Unknown component variant", n)
+    errors.extend(validate_provenance(ir))
     return errors
 
 

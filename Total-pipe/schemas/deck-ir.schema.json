@@ -463,6 +463,18 @@
         }
       }
     },
+    "supplement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["background", "analogy", "example", "derivation",
+                          "diagram", "comparison"]},
+        "source": {"type": "string"},
+        "constructed": {"type": "boolean"},
+        "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "explanation-obligation": {
       "type": "object",
       "additionalProperties": false,
@@ -562,9 +574,21 @@
                   "bullet_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
                     "description": "Override this list's marker color, independently of body text."},
                   "anchor": {"type": "string", "minLength": 1,
-                             "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."}
+                             "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."},
+                  "basis": {"enum": ["paper", "supplement"], "default": "paper",
+                            "description": "paper (default) keeps the evidence gate; supplement marks explanatory content that is not a paper claim."},
+                  "supplement": {"$ref": "#/$defs/supplement"}
                 },
                 "allOf": [{
+                  "if": {"required": ["supplement"]},
+                  "then": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+                  "then": {"required": ["supplement"]}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "paper"}}},
+                  "then": {"not": {"required": ["supplement"]}}
+                }, {
                   "if": {"anyOf": [{"required": ["bullet_style"]}, {"required": ["bullet_color"]}]},
                   "then": {"properties": {"component": {"not": {"const": "formula"}},
                     "inline_math": {"const": false}, "text_flow": {"enum": ["auto", "distributed_arrow_list"]}}}
