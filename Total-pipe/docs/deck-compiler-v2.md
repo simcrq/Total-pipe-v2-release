@@ -185,7 +185,10 @@ object:
   a visible 示意/构造/简化/示例 (or schematic/constructed) label.
 - A supplement-only page has `semantic.evidence_refs: []` and at least one supplement
   block. It must not use a paper figure; a mixed page may use a paper figure when it
-  also keeps the paper block and its evidence.
+  also keeps the paper block and its evidence. On a mixed page `semantic.evidence_refs`
+  must stay non-empty; an optional `block.evidence_refs` is only a subset of it.
+  `PROVENANCE_PAPER_EVIDENCE_MISSING` / `PROVENANCE_PAPER_EVIDENCE_INVALID` block a
+  mixed page that leaves paper content ungated.
 - The number of supplement pages is not capped. `SUPPLEMENT_RATIO_HIGH` is an INFO
   when supplement pages outnumber paper pages; it never blocks.
 - The agent-level `supplement` flag is `off` by default. `inline` allows blocks on

@@ -189,6 +189,28 @@ def validate(ir):
         else:
             paper_pages += 1
 
+        paper_blocks = [block for block in blocks if block.get("basis", "paper") == "paper"]
+        if supplements and paper_blocks:
+            refs = sem.get("evidence_refs") if isinstance(sem.get("evidence_refs"), list) else []
+            if not refs:
+                problems.append(issue(
+                    "PROVENANCE_PAPER_EVIDENCE_MISSING", "FAIL",
+                    "a mixed paper/supplement page has paper content but no semantic.evidence_refs; "
+                    "keep the paper claim gated or move it to a paper page",
+                    number, "semantic.evidence_refs"))
+            for index, block in enumerate(blocks):
+                if block.get("basis", "paper") != "paper":
+                    continue
+                own = block.get("evidence_refs")
+                if not isinstance(own, list) or not own:
+                    continue
+                if not all(isinstance(ref, str) and ref in refs for ref in own):
+                    problems.append(issue(
+                        "PROVENANCE_PAPER_EVIDENCE_INVALID", "FAIL",
+                        f"blocks[{index}]: paper evidence_refs must be a subset of "
+                        "semantic.evidence_refs",
+                        number, f"blocks[{index}]", block=block.get("id")))
+
         constructed_label = _has_constructed_marker(slide)
         for index, block in enumerate(blocks):
             basis = block.get("basis", "paper")

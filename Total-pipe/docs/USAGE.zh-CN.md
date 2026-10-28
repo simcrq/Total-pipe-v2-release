@@ -258,6 +258,7 @@ arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸�
 - 独立补充页：`semantic.evidence_refs: []`，全部 block 为 supplement；页数不限。
 - `inline` 只能加页内块；`pages/both` 才允许独立页。
 - 构造示例必须有可见“示意/构造/简化/示例”标注；补充页不能单独使用论文图。
+- 混合页的论文块必须保留非空 `semantic.evidence_refs`；block 级 `evidence_refs` 只能是其子集。
 - 补充块出现论文数值/单位、论文图或 EV 长原文，Agent 返回 `SUPPLEMENT_PAPER_LEAK`。
 - `slide_count` 仍按 RPA 论文 brief 计；补充页是额外页。
 - QA：`SUPPLEMENT_UNCITED` 为 INFO，`SUPPLEMENT_CONSTRUCTED_UNLABELED` 为 REVIEW，

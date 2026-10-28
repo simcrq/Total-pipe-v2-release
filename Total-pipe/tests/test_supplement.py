@@ -23,6 +23,17 @@ def base_ir():
     return ir
 
 
+def mixed_ir():
+    ir = base_ir()
+    slide = ir['slides'][0]
+    blocks = slide['composition']['blocks']
+    blocks[0].pop('basis', None)
+    blocks[0].pop('supplement', None)
+    blocks[0]['evidence_refs'] = []
+    slide['semantic']['evidence_refs'] = []
+    return ir
+
+
 def rules(ir):
     return [item['rule'] for item in validate_provenance(ir)]
 
@@ -35,6 +46,23 @@ class SupplementProvenanceTests(unittest.TestCase):
     def test_all_paper_deck_is_unchanged(self):
         ir = json.loads((ROOT / 'examples/research.deck_ir.json').read_text(encoding='utf-8'))
         self.assertEqual(validate_provenance(ir), [])
+        self.assertEqual(validate(ir), [])
+
+    def test_mixed_page_requires_paper_evidence(self):
+        ir = mixed_ir()
+        found = validate(ir)
+        self.assertIn('PROVENANCE_PAPER_EVIDENCE_MISSING', [item['rule'] for item in found])
+
+    def test_mixed_page_block_evidence_must_be_subset(self):
+        ir = mixed_ir()
+        ir['slides'][0]['semantic']['evidence_refs'] = ['EV0001']
+        ir['slides'][0]['composition']['blocks'][0]['evidence_refs'] = ['EV9999']
+        found = validate(ir)
+        self.assertIn('PROVENANCE_PAPER_EVIDENCE_INVALID', [item['rule'] for item in found])
+
+    def test_mixed_page_with_gated_paper_block_passes(self):
+        ir = mixed_ir()
+        ir['slides'][0]['semantic']['evidence_refs'] = ['EV0001']
         self.assertEqual(validate(ir), [])
 
     def test_supplement_page_is_valid(self):

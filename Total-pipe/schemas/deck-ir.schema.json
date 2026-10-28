@@ -577,7 +577,10 @@
                              "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."},
                   "basis": {"enum": ["paper", "supplement"], "default": "paper",
                             "description": "paper (default) keeps the evidence gate; supplement marks explanatory content that is not a paper claim."},
-                  "supplement": {"$ref": "#/$defs/supplement"}
+                  "supplement": {"$ref": "#/$defs/supplement"},
+                  "evidence_refs": {"type": "array", "uniqueItems": true,
+                                    "items": {"type": "string", "minLength": 1},
+                                    "description": "Paper block only: an optional subset of semantic.evidence_refs. A supplement block must not carry this field."}
                 },
                 "allOf": [{
                   "if": {"required": ["supplement"]},
@@ -588,6 +591,9 @@
                 }, {
                   "if": {"required": ["basis"], "properties": {"basis": {"const": "paper"}}},
                   "then": {"not": {"required": ["supplement"]}}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+                  "then": {"not": {"required": ["evidence_refs"]}}
                 }, {
                   "if": {"anyOf": [{"required": ["bullet_style"]}, {"required": ["bullet_color"]}]},
                   "then": {"properties": {"component": {"not": {"const": "formula"}},
