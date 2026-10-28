@@ -30,6 +30,7 @@
 | --- | --- |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
 | Story 可见结构、IR 义务与覆盖账本 | [讲解契约](explanation-contract.md) |
+| 补充内容、构造示例与论文泄漏检查 | [Supplement content、basis 与论文泄漏检查](../Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement) |
 | 递归内容区域与 RPA 子布局 | [复合布局](../Total-pipe/docs/composite-layouts.md) |
 | 边框、标题色带和 takeaway 框选 | [边框容器](../Total-pipe/docs/framed-containers.md) |
 | 原生列表、标记样式 / 颜色和实测容量 | [原生列表](../Total-pipe/docs/native-lists.md) |
