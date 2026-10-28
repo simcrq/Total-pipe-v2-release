@@ -12,3 +12,4 @@ __pycache__/
 install-report.json
 .totalpipe/
 commitmsg.txt
+codex-test/
