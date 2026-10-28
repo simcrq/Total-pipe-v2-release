@@ -156,8 +156,35 @@ def check_story(prompt, story, workflow):
         raise classify('STORY_PROVENANCE_INVALID', str(error)) from error
 
 
-def check_ir(value, normalized=None):
+def _supplement_blocks(ir):
+    if not isinstance(ir, dict):
+        return
+    for slide in ir.get('slides', []) or []:
+        if not isinstance(slide, dict):
+            continue
+        comp = slide.get('composition') if isinstance(slide.get('composition'), dict) else {}
+        blocks = comp.get('blocks') if isinstance(comp.get('blocks'), list) else []
+        supplements = [block for block in blocks
+                       if isinstance(block, dict) and block.get('basis') == 'supplement']
+        yield slide, supplements, [block for block in blocks if isinstance(block, dict)]
+
+
+def check_ir(value, normalized=None, supplement='off'):
     from deck_compiler.ir import validate
+    mode = supplement if supplement in ('off', 'inline', 'pages', 'both') else 'off'
+    has_supplement = False
+    has_supplement_page = False
+    for slide, supplements, blocks in _supplement_blocks(value):
+        has_supplement = has_supplement or bool(supplements)
+        has_supplement_page = has_supplement_page or (bool(blocks) and len(supplements) == len(blocks))
+    if has_supplement and mode == 'off':
+        raise Failure('SUPPLEMENT_NOT_ENABLED',
+                      'This job did not enable supplement content; remove the supplement blocks/pages or start a job with supplement=inline/pages/both.',
+                      'author_artifact', 'deck_ir')
+    if has_supplement_page and mode == 'inline':
+        raise Failure('SUPPLEMENT_PAGE_NOT_ENABLED',
+                      'supplement=inline only allows blocks on existing pages; start with supplement=pages/both for standalone supplement pages.',
+                      'author_artifact', 'deck_ir')
     failures = [i for i in validate(value) if i['severity'] == 'FAIL']
     if failures:
         item = failures[0]
@@ -214,11 +241,16 @@ def check_ir(value, normalized=None):
                     f'Story declared a {node_count}-step compact process, but the IR has no type=process/'
                     'layout=compact graphic carrying every step; replace the RPA three-slot placeholder.',
                     'deck_ir')
+    if normalized and mode != 'off':
+        from .supplement import leak_messages
+        leaks = leak_messages(value, normalized)
+        if leaks:
+            raise Failure('SUPPLEMENT_PAPER_LEAK', leaks[0], 'author_artifact', 'deck_ir')
 
 
-def import_ir(source, destination):
+def import_ir(source, destination, supplement='off'):
     value = read(source)
-    check_ir(value)
+    check_ir(value, supplement=supplement)
     for asset in value.get('assets', {}).values():
         if not Path(asset['path']).is_absolute():
             asset['path'] = str((Path(source).parent/asset['path']).resolve())
@@ -229,10 +261,10 @@ def import_ir(source, destination):
     write(destination, value)
 
 
-def ir_prompt(workflow, rpa_input, normalized, plan):
+def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
     from deck_compiler.catalog import ARCHETYPES, COMPONENTS
     from deck_compiler.layout_tree import capabilities
-    return {'workflow': workflow, 'rpa_input': rpa_input, 'content_model': normalized, 'deck_plan': plan,
+    prompt = {'workflow': workflow, 'rpa_input': rpa_input, 'content_model': normalized, 'deck_plan': plan,
         'archetypes': ARCHETYPES, 'components': sorted(COMPONENTS), 'capabilities': capabilities(),
         'schema': read(COMPONENT/'schemas/deck-ir.schema.json'),
         'instructions': 'Write canonical Deck IR. Preserve complete scientific body, key_points, figures, equations, '
@@ -247,6 +279,17 @@ def ir_prompt(workflow, rpa_input, normalized, plan):
         'If a brief has metadata.story_compact_process, ignore the smaller RPA process placeholder and write one '
         'type=process graphic with layout=compact, one square rect node per declared item, in the declared order; '
         'do not collapse the chain to the RPA three-slot page.'}
+    if supplement in ('inline', 'pages', 'both'):
+        prompt['supplement'] = supplement
+        prompt['instructions'] += (
+            ' Supplement content is enabled. You may add background, analogy, a constructed example, a derivation '
+            'step, an illustrative diagram or a comparison that is not from the paper, when it helps the audience. '
+            'Mark every such block with "basis":"supplement" and "supplement":{"kind":"...","source":"...","constructed":false}. '
+            'Never put evidence_refs on a supplement block; never put a paper number, unit, figure or a long verbatim '
+            'passage from the evidence into a supplement block. If a supplement page uses a paper figure, keep a paper '
+            'block with the correct evidence on that page. A constructed example needs a visible 示意/构造/简化/示例 label. '
+            'supplement=inline allows blocks on existing pages only; pages/both also allow standalone supplement pages.')
+    return prompt
 
 
 def execute(stage, job):
@@ -326,9 +369,10 @@ def execute(stage, job):
         write(work/'validation_input.json', {'slides': plan['slides'], 'content_model': model})
         validation = rpa('validate-deck', work/'validation_input.json', out)
         write(work/'rpa_validation.json', validation)
-        prompt = ir_prompt(read(workflow), payload, model, plan)
+        prompt = ir_prompt(read(workflow), payload, model, plan, request.get('supplement', 'off'))
         prompt['workflow_root'] = str(Path(workflow).parent)
-        prompt['request'] = {key: request[key] for key in ('language', 'presentation_type', 'requirements')}
+        prompt['request'] = {**{key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+                             'supplement': request.get('supplement', 'off')}
         write(work/'ir_prompt.json', prompt)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'deck_plan.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'design':

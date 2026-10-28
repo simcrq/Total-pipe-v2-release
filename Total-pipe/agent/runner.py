@@ -22,7 +22,7 @@ def design_complete(job):
         return False
     from deck_compiler.visual_planner import pending_design
     try:
-        a.check_ir(read(path))
+        a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'))
         pending = pending_design(read(path))
         return not pending['academic_design_required'] and not pending['slide_ids']
     except (ValueError, KeyError, TypeError):
@@ -135,7 +135,7 @@ def error_envelope(error, job_id=None):
 
 
 def start(source, out_dir, language, presentation_type, source_kind='auto', requirements='', queries=None,
-          slide_count=None, supplementary_paths=None, supplementary_content_included=False):
+          slide_count=None, supplementary_paths=None, supplementary_content_included=False, supplement='off'):
     source, out = Path(source).expanduser().resolve(), Path(out_dir).expanduser().resolve()
     if not source.is_file():
         return error_envelope(JobError('SOURCE_NOT_FOUND', 'Source must be an existing file.', 'Provide its absolute path.'))
@@ -155,10 +155,13 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
         raise ValueError('language and presentation_type are required')
     if slide_count is not None and (type(slide_count) is not int or not 1 <= slide_count <= 40):
         raise ValueError('slide_count must be in [1,40]')
+    if supplement not in ('off', 'inline', 'pages', 'both'):
+        raise ValueError('supplement must be off, inline, pages or both')
     request = {'source': str(source), 'out_dir': str(out), 'language': language,
         'presentation_type': presentation_type, 'source_kind': source_kind, 'requirements': requirements,
         'supplementary_content_included': supplementary_content_included,
-        'slide_count': slide_count, 'supplementary_paths': [str(Path(p).expanduser().resolve()) for p in supplementary_paths or []]}
+        'slide_count': slide_count, 'supplementary_paths': [str(Path(p).expanduser().resolve()) for p in supplementary_paths or []],
+        'supplement': supplement}
     try:
         with locked(out):
             path = out/'.totalpipe/job.json'
@@ -192,10 +195,11 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
                     stage, upstream = current(job)
                     checkpoint(job, stage['id'], [out/'work/queries.json'], upstream)
                 if source_kind == 'deck_ir':
-                    write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}),
+                    write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}, supplement),
                         'imported_deck_ir': read(source), 'source_base': str(source.parent),
-                        'request': {key: request[key] for key in ('language', 'presentation_type', 'requirements')}})
-                    a.import_ir(source, out/'work/deck_ir.json')
+                        'request': {**{key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+                                    'supplement': supplement}})
+                    a.import_ir(source, out/'work/deck_ir.json', supplement)
                     stage, upstream = current(job)
                     checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(out/'work/deck_ir.json').items() if hashed is not None], upstream)
             write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
@@ -235,7 +239,8 @@ def _accept(job, stage, upstream, kind, path):
             workflow = read(work/'evidence_pointer.json')['workflow']
             a.check_story(read(work/'story_prompt.json'), value, read(workflow))
         elif kind == 'deck_ir':
-            a.check_ir(value, read(work/'normalized_content.json') if (work/'normalized_content.json').exists() else None)
+            a.check_ir(value, read(work/'normalized_content.json') if (work/'normalized_content.json').exists() else None,
+                       job['request'].get('supplement', 'off'))
         elif kind == 'visual_proposal':
             from deck_compiler.visual_planner import apply_proposal
             try:
@@ -252,7 +257,7 @@ def _accept(job, stage, upstream, kind, path):
     destination = work/(kind+'.json')
     if destination != path:
         if kind == 'deck_ir':
-            a.import_ir(path, destination)
+            a.import_ir(path, destination, job['request'].get('supplement', 'off'))
         else:
             write(destination, value)
     paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None] if kind == 'deck_ir' else [destination]

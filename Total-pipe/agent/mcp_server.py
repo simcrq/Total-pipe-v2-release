@@ -23,6 +23,7 @@ DEFINITIONS = {
         'source_kind': {'type': 'string', 'enum': ['auto','pdf','markdown','workflow','deck_ir']}, 'requirements': {'type': 'string'},
         'queries': {'type': 'array'}, 'supplementary_paths': {'type': 'array', 'items': STRING},
         'supplementary_content_included': {'type': 'boolean'},
+        'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40}}, ['source','out_dir','language','presentation_type']),
     'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','deck_ir','visual_proposal']},
         'artifact_path': STRING, 'inputs': {'type': 'object', 'properties': {'model': STRING,
