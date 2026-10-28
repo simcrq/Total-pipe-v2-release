@@ -64,6 +64,7 @@ def _visible(slide):
         _collect(sem.get(key), result)
     _collect(sem.get("caveats"), result)
     _collect(comp.get("blocks"), result)
+    _collect(comp.get("layout_tree"), result)
     _collect(comp.get("figure_refs"), result)
     _collect(comp.get("tables"), result)
     for graphic in comp.get("graphics", []) or []:
