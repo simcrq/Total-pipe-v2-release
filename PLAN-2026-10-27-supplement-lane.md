@@ -1,6 +1,6 @@
 # TotalPipe Supplement Lane 实施版（B：页内 + 少量独立补充页）
 
-> 日期：2026-10-27　状态：S1/S2/S3 已完成；全量回归 408 项 0 failure，15 项环境错误（缺 jsonschema / Windows symlink 权限）
+> 日期：2026-10-27　状态：S1/S2/S3 与 v0.6（supplement explain）完成；全量回归 416 项 0 failure，17 项环境错误（缺 jsonschema / Windows symlink 权限）
 > 分支：`feat/supplement-lane`
 > 决策：用户选择 B —— 允许页内补充块 + 少量独立补充页（页数不限）
 > 取代：[teaching 子系统方案](PLAN-2026-10-27-teaching-provenance.md)（已标注范围修正，不再作为实施依据）
