@@ -240,6 +240,23 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 该对象放 `composition.visual_intent`；只支持四个无独立 label 的 block，有一张原图用
 `figure-parameters`、无图用 `process-flow`。不得与 graphics 或视觉重排混用。
 
+### 补充内容（`supplement`，默认关闭）
+
+`totalpipe_start` 的 `supplement` 取 `off|inline|pages|both`，默认 `off`。只有显式开启时，
+才可以在论文内容之外加“为了讲好”的补充材料；它永远不是论文事实。
+
+- 页内补充：block 加 `"basis":"supplement"` 和
+  `"supplement":{"kind":"background|analogy|example|derivation|diagram|comparison","source":"可选一行来源","constructed":false}`；
+  不写 `evidence_refs`。论文块保持 `basis=paper` + EV，同页按块分开。
+- 独立补充页：`semantic.evidence_refs: []`，全部 block 为 supplement；页数不限。
+  补充页数超过论文页数只产生 `SUPPLEMENT_RATIO_HIGH` INFO，不阻塞。
+- 构造示例必须有可见“示意/构造/简化/示例”标注；只有 supplement 块的页面不能使用论文图。
+- 补充块不能写入论文数值/单位、论文图或 EV 长原文；Agent 会报 `SUPPLEMENT_PAPER_LEAK`。
+- `supplement=inline` 只允许页内块；`pages/both` 才允许独立页。补充页暂不声明 `explain`，
+  直接写原生 block/graphic；需要讲解契约时另开协议。
+- 结构检查在 `deck_compiler/provenance.py`，Agent 开关与泄漏检查在 `agent/adapters.py` /
+  `agent/supplement.py`。字段与 QA 码见 `Total-pipe/docs/deck-compiler-v2.md` 的 Supplement content。
+
 ### 原生列表与单段标记
 
 正文列表先明确条目换行，用 text_flow=distributed_arrow_list 保留原生无序列表。

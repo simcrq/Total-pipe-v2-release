@@ -164,6 +164,44 @@ caption sits under it. A bbox provider cannot express that arrangement, so schem
 The spec file and the script are committed next to the PNG, which is what makes the picture
 reproducible. `examples/schematic.deck_ir.json` is the reference page.
 
+### Supplement content (`basis: "supplement"`)
+
+A block may carry content that is not a claim from the paper: a prerequisite definition,
+an analogy, a constructed example, a derivation step, an illustrative diagram, or a
+comparison. Such a block declares `"basis": "supplement"` and a small `supplement`
+object:
+
+```json
+{"id": "b3", "component": "definition", "text": "梯度下降是一阶迭代优化方法。",
+ "basis": "supplement",
+ "supplement": {"kind": "background", "source": "Sutton & Barto, ch. 3"}}
+```
+
+- `basis` defaults to `paper`; a paper block keeps `semantic.evidence_refs` and never
+  carries a `supplement` object. A supplement block must not carry `evidence_refs`;
+  split mixed content into separate blocks.
+- `kind` is one of `background`, `analogy`, `example`, `derivation`, `diagram`,
+  `comparison`. `source` is an optional one-line citation. `constructed: true` requires
+  a visible 示意/构造/简化/示例 (or schematic/constructed) label.
+- A supplement-only page has `semantic.evidence_refs: []` and at least one supplement
+  block. It must not use a paper figure; a mixed page may use a paper figure when it
+  also keeps the paper block and its evidence.
+- The number of supplement pages is not capped. `SUPPLEMENT_RATIO_HIGH` is an INFO
+  when supplement pages outnumber paper pages; it never blocks.
+- The agent-level `supplement` flag is `off` by default. `inline` allows blocks on
+  existing pages only; `pages`/`both` also allow standalone supplement pages. With
+  `off`, supplement blocks are rejected before compilation.
+- QA codes: `SUPPLEMENT_SPEC_MISSING`, `SUPPLEMENT_KIND_INVALID`,
+  `SUPPLEMENT_BASIS_INVALID`, `SUPPLEMENT_EVIDENCE_FORBIDDEN`,
+  `SUPPLEMENT_ON_PAPER_BLOCK`, `SUPPLEMENT_PAPER_FIGURE` (FAIL);
+  `SUPPLEMENT_CONSTRUCTED_UNLABELED`, `SUPPLEMENT_EVIDENCE_CONFLICT` (REVIEW);
+  `SUPPLEMENT_UNCITED`, `SUPPLEMENT_ASSUMPTION_MISSING`, `SUPPLEMENT_RATIO_HIGH` (INFO).
+  The agent additionally reports `SUPPLEMENT_PAPER_LEAK` when a supplement block reuses
+  a paper number, unit or long verbatim passage from the normalized evidence.
+
+`examples/supplement.deck_ir.json` is the reference page. It is a supplement-only
+page: paper pages keep their existing evidence contract.
+
 ### Formulas (`component: "formula"`)
 
 A block whose component is `formula` carries a LaTeX-subset expression in `text` instead of prose.

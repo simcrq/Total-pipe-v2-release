@@ -27,6 +27,10 @@ payload = result.to_dict()
 `QualityReport.passes()` 的当前默认判断是加权分数至少 70 且没有 CRITICAL 指标；
 该布尔值只表示此启发式分析的结果。CLI 成功输出报告的退出码也不是验收结论。
 
+`completeness` 只把论文页计入 evidence coverage：全部 block 为 `basis=supplement` 的页面
+不再报 “No evidence citations”，并在 `details` 中记 `supplement_slides`、`supplement_blocks`
+和 `uncited_supplements`；补充页不因无论文引用而扣分。
+
 ## 使用边界
 
 - 分数基于构建元数据和规则，不能验证科研结论、图像内容、真实可读性或 PowerPoint 实际渲染。

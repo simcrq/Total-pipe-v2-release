@@ -1,0 +1,54 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "supplement-demo",
+  "theme": {
+    "font_family": "Microsoft YaHei",
+    "font_file": "msyh.ttc",
+    "bold_font_file": "msyhbd.ttc",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#C2410C"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "supplement-gradient",
+      "semantic": {
+        "title": "先修：梯度下降在做什么",
+        "purpose": "补充标准教材内容，帮助理解论文的优化过程",
+        "takeaway": "梯度下降沿负梯度方向迭代；这是标准教材内容，不是本文结果。",
+        "evidence_refs": [],
+        "caveats": [],
+        "speaker_notes": "补充页，不引用论文 Evidence；讲清三步后回到论文方法。"
+      },
+      "composition": {
+        "archetype": "cover-hero",
+        "blocks": [
+          {
+            "id": "definition",
+            "component": "definition",
+            "text": "梯度下降是一阶迭代优化方法：计算梯度、取步长、更新参数。",
+            "basis": "supplement",
+            "supplement": {
+              "kind": "background",
+              "source": "Sutton & Barto, Reinforcement Learning, 2nd ed., ch. 3"
+            }
+          },
+          {
+            "id": "steps",
+            "component": "body",
+            "text": "理解顺序：先看梯度方向，再看步长，最后看参数更新后的损失。",
+            "basis": "supplement",
+            "supplement": {
+              "kind": "derivation",
+              "source": "标准教材推导",
+              "assumptions": ["目标函数可微", "学习率固定"]
+            }
+          }
+        ],
+        "figure_refs": []
+      },
+      "presentation": {}
+    }
+  ]
+}

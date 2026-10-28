@@ -44,7 +44,7 @@ python3.12 install.py --client codex --profile advanced
 | 工具 | 输入与行为 |
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；报告 12 类环境检查与阶段能力 |
-| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included |
+| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
 | totalpipe_advance | job_id；可提交 artifact_kind / artifact_path，回填 inputs，或指定 replan_from / acknowledge |
 | totalpipe_status | job_id；只读取实际哈希和状态，不执行组件 |
 
@@ -54,6 +54,12 @@ source_kind 可为 auto、pdf、markdown、workflow、deck_ir。JSON 自动按 s
 PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","query":"具体检索问题"}]`，
 可附 intent；接入层将 query 字符串交给 PWF，PWF 自行推导检索 intent 和 custom query ID。
 显式配对 supplementary_paths；内容确已合入分析输入后才确认 supplementary_content_included=true。
+
+`supplement` 取 `off`（默认）/ `inline` / `pages` / `both`，只影响 Deck IR 阶段：允许模型
+添加论文之外的背景、类比、构造示例、推导说明、示意图或对照。补充块标
+`basis=supplement`，不写 EV；`inline` 只允许页内块，`pages/both` 才允许独立补充页（页数不限）。
+论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
+`slide_count` 仍按 RPA 论文 brief 计，补充页是额外页。
 
 start 不收模型字段。在 model_selection 暂停点使用用户本轮或此前的明确选择回填：
 
@@ -105,6 +111,7 @@ python -m agent ir-prompt --workflow /abs/workflow.json --rpa /abs/rpa_input.jso
 真实 catalog / 能力 / schema 及素材根。没有新增 `deck_compiler ir-prompt` 命令。
 RPA 的业务参数写在 plan_input.json；不能把 `--file` 后的命令行参数当成合并成功。
 slide_count 与完整 Story briefs 数量冲突时要求改 Story，不截断 / 复制 brief。
+补充页不计入 slide_count；IR 页数下界仍按论文 brief 检查。
 IR 另校验完整 body / key_points、证据引用和页数下界，不能将多页内容塞成一页来消除容量问题。
 
 ## 恢复与文件边界

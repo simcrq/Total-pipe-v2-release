@@ -248,6 +248,23 @@ arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸�
 可运行的[复杂混排单页样例](../examples/complex-mixed/README.zh-CN.md)同时提供 PPTX 与完整 Deck IR：
 包含参考图片、原生列表、矩阵、行内公式、边框及 graphics/path 小图案，可用于检查这些能力共存时的容量。
 
+### 补充内容（可选，默认关闭）
+
+`totalpipe_start` 增加 `supplement`：`off`（默认）/ `inline` / `pages` / `both`。
+只有非 `off` 时才允许在论文内容之外加入背景、类比、构造示例、推导说明、示意图或对照；
+它们不冒充论文事实，也不进入 Evidence Store。
+
+- 页内补充：block 加 `basis=supplement` 和 `supplement.kind/source/constructed`；不写 `evidence_refs`。
+- 独立补充页：`semantic.evidence_refs: []`，全部 block 为 supplement；页数不限。
+- `inline` 只能加页内块；`pages/both` 才允许独立页。
+- 构造示例必须有可见“示意/构造/简化/示例”标注；补充页不能单独使用论文图。
+- 补充块出现论文数值/单位、论文图或 EV 长原文，Agent 返回 `SUPPLEMENT_PAPER_LEAK`。
+- `slide_count` 仍按 RPA 论文 brief 计；补充页是额外页。
+- QA：`SUPPLEMENT_UNCITED` 为 INFO，`SUPPLEMENT_CONSTRUCTED_UNLABELED` 为 REVIEW，
+  `SUPPLEMENT_PAPER_FIGURE` 等为 FAIL；补充页不再被 `quality` 误判为“无论文引用”。
+  完整字段与错误码见 [Deck IR 协议](deck-compiler-v2.md#supplement-content-basis-supplement)。
+  最小示例见 [supplement.deck_ir.json](../examples/supplement.deck_ir.json)。
+
 原生 process/DAG 与图文混排见 [native-graphics.md](native-graphics.md)；机制、架构、漏斗、
 Path 和 composite 见 [native-components.md](native-components.md)。所有关系显式声明；
 机制的实测与假设保留依据、不同线型及标签。生成示意图不能替代论文原图，保留 `SCHEMATIC_REVIEW`。

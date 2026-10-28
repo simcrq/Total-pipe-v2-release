@@ -118,3 +118,10 @@ required 义务没有载体、或声明内容不可见，是 **REVIEW**。这样
 
 Story 只判断“需不需要讲成这个结构”，不判断“画哪个组件”。组件由 Binder 和编译器按能力、
 容量与证据关系选择；这样换渲染器时 Story 不需要重写，容量不足时也有地方回退。
+
+## 补充内容（supplement）
+
+`basis=supplement` 的块是补充讲解，不是论文主张：它们不绑定 `EV####`，v0 也不要求写
+`semantic.explanation`。补充页的结构由 `deck_compiler/provenance.py` 检查（构造标注、来源、
+论文图误用），讲解义务仍只适用于论文内容。需要给补充页声明“必须看见什么”时，再单独扩展
+obligation 的 basis，不改变本文的 paper 规则。
