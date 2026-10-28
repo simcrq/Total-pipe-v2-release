@@ -28,6 +28,10 @@ def rules(ir):
 
 
 class SupplementProvenanceTests(unittest.TestCase):
+    def test_example_is_valid(self):
+        ir = json.loads((ROOT / 'examples/supplement.deck_ir.json').read_text(encoding='utf-8'))
+        self.assertEqual(validate(ir), [])
+
     def test_all_paper_deck_is_unchanged(self):
         ir = json.loads((ROOT / 'examples/research.deck_ir.json').read_text(encoding='utf-8'))
         self.assertEqual(validate_provenance(ir), [])
