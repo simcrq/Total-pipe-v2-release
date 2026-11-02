@@ -140,6 +140,11 @@ def _connector(graphic_id, source, target, bend_x, bus_y=None, last_x=None):
     sx, sy, sw, sh = source['bbox']
     tx, ty, _, th = target['bbox']
     start, end = [sx+sw, sy+sh/2], [tx, ty+th/2]
+    # Rounding a layer to whole pixels can leave a 1-8 px center offset. A
+    # bent connector then renders as a tiny double elbow; snap it to a straight
+    # arrow because the endpoint is still on the target's left edge.
+    if bus_y is None and abs(end[1]-start[1]) <= 8:
+        end[1] = start[1]
     width, height = end[0]-start[0], abs(end[1]-start[1])
     flip = start[1] > end[1]
     geometry = 'straightConnector1' if height < EPS and bus_y is None else 'bentConnector3'
