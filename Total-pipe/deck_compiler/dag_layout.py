@@ -170,7 +170,7 @@ def _connector(graphic_id, source, target, bend_x, bus_y=None, last_x=None):
     return edge
 
 
-def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None, column_gap=72.0):
+def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None, column_gap=32.0):
     from .layout import break_lines
     if font_paths is None:
         from .fonts import resolve_theme_fonts
@@ -207,18 +207,18 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
                 f'{nid}: text needs {len(title_lines)} title / {len(body_lines)} body lines at 18 pt; widen or split the diagram')
         th, bh = len(title_lines)*30.0, len(body_lines)*30.0
         text_heights[nid] = th, bh
-        heights[nid] = max(96.0, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
+        heights[nid] = max(108.0, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
     boxes = {}
     left = x+(width-(node_width*columns+gap*(columns-1)))/2
     for rank, layer in enumerate(layers):
-        need = sum(heights[n] for n in layer)+24*(len(layer)-1)
+        need = sum(heights[n] for n in layer)+12*(len(layer)-1)
         if need > available+EPS:
             raise GraphicLayoutError('GRAPHIC_CAPACITY',
                 f'DAG layer {rank+1} needs {need:.0f} px, only {available:.0f} px available at 18 pt; split the diagram')
         cursor = y+pad+(available-need)/2+4*rank
         for nid in layer:
             boxes[nid] = [left+rank*(node_width+gap), cursor, node_width, heights[nid]]
-            cursor += heights[nid]+24
+            cursor += heights[nid]+12
     # Avoid the zero-height degeneracy of native five-segment presets for long detours.
     for source, target in sorted(long_edges, key=lambda p: (ranks[p[1]], ids.index(p[1]), ids.index(p[0]))):
         if abs(boxes[source][1]+boxes[source][3]/2-boxes[target][1]-boxes[target][3]/2) < 1:
@@ -226,7 +226,8 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
                 boxes[nid][1] += 4
     elements = []
     for node in graphic['nodes']:
-        elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme, text_heights[node['id']]))
+        elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme,
+                                      text_heights[node['id']], title_size=32))
     nodes = [e for e in elements if e['kind'] == 'shape']
     native_nodes = {n['node_id']: n for n in nodes}
     routes = []
