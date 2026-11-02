@@ -367,21 +367,23 @@ def compile_graphic(graphic, region, theme, font_paths=None):
                              'head_end': 'none', 'tail_end': 'triangle'})
         return elements
 
-    gap = 64.0
-    node_width = (width - gap*(count-1))/count
+    gap = 32.0
+    node_width = min(320.0, (width - gap*(count-1))/count)
+    total_width = node_width*count + gap*(count-1)
+    start_x = x + (width-total_width)/2
     if layout == 'staggered':
-        offset = 28.0
-        node_height = min(240.0, height-32-2*offset)
-        if node_width < 200 or node_height < 180:
-            raise ValueError('Staggered process needs at least 200 px per node and 212 px of height')
+        offset = 18.0
+        node_height = min(170.0, height-32-2*offset)
+        if node_width < 160 or node_height < 120:
+            raise ValueError('Staggered process needs at least 160 px per node and 152 px of height')
         base_y = y+(height-node_height)/2
     else:
-        node_height = min(272.0, height-32)
-        if node_width < 200 or node_height < 240:
-            raise ValueError('Process graphic needs at least 200 px per node and 272 px of height')
+        node_height = min(180.0, height-32)
+        if node_width < 160 or node_height < 120:
+            raise ValueError('Process graphic needs at least 160 px per node and 152 px of height')
         base_y = y+(height-node_height)/2
     for index, node in enumerate(graphic['nodes']):
-        nx = x + index*(node_width+gap)
+        nx = start_x + index*(node_width+gap)
         ny = base_y + (-offset if index % 2 == 0 else offset) if layout == 'staggered' else base_y
         elements.extend(node_elements(graphic['id'], node, [nx, ny, node_width, node_height], theme))
     nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}

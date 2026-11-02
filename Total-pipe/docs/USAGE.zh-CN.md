@@ -216,6 +216,10 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 - `composition`：完整 blocks、原图 figure_refs 与 assets 引用、显式原生 graphics。
 - `presentation`：统一 frame、文字容量策略和后续视觉决策。
 
+写 IR 前先决定页面结构：`composite-research` + `layout_tree` 是初始选项，不是容量失败后的补丁。
+页面有 3 个以上内容对象、原生图与文字同页，或需要 panels/columns 时，直接写树；树测量后仍溢出
+再拆页，不先删内容。每个 block/figure/graphic 在树中恰好引用一次。
+
 完整标题或正文较长时，在映射阶段显式设顶层
 `presentation.text_capacity_policy="preserve-terms"`，使进入设计前的字符预算也不要求缩写科学术语。
 

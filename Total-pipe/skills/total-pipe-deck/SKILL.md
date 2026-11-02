@@ -209,6 +209,9 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 ## 4. Canonical Deck IR：正文、图片、图形和公式
 
 按 §0 的四问逐页选能力：命中才读下面小节对应的协议；都不命中就保持平面页，并写明为什么不用。
+写 IR 前先决定页面结构：**`composite-research` + `layout_tree` 从一开始就是一等选项**，不要等
+容量失败才想起它。页面有 3 个以上内容对象、原生图与文字同页、或需要 panels/columns 时，直接写树；
+树测量后仍溢出再拆页，不先删内容。
 
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
