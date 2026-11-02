@@ -111,7 +111,9 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 
 `question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
 陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
-标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
+**RPA 槽位不是 Story 的写作上限**：RPA 可以只规划放得下的页，剩余完整 brief 以
+`unplanned_slide_briefs` 交给 IR；IR 用 `composite-research` + `layout_tree` 补页/拆页，
+不靠删句、缩写术语或藏 notes 通过。标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
 

@@ -78,7 +78,7 @@ def run_process(argv, cwd, timeout):
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
 
-def run(argv, cwd, out, name, timeout=120, json_output=True):
+def run(argv, cwd, out, name, timeout=120, json_output=True, allow_unplanned=False):
     log = Path(out)/'logs'/(name+'.json')
     try:
         process = run_process([str(a) for a in argv], cwd, timeout)
@@ -98,12 +98,16 @@ def run(argv, cwd, out, name, timeout=120, json_output=True):
         except ValueError as error:
             raise Failure('COMPONENT_BAD_JSON', 'Component did not return JSON; inspect its log.', log=str(log)) from error
     errors = findings(value)
+    unplanned_ok = (allow_unplanned and process.returncode == 0 and not errors and
+                    isinstance(value, dict) and bool(value.get('slides')) and
+                    bool(value.get('unplanned_slide_briefs')))
     if (name.startswith('rpa-') and isinstance(value, dict) and not errors and
-            (value.get('status') in ('failed', 'needs_replan') or value.get('unplanned_slide_briefs'))):
+            (value.get('status') in ('failed', 'needs_replan') or value.get('unplanned_slide_briefs'))
+            and not unplanned_ok):
         raise Failure('RPA_PLAN_REQUIRES_REPLAN',
                       'RPA left source briefs unplanned. Inspect the complete planning log and revise Story without dropping content.',
                       'replan', 'story', str(log))
-    if process.returncode or errors or (isinstance(value, dict) and value.get('status') in ('blocked', 'needs_replan', 'invalid')):
+    if (process.returncode or errors or (isinstance(value, dict) and value.get('status') in ('blocked', 'needs_replan', 'invalid'))) and not unplanned_ok:
         first = errors[0] if errors else {}
         code = first.get('code', first.get('rule'))
         if not code:
@@ -123,9 +127,10 @@ def pwf_cli(out, *args):
     return run([sys.executable, '-m', 'pwf2rpa', *args], COMPONENT/'pwf2rpa', out, 'pwf2rpa', json_output=False)
 
 
-def rpa(command, source, out):
+def rpa(command, source, out, allow_unplanned=False):
     value = run(['node', ROOT/'research-ppt-assistant/server/cli.mjs', command, '--file', source,
-                 '--detail-level', 'full'], ROOT, out, 'rpa-'+command)
+                 '--detail-level', 'full'], ROOT, out, 'rpa-'+command,
+                allow_unplanned=allow_unplanned)
     return value
 
 
@@ -490,7 +495,7 @@ def execute(stage, job):
         return [work/'story_prompt.json']
     if stage == 'rpa':
         workflow = read(work/'evidence_pointer.json')['workflow']
-        pwf_cli(out, workflow, '--story', work/'story_plan.json', '--strict', '--out', work/'rpa_input.json')
+        pwf_cli(out, workflow, '--story', work/'story_plan.json', '--out', work/'rpa_input.json')
         payload = read(work/'rpa_input.json')
         model = rpa('normalize-content', work/'rpa_input.json', out)
         write(work/'normalized_content.json', model)
@@ -498,12 +503,29 @@ def execute(stage, job):
         if count and count != len(payload['slide_briefs']):
             raise Failure('SLIDE_COUNT_REPLAN', 'Requested slide_count differs from the complete Story briefs; revise Story instead of truncating briefs.', 'replan', 'story')
         write(work/'plan_input.json', {**payload, 'presentation_type': request['presentation_type']})
-        plan = rpa('plan', work/'plan_input.json', out)
+        plan = rpa('plan', work/'plan_input.json', out, allow_unplanned=True)
         write(work/'deck_plan.json', plan)
-        write(work/'validation_input.json', {'slides': plan['slides'], 'content_model': model})
-        validation = rpa('validate-deck', work/'validation_input.json', out)
+        unplanned = plan.get('unplanned_slide_briefs') or []
+        if unplanned:
+            # Story content is not shortened to satisfy RPA slots. The planned
+            # pages stay RPA-owned; the unplanned briefs are handed to Deck IR,
+            # where composite-research + layout_tree can split or reflow them.
+            validation = {'status': 'partial', 'slides': [s.get('slide_id') for s in plan.get('slides', [])],
+                          'unplanned_slide_briefs': unplanned}
+        else:
+            write(work/'validation_input.json', {'slides': plan['slides'], 'content_model': model})
+            validation = rpa('validate-deck', work/'validation_input.json', out)
         write(work/'rpa_validation.json', validation)
         prompt = ir_prompt(read(workflow), payload, model, plan, request.get('supplement', 'off'))
+        prompt['unplanned_briefs'] = unplanned
+        if unplanned:
+            prompt['instructions'] += (
+                ' RPA left these briefs unplanned: '
+                + ', '.join(str(brief.get('slide_id') or brief.get('title') or '?') for brief in unplanned)
+                + '. Do NOT shorten the Story or drop content. Add one page per unplanned brief (or split a '
+                  'planned page only when necessary), using composite-research + layout_tree so the complete '
+                  'body/key_points and evidence fit. Keep the planned RPA pages; the deck page count must be '
+                  'at least the number of normalized briefs.')
         prompt['workflow_root'] = str(Path(workflow).parent)
         prompt['request'] = {**{key: request[key] for key in ('language', 'presentation_type', 'requirements')},
                              'supplement': request.get('supplement', 'off')}

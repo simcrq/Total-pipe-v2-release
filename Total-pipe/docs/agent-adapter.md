@@ -62,6 +62,11 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
 `slide_count` 仍按 RPA 论文 brief 计，补充页是额外页。
 
+**Story 不为 RPA 槽位缩短科学内容。** RPA 只规划它当前能容纳的页面；若仍有完整 brief 无法规划，
+`rpa_validation.status=partial`，`unplanned_slide_briefs` 随 IR 提示包下发。IR 必须为这些 brief
+补页或拆页，优先 `composite-research` + `layout_tree`，保留完整 body/key_points 和 EV；不能靠删句、
+缩写术语或把内容藏进 notes 通过。`check_ir` 仍按 normalized brief 数检查页数下界和全文保全。
+
 Deck IR 还接受两个 authoring shorthand，在 schema 校验前展开为 canonical IR：
 
 ```json

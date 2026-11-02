@@ -98,7 +98,9 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 `question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
 陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
 `key_points` 可选；摘要不足以保留科学细节时使用，条数由内容决定。标题和正文保留完整正确的术语、
-化学态、单位与限定词，不为容量截断或强行缩写。`ending.limitation` 只记录论文边界；
+化学态、单位与限定词，不为容量截断或强行缩写。**RPA 槽位不是 Story 的写作上限**：RPA 可以只规划
+当前放得下的页，剩余 brief 以 `unplanned_slide_briefs` 交给 IR；IR 用 `composite-research` +
+`layout_tree` 补页/拆页，保留完整 body、key_points 和 EV。`ending.limitation` 只记录论文边界；
 输入文件是否取得、SI 是否审阅等进入工作记录。
 
 ### 节点的讲解形态
