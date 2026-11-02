@@ -1,4 +1,5 @@
 """Component invocations and deterministic validation, never scientific content generation."""
+import copy
 import json
 import os
 from pathlib import Path
@@ -290,6 +291,7 @@ def normalize_authoring_ir(value):
 
 def check_ir(value, normalized=None, supplement='off'):
     from deck_compiler.ir import validate
+    original = copy.deepcopy(value)
     value = normalize_authoring_ir(value)
     mode = supplement if supplement in ('off', 'inline', 'pages', 'both') else 'off'
     has_supplement = False
@@ -321,7 +323,10 @@ def check_ir(value, normalized=None, supplement='off'):
             if isinstance(value, list):
                 return '\n'.join(texts(v) if isinstance(v, (dict, list)) else str(v) for v in value)
             return ''
-        corpus = ''.join(texts(value.get('slides', [])).split())
+        # Content-loss compares the author's visible text before scientific
+        # notation is rewritten into $...$ math; otherwise a brief number such
+        # as 1.2×10^-3 would no longer match its normalized LaTeX form.
+        corpus = ''.join(texts(original.get('slides', []) if isinstance(original, dict) else []).split())
         if len(value['slides']) < len(normalized.get('slide_briefs', [])):
             raise classify('CONTENT_LOSS', 'IR has fewer pages than the original complete briefs; revise Story explicitly before merging pages.', 'deck_ir')
         known = {entry.get('id', entry.get('evidence_id')) for entry in normalized.get('evidence', [])}
