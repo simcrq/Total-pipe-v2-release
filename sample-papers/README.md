@@ -22,6 +22,9 @@ number, figure and conclusion on the evidence path.
 2. `02-restarted-fista` — optimization/algorithm paper. Natural supplements: proximal
    gradient intuition, a two-step numerical example, a comparison with plain gradient
    descent.
+3. `03-restarted-fista-figure` — same algorithmic fixture plus a real `images/figure-1.png`
+   and EV0010 figure-caption evidence. Use it to test a full text+figure pipeline; the
+   figure page must keep EV0010 and carry `SCIENTIFIC_PANEL_REVIEW`.
 
 ## Quick preflight
 
