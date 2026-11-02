@@ -945,7 +945,7 @@ def build_story_prompt(
         "core_question": "string",
         "main_message": "string",
         "story": [
-            {"title": "string, optional", "question": "string", "answer": "string",
+            {"title": "string, required; declarative slide title, not a question", "question": "string", "answer": "string",
              "evidence": ["EV0001"], "next": "string, optional on the last node",
              "form": "sequence|compare|branch|relation|evidence, optional; derived from explain when omitted",
              "process_steps": ["one step per item, required when form=sequence"],
@@ -976,9 +976,9 @@ def build_story_prompt(
         "节点数量由论证需要决定，不要为凑页数增加节点。\n"
         "2. 每个 node 有 question 和 answer。question 是你这一步要回答的科学问题，"
         "answer 是回答，只能由列出的 Evidence id 支撑；不得创造事实、因果关系或确定性。\n"
-        "3. title 可选，是这一页给听众看的话。它可以不是问句，可以比 question 长或短，"
-        "由你决定怎样说清楚；不写就退回 question。"
-        "不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
+        "3. title 必填，是这一页给听众看的陈述句或名词短语，不以 ?/？ 结尾；"
+        "question 只是内部推理问题，不要直接拿它当标题。标题可以比 question 短，"
+        "但必须保留科学含义。不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
         "4. 原文的 may/likely/suggest/possibly/可能/提示/推测必须保留其不确定性。\n"
         "5. next 说明当前证据留下的疑问或待验证机制，除最后一个 node 外必填；"
         "最后一个 node 不需要为了形式补一句“下一步看什么”。不得写成‘然后看 Fig.4’。\n"

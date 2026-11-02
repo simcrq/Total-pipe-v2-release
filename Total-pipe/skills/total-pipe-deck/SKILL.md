@@ -106,11 +106,12 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 提示包生成器不调用模型。按论证需要安排 4–10 个节点，不凑页数：
 
 ```json
-{"title":"可选展示标题","question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
+{"title":"实验条件","question":"实验条件是什么？","answer":"...","evidence":["EV0001"],"next":"..."}
 ```
 
-`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 可独立于 question，
-省略时取 question；不要为了标题形式硬拼“主题：结论”。摘要不足以保留科学细节时加
+`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
+陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
+标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
 
@@ -225,6 +226,8 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 让完整长标题和正文在进入设计提示包前也能保留，不等到样式合入后再处理字符预算。
 
 标题优先取 `metadata.story_title` 中的完整 Story 标题，不使用 RPA 临时压缩的短标题。
+`semantic.title` 用陈述句或名词短语，保留科学含义，不以 `?` / `？` 结尾；不要把 Story 的
+`question` 直接复制成标题。
 逐条核对源 `key_points` 和正文：按原顺序进入 block、图形节点完整 title/body 或讲稿；
 必要的展示内容仍须可见，不能全部藏到 notes。段落边界保持换行，按需复制
 `design_ir.text_flow.mode` 到 block 的 `text_flow`；不要为了触发列表样式改写科研内容。

@@ -86,8 +86,8 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 
 ```json
 {
-  "title": "可选的完整展示标题",
-  "question": "为什么出现这一现象？",
+  "title": "实验条件",
+  "question": "实验条件是什么？",
   "answer": "结果支持机制 A，但不能排除机制 B。",
   "key_points": ["实验观察到……", "进一步分析显示……", "仍不能排除……"],
   "evidence": ["EV0012", "EV0013"],
@@ -95,8 +95,9 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 }
 ```
 
-`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 和 `key_points` 可选；
-摘要不足以保留科学细节时使用 key_points，条数由内容决定。标题和正文保留完整正确的术语、
+`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
+陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
+`key_points` 可选；摘要不足以保留科学细节时使用，条数由内容决定。标题和正文保留完整正确的术语、
 化学态、单位与限定词，不为容量截断或强行缩写。`ending.limitation` 只记录论文边界；
 输入文件是否取得、SI 是否审阅等进入工作记录。
 
@@ -219,6 +220,8 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 `presentation.text_capacity_policy="preserve-terms"`，使进入设计前的字符预算也不要求缩写科学术语。
 
 标题优先使用 Brief `metadata.story_title` 的完整 Story 标题；不写独立 title 时取 question。
+`semantic.title` 用陈述句或名词短语，保留科学含义，不以 `?` / `？` 结尾；不要直接把
+Story 的 `question` 复制成标题。
 保留源 key_points 与正文顺序、段落边界和必要展示细节，不只留下摘要或把全部正文藏到 notes。
 证据编号、输入情况和运行记录进入备注；页面 caveat 只保留论文自身边界。
 
