@@ -170,10 +170,37 @@ def _supplement_blocks(ir):
 
 
 _INLINE_MATH = re.compile(r'(?<!\\)\$[^$\n]+\$|\\\(.+?\\\)')
+_SCI_FULL = re.compile(
+    r'(?<![\w$])(-?\d+(?:\.\d+)?)\s*[×xX]\s*10\s*\^\s*\{?\s*([+\-−]?\d+)\s*\}?(?![\w$])')
+_SCI_POWER = re.compile(
+    r'(?<![\w$×xX])10\s*\^\s*\{?\s*([+\-−]?\d+)\s*\}?(?![\w$])')
 
 
 def _has_inline_math(text):
     return isinstance(text, str) and bool(_INLINE_MATH.search(text))
+
+
+def _scientific_math(text):
+    """Turn plain scientific notation into the existing measured inline-math path."""
+    if not isinstance(text, str) or ('$' in text and _INLINE_MATH.search(text)):
+        return text, False
+    changed = False
+
+    def full(match):
+        nonlocal changed
+        changed = True
+        exponent = match.group(2).replace('−', '-')
+        return f'${match.group(1)}\\times10^{{{exponent}}}$'
+
+    def power(match):
+        nonlocal changed
+        changed = True
+        exponent = match.group(1).replace('−', '-')
+        return f'$10^{{{exponent}}}$'
+
+    text = _SCI_FULL.sub(full, text)
+    text = _SCI_POWER.sub(power, text)
+    return text, changed
 
 
 def _expand_diagram(comp, diagram):
@@ -223,7 +250,10 @@ def normalize_authoring_ir(value):
         semantic = slide.get('semantic')
         if isinstance(semantic, dict):
             for key in ('title', 'takeaway'):
-                if _has_inline_math(semantic.get(key)):
+                converted, changed = _scientific_math(semantic.get(key))
+                if changed:
+                    semantic[key] = converted
+                if changed or _has_inline_math(semantic.get(key)):
                     fields = semantic.setdefault('inline_math', [])
                     if isinstance(fields, list) and key not in fields:
                         fields.append(key)
@@ -242,6 +272,11 @@ def normalize_authoring_ir(value):
             if 'latex' in block and 'text' not in block:
                 block['text'] = block.pop('latex')
                 block.setdefault('component', 'formula')
+            if block.get('component') != 'formula':
+                converted, changed = _scientific_math(block.get('text'))
+                if changed:
+                    block['text'] = converted
+                    block['inline_math'] = True
             if block.get('component') == 'body' and not block.get('inline_math'):
                 if _has_inline_math(block.get('text')):
                     block['inline_math'] = True

@@ -38,6 +38,36 @@ class AuthoringShorthandTests(unittest.TestCase):
         self.assertEqual(slide['semantic']['inline_math'], ['title'])
         self.assertTrue(slide['composition']['blocks'][0]['inline_math'])
 
+    def test_scientific_notation_becomes_inline_math(self):
+        ir = research_ir()
+        slide = ir['slides'][1]
+        slide['semantic']['title'] = '误差 1.2×10^-3'
+        slide['semantic'].pop('inline_math', None)
+        slide['composition']['blocks'] = [
+            {'id': 'result', 'component': 'body', 'text': '达到 10^-3 误差，误差约 1.2 × 10^{-3}。'},
+        ]
+        a.normalize_authoring_ir(ir)
+        self.assertEqual(slide['semantic']['title'], '误差 $1.2\\times10^{-3}$')
+        self.assertEqual(slide['semantic']['inline_math'], ['title'])
+        self.assertIn('$10^{-3}$', slide['composition']['blocks'][0]['text'])
+        self.assertIn('$1.2\\times10^{-3}$', slide['composition']['blocks'][0]['text'])
+        self.assertTrue(slide['composition']['blocks'][0]['inline_math'])
+
+    def test_plain_hundred_is_not_read_as_a_power(self):
+        ir = research_ir()
+        block = {'id': 'count', 'component': 'body', 'text': '100 次随机试验。'}
+        ir['slides'][1]['composition']['blocks'] = [block]
+        a.normalize_authoring_ir(ir)
+        self.assertEqual(block['text'], '100 次随机试验。')
+        self.assertFalse(block.get('inline_math'))
+
+    def test_formula_block_is_not_rewritten_by_scientific_notation(self):
+        ir = research_ir()
+        block = {'id': 'f', 'component': 'formula', 'text': r'1.2\times10^{-3}'}
+        ir['slides'][1]['composition']['blocks'] = [block]
+        a.normalize_authoring_ir(ir)
+        self.assertEqual(block['text'], r'1.2\times10^{-3}')
+
     def test_diagram_shorthand_expands_to_a_native_process(self):
         ir = research_ir()
         slide = ir['slides'][1]
