@@ -262,6 +262,9 @@ arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸�
   `basis=paper` + EV，补充义务带 evidence 会报 `EXPLANATION_EVIDENCE_FORBIDDEN`。
 - 混合页的论文块必须保留非空 `semantic.evidence_refs`；block 级 `evidence_refs` 只能是其子集。
 - 补充块出现论文数值/单位、论文图或 EV 长原文，Agent 返回 `SUPPLEMENT_PAPER_LEAK`。
+- 补充内容可以是原生图：用 `composition.graphics` 的 process/DAG/mechanism/architecture/funnel/path/composite。
+  Agent 还接受简单 `composition.diagram`（3–8 个节点的链式流程），自动展开为一个原生 `process` 图；
+  复杂关系仍写完整 graphics。图不是论文图，不冒充 Evidence。
 - `slide_count` 仍按 RPA 论文 brief 计；补充页是额外页。
 - QA：`SUPPLEMENT_UNCITED` 为 INFO，`SUPPLEMENT_CONSTRUCTED_UNLABELED` 为 REVIEW，
   `SUPPLEMENT_PAPER_FIGURE` 等为 FAIL；补充页不再被 `quality` 误判为“无论文引用”。
@@ -330,6 +333,16 @@ PWF 新增 `artifacts.figure_assets_metadata`，pwf2rpa 对显式匹配的资源
 
 anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标签公式默认位于前一说明块下方，
 有 label 时标签与公式并排。普通正文默认不解析 `$…$`；显式开启行内模式后按下节处理。
+
+经 Agent 接入层时还可以只写 `latex`，接入层在校验前补成 `component:"formula"` + `text`：
+
+```json
+{"id":"f1","latex":"S_{\\lambda}(z)=\\operatorname{sign}(z)\\max(|z|-\\lambda,0)"}
+```
+
+正文、标题或 takeaway 中的 `$…$` / `\\(…\\)` 会自动开启行内公式，不必再手写
+`inline_math:true`。展开后的 canonical IR 会写回 `work/deck_ir.json`；直接调用
+`deck_compiler build` 仍以 canonical 字段为准。
 
 #### 行内公式与混排容量
 

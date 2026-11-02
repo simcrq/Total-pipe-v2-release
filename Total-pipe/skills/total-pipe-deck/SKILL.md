@@ -251,6 +251,9 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 - 独立补充页：`semantic.evidence_refs: []`，全部 block 为 supplement；页数不限。
   补充页数超过论文页数只产生 `SUPPLEMENT_RATIO_HIGH` INFO，不阻塞。
 - 构造示例必须有可见“示意/构造/简化/示例”标注；只有 supplement 块的页面不能使用论文图。
+- 补充内容可以是原生图：`composition.graphics` 的 process/DAG/mechanism/architecture/funnel/path/composite。
+  Agent 还接受 `composition.diagram` 的 3–8 节点链式简写，自动展开为一个原生 process 图；
+  复杂关系仍写完整 graphics。图不是论文图，不冒充 Evidence。
 - 补充块不能写入论文数值/单位、论文图或 EV 长原文；Agent 会报 `SUPPLEMENT_PAPER_LEAK`。
 - `supplement=inline` 只允许页内块；`pages/both` 才允许独立页。补充页可声明
   `semantic.explanation`，但义务写 `"basis":"supplement"`、不写 `evidence_refs`；paper 义务仍是
@@ -336,6 +339,10 @@ table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字�
 ```json
 {"id":"equation","component":"formula","text":"\\sqrt{\\frac{1+e^{-t}}{1+x^{2}}}","anchor":"explanation"}
 ```
+
+Agent 接入层还接受更短的 `{"id":"equation","latex":"..."}`，校验前补成
+`component:"formula"` + `text`；正文、标题或 takeaway 中的 `$…$` / `\(…\)` 自动开启行内模式。
+展开结果会写回 `work/deck_ir.json`，直接调用编译器时仍写 canonical 字段。
 
 `anchor` 可省略；存在时指向本页前方的非公式 block。无标签公式默认贴在前一说明块下方，
 有 label 时标签与公式并排。支持 `\frac`、`\sqrt{…}`、`\sqrt[3]{…}`、`^/_`、

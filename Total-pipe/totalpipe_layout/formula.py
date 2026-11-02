@@ -549,7 +549,13 @@ def _plain(node):
         text = base
         if node.sub is not None:
             sub = _plain(node.sub)
-            text += sub.translate(SUBSCRIPT) if sub.isdigit() else f'_{_script_plain(sub)}'
+            # Decimal subscripts such as S_{0.5} are common in teaching notes and
+            # stay readable in the plain fallback used by viewers without OMML.
+            if sub and all(char.isdigit() or char == '.' for char in sub):
+                text += ''.join(chr(SUBSCRIPT[ord(char)]) if ord(char) in SUBSCRIPT else char
+                                for char in sub)
+            else:
+                text += f'_{_script_plain(sub)}'
         if node.sup is not None:
             sup = _plain(node.sup)
             can_lift = sup and all(ord(char) in SUPERSCRIPT for char in sup)

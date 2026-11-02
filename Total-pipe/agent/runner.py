@@ -260,6 +260,10 @@ def _accept(job, stage, upstream, kind, path):
             a.import_ir(path, destination, job['request'].get('supplement', 'off'))
         else:
             write(destination, value)
+    elif kind == 'deck_ir':
+        # Persist authoring shorthands (latex, diagram, auto inline math) after
+        # validation so Design and Build consume the canonical representation.
+        write(destination, value)
     paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None] if kind == 'deck_ir' else [destination]
     checkpoint(job, stage['id'], paths, upstream)
     job.pop('last_error', None)

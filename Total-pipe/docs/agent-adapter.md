@@ -62,6 +62,24 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
 `slide_count` 仍按 RPA 论文 brief 计，补充页是额外页。
 
+Deck IR 还接受两个 authoring shorthand，在 schema 校验前展开为 canonical IR：
+
+```json
+{"id":"eq1","latex":"S_{\\lambda}(z)=\\operatorname{sign}(z)\\max(|z|-\\lambda,0)"}
+```
+
+等价于 `component:"formula"` + `text`；正文、标题或 takeaway 中的 `$...$` / `\\(...\\)`
+会自动打开已有行内公式路径。简单流程可写：
+
+```json
+{"diagram":{"id":"proximal-flow","nodes":[
+  {"id":"grad","title":"梯度步"},{"id":"prox","title":"近端步"},{"id":"next","title":"新迭代"}]}}
+```
+
+它展开为 `composition.graphics` 的一个原生 `process` 图，自动串链。复杂 DAG、机制图、架构图
+仍按 `composition.graphics` 的完整 schema 写；shorthand 只降低常见补充图的输入成本，不改变编译器、
+QA 或证据契约。展开后的 IR 会写回 `work/deck_ir.json`，Design/Build 只读 canonical 版本。
+
 start 不收模型字段。在 model_selection 暂停点使用用户本轮或此前的明确选择回填：
 
 ```json

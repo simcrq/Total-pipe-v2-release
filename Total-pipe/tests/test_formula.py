@@ -60,6 +60,7 @@ class FormulaParseTests(unittest.TestCase):
             self.assertIn(namespace, paragraph)
         self.assertIn('<mc:Fallback>', paragraph)
         self.assertIn('<a:rPr lang="en-US" sz="1800">', paragraph)
+        self.assertEqual(F.to_plain(F.parse(r'S_{0.5}(z)')), 'S₀.₅(z)')
 
     def test_roots_preserve_the_degree_and_the_entire_radicand(self):
         for source in (r'\sqrt{x^2+y^2}', r'\sqrt {x^2+y^2}'):

@@ -169,8 +169,88 @@ def _supplement_blocks(ir):
         yield slide, supplements, [block for block in blocks if isinstance(block, dict)]
 
 
+_INLINE_MATH = re.compile(r'(?<!\\)\$[^$\n]+\$|\\\(.+?\\\)')
+
+
+def _has_inline_math(text):
+    return isinstance(text, str) and bool(_INLINE_MATH.search(text))
+
+
+def _expand_diagram(comp, diagram):
+    """Expand the small authoring shorthand into a canonical native graphic."""
+    nodes = diagram.get('nodes')
+    if not isinstance(nodes, list):
+        return
+    edges = diagram.get('edges')
+    if not isinstance(edges, list):
+        edges = [{'from': left.get('id'), 'to': right.get('id'), 'kind': 'arrow'}
+                 for left, right in zip(nodes, nodes[1:])
+                 if isinstance(left, dict) and isinstance(right, dict)
+                 and left.get('id') and right.get('id')]
+    graphic = {
+        'id': diagram.get('id') or 'diagram',
+        'type': diagram.get('type') or 'process',
+        'direction': diagram.get('direction') or 'horizontal',
+        'layout': diagram.get('layout') or 'chain',
+        'nodes': nodes,
+        'edges': edges,
+    }
+    if graphic['type'] == 'dag':
+        graphic['direction'] = 'horizontal'
+        graphic['layout'] = 'chain'
+    graphics = comp.setdefault('graphics', [])
+    if isinstance(graphics, list):
+        graphics.append(graphic)
+
+
+def normalize_authoring_ir(value):
+    """Accept the small authoring shorthands before canonical schema validation.
+
+    ``latex`` on a block is a display formula; ``composition.diagram`` is a
+    chain/process graphic.  The canonical IR is unchanged after normalization,
+    so the compiler, QA and layout providers keep their existing contracts.
+    Inline ``$...$`` / ``\\(...\\)`` in a body block or title/takeaway enables
+    the existing measured inline-math path.
+    """
+    if not isinstance(value, dict):
+        return value
+    slides = value.get('slides')
+    if not isinstance(slides, list):
+        return value
+    for slide in slides:
+        if not isinstance(slide, dict):
+            continue
+        semantic = slide.get('semantic')
+        if isinstance(semantic, dict):
+            for key in ('title', 'takeaway'):
+                if _has_inline_math(semantic.get(key)):
+                    fields = semantic.setdefault('inline_math', [])
+                    if isinstance(fields, list) and key not in fields:
+                        fields.append(key)
+        composition = slide.get('composition')
+        if not isinstance(composition, dict):
+            continue
+        diagram = composition.pop('diagram', None)
+        if isinstance(diagram, dict):
+            _expand_diagram(composition, diagram)
+        blocks = composition.get('blocks')
+        if not isinstance(blocks, list):
+            continue
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            if 'latex' in block and 'text' not in block:
+                block['text'] = block.pop('latex')
+                block.setdefault('component', 'formula')
+            if block.get('component') == 'body' and not block.get('inline_math'):
+                if _has_inline_math(block.get('text')):
+                    block['inline_math'] = True
+    return value
+
+
 def check_ir(value, normalized=None, supplement='off'):
     from deck_compiler.ir import validate
+    value = normalize_authoring_ir(value)
     mode = supplement if supplement in ('off', 'inline', 'pages', 'both') else 'off'
     has_supplement = False
     has_supplement_page = False
@@ -278,7 +358,12 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
         'table/columns for comparison, process/dag for ordered_steps, mechanism/dag for relation and path for curve. '
         'If a brief has metadata.story_compact_process, ignore the smaller RPA process placeholder and write one '
         'type=process graphic with layout=compact, one square rect node per declared item, in the declared order; '
-        'do not collapse the chain to the RPA three-slot page.'}
+        'do not collapse the chain to the RPA three-slot page.'
+        ' Authoring shorthand: a display equation may be written as '
+        '{"id":"eq1","latex":"S_{\\\\lambda}(z)=..."} (component/text are filled automatically), and a simple '
+        'flow may be written as composition.diagram={"id":"flow","nodes":[{"id":"a","title":"..."},...]}; '
+        'the Agent expands it to one native process graphic with chained arrows. Inline $...$ in a body block, '
+        'title or takeaway enables the measured inline-math path automatically.'}
     if supplement in ('inline', 'pages', 'both'):
         prompt['supplement'] = supplement
         prompt['instructions'] += (
