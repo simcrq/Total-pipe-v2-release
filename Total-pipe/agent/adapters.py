@@ -349,8 +349,10 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
         'schema': read(COMPONENT/'schemas/deck-ir.schema.json'),
         'instructions': 'Write canonical Deck IR. Preserve complete scientific body, key_points, figures, equations, '
         'units and uncertainty. Semantic titles are declarative phrases, not questions: do not copy a Story '
-        'question and do not end a title with ? or ？. Source paths are relative to workflow_root; use absolute '
-        'paths in work/deck_ir.json. '
+        'question and do not end a title with ? or ？. When an archetype cannot hold the page objects, or a '
+        'native graphic plus text cannot share a page, prefer composite-research with a layout_tree stack/'
+        'columns before deleting content or splitting the page; split only after the measured tree overflows. '
+        'Source paths are relative to workflow_root; use absolute paths in work/deck_ir.json. '
         'Retain original body/key_points in speaker_notes when a display expression changes their literal notation. '
         'Do not write page bboxes. Keep full evidence refs; use native formulas and explicit graph relationships. '
         'For every brief with metadata.story_explain, write semantic.explanation with the same obligations and '

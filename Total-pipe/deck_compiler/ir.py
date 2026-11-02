@@ -346,7 +346,9 @@ def validate(ir):
             context_count = sum(b.get('component') != 'formula' for b in blocks if isinstance(b, dict))
             check((len(blocks) if cap['blocks'] == 0 else context_count) <= cap["blocks"]
                   and len(figures) <= cap["figures"],
-                  "Archetype block/figure capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
+                  "Archetype block/figure capacity exceeded; use composite-research with layout_tree "
+                  "to hold the extra objects, or split the page if the measured tree still overflows",
+                  n, "CONTENT_CAPACITY_EXCEEDED")
             if archetype == "evidence-hypothesis":
                 check(all(b.get("component") in ("direct-evidence", "hypothesis") for b in blocks)
                       and all(sum(b.get("component") == role for b in blocks) <= 4

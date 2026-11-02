@@ -1299,7 +1299,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 issues.extend(best_failures)
                 issues.append(issue('GRAPHIC_PAGE_CAPACITY', 'FAIL',
                     'The graphic, context and source figure/caption cannot share this page above '
-                    'their size floors. Split or replan the page; no content was shortened or dropped.',
+                    'their size floors. Try composite-research with a vertical layout_tree stack '
+                    '(graphic + blocks) before splitting; if the measured tree still cannot fit, '
+                    'split the page. No content was shortened or dropped.',
                     n, comp['graphics'][0]['id'], detector='geometric-preflight',
                     attempted_compositions=attempted))
                 issues.append(issue('SCHEMATIC_REVIEW', 'REVIEW',

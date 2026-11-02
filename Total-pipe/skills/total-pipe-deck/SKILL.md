@@ -319,6 +319,11 @@ suggested_weights；调整结构后重编，或真实审核后接受有意留白
 并传 rejected_sublayout_ids 排除已失败结构。未知/重复 slide_id、过期反馈、无合法候选均需重规划。
 最多自主修订三次；同一问题仍存在则保留失败并向用户说明所缺空间，不继续无界循环或删改科学内容。
 
+容量失败时先试 `composite-research` + `layout_tree`：给溢出 block 更大区域，或把 graphic 与文字
+分到 stack/columns 的不同区域；再考虑拆页。嵌套不会增加页面总面积，panel 内边距、标题带和 gap
+还会占面积，所以不能替代真正的拆页或删减。单块文字仍过长时，按段落/句子拆成多个 block 并保留
+全文与顺序，不能按字符硬切。
+
 原生科研表格读 `Total-pipe/docs/native-tables.md`。composition.tables 保存完整 cells，支持多级表头、
 row_span/column_span 及 formula/矩阵格；每个逻辑位置必须恰好覆盖一次，不自动补零或推断数据。
 paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最多 32 行/12 列；字体下限 18 pt。

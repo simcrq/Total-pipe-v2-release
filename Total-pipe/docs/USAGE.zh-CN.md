@@ -299,7 +299,9 @@ weights 各项为 `[0.1,10]` 的相对值，按比例铺满，不能与 center /
 最多 6 层、64 节点，公式与解释在同一 stack，图形和原图的尺寸下限不变。
 
 树页仍执行整套 Design、保留 academic_design，不叠加分配同一区域的 visual_plan/visual_intent。
-查看 `layout_feedback.json` 的组件路径、所需/实际尺寸和建议，容量不足交回 RPA 重规划。
+查看 `layout_feedback.json` 的组件路径、所需/实际尺寸和建议。容量不足时先试
+`composite-research` + `layout_tree`（给溢出 block 更大区域，或把 graphic 与文字分栏），
+再交回 RPA 重规划或拆页；嵌套不增加页面总面积，panel/gap 还会占面积。
 向 plan_sublayout 传当前完整 IR 的 ir_sha256、compiler_feedback 及 rejected_sublayout_ids；
 过期反馈会被拒绝，已失败候选不会重试。调用者控制最多三轮修订，编译器不自行调用 RPA。
 不会自动缩小水平流程图或裁剪证据图；完整标题/正文超容量按 preserve-terms 保留 REVIEW。

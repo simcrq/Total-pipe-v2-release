@@ -106,6 +106,20 @@ plan_sublayout 输入相同。slide_id 必须是规范化规划中的实际 `SLI
 明确拒绝，目录内无合法候选返回 needs_replan，不删除分组。自动选型不调用编译器；
 Skill/调用者控制最多三轮编译与修订，合入 patch 后重新生成哈希和反馈。
 
+## 容量失败时的回退顺序
+
+嵌套布局不是凭空扩容：页面正文区域不变，panel 内边距、标题带和 gap 还会占掉面积。它真正有用的
+情况是**区域被固定槽位卡住**，或**页内对象数超过 archetype 容量**：
+
+1. 先用 `composite-research` + `layout_tree` 给溢出对象独立区域（例如 graphic 与公式上下分栏，
+   或把多个块放进 columns/stack），保留完整正文与证据，不缩短术语。
+2. 如果树测量后仍超出，再拆页或改 Story；不要先删内容。
+3. `GRAPHIC_PAGE_CAPACITY` 与 `CONTENT_CAPACITY_EXCEEDED` 的提示都指向这条回退路径；
+   `PAGE_UNDERFILL` 只说明贴顶 stack 余量过大，和容量失败不是同一件事。
+
+嵌套本身不会让同一块文字变短；如果单个 block 的文本在整页宽度仍放不下，需要按段落/句子拆成
+多个 block（全文与顺序保留），而不是按字符硬切。
+
 ## 测量、反馈和容量
 
 编译器自底向上测量需求、自顶向下分配矩形。公式按 AST 和 18 pt 下限测量，图片保持原有 panel 下限，
