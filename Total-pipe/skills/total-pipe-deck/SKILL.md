@@ -231,7 +231,7 @@ Story 内容、论点是什么、用哪种形式、眼睛落在什么锚点上�
   `equation-reading`（公式）、`mechanism-flow`
   （原生流程）、`figure-reading`（图）、`three-limits`（三列）、`statement`（一句主张放大）、
   `text-columns`（2–3 组并排）、`numbered-points`（带序号要点）、`problem-route-result`
-  （问题 → 做法 → 结果三节点流程 + 文本带）、`text-stack` / `closing-statement`
+  （问题 → 做法 → 结果三节点机制图，边上写条件 + 文本带）、`text-stack` / `closing-statement`
   （兜底堆叠 / 单句结论）。`anchor.kind` 必须与形式匹配。文本带的多栏用 `columns fit="hug"`，
   让行高贴合最高内容而不是撑满整栏。
 - **守恒**：Story 的每个 answer / key_point / ending **只属于一页**（同一页可被多个 item 引用展开，

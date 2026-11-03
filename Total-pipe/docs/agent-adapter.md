@@ -118,7 +118,7 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 | statement | none | 一句主张放大成主句 + 1–2 条注 | 一页就是一句话 |
 | text-columns | none | 2–3 组短陈述并排（可带 chip 标签） | 平行短内容，没有表可依 |
 | numbered-points | none | 带 01–0N 标签的并列要点 | 两到四条并列要点 |
-| problem-route-result | graphic | 三节点流程（问题 → 做法 → 结果）+ 文本带 | 三段式论证，没有现成图 |
+| problem-route-result | graphic | 三节点机制图（问题 → 做法 → 结果，边上带条件）+ 文本带 | 三段式论证，没有现成图 |
 | text-stack / closing-statement | none | 兜底堆叠 / 单句结论 | 只有一两句、无法分组时 |
 
 视觉语言另由 `presentation.visual_style` 选择风格包（`academic`/`commercial`/`print`），见
