@@ -98,6 +98,20 @@ class PageDesignTests(unittest.TestCase):
             {'id': 'eq', 'text': 'S_{1/L}(z)', 'source': 'EV3', 'evidence': ['EV3'], 'kind': 'formula'})
         self.assertEqual(validate_design(design, STORY, EVIDENCE), [])
 
+    def test_occasion_is_a_key_and_the_brief_suggests_one(self):
+        from deck_compiler.design import OCCASIONS, default_occasion
+        self.assertEqual(set(OCCASIONS), {'group-meeting', 'research-report', 'research-sharing',
+                                          'lecture', 'commercial'})
+        self.assertEqual(default_occasion('paper_presentation', '组会研究报告'), 'group-meeting')
+        self.assertEqual(default_occasion('seminar', '文献分享'), 'research-sharing')
+        self.assertEqual(default_occasion('lecture', ''), 'lecture')
+        self.assertEqual(default_occasion('pitch', ''), 'commercial')
+        self.assertEqual(default_occasion('conference', ''), 'research-report')
+        design = copy.deepcopy(DESIGN)
+        design['setting']['occasion'] = '组会'
+        problems = ' '.join(validate_design(design, STORY, EVIDENCE))
+        self.assertIn('setting.occasion must be one of', problems)
+
     def test_capabilities_and_summary(self):
         published = capabilities()
         self.assertIn('figure-reading', published['forms'])
