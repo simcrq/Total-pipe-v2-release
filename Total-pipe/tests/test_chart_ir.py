@@ -68,6 +68,31 @@ class ChartContractTests(unittest.TestCase):
             jsonschema.validate(chart, SCHEMA)
 
 
+    def test_scatter_uses_per_series_x(self):
+        chart = self.chart()
+        chart['kind'] = 'scatter'
+        chart['x'].pop('values')
+        self.assertTrue(any('x_values' in message for message in validate_charts([chart], ['EV0012'])))
+        chart['series'][0]['x_values'] = [10, 20, 30, 40]
+        self.assertEqual(validate_charts([chart], ['EV0012']), [])
+        self.assertEqual(jsonschema.Draft202012Validator(SCHEMA).is_valid(chart), True)
+
+    def test_error_bars_match_points_and_cannot_be_negative(self):
+        chart = self.chart()
+        chart['series'][0]['y_error'] = [1, 1]
+        self.assertTrue(any('y_error' in message for message in validate_charts([chart], ['EV0012'])))
+        chart['series'][0]['y_error'] = [1, -1, 1, 1]
+        self.assertTrue(any('negative' in message for message in validate_charts([chart], ['EV0012'])))
+        chart['series'][0]['y_error'] = [1, 1, 1, 1]
+        self.assertEqual(validate_charts([chart], ['EV0012']), [])
+
+    def test_annotations_must_index_real_points(self):
+        chart = self.chart()
+        chart['annotations'] = [{'text': '拐点', 'series': 0, 'point': 9}]
+        self.assertTrue(any('point' in message for message in validate_charts([chart], ['EV0012'])))
+        chart['annotations'] = [{'text': '拐点', 'series': 0, 'point': 2, 'dx': 20, 'dy': -30}]
+        self.assertEqual(validate_charts([chart], ['EV0012']), [])
+
     def test_chart_leaf_compiles_as_a_native_plot(self):
         from deck_compiler.layout import compile_deck
         deck = json.loads((ROOT/'examples/composite-layout.deck_ir.json').read_text(encoding='utf-8'))

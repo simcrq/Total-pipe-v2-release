@@ -38,8 +38,9 @@ def capabilities():
                                           'title_band': True}, 'takeaway': {'measured': True}},
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
-            'chart': {'types': ['line', 'bar'], 'bases': ['evidence', 'explain'],
-                      'min_size_px': [420, 260], 'max_series': 4},
+            'chart': {'types': ['line', 'bar', 'scatter'], 'bases': ['evidence', 'explain'],
+                      'min_size_px': [420, 260], 'max_series': 4, 'error_bars': True,
+                      'annotations': 6},
             'legacy_flat_ir': True}
 
 

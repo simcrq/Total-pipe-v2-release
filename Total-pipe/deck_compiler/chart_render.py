@@ -95,6 +95,18 @@ def _polyline(eid, xs, ys, color, width=2.5):
             'custom_geometry': custom_geometry(commands, box)}
 
 
+def _geometry_shape(eid, commands, color, width=1.5):
+    """One open stroke path (error bar, leader) as a native custom-geometry shape."""
+    from .graphic_paths import custom_geometry
+    xs = [x for _, x, _ in commands]
+    ys = [y for _, _, y in commands]
+    low_x, high_x, low_y, high_y = min(xs), max(xs), min(ys), max(ys)
+    box = [low_x, low_y, max(1., high_x-low_x), max(1., high_y-low_y)]
+    return {'id': eid, 'kind': 'shape', 'role': 'chart-mark', 'bbox': box,
+            'geometry': 'rect', 'fill': 'none', 'line': color, 'line_width': width,
+            'custom_geometry': custom_geometry(commands, box)}
+
+
 def _text(eid, content, bbox, color, size=TICK_SIZE, align='left', lines=1, role='caption'):
     return {'id': eid, 'kind': 'text', 'text': content, 'bbox': list(bbox),
             'role': role, 'font_size': size, 'max_lines': lines,
@@ -119,11 +131,13 @@ def compile_chart(chart, bbox, theme, font_paths):
     grid = theme.get('rule', '#D8DEE6')
     face = ImageFont.truetype(str(font_paths['font_file']), TICK_SIZE)
 
-    x_values = list(chart['x']['values'])
     series = chart['series']
     x_scale = chart['x'].get('scale', 'linear')
     y_scale = chart['y'].get('scale', 'linear')
-    y_values = [value for entry in series for value in entry['values']]
+    shared_x = list(chart['x'].get('values') or [])
+    bars = [entry.get('y_error') or [0.]*len(entry['values']) for entry in series]
+    y_values = [value-bar for entry, errors in zip(series, bars) for value, bar in zip(entry['values'], errors)]
+    y_values += [value+bar for entry, errors in zip(series, bars) for value, bar in zip(entry['values'], errors)]
     y_low, y_high = min(y_values), max(y_values)
     if chart['kind'] == 'bar':
         y_low = min(0., y_low)
@@ -131,9 +145,15 @@ def compile_chart(chart, bbox, theme, font_paths):
     if y_high <= y_low:
         y_high = y_low+1.
     pad = (y_high-y_low)*.08
-    if chart['kind'] == 'line':
+    if chart['kind'] in ('line', 'scatter'):
         y_low, y_high = y_low-pad, y_high+pad
-    x_low, x_high = (0., float(len(x_values)-1)) if chart['kind'] == 'bar' else (min(x_values), max(x_values))
+    if chart['kind'] == 'scatter':
+        x_values = []
+        all_x = [value for entry in series for value in (entry.get('x_values') or [])]
+        x_low, x_high = min(all_x), max(all_x)
+    else:
+        x_values = shared_x
+        x_low, x_high = (0., float(len(x_values)-1)) if chart['kind'] == 'bar' else (min(x_values), max(x_values))
     if x_high <= x_low:
         x_high = x_low+1.
 
@@ -172,23 +192,57 @@ def compile_chart(chart, bbox, theme, font_paths):
     # Series.
     for series_index, entry in enumerate(series):
         color = PALETTE[series_index % len(PALETTE)]
+        xs = _positions(entry.get('x_values') or x_values, x_low, x_high, x_scale, px, pw)
+        points = _positions(entry['values'], y_low, y_high, y_scale, py+ph, -ph)
         if chart['kind'] == 'bar':
             band = pw/len(x_values)
             width = band*.6/max(1, len(series))
             zero = _positions([0.], y_low, y_high, y_scale, py+ph, -ph)[0]
+            centres = []
             for point, value in enumerate(entry['values']):
                 centre = px+(point+.5)*band+series_index*width-(len(series)-1)*width/2
-                top_y = _positions([value], y_low, y_high, y_scale, py+ph, -ph)[0]
+                centres.append(centre)
+                top_y = points[point]
                 elements.append(_shape(f'chart:{chart["id"]}:bar:{series_index}:{point}',
                                        [centre-width/2, min(top_y, zero), width, abs(zero-top_y)],
                                        color))
+            mark_x = centres
         else:
-            points = _positions(entry['values'], y_low, y_high, y_scale, py+ph, -ph)
-            xs = _positions(x_values, x_low, x_high, x_scale, px, pw)
-            elements.append(_polyline(f'chart:{chart["id"]}:line:{series_index}', xs, points, color))
+            mark_x = xs
+            if chart['kind'] == 'line':
+                elements.append(_polyline(f'chart:{chart["id"]}:line:{series_index}', xs, points, color))
             for point, (cx, cy) in enumerate(zip(xs, points)):
                 elements.append(_shape(f'chart:{chart["id"]}:dot:{series_index}:{point}',
                                        [cx-3, cy-3, 6, 6], color, 'ellipse'))
+        errors = entry.get('y_error')
+        if errors:
+            for point, (cx, value, bar) in enumerate(zip(mark_x, entry['values'], errors)):
+                if bar <= 0:
+                    continue
+                low = _positions([value-bar], y_low, y_high, y_scale, py+ph, -ph)[0]
+                high = _positions([value+bar], y_low, y_high, y_scale, py+ph, -ph)[0]
+                commands = [('M', cx, low), ('L', cx, high),
+                            ('M', cx-4, low), ('L', cx+4, low),
+                            ('M', cx-4, high), ('L', cx+4, high)]
+                elements.append(_geometry_shape(
+                    f'chart:{chart["id"]}:error:{series_index}:{point}', commands, color))
+
+    # In-plot annotations: a short label near a chosen point, with a leader line.
+    for index, note in enumerate(chart.get('annotations') or []):
+        entry = series[note['series']]
+        xs = _positions(entry.get('x_values') or x_values, x_low, x_high, x_scale, px, pw)
+        points = _positions(entry['values'], y_low, y_high, y_scale, py+ph, -ph)
+        cx, cy = xs[note['point']], points[note['point']]
+        width = min(max(face.getlength(note['text'])+12, 60), pw*.55)
+        tx = min(max(cx+note.get('dx', 12), x+4), x+w-width-4)
+        ty = min(max(cy+note.get('dy', -18), y+4), y+h-32)
+        elements.append({**_text(f'chart:{chart["id"]}:annotation:{index}', note['text'],
+                                 [tx, ty, width, 28], ink, TICK_SIZE, 'left'),
+                         'node_id': f'annotation:{index}'})
+        edge_x = tx if cx < tx else tx+width
+        elements.append({**_geometry_shape(f'chart:{chart["id"]}:annotation-leader:{index}',
+                                           [('M', cx, cy), ('L', edge_x, ty+14)], muted, 1.2),
+                         'node_id': f'annotation:{index}'})
 
     # Axis titles.
     elements.append(_text(f'chart:{chart["id"]}:x-title', chart['x']['label'],
@@ -197,19 +251,19 @@ def compile_chart(chart, bbox, theme, font_paths):
     elements.append(_text(f'chart:{chart["id"]}:y-title', y_label,
                           [px, y+2, pw, 32], ink, LABEL_SIZE, 'left', role='body'))
 
-    # Legend: always shown above the plot on the right, one row.
+    # Legend: series order left-to-right, right-aligned above the plot.
     legend = []
-    cursor = px+pw
+    widths = [face.getlength(entry['label'])+8 for entry in series]
+    total = sum(widths)+22*len(series)
+    if total > pw*.6:
+        raise ChartLayoutError('chart legend does not fit the plot width')
+    cursor = px+pw-total
     for series_index, entry in enumerate(series):
         color = PALETTE[series_index % len(PALETTE)]
-        width = face.getlength(entry['label'])+8
-        cursor -= width+6
+        legend.append(_shape(f'chart:{chart["id"]}:swatch:{series_index}', [cursor, y+10, 10, 10], color))
         legend.append(_text(f'chart:{chart["id"]}:legend:{series_index}', entry['label'],
-                            [cursor, y+2, width, 28], ink, TICK_SIZE, 'left'))
-        legend.append(_shape(f'chart:{chart["id"]}:swatch:{series_index}', [cursor-14, y+10, 10, 10], color))
-        cursor -= 14
-        if cursor < px+pw*.45:
-            raise ChartLayoutError(f'chart legend does not fit: {entry["label"]!r}')
+                            [cursor+16, y+2, widths[series_index], 28], ink, TICK_SIZE, 'left'))
+        cursor += widths[series_index]+22
     elements.extend(legend)
 
     # Provenance and the illustrative badge.
