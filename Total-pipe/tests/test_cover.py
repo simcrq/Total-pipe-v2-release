@@ -36,7 +36,8 @@ def deck(**overrides):
 
 class CoverDesignTests(unittest.TestCase):
     def test_a_cover_may_be_empty(self):
-        design = {'pages': [cover_page(),
+        design = {'setting': {'audience': '同行', 'occasion': 'group-meeting', 'reading': 'spoken'},
+                  'pages': [cover_page(),
                             {'id': 'P2', 'role': 'setup', 'claim': '条件固定。', 'form': 'text-stack',
                              'anchor': {'kind': 'none', 'why': '一句陈述'}, 'rationale': '一句陈述。',
                              'items': [{'id': 'a', 'text': 'Conditions are fixed.',
@@ -44,7 +45,8 @@ class CoverDesignTests(unittest.TestCase):
         self.assertEqual(validate_design(design, STORY, EVIDENCE), [])
 
     def test_only_a_cover_may_be_empty(self):
-        design = {'pages': [cover_page(form='text-stack')]}
+        design = {'setting': {'audience': '同行', 'occasion': 'group-meeting', 'reading': 'spoken'},
+                  'pages': [cover_page(form='text-stack')]}
         self.assertIn('only a cover may be empty', ' '.join(validate_design(design, STORY, EVIDENCE)))
 
 

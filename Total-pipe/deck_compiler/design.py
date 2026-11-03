@@ -34,7 +34,9 @@ FORMS = {
     # A text-only page still needs a composition. These three are the shapes a designer reaches
     # for when there is no figure: one statement that owns the page, two or three short groups
     # side by side, or a numbered set of points.
-    'statement': {'anchor': 'none', 'ir': 'one block at display size (component=metric) + 1-2 notes',
+    'statement': {'anchor': 'none', 'ir': 'one block at display size (component=metric) + 1-2 notes; set '
+                  'presentation.academic_design.type_scale="statement" so the number takes the poster step '
+                  '(88 px) while body and captions keep their deck sizes',
                   'use': '一页就是一句话：把结论放大成主句，其余为注'},
     'text-columns': {'anchor': 'none', 'ir': 'composite-research + layout_tree columns (fit=hug), 2-3 short blocks',
                      'use': '两三组短陈述并排（路线 | 数字 | 边界），把横向空间用起来'},
@@ -52,6 +54,76 @@ FORMS = {
 
 ANCHORS = ('figure', 'table', 'formula', 'graphic', 'number', 'none')
 ROLES = ('setup', 'problem', 'mechanism', 'result', 'limitation', 'closing', 'context')
+
+# The room, not the paper, decides what a page has to do. These five are the occasions a research
+# deck is actually presented in; the designer picks one and writes it into setting.occasion. Each
+# profile says who is listening, how long a page lives, and what a page in that room must survive --
+# it never names a layout, so it constrains the design without dictating the visual.
+OCCASIONS = {
+    'group-meeting': {
+        'label': '组会汇报',
+        'audience': '同组同行与导师；熟悉这篇论文的背景、方法与表征，不需要科普',
+        'length': '10–20 分钟',
+        'reading': 'spoken',
+        'expects': '页面会停在屏幕上被追问：每页要能被指着问，数字、图、机制自己站得住；'
+                   '讲者补的是细节，不是补页面缺的内容',
+        'avoid': '把摘要抄成一页；两三行字占满一页；为了好看加的装饰图',
+    },
+    'research-report': {
+        'label': '学术报告（会议 / 答辩）',
+        'audience': '同行，但不一定读过这篇；需要一条自洽的论证',
+        'length': '12–20 分钟',
+        'reading': 'mixed',
+        'expects': '页面要能独立读懂：问题、做法、证据、边界齐全；讲者不在时也成立',
+        'avoid': '离开讲者口述就散掉的页；只有结论没有依据的页',
+    },
+    'research-sharing': {
+        'label': '文献分享 / journal club',
+        'audience': '想快速理解这篇论文的同行；对背景有兴趣但未必熟',
+        'length': '20–30 分钟',
+        'reading': 'spoken',
+        'expects': '解释性更强：机制、图与结论的因果链要铺开，读者跟着你走一遍论文',
+        'avoid': '只报结果不讲怎么得到；把分享做成摘要朗读',
+    },
+    'lecture': {
+        'label': '讲课 / 教学',
+        'audience': '学生；需要概念铺垫，不能假定读过论文',
+        'length': '45–90 分钟',
+        'reading': 'mixed',
+        'expects': '节奏慢，定义、例子、推导各占其位；一页一个概念，允许重复与停顿',
+        'avoid': '研究论文式的密集结果页；一页塞三个新概念',
+    },
+    'commercial': {
+        'label': '商业路演 / 产品汇报',
+        'audience': '决策者与客户；时间短，关心价值、差异与可信度',
+        'length': '5–15 分钟',
+        'reading': 'spoken',
+        'expects': '一句主张、一个数字、一个视觉；每页只推进一步，装饰可以比学术场合多',
+        'avoid': '论文式的方法细节与边界讨论；需要背景知识才看得懂的图',
+    },
+}
+READINGS = ('spoken', 'read', 'mixed')
+
+
+def default_occasion(presentation_type, brief=''):
+    """The occasion a request most likely means, before the designer confirms it.
+
+    ``presentation_type`` is free text upstream (paper_presentation, seminar, ...), so the brief is
+    read too: a group meeting named in the requirements outranks a generic type.
+    """
+    text = f'{presentation_type or ""} {brief or ""}'.lower()
+    for needle, occasion in (('组会', 'group-meeting'), ('group meeting', 'group-meeting'),
+                             ('lab meeting', 'group-meeting'), ('journal club', 'research-sharing'),
+                             ('文献分享', 'research-sharing'), ('文献', 'research-sharing'),
+                             ('讲课', 'lecture'), ('课程', 'lecture'), ('lecture', 'lecture'),
+                             ('教学', 'lecture'), ('路演', 'commercial'), ('商业', 'commercial'),
+                             ('pitch', 'commercial'), ('commercial', 'commercial'),
+                             ('答辩', 'research-report'), ('defense', 'research-report'),
+                             ('conference', 'research-report'), ('会议', 'research-report')):
+        if needle in text:
+            return occasion
+    return 'research-report'
+
 NUMBER = re.compile(r'\d+(?:\.\d+)?(?:\s*[×x]\s*10\^?-?\d+)?%?')
 # A panel id is not a measurement: "Fig. 3e" names a source panel, and requiring its 3 in the
 # evidence rejected correct items that simply say which panel they show.
@@ -88,8 +160,13 @@ def story_items(story):
 def capabilities():
     from .art_direction import capabilities as art
     return {'contract': 'totalpipe.page-design', 'forms': FORMS, 'anchors': list(ANCHORS),
-            'roles': list(ROLES), 'art_direction': art(),
-            'rules': ['Every Story answer, key point and ending line belongs to exactly one page; one unit '
+            'roles': list(ROLES), 'occasions': OCCASIONS, 'readings': list(READINGS),
+            'art_direction': art(),
+            'rules': ['Name the room in setting before the pages: pick the occasion from occasions, say '
+                      'who is listening and what they already know, and whether a page is spoken to or '
+                      'read alone. Density and page shape answer to that room, not to a template; the same '
+                      'content in two rooms may legitimately be two decks.',
+                      'Every Story answer, key point and ending line belongs to exactly one page; one unit '
                       'may be elaborated by several items on its page.',
                       'A page may merge two thin Story entries, and one dense entry may be split.',
                       'Every number in a claim or item must occur in the evidence that item cites; LaTeX '
@@ -109,6 +186,21 @@ def validate_design(design, story, evidence):
         return ['page_design must be an object']
     if 'devices' in design:
         problems += [f'deck devices: {message}' for message in validate_devices(design['devices'], DECK)]
+    # The room is a design input, not a caption: without it, density and page shape are decided by
+    # habit. One line each is enough; the designer may add anything else it needs.
+    setting = design.get('setting')
+    if not isinstance(setting, dict):
+        problems.append('setting is required: who is in the room (audience), the occasion key from '
+                        f'occasions ({", ".join(OCCASIONS)}), and whether pages are spoken to, read '
+                        'alone or mixed (reading)')
+    else:
+        if not str(setting.get('audience') or '').strip():
+            problems.append('setting.audience is required: who is listening and what they already know')
+        if setting.get('occasion') not in OCCASIONS:
+            problems.append(f'setting.occasion must be one of {list(OCCASIONS)}, not '
+                            f'{setting.get("occasion")!r}')
+        if setting.get('reading') not in READINGS:
+            problems.append('setting.reading must be spoken, read or mixed')
     pages = design.get('pages')
     if not isinstance(pages, list) or not pages:
         return ['page_design.pages must be a non-empty list']
@@ -188,6 +280,7 @@ def validate_design(design, story, evidence):
 def summary(design):
     """The design decisions an IR author needs, without the Story bodies."""
     return {'devices': dict((design or {}).get('devices') or {}),
+            'setting': dict((design or {}).get('setting') or {}),
             'pages': [{'id': page.get('id'), 'role': page.get('role'), 'claim': page.get('claim'),
                        'form': page.get('form'), 'anchor': (page.get('anchor') or {}).get('kind'),
                        'devices': dict(page.get('devices') or {}),

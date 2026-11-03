@@ -12,7 +12,7 @@ DESIGN_TOKENS = {
     'figure_treatment': ('unframed', 'ruled-caption'),
     'decoration_policy': ('minimal', 'none'),
     'header_variant': ('standard', 'compact'),
-    'type_scale': ('standard', 'compact'),
+    'type_scale': ('standard', 'compact', 'statement'),
 }
 DESIGN_REQUIRED = {'style', 'title_treatment', 'density', 'figure_treatment', 'decoration_policy'}
 COMPOSITIONS = {
@@ -170,6 +170,11 @@ def preserve_scientific_terms(ir):
 
 
 def type_sizes(design):
+    # A statement page has nothing else on it: the number is the page, so it is allowed the one
+    # poster step the deck otherwise never uses. Body, takeaway and captions keep their deck sizes;
+    # only the promoted object changes.
+    if design['type_scale'] == 'statement':
+        return {'title': 44, 'display': 88, 'takeaway': 28, 'body': 28, 'heading': 28, 'caption': 22}
     return ({'title': 40, 'display': 34, 'takeaway': 26, 'body': 26, 'heading': 26, 'caption': 20}
             if design['type_scale'] == 'compact' else
             {'title': 44, 'display': 36, 'takeaway': 28, 'body': 28, 'heading': 28, 'caption': 22})

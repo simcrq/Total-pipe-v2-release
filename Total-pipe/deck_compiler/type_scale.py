@@ -16,6 +16,10 @@ text and never drops an evidence ref.
 # the figure or the table carry the page. 36 px is 27 pt against 21 pt body.
 DISPLAY = {'metric': (36, 32)}
 DISPLAY_COMPACT = {'metric': (34, 30)}
+# A page that is only a statement has no figure to carry it: the measure itself is the page, so it
+# gets the one poster step the deck never otherwise uses. This is opt-in per slide, never a default:
+# 88 px in a research deck reads as a claim the talk is willing to stand behind.
+DISPLAY_STATEMENT = {'metric': (88, 80)}
 DISPLAY_MAX_LINES = 2
 
 
@@ -34,13 +38,18 @@ def constraints(design=None):
             'floors': {'body': 18.0, 'annotation': 15.0},
             'rule': 'One body size per page. metric is the measured number the page is about and is set '
                     'one reading step above body copy; it is not a headline and never carries prose. '
+                    'The one exception is a page whose whole job is that number: set '
+                    'presentation.academic_design.type_scale="statement" and it takes the poster step '
+                    '(88 px) while every other role keeps its deck size. '
                     'A page that cannot hold its content at these sizes is split, not shrunk.'}
 
 
 def display_scale(block, design=None):
     """``(size, floor)`` for a block that owns the page, or ``None`` for body copy."""
     component = (block or {}).get('component')
-    table = DISPLAY_COMPACT if (design or {}).get('type_scale') == 'compact' else DISPLAY
+    scale = (design or {}).get('type_scale')
+    table = (DISPLAY_COMPACT if scale == 'compact' else
+             DISPLAY_STATEMENT if scale == 'statement' else DISPLAY)
     return table.get(component)
 
 

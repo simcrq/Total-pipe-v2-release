@@ -312,7 +312,8 @@
         "figure_treatment": {"enum": ["unframed", "ruled-caption"]},
         "decoration_policy": {"enum": ["minimal", "none"]},
         "header_variant": {"enum": ["standard", "compact"], "default": "compact"},
-        "type_scale": {"enum": ["standard", "compact"], "default": "standard"},
+        "type_scale": {"enum": ["standard", "compact", "statement"], "default": "standard",
+          "description": "statement promotes metric to the poster step (88 px) for a page that is only a number; body and captions keep deck sizes."},
         "accent_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
       },
       "allOf": [{

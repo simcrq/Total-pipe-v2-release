@@ -624,7 +624,13 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
 
 
 DESIGN_INSTRUCTIONS = (
-    'You are designing a research talk, not filling a template. You have the Story (what the talk '
+    'You are designing a research talk, not filling a template. The room comes before the page: the '
+    'request names a presentation type and a brief, and between them they say who is in the room, what '
+    'they already know, how long the talk runs and how long one page stays on screen, and whether the '
+    'page is spoken to or read on its own. Settle that first and write it down as deck.setting. It '
+    'decides density and page shape, not decoration: a page that stays up while the room argues has to '
+    'give the eye something to hold, and a page meant to be read alone cannot depend on the voice. Do '
+    'not import the habits of a different room. You have the Story (what the talk '
     'argues), the briefs (one unit of content each), the evidence behind them, the figure panels that '
     'exist, and the catalogue of forms and devices this compiler can actually draw. Everything you '
     'name is drawn natively and stays editable in PowerPoint. '
@@ -665,6 +671,12 @@ def design_task(prompt=None):
   证据原文、{figures} 张可用的论文图，以及这套编译器能画的**形式**（forms）和**设备**（devices）清单，
   每项都写了它买来什么、放不下时怎么退化。
 - **输出**：`work/page_design.json`，结构照输入里的 `shape`。
+- **先看场合，再排页**：输入里的 `room` 是这场报告的场合与对象。先从 `occasions` 里选一个键写进
+  `setting.occasion`：`group-meeting`（组会）、`research-report`（会议/答辩）、`research-sharing`
+  （文献分享）、`lecture`（讲课）、`commercial`（商业路演）。每个键都写了听众、时长、讲者口述还是听众
+  自读、以及“一页要扛住什么、别出现什么”。再写 `setting.audience`（听众是谁、已经知道什么）和
+  `setting.reading`（spoken/read/mixed）。后面的密度、文字量和页面形态都按它来；同一篇论文在这五种
+  场合里应该长得不一样。
 - **你的判断范围**：一页放哪条内容、用什么形式、要不要标签组/结论框/强调/出处/目录，都是你定。
   设备的退化写在清单里，用了不会让构建失败；一页确实不需要设备时，在 rationale 里写一句为什么。
 - **写完自查**：JSON 合法；每条 Story 的 answer / key_point / ending 恰好落在一页上；每个 item 引了
@@ -798,7 +810,7 @@ def execute(stage, job):
         write(work/'ir_prompt.json', prompt)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'deck_plan.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
-        from deck_compiler.design import capabilities as design_capabilities
+        from deck_compiler.design import capabilities as design_capabilities, default_occasion
         from deck_compiler.style import capabilities as style_capabilities
         from deck_compiler.type_scale import constraints
         workflow = read(work/'evidence_pointer.json')['workflow']
@@ -819,17 +831,39 @@ def execute(stage, job):
         capabilities = design_capabilities()
         prompt = {
             'request': {key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+            'room': {
+                'presentation_type': request['presentation_type'],
+                'brief': request['requirements'],
+                'default_occasion': default_occasion(request['presentation_type'], request['requirements']),
+                'occasions': capabilities['occasions'],
+                'settle_before_designing': [
+                    'which occasion this is — the five keys in occasions, each with its own audience, '
+                    'length, reading mode and what a page must survive in that room',
+                    'in this room, who is listening and what do they already know — what must not be explained again',
+                    'how long the talk runs and how long one page stays on screen before the next',
+                    'is the page spoken to, read alone, or both — who carries the detail, the voice or the page',
+                    'what the projector does to small type, thin rules and light greys at the back of the room',
+                ],
+                'why': 'The occasion is a constraint on density and page shape, not a template: a group '
+                       'meeting, a conference talk, a journal club, a lecture and a pitch legitimately '
+                       'produce different pages from the same paper. Write the chosen key into '
+                       'setting.occasion; refine the audience in setting.audience.',
+            },
             'story': read(work/'story_plan.json'),
             'briefs': briefs,
             'evidence': evidence,
             'figures': figures,
             'forms': capabilities['forms'],
+            'rules': capabilities['rules'],
             'devices': capabilities['art_direction'],
             'roles': capabilities['roles'],
             'type_scale': constraints(),
             'visual_style': style_capabilities(),
             'shape': {
                 'schema_version': '1.0', 'deck_id': '<string>',
+                'setting': {'audience': '<who, and what they already know>',
+                            'occasion': '<one key from occasions, e.g. group-meeting>',
+                            'reading': 'spoken|read|mixed'},
                 'devices': {'<deck device>': '<setting, e.g. sections/agenda/footer/page-numbers>'},
                 'pages': [{'id': 'P1', 'from_story': ['S1'], 'role': 'setup',
                            'claim': '<one declarative sentence the page argues>',

@@ -20,6 +20,10 @@ STACK_ALIGNMENTS = ('start', 'center', 'distribute')
 COLUMN_FITS = ('stretch', 'hug')
 UNDERFILL_RATIO = .15
 SPARSE_BALANCE_MAX_PX = 32.
+# A gap is a rhythm, not a filler. Past this a distributed gap stops reading as spacing between
+# two things and starts reading as a missing object, so the stack is centred instead.
+DISTRIBUTED_GAP_MAX_PX = 48.
+STACK_CENTER_MAX_PX = 56.
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
@@ -516,16 +520,16 @@ class RegionCompiler:
         remaining = max(0., usable-sum(heights))
         alignment = node.get('align', 'start')
         if kind == 'stack' and not weights and alignment == 'distribute' and len(rows) > 1:
-            if remaining <= height*UNDERFILL_RATIO*2:
+            even_gap = gap+remaining/(len(rows)-1)
+            if even_gap <= DISTRIBUTED_GAP_MAX_PX:
                 # Distribute the *gaps*, not the children: stretching a one-line block to 129 px
                 # made a three-line page read as three lines floating a hand's width apart.
-                gap = gap+remaining/(len(rows)-1)
+                gap = even_gap
                 remaining = 0.
             else:
-                # Little content, a lot of region: even gaps would be holes, and centring moves the
-                # text away from the title it belongs to. Keep the normal rhythm at the top and let
-                # the page be reported as sparse, so the composition changes instead of the spacing.
-                alignment = 'start'
+                # The even gap would be a hole. Centre the block instead: three lines that float a
+                # hand's width apart read as missing content, an evenly margined block reads as air.
+                alignment = 'center'
         elif kind == 'stack' and not weights and alignment == 'start' and remaining > height*UNDERFILL_RATIO:
             # Suggest legal relative weights, never pixel values. Check that rounding and the
             # schema's 100:1 ratio limit still leave every child above its measured hard floor.
@@ -537,7 +541,7 @@ class RegionCompiler:
                                       'set_stack_align_distribute', 'review_intentional_whitespace']}
             if all(usable*w/sum(suggested) >= m-.1 for w, m in zip(suggested, minimums)):
                 entry['underfill']['suggested_weights'] = suggested
-        cursor = y+(min(remaining/2, SPARSE_BALANCE_MAX_PX) if kind == 'stack' and alignment == 'center' else 0)
+        cursor = y+(min(remaining/2, STACK_CENTER_MAX_PX) if kind == 'stack' and alignment == 'center' else 0)
         for row, row_h in enumerate(heights):
             for col in range(columns):
                 index = row*columns+col

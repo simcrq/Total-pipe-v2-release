@@ -230,7 +230,7 @@ class LayoutTreeTests(unittest.TestCase):
         plan = nodes(layout)
         within = plan[1]['bbox'][1]-plan[0]['bbox'][1]
         self.assertGreaterEqual(within, 0)      # at the top, or nudged down ...
-        self.assertLessEqual(within, 32.5)      # ... but never by the whole slack
+        self.assertLessEqual(within, 56.5)     # ... but never by the whole slack
         self.assertEqual(plan[1]['bbox'][3], start[1]['bbox'][3])
         body['align'] = 'distribute'
         layout, issues = self.compile_ok(ir)

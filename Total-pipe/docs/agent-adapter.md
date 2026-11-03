@@ -74,6 +74,8 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 
 ```json
 {"schema_version":"1.0","deck_id":"<id>",
+ "setting":{"audience":"同组同行，已熟悉二维器件与浮栅存储","occasion":"group-meeting",
+            "reading":"spoken"},
  "devices":{"sections":[{"page":"P1","label":"背景"}],"agenda":{"title":"目录"},
             "footer":"组会报告","page-numbers":true},
  "pages":[
@@ -89,6 +91,14 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 与 `work/page_design_task.md`（任务书）。主 Agent 把这两份交给子代理，收回子代理写的
 `work/page_design.json` 再 advance。提示是**能力清单**——每个形式与设备买来什么、放不下怎么退化——
 不是规则清单；设计层按这场报告的需要选择，不要为了稳妥而不用。
+
+`setting` 是必填的**场合与对象**：`occasion` 从五个键里选一个——`group-meeting`（组会）、
+`research-report`（会议/答辩）、`research-sharing`（文献分享/journal club）、`lecture`（讲课）、
+`commercial`（商业路演）；`audience` 写听众是谁、已经知道什么；`reading` 写页面是讲者口述
+（`spoken`）、听众自读（`read`）还是两者兼有。它不直接产生版面，但决定密度与页面形态：同一篇论文在
+这五种场合里可以合理地长成五套不同的页。缺 `setting` 或 `occasion` 不在键里会报
+`PAGE_DESIGN_INVALID`；`room.default_occasion` 是接入层按 `presentation_type` 与 brief 猜的默认值，
+设计者可以改。
 
 - `forms` 是一份封闭的形式库（下表由 `deck_compiler.design.capabilities()` 发布），每个形式对应一个
   编译器能渲染的构图；`anchor` 必须与形式一致（表格页不能声明图作锚点）。

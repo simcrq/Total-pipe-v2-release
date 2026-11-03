@@ -21,6 +21,8 @@ EVIDENCE = {
 }
 DESIGN = {
     'schema_version': '1.0', 'deck_id': 'd',
+    'setting': {'audience': '同一课题组的同行', 'occasion': 'group-meeting',
+                'reading': 'spoken'},
     'pages': [
         {'id': 'P1', 'role': 'setup', 'claim': '基准为 N=512、100 次试验。',
          'takeaway_from': 'S1.answer',

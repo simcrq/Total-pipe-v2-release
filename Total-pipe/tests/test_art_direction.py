@@ -35,7 +35,8 @@ def design(first=None, second=None):
     ]
     pages[0].update(first or {})
     pages[1].update(second or {})
-    return {'pages': pages}
+    return {'setting': {'audience': '同行', 'occasion': 'group-meeting', 'reading': 'spoken'},
+            'pages': pages}
 
 
 STORY = {'story': [
