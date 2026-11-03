@@ -35,10 +35,11 @@ render_component(data, theme, bounds, font_paths=None)
 ```
 
 节点沿用五种形状和完整 title/body。`kind` 必须为 `activate`、`inhibit` 或 `associate`；
-分别使用箭头、T 端帽、无箭头连线。`basis` 必须为 `evidence` 或 `hypothesis`。
+分别使用箭头、T 端帽、无箭头连线。`basis` 必须为 `evidence`、`hypothesis` 或 `explain`。
 证据关系必须给非空 `evidence_refs`，并全部绑定到本页 `semantic.evidence_refs`；
-声明引用不等于编译器已验证科学结论。假设使用虚线并显示“假设”，可用 `label`
-补充关系文字，最长 80 字符。标签不低于 18 pt，找不到不遮挡节点/连线的空间时明确失败。
+声明引用不等于编译器已验证科学结论。假设使用虚线并显示“假设”；解释关系使用点线、不加前缀，
+用于机制图的补充说明：标签可写定性解释，但一旦引用数字仍需 `evidence_refs`。
+可用 `label` 补充关系文字，最长 80 字符。标签不低于 18 pt，找不到不遮挡节点/连线的空间时明确失败。
 
 普通边必须构成 DAG；只有明确写 `feedback: true` 的边允许从其后层返回前层。
 先按明确的正向边分层，再为反馈分配外侧正交通道。一般循环、自环、重复边、失效端点

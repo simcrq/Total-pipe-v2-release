@@ -84,6 +84,24 @@ class GraphicComponentTests(unittest.TestCase):
         self.assertNotIn('line_dash', actual)
         self.assertEqual(actual['evidence_refs'], ['fixture:relation'])
 
+    def test_explanatory_edges_are_dotted_and_qualitative(self):
+        ir = example()
+        edge = graph(ir)['edges'][0]
+        edge['basis'] = 'explain'
+        edge.pop('evidence_refs', None)
+        edge['label'] = '温度决定质量'
+        layout = self.compile_ok(ir)
+        actual = next(e for e in layout['slides'][0]['elements']
+                      if e['kind'] == 'connector' and e['id'].endswith(':A:B'))
+        self.assertEqual(actual['line_dash'], 'sysDot')
+        labels = [e for e in layout['slides'][0]['elements']
+                  if e.get('edge_id') == actual['id'] and e['kind'] == 'text']
+        self.assertTrue(labels)
+        self.assertFalse(labels[0]['source_text'].startswith('假设'))
+        # Qualitative glosses need no refs; a number in the label still does.
+        edge['label'] = '温度决定 95.8% 的良率'
+        self.assertTrue(any(i['severity'] == 'FAIL' for i in validate(ir)))
+
     def test_cycles_are_not_automatically_reclassified_as_feedback(self):
         ir = example()
         graph(ir)['edges'][-1].pop('feedback')

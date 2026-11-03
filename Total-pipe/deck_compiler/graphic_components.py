@@ -179,9 +179,10 @@ def validate_component(data):
                 continue
             if (set(edge)-{'from', 'to', 'kind', 'basis', 'evidence_refs', 'feedback', 'label'} or
                     edge.get('kind') not in ('activate', 'inhibit', 'associate') or
-                    edge.get('basis') not in ('evidence', 'hypothesis') or
+                    edge.get('basis') not in ('evidence', 'hypothesis', 'explain') or
                     not isinstance(edge.get('feedback', False), bool)):
-                errors.append('Mechanism edges require explicit kind and basis; feedback must be boolean')
+                errors.append('Mechanism edges require kind (activate/inhibit/associate) and basis '
+                              '(evidence/hypothesis/explain); feedback must be boolean')
             if not all(isinstance(edge.get(k), str) and edge[k] in ids for k in ('from', 'to')):
                 errors.append('Mechanism edge endpoints must reference existing nodes')
             else:
@@ -190,6 +191,9 @@ def validate_component(data):
             if (not isinstance(refs, list) or not all(isinstance(r, str) and r.strip() for r in refs)
                     or (edge.get('basis') == 'evidence' and not refs)):
                 errors.append('Evidence relationships require nonempty evidence_refs; hypotheses must be explicit')
+            if (edge.get('basis') == 'explain' and not refs
+                    and re.search(r'\d', str(edge.get('label', '')))):
+                errors.append('An explanatory edge is qualitative; a label quoting a number needs evidence_refs')
             if 'label' in edge:
                 title(edge['label'], 'Mechanism edge label')
             if not edge.get('feedback'):
@@ -347,6 +351,9 @@ def render_mechanism_graph(data, theme, bounds, font_paths=None):
             edge['tail_end'] = 'none'
         if relation['basis'] == 'hypothesis':
             edge['line_dash'] = 'dash'
+        elif relation['basis'] == 'explain':
+            # A supplementary explanation, not a measured relation: dotted, no "假设" prefix.
+            edge['line_dash'] = 'sysDot'
         if relation['kind'] == 'inhibit':
             ex, ey = edge['end']
             elements.append({'id': edge['id']+':inhibition', 'kind': 'shape', 'role': 'graphic-mark',

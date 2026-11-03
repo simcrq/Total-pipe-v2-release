@@ -378,7 +378,7 @@
             "properties": {
               "from": {"$ref": "#/$defs/identifier"}, "to": {"$ref": "#/$defs/identifier"},
               "kind": {"enum": ["activate", "inhibit", "associate"]},
-              "basis": {"enum": ["evidence", "hypothesis"]}, "feedback": {"type": "boolean"},
+              "basis": {"enum": ["evidence", "hypothesis", "explain"]}, "feedback": {"type": "boolean"},
               "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1, "pattern": "\\S"}},
               "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"}
             },
