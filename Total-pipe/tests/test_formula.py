@@ -30,7 +30,7 @@ class FormulaParseTests(unittest.TestCase):
         self.assertIn('<m:f>', omml)
         self.assertIn('<m:sSup>', omml)
         self.assertIn('xmlns:m=', omml)
-        self.assertEqual(F.to_plain(ast), 'E = 1/2 m v²')
+        self.assertEqual(F.to_plain(ast), 'E = 1\u20442 m v²')
 
     def test_sum_keeps_its_limits(self):
         ast = F.parse(r'\sum_{i=1}^{n} x_i')

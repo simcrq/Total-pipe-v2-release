@@ -5,7 +5,7 @@ import re
 from PIL import Image, ImageFont
 from . import audience
 from .catalog import ARCHETYPES
-from .capacity import FORMULA_GAP, FORMULA_LABEL_MAX, FORMULA_SIZES
+from .capacity import DISPLAY_FORMULA_SIZES, FORMULA_GAP, FORMULA_LABEL_MAX, FORMULA_SIZES
 from .formula_layout import formula_groups, plan_formula_flow, FormulaCapacityError
 from .contracts import TextBoxContract, digest, file_hash, issue
 from .ir import validate
@@ -13,8 +13,9 @@ from .layout_tree import walk as walk_regions
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
                              graphic_texts, intentional_overlap)
 from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
-from .visual_design import (header_decoration, header_layout, preserve_scientific_terms,
+from .visual_design import (TITLE_BOX_LINES, header_decoration, header_layout, preserve_scientific_terms,
                             resolve_design, rule, type_sizes)
+from totalpipe_layout.inline_math import has_markup, strip_markup, unmatched_markers
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -52,8 +53,46 @@ ANNOTATION_ROLES = {"caption", "caveat", "footer", "badge"}
 def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
     """Height of a caption strip: the wrapped line count at the size it is set in."""
     from .fonts import load_font_file
-    lines = break_lines(caption, load_font_file(font_file, size), max(1, width))
+    lines = break_lines(strip_markup(caption), load_font_file(font_file, size), max(1, width))
     return max(34.0, len(lines) * size * 1.25 + 8)
+
+
+def caption_with_source(ref):
+    """A panel's caption with its provenance set as a weakened prefix.
+
+    A paper panel belongs to a figure, an author and a panel letter; a caption that only says what
+    is plotted makes the reader hunt for the source. The label is part of the measured caption, so
+    the strip grows by the characters it costs — it is never a separate text box that could drift
+    onto the picture.
+    """
+    label = str((ref or {}).get('source_label') or '').strip()
+    caption = str((ref or {}).get('caption') or '')
+    if not label or not caption:
+        return caption
+    return f'[[{label}]] · {caption}'
+
+
+def caption_measure(ref, width, font_file):
+    """``(height, lines)`` of a caption strip, measured the way it will be set.
+
+    A labelled caption is set as runs, so it is measured by the inline engine that draws it: the
+    plain wrapper and the run engine break lines slightly differently, and a strip that reserved
+    one line too few would silently shrink the caption to its floor.
+    """
+    from .fonts import load_font_file
+    content = caption_with_source(ref) if isinstance(ref, dict) else str(ref or '')
+    size = float((ref or {}).get('caption_font_size', CAPTION_FONT_SIZE))
+    if not content:
+        return 0., 0
+    if has_markup(content):
+        from totalpipe_layout.inline_math import InlineWidthError, measure_inline
+        try:
+            plan = measure_inline(content, max(1., width), load_font_file(font_file, int(size)), int(size))
+            return max(34.0, plan['height']+8), len(plan['lines'])
+        except InlineWidthError:
+            pass
+    lines = break_lines(strip_markup(content), load_font_file(font_file, int(size)), max(1., width))
+    return max(34.0, len(lines)*size*1.25+8), len(lines)
 
 
 def body_bottom(slide, family, spacious):
@@ -158,7 +197,11 @@ def native_list_height(block, width, font_file, gap_ratio=DEFAULT_LIST_GAP, padd
 
 
 def text_floor_height(text, width, font_file, floor=24, max_lines=10, inline_math=False):
-    """Height of ``text`` at the 18 pt floor, or None when it cannot fit in ``max_lines``."""
+    """Height of ``text`` at ``floor`` px, or None when it cannot fit in ``max_lines``.
+
+    Body copy is measured at the size it will be set at (21 pt, not the 18 pt emergency floor), so a
+    slot is big enough for the page's one body size instead of being shrunk back to the floor later.
+    """
     face = ImageFont.truetype(font_file, floor)
     if inline_math:
         from totalpipe_layout.inline_math import InlineWidthError, measure_inline
@@ -181,17 +224,17 @@ def formula_label_width(label, bold_font_file, size=24):
     return min(FORMULA_LABEL_MAX, max(56.0, float(face.getlength(label)) + 12))
 
 
-def formula_widths(text):
+def formula_widths(text, sizes=None):
     """Measured metrics at every allowed size, widest (the floor) last."""
     from totalpipe_layout.formula import measure, parse
     ast = parse(text)
-    return {size: measure(ast, size) for size in FORMULA_SIZES}
+    return {size: measure(ast, size) for size in (sizes or FORMULA_SIZES)}
 
 
-def formula_fit(text, width):
+def formula_fit(text, width, sizes=None):
     """Metrics of the largest allowed size whose measured width fits ``width``, else None."""
-    widths = formula_widths(text)
-    for size in FORMULA_SIZES:
+    widths = formula_widths(text, sizes)
+    for size in (sizes or FORMULA_SIZES):
         if widths[size].width <= width:
             return widths[size]
     return None
@@ -340,7 +383,31 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  empty_share=round(share, 3))
 
 
-def graphic_page_regions(composition, region, assets, font_paths, visual_plan=None, *,
+def sparse_text_page(entry, elements):
+    """Whether this stack is the bare-document look: text only, less than half its region filled.
+
+    The measure is one stack's own region, so a page that already carries a figure, table or
+    graphic elsewhere is not sparse text even when its text column is short: that page has a
+    composition, and advising it to "use two columns" describes columns it already has. Only a
+    page whose ink is all stacked text gets the warning.
+    """
+    if entry['type'] != 'stack' or entry['bbox'][3] <= 0:
+        return False
+    prefix = entry['component']
+    own = [e for e in elements if (e.get('layout_component') or '').startswith(prefix)]
+    if not own:
+        return False
+    if any(e['kind'] in ('image', 'table', 'math', 'connector') or e.get('graphic_id') for e in own):
+        return False
+    # A connector is a rule or an arrow, not a composition; only real visual objects count as the
+    # page's other half.
+    if any(e['kind'] in ('image', 'table', 'math') or e.get('graphic_id') for e in elements
+           if not (e.get('layout_component') or '').startswith(prefix)):
+        return False
+    return entry['requirements']['preferred_height_px']/entry['bbox'][3] < .5
+
+
+def graphic_page_regions(composition, region, assets, font_paths, visual_plan=None, *, design=None,
                          list_gap_ratio=DEFAULT_LIST_GAP, list_padding=(0, 0), bullet_style='large_square'):
     """Finite page-level candidates; graph internals stay with compile_graphic.
 
@@ -353,7 +420,8 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
     if visual_plan and not figures:
         from .academic_layout import graphic_without_evidence
         yield from graphic_without_evidence(composition, region, font_paths, visual_plan,
-                                             list_gap_ratio=list_gap_ratio, bullet_style=bullet_style)
+                                             design=design, list_gap_ratio=list_gap_ratio,
+                                             bullet_style=bullet_style)
         return
 
     def need(block, w):
@@ -367,7 +435,12 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
             metrics = formula_fit(block['text'], w-20-(label_w+12 if label_w else 0))
             return max(30 if label else 0, metrics.height+12) if metrics else 10000
         label_h = (40 if composition['archetype'] == 'figure-parameters' else 44) if label else 0
-        return label_h + (text_floor_height(block['text'], w, font_paths['font_file'], inline_math=block.get('inline_math', False)) or 10000)
+        from .type_scale import body_size, display_floor
+        display = display_floor(block, design)
+        return label_h + (text_floor_height(block['text'], w, font_paths['font_file'],
+                                            floor=display or body_size(design),
+                                            max_lines=2 if display else 10,
+                                            inline_math=block.get('inline_math', False)) or 10000)
 
     def rows(w, bx, by):
         boxes = []
@@ -428,8 +501,8 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
     ref, asset = figures[0], assets[figures[0]['asset_id']]
     extent = ref.get('min_panel_extent', 220)
     image_h = max(extent, extent*ref.get('panel_count', 1)*asset['height']/asset['width'])
-    ch = (ref.get('caption_height') or caption_height(ref['caption'], figure_w,
-          font_paths['font_file'], ref.get('caption_font_size', 22))) if ref['caption'] else 0
+    ch = (ref.get('caption_height') or caption_measure(ref, figure_w, font_paths['font_file'])[0]
+          ) if ref['caption'] else 0
     lower_h = max(context_h, image_h+ch+12)
     lower_y = y+height-lower_h
     shares = ratios(visual_plan.get('graphic_width_ratio', 1.0), .4, 1.0) if visual_plan else [1.0]
@@ -439,6 +512,145 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
                'figures': [[figure_x, lower_y, figure_w, lower_h]],
                'graphic': [x+(width-width*graphic_share)/2, y, width*graphic_share, height-lower_h-gap],
                **({'graphic_width_ratio': graphic_share} if visual_plan else {})}
+
+
+# Page furniture sits below the caveat strip: a hairline and a page number are the cheapest signal
+# that a deck is a finished document rather than a strip of screenshots. It is deliberately the
+# quietest object on the page — supporting ink, 15-16 pt — so it never competes with the content.
+FOOTER_RULE_Y = 664.0
+FOOTER_TEXT_Y = 672.0
+FOOTER_TEXT_H = 28.0
+FOOTER_NUMBER_BOX = [1160, FOOTER_TEXT_Y, 64, FOOTER_TEXT_H]
+FOOTER_TEXT_BOX = [56, FOOTER_TEXT_Y, 880, FOOTER_TEXT_H]
+
+
+def page_furniture_elements(elements, text, number, slide, presentation, design, furniture):
+    """Bottom rule, page number and the deck's own footer line on a designed page.
+
+    Evidence ids are traceability keys and stay in the speaker notes; what the audience needs is a
+    number they can refer to and a line that says whose deck this is. Both are opt-out per deck
+    (``presentation.page_numbers``) and per page (``presentation.page_number``).
+    """
+    if not design or furniture.get('furniture', 'rule') == 'none':
+        return
+    if (slide.get('composition') or {}).get('archetype') == 'cover':
+        return      # the page before page 1 carries no number and no footer
+    numbering = slide.get('presentation', {}).get('page_number',
+                                                  presentation.get('page_numbers', True))
+    footer = presentation.get('footer')
+    if numbering is False and not footer:
+        return
+    elements.append({'id': 'page:rule', 'kind': 'shape', 'role': 'decoration',
+                     'bbox': [56, FOOTER_RULE_Y, 1168, 1], 'geometry': 'rect',
+                     'fill': furniture['rule'], 'line': 'none', 'line_width': 0,
+                     'visual_decoration': True})
+    if footer:
+        text('page:footer', footer, list(FOOTER_TEXT_BOX), 'footer', furniture['footer_size'], 20, 1,
+             color=furniture['footer_ink'])
+    if numbering is not False:
+        text('page:number', str(number), list(FOOTER_NUMBER_BOX), 'footer',
+             furniture['number_size'], 20, 1, color=furniture['number_ink'], align='right')
+
+
+# A table of contents is a page the deck already knows how to write: the sections are the ones the
+# author marked with presentation.section and the page numbers are the compiler's own. Nothing here
+# is new content, so the page never consumes a Story item and never invents a page reference.
+AGENDA_ROW_GAP = 52.0
+AGENDA_NUMBER_W = 64.0
+AGENDA_DOT = '·'
+AGENDA_MAX_SECTIONS = 8
+
+
+def agenda_sections(ir):
+    """``[(label, first slide index)]`` in deck order, one entry per section start."""
+    sections, current = [], None
+    for index, slide in enumerate(ir.get('slides') or [], 1):
+        label = str((slide.get('presentation') or {}).get('section') or '').strip()
+        if label and label != current:
+            sections.append((label, index))
+            current = label
+    return sections
+
+
+def _fitted_element(eid, content, bbox, role, size, font_file, family, color,
+                    floor=None, max_lines=1, align=None):
+    """One measured text element for a page the compiler writes itself."""
+    contract = TextBoxContract(family, size, font_file,
+                               font_weight=700 if role in ('title', 'heading') else 400,
+                               font_floor=floor or size, max_lines=max_lines, vertical_anchor='top')
+    output, fitted = fit_text(content, bbox, contract)
+    element = {'id': eid, 'kind': 'text', 'role': role, 'text': output, 'source_text': content,
+               'bbox': list(bbox), 'contract': fitted.to_dict(), 'color': color}
+    if align:
+        element['align'] = align
+    return element
+
+
+def agenda_slide(agenda, sections, theme, font_paths, design, number, furniture, footer_text=None):
+    """The generated contents page: numbered sections, dot leaders, the page each one starts on.
+
+    The label text is the author's own section name; the dot leader is measured against the same
+    font that draws it and the number column is right-aligned, so the rows read as a contents page
+    instead of as a list of sentences.
+    """
+    family, regular, bold = theme['font_family'], font_paths['font_file'], font_paths['bold_font_file']
+    from .style import named_color
+    title_size = type_sizes(design)['title']
+    header = header_layout(design)
+    rows_top = header['body_top']+8
+    ink = theme.get('foreground', '#142735')
+    accent = theme.get('accent', DEFAULT_ACCENT)
+    elements = [_fitted_element('agenda:title', str(agenda.get('title') or '目录'), header['title'],
+                                'title', title_size, bold, family, accent, max_lines=1)]
+    if design['title_treatment'] == 'thin-rule':
+        elements.append(rule('agenda:title-rule', header['rule'], design))
+    size = float(type_sizes(design)['body'])
+    face = ImageFont.truetype(regular, int(size))
+    dot = face.getlength(AGENDA_DOT) or 1.
+    muted = named_color('muted', theme)
+    for index, (label, first) in enumerate(sections[:AGENDA_MAX_SECTIONS], 1):
+        y = rows_top+(index-1)*AGENDA_ROW_GAP
+        row_w = 1168-AGENDA_NUMBER_W-24
+        numbered = f'{index:02d}  {label}'
+        label_w = face.getlength(numbered)
+        # The label box hugs its own text: a box spanning the whole row would overlap the leader
+        # that starts where the text ends.
+        text_w = min(row_w, label_w+6)
+        elements.append(_fitted_element(f'agenda:row:{index}', numbered, [56, y, text_w, 30], 'body',
+                                        size, regular, family, ink, floor=24, max_lines=1))
+        # The leader is its own run so it can stay in the supporting ink: a row of dots at body
+        # weight competes with the section names it is supposed to point at.
+        leader_x, leader_w = 56+text_w+8, row_w-text_w-8
+        dots = max(0, int(leader_w/dot))
+        if dots:
+            # A couple of pixels of slack keeps OfficeCLI's width estimate from calling the leader
+            # a two-line paragraph; PowerPoint draws it on one line either way.
+            elements.append(_fitted_element(f'agenda:leader:{index}', AGENDA_DOT*dots,
+                                            [leader_x, y, min(leader_w, dots*dot+3), 30], 'body', size,
+                                            regular, family, muted, floor=24, max_lines=1))
+        page = first+1 if first > 1 else first     # the agenda page itself shifts later pages by one
+        elements.append(_fitted_element(f'agenda:page:{index}', str(page),
+                                        [56+row_w+24, y, AGENDA_NUMBER_W, 30], 'badge',
+                                        float(furniture['number_size']), regular, family,
+                                        furniture['number_ink'], floor=20, max_lines=1, align='right'))
+    if furniture.get('furniture', 'rule') != 'none':
+        elements.append({'id': 'page:rule', 'kind': 'shape', 'role': 'decoration',
+                         'bbox': [56, FOOTER_RULE_Y, 1168, 1], 'geometry': 'rect',
+                         'fill': furniture['rule'], 'line': 'none', 'line_width': 0,
+                         'visual_decoration': True})
+    footer = footer_text or (agenda.get('footer') if isinstance(agenda, dict) else None)
+    if footer:
+        elements.append(_fitted_element('page:footer', str(footer), list(FOOTER_TEXT_BOX), 'footer',
+                                        float(furniture['footer_size']), regular, family,
+                                        furniture['footer_ink'], floor=20, max_lines=1))
+    if number is not None:
+        elements.append(_fitted_element('page:number', str(number), list(FOOTER_NUMBER_BOX), 'footer',
+                                        float(furniture['number_size']), regular, family,
+                                        furniture['number_ink'], floor=20, max_lines=1, align='right'))
+    return {'id': 'agenda', 'background': theme.get('background', '#FFFFFF'),
+            'notes': '目录页：由 presentation.section 的章节标记生成，页码由编译器按最终页序计算。',
+            'elements': elements,
+            'adaptation_log': [{'action': 'agenda', 'sections': [label for label, _ in sections]}]}
 
 
 def geometry_issues(elements, number):
@@ -481,6 +693,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     design = resolve_design(ir)
     preserve_terms = preserve_scientific_terms(ir)
     theme = {**ir['theme'], **({'accent': design['accent_color']} if design else {})}
+    from .style import StyleError, resolve as resolve_style
+    try:
+        theme['_visual_style'] = resolve_style(ir.get('presentation'))
+    except StyleError as error:
+        issues.append(issue('VISUAL_STYLE_INVALID', 'FAIL', str(error), detector='geometric-preflight'))
+        return None, issues
+    from .style import page_furniture, text_styles
+    text_inks = text_styles(theme)
+    furniture = page_furniture(theme)
     # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
     # another operating system, and a deck that cannot find its declared face is still deliverable in
     # a substituted one. Only "no font anywhere" is a FAIL.
@@ -568,7 +789,21 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     for n, slide in enumerate(ir["slides"], 1):
         sem, comp = slide["semantic"], slide["composition"]
         visual_plan = slide['presentation'].get('visual_plan')
-        blocks, figs = comp["blocks"], comp["figure_refs"]
+        # Deck IR fallback: a block whose text is several paragraphs is a list, even when the author
+        # forgot to say so. The copy keeps the caller's IR untouched.
+        from .text_flow import fallback_list
+        blocks = [fallback_list(block) for block in comp["blocks"]]
+        comp = {**comp, "blocks": blocks}
+        figs = comp["figure_refs"]
+        # A page whose only object is one equation is an equation page: let it use the display
+        # ladder, so the formula is the anchor instead of a body-sized line. Long equations fall
+        # back down the ladder on their own when the measured width does not fit.
+        formula_sizes = FORMULA_SIZES
+        equation_page = (len([b for b in blocks if b.get('component') == 'formula']) == 1
+                         and not figs and not comp.get('tables') and not comp.get('graphics')
+                         and len(blocks) <= 4)
+        if equation_page:
+            formula_sizes = DISPLAY_FORMULA_SIZES+FORMULA_SIZES
         show_sequence = sequence_flow(comp)
         visual_intent = comp.get("visual_intent") or {}
         family = ARCHETYPES[comp["archetype"]]["layout"]
@@ -594,11 +829,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 contract = replace(contract, line_height=max(contract.line_height, marker['line_height_px']/size))
             measure_box = [*bbox[:2], bbox[2]-(marker['gutter'] if marker else 0), bbox[3]]
             overflow = None
-            if inline_math:
+            # Authored emphasis is a measured run, not a decoration: the phrase is set in the bold
+            # face, so it is laid out by the same inline engine that already handles a formula in a
+            # sentence. Text without markers keeps the plain, cheaper path byte for byte.
+            markup = has_markup(content)
+            if inline_math or markup:
                 from .inline_text import fit_inline, text_body
                 from totalpipe_layout.inline_math import InlineWidthError
                 try:
-                    plan, fitted, overflowed = fit_inline(content, measure_box, contract, preserve_terms and eid in scientific_text_ids, marker)
+                    plan, fitted, overflowed = fit_inline(content, measure_box, contract, preserve_terms and eid in scientific_text_ids, marker,
+                                                          font_paths['bold_font_file'])
                 except InlineWidthError as error:
                     issues.append(issue('INLINE_FORMULA_SPACE', 'FAIL', str(error), n, eid,
                         detector='geometric-preflight', required_size_px=[error.required_width, 0],
@@ -612,12 +852,23 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     bbox = [*bbox[:3], max(bbox[3], plan['height']+contract.inset['top']+contract.inset['bottom'])]
                     issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
                         f'{eid}: complete mixed text and formulas retained beyond the nominal slot.', n, eid, detector='geometric-preflight'))
+                unpaired = unmatched_markers(content)
+                if unpaired:
+                    # A marker pair that was never closed stays visible. Refusing the page would be
+                    # worse than showing the author what to fix, so the phrase is set literally and
+                    # the page is reported.
+                    issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
+                        f"{eid}: {', '.join(unpaired)} is set literally; close the marker or escape it.",
+                        n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
                 colour = color or theme.get('foreground', '#142735')
                 elements.append({'id': eid, 'kind': 'text', 'role': role, 'text': plan['text'], 'source_text': content,
                     'bbox': bbox, 'contract': fitted.to_dict(), 'color': colour, 'inline_math': True,
-                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left', marker=marker),
+                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left', marker=marker,
+                                                                   styles=text_inks),
                     **({'bullet': marker, 'leading_marker': True} if marker else {}),
                     **({'align': align} if align else {}), **({'scientific_text_overflow': overflow} if overflow else {})})
+                if plan['marks']:
+                    adaptations.append({'action': 'inline_emphasis', 'element': eid, 'marks': plan['marks']})
                 if plan['formula_count']:
                     issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
                         f'{eid}: verify native inline baseline, line spacing and formula bounds in PowerPoint.',
@@ -626,7 +877,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             try:
                 output, fitted = fit_text(content, measure_box, contract)
             except ValueError:
-                if preserve_terms and eid in scientific_text_ids and min(bbox[2:]) > 0:
+                if preserve_terms and eid in scientific_text_ids and min(bbox[2:]) > 0 and role != 'title':
                     wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), measure_box[2])
                     output = '\n'.join(wrapped)
                     overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
@@ -650,8 +901,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                     font_metrics="pillow", characters=''.join(sorted(gaps))[:20]))
             # The declared scale, checked on the fitted size: an annotation may be 15 pt, body copy
             # may not. This is the rule the old code implied with two different floors and never
-            # stated, which is how a 13.5 pt footer shipped beside 18 pt body text.
-            minimum_pt = ANNOTATION_MIN_PT if role in ANNOTATION_ROLES else BODY_MIN_PT
+            # stated, which is how a 13.5 pt footer shipped beside 18 pt body text. A diagram label
+            # is annotation: a node body is a caption inside a shape, not running copy.
+            annotation = role in ANNOTATION_ROLES or eid.startswith('graphic:')
+            minimum_pt = ANNOTATION_MIN_PT if annotation else BODY_MIN_PT
             if fitted.font_size * .75 < minimum_pt - .01:
                 issues.append(issue("TYPOGRAPHY_FLOOR", "FAIL",
                                     f"{eid} is set at {fitted.font_size*.75:.1f} pt; the {role} "
@@ -663,6 +916,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 # A soft break, not a new paragraph: OfficeCLI's overflow estimator counts every
                 # paragraph of a pre-broken footer as one line more than the renderer draws.
                 output = output.replace("\n", "\v")
+            unpaired = unmatched_markers(content)
+            if unpaired:
+                issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
+                    f"{eid}: {', '.join(unpaired)} is set literally; close the marker or escape it.",
+                    n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
             elements.append({"id": eid, "kind": 'list' if marker else "text", "role": role,
                              "text": output.replace('\n', '\v') if marker else output,
                              **({'items': [output.split('\n')], 'bullet': marker,
@@ -705,9 +963,30 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             else:
                 text('takeaway', sem['takeaway'], slot, 'takeaway', size, 24, lines,
                      color=color, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
-        if design:
+        if design and family == 'cover':
+            # A cover is the page the design layer can ask for that carries no content blocks: the
+            # title says what the talk is, one line says why it is worth the next forty minutes, and
+            # a short accent rule sets the tone without a picture. It is deliberately the only page
+            # whose title does not sit in the header box.
+            sizes = type_sizes(design)
+            elements.append(rule('cover:rule', [56, 268, 136, 4], design))
+            text('title', sem['title'], [56, 300, 1100, 116], 'title', sizes['title'], sizes['title'], 2)
+            text('takeaway', sem['takeaway'], [56, 462, 980, 96], 'takeaway', sizes['takeaway'], 24, 3)
+            adaptations.append({'action': 'cover', 'title': sem['title']})
+            # A cover has no caveat strip and no page furniture: it is the page before page 1.
+            visible_caveats = []
+            caveat_y, caveat_h = 604, 46
+        elif design:
             header = header_layout(design, slide, font_paths, preserve_terms)
-            text('title', sem['title'], header['title'], 'title', 44, 36, header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
+            # One title size for the whole deck; the header grew instead of the title shrinking.
+            title_pt = header.get('title_size', type_sizes(design)['title'])
+            text('title', sem['title'], header['title'], 'title', title_pt, title_pt,
+                 header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
+            if header.get('title_lines', 2) >= TITLE_BOX_LINES and len(
+                    break_lines(sem['title'], ImageFont.truetype(font_paths['bold_font_file'], int(title_pt)), 1168)) > TITLE_BOX_LINES:
+                issues.append(issue('TITLE_TOO_LONG', 'FAIL',
+                    'The title needs more than three lines at the deck title size; shorten it or split the page.',
+                    n, 'title', detector='geometric-preflight', suggested_actions=['shorten_title', 'split_slide']))
             takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
             elements.extend(header_decoration(design, header))
             caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
@@ -761,7 +1040,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 inner = [box[0]+gaps, box[1]+6, box[2]-gaps-20 if label_w else box[2]-20,
                          box[3]-12]
                 chosen = None
-                for size_px in ([formula_size] if formula_size is not None else FORMULA_SIZES):
+                for size_px in ([formula_size] if formula_size is not None else formula_sizes):
                     metrics = measure(ast, size_px)
                     if metrics.width <= inner[2]+.5 and metrics.height <= inner[3]+.5:
                         chosen = (size_px, metrics)
@@ -792,7 +1071,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 colour = theme.get("foreground", "#142735")
                 elements.append({
                     "id": b["id"], "kind": "math", "role": "formula", "bbox": bbox,
-                    "omml": to_omml_paragraph(ast, size_px, colour),
+                    "omml": to_omml_paragraph(ast, size_px, colour,
+                                              fallback_font=font_paths["font_file"],
+                                              box_width=inner[2]),
                     "plain": to_plain(ast), "font_size_px": size_px,
                     "measured_exact": metrics.exact, "source_text": b["text"],
                     "color": colour})
@@ -808,6 +1089,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
             if b.get('inline_math'):
                 flow = {**flow, 'mode': 'plain'}
+            if flow['mode'] == DISTRIBUTED_ARROW_LIST and has_markup(b['text']):
+                # A native list is one run style across its items: the words stay, the emphasis
+                # cannot. Report it instead of shipping a bullet with visible ** in it.
+                flow = {**flow, 'items': [strip_markup(item) for item in flow['items']]}
+                issues.append(issue('EMPHASIS_IN_LIST', 'REVIEW',
+                    f"{b['id']}: a native list carries one run style, so emphasis markers are set as plain text; "
+                    "use text_flow=plain to keep the emphasis.", n, b['id'], detector='geometric-preflight',
+                    suggested_actions=['text_flow_plain', 'drop_markers']))
             pad_x, pad_y = (0, 0) if design else (28, 18)
             measured_list_height = (native_list_height(
                 b, max(520, box[2]), font_paths["font_file"], list_gap_ratio,
@@ -930,7 +1219,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
             text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
             emphasis_color = theme.get("accent", DEFAULT_ACCENT) if b["id"] == visual_intent.get("emphasis") else None
-            text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color, inline_math=b.get('inline_math', False))
+            from .type_scale import display_floor, display_size
+            size, floor = display_size(b, design), display_floor(b, design)
+            if size:
+                # A promoted object is the page's anchor: display role keeps its own floor instead
+                # of being capped by the body size the rest of the page uses.
+                text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], "display",
+                     size, floor, 2, color=emphasis_color, inline_math=b.get('inline_math', False))
+            else:
+                text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color, inline_math=b.get('inline_math', False))
         def formula_flow(bs, box, max_columns=1, preferred_columns=1):
             try:
                 plan = plan_formula_flow(bs, box, font_paths, comp['archetype'],
@@ -966,7 +1263,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 return
             from .academic_layout import block_height
             gap = 24 if comp['archetype'] == 'figure-parameters' else 18
-            needs = [block_height(b, box[2], font_paths, comp['archetype'],
+            needs = [block_height(b, box[2], font_paths, comp['archetype'], design=design,
                                   list_gap_ratio=list_gap_ratio, bullet_style=bullet_style) for b in bs]
             total = sum(needs)+gap*(len(bs)-1)
             extra = max(0.0, box[3]-total)
@@ -983,13 +1280,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             asset = assets[f["asset_id"]]
             schematic = (asset.get("origin") or "paper") == "generated"
             reference = asset.get("origin") == "reference"
-            caption_h = 0
-            if f["caption"]:
-                # Declared height wins; otherwise the strip follows the actual line count. A drawn
-                # schematic and a one-line paper caption need the same thing: enough room for the
-                # lines they have, not the two-line scientific default.
-                caption_h = f.get("caption_height") or caption_height(
-                    f["caption"], box[2], font_paths["font_file"], f.get("caption_font_size", 22))
+            content = caption_with_source(f)
+            caption_h, caption_lines = caption_measure(f, box[2], font_paths["font_file"])
+            if f.get("caption_height") and content:
+                # An explicit height still wins; it was measured by its author.
+                caption_h = f["caption_height"]
+                caption_lines = max(2, int(round((caption_h-8)/(f.get("caption_font_size", 22)*1.25))))
             h = box[3] - caption_h - 12
             if caption_top is not None:
                 h = min(h, caption_top-12-box[1])
@@ -1028,10 +1324,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                         n, eid, detector="geometric-preflight", confidence="HIGH",
                                         source_figure=f["source_figure"]))
             caption_y = bbox[1]+bbox[3]+12
-            if design and f['caption'] and design['figure_treatment'] == 'ruled-caption':
+            if design and content and design['figure_treatment'] == 'ruled-caption':
                 elements.append(rule(eid+':caption-rule', [box[0], caption_y-6, box[2], 1], design))
-            text(eid+":caption", f["caption"], [box[0], caption_y, box[2], caption_h],
-                 "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20), 2)
+            # A real paper caption is often three or four lines; the strip was measured for exactly
+            # that many lines, so the emitter must not clamp it back to two.
+            text(eid+":caption", content, [box[0], caption_y, box[2], caption_h],
+                 "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20),
+                 max(2, caption_lines))
             if schematic:
                 issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
                                     "Confirm the drawn schematic matches the text it illustrates; "
@@ -1087,7 +1386,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     continue
                 before = len(elements)
                 text(element["id"], element["text"], element["bbox"], element["role"],
-                     element["font_size"], 24, element["max_lines"], "middle",
+                     element["font_size"], min(24, element["font_size"]), element["max_lines"], "middle",
                      element["color"], align="center")
                 if len(elements) > before:
                     elements[-1].update({key: element[key] for key in
@@ -1111,7 +1410,12 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             checkpoints = [len(elements), len(issues), len(adaptations)]
             try:
                 plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
-                                       list_gap_ratio, (0, 0) if design else (28, 18), bullet_style)
+                                       list_gap_ratio, (0, 0) if design else (28, 18), bullet_style,
+                                       design=design,
+                                       formula_sizes=formula_sizes if equation_page else None)
+                balance_shift = (plan.get('balanced') or {}).get('shift_px', 0.)
+                if balance_shift > .5:
+                    adaptations.append({'action': 'vertical_balance', **plan['balanced']})
                 by_id = {b['id']: b for b in blocks}
                 graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
                 for entry in plan['nodes']:
@@ -1124,14 +1428,15 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             elements.append(rectangle('region:'+entry['node_id']+':frame', entry['bbox'], style, []))
                             if style.get('title_fill', 'none') != 'none':
                                 elements.append({'id': 'region:'+entry['node_id']+':title-band', 'kind': 'shape',
-                                    'role': 'decoration', 'bbox': entry['title_band_bbox'], 'geometry': 'rect',
+                                    'role': 'decoration', 'bbox': entry['title_band_bbox'],
+                                    'geometry': entry.get('title_band_geometry', 'rect'),
                                     'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
                                     'visual_decoration': True, 'frame_members': [title_id],
                                     'frame_growth_inset': style['border'].get('width', 1.)})
                         text('region:'+entry['node_id']+':title', entry['title'], entry['title_bbox'],
                              'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)),
                              color=style.get('title_color') if style else None,
-                             align=style.get('title_align') if style else None)
+                             align=entry.get('title_align') or (style.get('title_align') if style else None))
                     elif entry['type'] == 'block':
                         block(by_id[entry['ref']], entry['bbox'], formula_align='left')
                     elif entry['type'] == 'figure':
@@ -1187,7 +1492,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     framed = next(e for e in elements if e['id'] == eid+':frame')
                     title_element = next(e for e in elements if e['id'] == eid+':title')
                     band = next((e for e in elements if e['id'] == eid+':title-band'), None)
-                    if band:
+                    # A chip is a label around its text, not a row that can absorb extra height:
+                    # growing it would stretch the pill, so a chip keeps its measured size.
+                    if band and not entry.get('title_band_geometry'):
                         needed = title_element['bbox'][1]+title_element['bbox'][3]+entry['padding_px']-band['bbox'][1]
                         if needed > band['bbox'][3]+.1:
                             band['bbox'] = [*band['bbox'][:3], needed]
@@ -1206,12 +1513,27 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             original_bbox=entry['bbox'], expanded_bbox=outer))
                 adaptations.append({'action': 'layout_tree', **plan})
                 for entry in plan['nodes']:
-                    if entry.get('underfill'):
+                    if (entry.get('underfill') and
+                            balance_shift < entry['underfill']['underfill_px']*.5):
+                        # The balance nudge is capped at 32 px; a 300 px gap is not explained by it.
+                        # Suppress the report only when the shift actually absorbed most of the gap.
                         issues.append(issue('PAGE_UNDERFILL', 'REVIEW',
                             'A stack leaves more than 15% of its allocated height unused. '
                             'Review intentional whitespace or adjust relative weights / stack alignment.',
                             n, 'region:'+entry['node_id'], detector='geometric-preflight',
                             component=entry['component'], **entry['underfill']))
+                    if sparse_text_page(entry, elements):
+                        filled = entry['requirements']['preferred_height_px']/entry['bbox'][3]
+                        # A stack of one-line statements in a half-empty region is the
+                        # document look: the page has structure but no composition.
+                        issues.append(issue('SPARSE_TEXT_PAGE', 'REVIEW',
+                            f'The text on this page fills {filled*100:.0f}% of its region. Short '
+                            'statements stacked in one column read as a document; give the page a '
+                            'composition — two columns, one display-size statement, or numbered '
+                            'points — or split it.', n, 'region:'+entry['node_id'],
+                            detector='geometric-preflight', filled_ratio=round(filled, 3),
+                            suggested_actions=['text_columns', 'statement', 'numbered_points',
+                                               'split_slide']))
                 adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
             except LayoutTreeError as error:
@@ -1269,7 +1591,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # Try a small set of whole-page compositions using the existing emitters. Failed
             # attempts never leak partial content, warnings or text adaptations into the result.
             best_failures, attempted = [], 0
-            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths,
+            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths, design=design,
                     list_gap_ratio=list_gap_ratio, list_padding=(0, 0) if design else (28, 18),
                     bullet_style=bullet_style):
                 boxes = [plan['graphic'], *plan['blocks'], *plan['figures']]
@@ -1433,10 +1755,24 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             notice = lower_whitespace_issue(elements, n, top, bottom)
             if notice:
                 issues.append(notice)
+        page_furniture_elements(elements, text, n, slide, ir.get('presentation') or {}, design, furniture)
         if (comp.get('layout_tree') or comp.get('graphics') or design) and len({e['id'] for e in elements}) != len(elements):
             issues.append(issue('GRAPHIC_ID_COLLISION' if comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
                                 'FAIL', 'Page object names must be unique',
                                 n, detector='geometric-preflight'))
+        # Diagram labels are their own type scale; this rule is about running body copy on the page.
+        body_sizes = sorted({round(e['contract']['font_size'], 1) for e in elements
+                             if e.get('kind') == 'text' and e.get('role') == 'body' and e.get('contract')
+                             and not e['id'].startswith('graphic:')})
+        if len(body_sizes) > 1:
+            # Body copy on one page is one size. A fitted block may shrink to avoid a hard failure,
+            # but then the page is reported so the composition can be reflowed instead of shipping
+            # three body sizes that read as accidental emphasis.
+            issues.append(issue('BODY_SIZE_VARIANCE', 'REVIEW',
+                f'Body copy uses {len(body_sizes)} sizes on one page ({", ".join(f"{s*.75:.1f}" for s in body_sizes)} pt); '
+                'reflow or split the page so body text keeps one size and the page anchor stays distinct.',
+                n, detector='geometric-preflight', body_font_px=body_sizes,
+                suggested_actions=['reflow_region', 'split_slide']))
         for b in blocks:
             if (b.get('text_flow') == DISTRIBUTED_ARROW_LIST
                     and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in elements)
@@ -1461,6 +1797,40 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                        "background": "#FFFFFF" if templated else theme.get("background", "#FFFFFF"),
                        "notes": notes,
                        "elements": elements, "adaptation_log": adaptations})
+    presentation = ir.get('presentation') or {}
+    agenda = presentation.get('agenda')
+    sections = agenda_sections(ir)
+    if sections and not agenda:
+        # Section labels only steer the contents page; without one they are invisible metadata.
+        issues.append(issue('SECTION_LABELS_UNUSED', 'INFO',
+            f'{len(sections)} section labels are declared but presentation.agenda is off, so nothing '
+            'on the page shows them. Add an agenda or drop the labels.', detector='geometric-preflight'))
+    if agenda:
+        sections = agenda_sections(ir)
+        if not design:
+            issues.append(issue('AGENDA_SKIPPED', 'REVIEW',
+                'presentation.agenda needs academic_design: the contents page uses the designed header, '
+                'footer rule and page numbers.', detector='geometric-preflight'))
+        elif len(sections) < 2:
+            issues.append(issue('AGENDA_EMPTY', 'REVIEW',
+                'presentation.agenda needs at least two slides that declare presentation.section; '
+                'no contents page was generated.', detector='geometric-preflight'))
+        elif len(slides) >= 2:
+            # The contents page goes after the opening page, so every later page moves one slot;
+            # the number the reader sees is rewritten before the contents page is built from it.
+            for index, page in enumerate(slides, 1):
+                if index > 1:
+                    number_element = next((e for e in page['elements'] if e['id'] == 'page:number'), None)
+                    if number_element is not None:
+                        number_element['text'] = str(index+1)
+            slides.insert(1, agenda_slide(agenda if isinstance(agenda, dict) else {},
+                                          sections, theme, font_paths, design,
+                                          2 if presentation.get('page_numbers', True) else None,
+                                          furniture, footer_text=presentation.get('footer')))
+            if len(sections) > AGENDA_MAX_SECTIONS:
+                issues.append(issue('AGENDA_TRUNCATED', 'REVIEW',
+                    f'presentation.section declares {len(sections)} sections; the contents page holds '
+                    f'{AGENDA_MAX_SECTIONS}. Merge sections or split the deck.', detector='geometric-preflight'))
     if _retry and not design and not preserve_terms and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
         import copy
         alternative = copy.deepcopy(ir)

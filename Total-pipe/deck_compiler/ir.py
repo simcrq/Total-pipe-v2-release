@@ -70,6 +70,26 @@ def validate(ir):
             check(isinstance(gap, (int, float)) and not isinstance(gap, bool)
                   and .1 <= float(gap) <= 1.5,
                   "presentation.list_gap must be between 0.1 and 1.5", rule="LIST_GAP_INVALID")
+        if 'visual_style' in deck_presentation:
+            from .style import validate_style
+            for message in validate_style(deck_presentation['visual_style']):
+                check(False, message, rule='VISUAL_STYLE_INVALID')
+        if 'page_numbers' in deck_presentation:
+            check(isinstance(deck_presentation['page_numbers'], bool),
+                  'presentation.page_numbers must be true or false', rule='PAGE_NUMBER_INVALID')
+        if 'footer' in deck_presentation:
+            value = deck_presentation['footer']
+            check(isinstance(value, str) and bool(value.strip()) and len(value) <= 120
+                  and '\n' not in value,
+                  'presentation.footer requires one line of at most 120 characters',
+                  rule='FOOTER_INVALID')
+        if 'agenda' in deck_presentation:
+            value = deck_presentation['agenda']
+            check(value is True or (isinstance(value, dict) and set(value) <= {'title'}
+                                    and (value.get('title') is None or (
+                                        isinstance(value['title'], str) and 0 < len(value['title']) <= 20))),
+                  'presentation.agenda requires true or {"title": "..."} (at most 20 characters)',
+                  rule='AGENDA_INVALID')
     theme = ir.get("theme", {})
     check(isinstance(theme, dict) and all(isinstance(theme.get(k), str) and theme[k]
           for k in ("font_family", "font_file", "bold_font_file")), "Explicit theme fonts required")
@@ -150,6 +170,12 @@ def validate(ir):
             continue
         check('academic_design' not in pres, 'academic_design belongs to the deck', n,
               'ACADEMIC_DESIGN_INVALID')
+        if 'section' in pres:
+            label = pres['section']
+            check(isinstance(label, str) and bool(label.strip()) and len(label) <= 24
+                  and '\n' not in label,
+                  'presentation.section requires one line of at most 24 characters', n,
+                  'SECTION_INVALID')
         if 'takeaway_marker' in pres:
             from .fonts import BULLET_STYLES
             marker = pres['takeaway_marker']
@@ -307,6 +333,12 @@ def validate(ir):
                   isinstance(f.get("caption"), str), "Figure needs asset reference and caption", n)
             if not isinstance(f, dict) or f.get("asset_id") not in assets:
                 continue
+            if 'source_label' in f:
+                label = f['source_label']
+                check(isinstance(label, str) and bool(label.strip()) and len(label) <= 80
+                      and '\n' not in label,
+                      "figure_refs.source_label requires one line of at most 80 characters, "
+                      "e.g. 'Xie et al., Fig. 1g'", n, "FIGURE_SOURCE_LABEL_INVALID")
             asset = assets[f["asset_id"]]
             asset = asset if isinstance(asset, dict) else {}
             origin = asset.get("origin", "paper")
@@ -363,7 +395,9 @@ def validate(ir):
               "Block exceeds 600 characters; retain complete scientific terminology", n,
               "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
               severity='REVIEW' if preserve_scientific_terms(ir) else 'FAIL')
-        check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 180 and
+        # A published figure caption runs three or four lines; the strip is measured for the lines
+        # it actually needs, so the character cap is only there to stop a paragraph being pasted in.
+        check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 320 and
                   isinstance(f.get("panel_count", 1), int) and 1 <= f.get("panel_count", 1) <= 6 for f in figures),
               "Caption/panel capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
         # The page is read by an audience, not by the person auditing the build. Evidence ids,

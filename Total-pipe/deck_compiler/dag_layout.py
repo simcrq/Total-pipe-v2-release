@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 from PIL import ImageFont
 
+from totalpipe_layout.inline_math import strip_markup
 from .graphic_layout import CONNECTION_SITES, SHAPES, GraphicLayoutError, node_elements
 
 EPS = .05
@@ -195,17 +196,26 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
     long_edges = [(s, t) for s, t in pairs if ranks[t]-ranks[s] > 1]
     pad = 32 if long_edges else 12
     available = height-2*pad-4*(columns-1)
-    faces = {key: ImageFont.truetype(str(font_paths[key]), 24) for key in ('font_file', 'bold_font_file')}
+    # Node type is the style pack's, and the box is measured at the size the text is set in: a
+    # 32 px title kept in a box sized for 30 px lines overflowed its own node.
+    from .style import node_style
+    style = node_style(theme)
+    title_size = float(style.get('title_size', 24))
+    body_size = float(style.get('body_size', 20))
+    faces = {'title': ImageFont.truetype(str(font_paths['bold_font_file' if style.get('bold', True)
+                                                                 else 'font_file']), int(title_size)),
+             'body': ImageFont.truetype(str(font_paths['font_file']), int(body_size))}
     heights, text_heights = {}, {}
     for nid in ids:
         node = by_id[nid]
         sx, sy = INSETS.get(SHAPES[node.get('shape', 'rounded-rect')], (.84, .78))
-        title_lines = break_lines(node['title'], faces['bold_font_file'], node_width*sx)
-        body_lines = break_lines(node.get('body', ''), faces['font_file'], node_width*sx) if node.get('body', '').strip() else []
+        title_lines = break_lines(strip_markup(node['title']), faces['title'], node_width*sx)
+        body_lines = (break_lines(strip_markup(node.get('body', '')), faces['body'], node_width*sx)
+                      if str(node.get('body') or '').strip() else [])
         if len(title_lines) > 2 or len(body_lines) > 4:
             raise GraphicLayoutError('GRAPHIC_TEXT_OVERFLOW',
                 f'{nid}: text needs {len(title_lines)} title / {len(body_lines)} body lines at 18 pt; widen or split the diagram')
-        th, bh = len(title_lines)*30.0, len(body_lines)*30.0
+        th, bh = len(title_lines)*title_size*1.25, len(body_lines)*body_size*1.25
         text_heights[nid] = th, bh
         minimum = 96.0 if bh else 72.0
         heights[nid] = max(minimum, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
@@ -228,7 +238,8 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
     elements = []
     for node in graphic['nodes']:
         elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme,
-                                      text_heights[node['id']], title_size=32))
+                                      text_heights[node['id']], title_size=title_size,
+                                      body_size=body_size))
     nodes = [e for e in elements if e['kind'] == 'shape']
     native_nodes = {n['node_id']: n for n in nodes}
     routes = []

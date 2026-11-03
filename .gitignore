@@ -13,3 +13,5 @@ install-report.json
 .totalpipe/
 commitmsg.txt
 codex-test/
+.pydeps/
+.tmp/

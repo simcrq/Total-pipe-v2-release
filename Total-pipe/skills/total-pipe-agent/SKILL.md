@@ -31,6 +31,13 @@ status=running 时调用 totalpipe_advance；status=candidate_ready 时交付 ca
 queries 是对象数组，含唯一 id、query，可选 intent。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
 Story 提示的 delegation 绑定用户选择；模型字段仍是声明，必须真实执行子代理，不伪造 provenance。
 Story 缺模型选择时先询问；不得静默选择，也不得由主 Agent 代写。
+RPA 之后会先要求 `page_design`：一页一个论点、一条形式、一个锚点，Story 的每一条内容恰好出现一次，
+数字只能来自所引 evidence；设计通过后 IR 必须逐页实现，不得重新设计。
+`page_design` 与 Story 一样交给**独立子代理**执行，不主 Agent 代写：读 `work/page_design_task.md` 作为任务书，
+把 `work/page_design_prompt.json` 与输出路径交给子代理，收回它写出的 `work/page_design.json` 再 advance。
+设计提示是能力清单（forms / devices 各买来什么、放不下怎么退化），不是规则清单；
+子代理要按这场报告的需要选形式与设备，不要为了稳妥而不用，页面上确实不需要时在 rationale 里说明即可。
+校验只关心内容不变式：Story 每条内容恰好一次、数字来自所引 evidence、form 与 anchor 对齐。
 IR / Design 提示包是完整输入；原文 body、key_points、公式、单位和不确定性保留在页面或讲稿。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。

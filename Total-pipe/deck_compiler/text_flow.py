@@ -1,6 +1,8 @@
 """Deterministic text-flow selection for prose-heavy content blocks."""
 import re
 
+from totalpipe_layout.inline_math import has_markup
+
 
 DISTRIBUTED_ARROW_LIST = "distributed_arrow_list"
 ARROW_GLYPH = "➢"
@@ -19,6 +21,29 @@ def split_parallel_items(value):
         return []
     rows = [row.strip() for row in re.split(r"\n+", text) if row.strip()]
     return [_PREFIX.sub("", row).strip() for row in rows if _PREFIX.sub("", row).strip()]
+
+
+def fallback_list(block):
+    """Deck IR fallback: several paragraphs stacked in one block read as a list.
+
+    Two or more explicit paragraphs are a vertical run of statements; without a marker they read as
+    one wall of prose. The block keeps its text, id and evidence refs — only the flow changes.
+    A native list carries one run style, so a block whose author wrote emphasis stays plain: the
+    emphasised phrase is worth more than the marker, and the list is the compiler's suggestion.
+    """
+    if not isinstance(block, dict) or block.get('component') == 'formula':
+        return block
+    if block.get('text_flow') or block.get('inline_math'):
+        return block
+    text = str(block.get('text') or '')
+    if has_markup(text):
+        return block
+    items = split_parallel_items(text)
+    if not 2 <= len(items) <= 6 or _EXCLUDED.search(text):
+        return block
+    if any(_display_units(item) > 240 for item in items):
+        return block
+    return {**block, 'text_flow': DISTRIBUTED_ARROW_LIST}
 
 
 def select_text_flow(value, requested="auto"):

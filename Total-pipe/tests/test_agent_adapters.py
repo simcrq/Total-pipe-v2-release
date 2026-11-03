@@ -12,6 +12,18 @@ from agent_fixture import AgentCase, workflow, story
 
 
 class AdapterTests(AgentCase):
+    def test_design_task_is_a_capability_brief(self):
+        task = a.design_task({'figures': [{}, {}, {}], 'briefs': [{}]*5})
+        self.assertIn('5 条 briefs', task)
+        self.assertIn('3 张', task)
+        self.assertIn('forms', task)
+        self.assertIn('devices', task)
+        self.assertIn('page_design_prompt.json', task)
+        self.assertIn('page_design.json', task)
+        # Capabilities, not a rule list: the instructions describe what each thing buys.
+        self.assertIn('degrades', a.DESIGN_INSTRUCTIONS)
+        self.assertNotIn('MUST', a.DESIGN_INSTRUCTIONS)
+
     def test_story_binding_uses_delegation_and_existing_provenance_gate(self):
         from pwf2rpa import Workflow, build_story_prompt
         prompt = build_story_prompt(Workflow(workflow()), model='test-model', reasoning_effort='high', selected_by_user=True)

@@ -32,8 +32,28 @@
 | frame.title_fill | 可选，默认 none；为实测标题区绘制原生色带 |
 | frame.title_color | 可选，默认沿用正文前景色 |
 | frame.title_align | 可选，left / center，默认沿用左对齐 |
+| frame.title_band | 可选，`strip`（默认，铺满标题行）或 `chip`（按标题实测宽度收成一个圆角标签，必须同时给 title_fill） |
 | panel.padding | none / compact / standard；带框时默认 compact，未带框时仍默认 none |
 | panel.gap | 标题区与正文的间距，compact / standard / spacious |
+
+### 标题做成 chip 标签
+
+整条色带会把一页切成横向的几块；参考里那种「深红色小标签 + 一组条目」是另一种读法：
+标签只包住自己的文字，眼睛靠它定位分组，而不是靠一条横贯面板的色块。
+
+```json
+"frame": {
+  "border": {"color": "#A7B5C5", "width": 1.5},
+  "title_fill": "#0755A3", "title_color": "#FFFFFF", "title_band": "chip"
+}
+```
+
+- chip 高度 = 标题实测高度 + 上下各 7 px，在原有标题行里垂直居中；行高、正文起点、框体高度**都不变**，
+  所以开着 chip 不会挤压下面的内容，也不会让已有面板重新排版。
+- chip 宽度 = 标题实测行宽 + 左右各 14 px（用实际渲染的粗体字面测量），文字默认居中。
+- 标题宽到无法收成标签时自动退回整行色带：需要换行才能塞进标签的 chip 读起来像排版事故。
+- chip 只画在面板内侧 8 px，不越出边框，因此仍受 `FRAME_CONTENT_OUT_OF_BOUNDS` 与层序检查。
+- 没有 `title_fill` 的 chip 不可见，校验直接报错。
 
 内边距为 0/12/20 CSS px，间距为 12/24/32 CSS px。边框和内边距都从可用区域扣除后才测量子内容。
 带框标题区上下各有一份内边距，正文保留左右和底部内边距；标题区宽度随完整容器宽度变化。

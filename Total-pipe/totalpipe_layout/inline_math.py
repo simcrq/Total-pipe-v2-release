@@ -21,6 +21,36 @@ class InlineWidthError(InlineMathError):
 class Span:
     kind: str
     text: str
+    mark: str = ''      # '' | 'emphasis' | 'highlight' | 'citation'; only text spans carry a mark
+
+
+# Emphasis and citations are written in the text, not declared in a parallel array: the author
+# types what should read louder or weaker and the compiler turns each pair into a run. Every mark
+# is opt-in on purpose — a deck with no markers parses exactly as before.
+MARKERS = (('**', '**', 'emphasis'), ('==', '==', 'highlight'), ('[[', ']]', 'citation'))
+MARK_NAMES = tuple(name for _, _, name in MARKERS)
+ESCAPES = ('\\\\', '\\$', '\\*', '\\=')
+
+
+def _closing_marker(source, start, closer):
+    """Index of the matching closer, or ``None`` when the pair is not a pair.
+
+    A formula inside a marked span would need the mark to reach an OMML run, so an opener that
+    meets ``$`` first stays literal. An unclosed or empty pair stays literal too: visible ``**`` is
+    a defect a reviewer can see, while silently swallowing the rest of the sentence is not.
+    """
+    index = start
+    while index < len(source):
+        char = source[index]
+        if char == '\\':
+            index += 2
+            continue
+        if char == '\n' or char == '$' or source.startswith('\\(', index):
+            return None
+        if source.startswith(closer, index):
+            return index
+        index += 1
+    return None
 
 
 @lru_cache(maxsize=2048)
@@ -32,7 +62,7 @@ def parse_inline(source):
             spans.append(Span('text', ''.join(prose)))
             prose.clear()
     while index < len(source):
-        if source.startswith(('\\\\', '\\$'), index):
+        if source.startswith(ESCAPES, index):
             prose.append(source[index+1]); index += 2; continue
         if source.startswith(('$$', '\\[', '\\]'), index):
             raise InlineMathError(f'Display delimiters are not inline math at char {index}; use component=formula.')
@@ -40,6 +70,17 @@ def parse_inline(source):
         if opening is None:
             if source.startswith('\\)', index):
                 raise InlineMathError(f'Unmatched inline closing delimiter at char {index}.')
+            marker = next(((opener, closer, name) for opener, closer, name in MARKERS
+                           if source.startswith(opener, index)), None)
+            if marker is not None:
+                opener, closer_text, name = marker
+                closer = _closing_marker(source, index+len(opener), closer_text)
+                inner = source[index+len(opener):closer] if closer is not None else ''
+                if closer is not None and inner.strip() and not inner[0].isspace() and not inner[-1].isspace():
+                    flush()
+                    spans.append(Span('text', inner, name))
+                    index = closer+len(closer_text)
+                    continue
             prose.append(source[index]); index += 1; continue
         flush()
         start = index
@@ -80,11 +121,15 @@ TOKEN = re.compile(r'[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u0
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
 
 
-def measure_inline(source, width, font, size, line_height=1.25, leading_marker=None):
-    """Sum widths within each line; sum per-line max ascent + max descent, not TeX length."""
+def measure_inline(source, width, font, size, line_height=1.25, leading_marker=None, strong_font=None):
+    """Sum widths within each line; sum per-line max ascent + max descent, not TeX length.
+
+    ``strong_font`` is the bold face used for ``**...**`` runs. Bold advances are wider than regular
+    ones for Latin text, so an emphasised phrase is measured with the face it will be drawn in; when
+    no bold face is available the run is laid out in the regular face and PowerPoint synthesises it.
+    """
     if width <= 0:
         raise InlineWidthError(1, width)
-    ascent, descent = font.getmetrics()
     atoms, minimum, exact = [], 0., True
     for span in parse_inline(source):
         if span.kind == 'formula':
@@ -98,30 +143,38 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                 'width': w, 'ascent': metrics.height-metrics.depth+2, 'descent': metrics.depth+2})
             exact = exact and metrics.exact
         else:
+            face = strong_font if (span.mark == 'emphasis' and strong_font is not None) else font
+            ascent, descent = face.getmetrics()
             # Line breaks are layout controls, not glyphs. In particular, Raqm-backed
             # Pillow 13 fonts reject getlength('\n') and getlength('\r'). Normalize
             # authored Windows/Mac breaks locally; the canonical source stays intact.
             prose = span.text.replace('\r\n', '\n').replace('\r', '\n')
             for token in TOKEN.findall(prose):
-                pieces = list(token) if token != '\n' and font.getlength(token) > width else [token]
+                pieces = list(token) if token != '\n' and face.getlength(token) > width else [token]
                 for piece in pieces:
-                    atoms.append({'kind': 'text', 'text': piece, 'plain': piece,
-                        'width': 0.0 if piece == '\n' else font.getlength(piece),
+                    atoms.append({'kind': 'text', 'text': piece, 'plain': piece, 'mark': span.mark,
+                        'width': 0.0 if piece == '\n' else face.getlength(piece),
                         'ascent': ascent, 'descent': descent})
 
     lines, current = [], []
+    base_ascent, base_descent = font.getmetrics()
     def finish():
         # Whitespace at a soft line boundary is typographic; source remains byte-for-byte in IR.
         while current and current[-1]['kind'] == 'text' and current[-1]['text'].isspace(): current.pop()
         fragments = []
         for atom in current:
-            if fragments and fragments[-1]['kind'] == atom['kind'] == 'text':
+            if (fragments and fragments[-1]['kind'] == atom['kind'] == 'text'
+                    and fragments[-1].get('mark', '') == atom.get('mark', '')):
                 fragments[-1]['text'] += atom['text']; fragments[-1]['plain'] += atom['plain']
-                fragments[-1]['width'] = font.getlength(fragments[-1]['text'])
+                face = strong_font if (atom.get('mark') == 'emphasis' and strong_font is not None) else font
+                fragments[-1]['width'] = face.getlength(fragments[-1]['text'])
             else:
                 fragments.append(dict(atom))
-        above = max([ascent, *(a['ascent'] for a in current)])
-        below = max([descent, *(a['descent'] for a in current)])
+        above = max([base_ascent, *(a['ascent'] for a in current)])
+        below = max([base_descent, *(a['descent'] for a in current)])
+        if leading_marker and not lines:
+            above = max(above, leading_marker['ascent'])
+            below = max(below, leading_marker['descent'])
         if leading_marker and not lines:
             above = max(above, leading_marker['ascent'])
             below = max(below, leading_marker['descent'])
@@ -154,4 +207,68 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
     if current or not lines or source.endswith(('\n', '\r')): finish()
     return {'lines': lines, 'height': sum(line['height'] for line in lines),
             'min_width': minimum, 'formula_count': sum(s.kind == 'formula' for s in parse_inline(source)),
+            'marks': sorted({f.get('mark') for line in lines for f in line['fragments'] if f.get('mark')}),
             'measured_exact': exact, 'font_size_px': size, 'text': '\n'.join(line['text'] for line in lines)}
+
+
+def has_markup(source):
+    """Whether a text field asks for run-level emphasis or a citation; never raises on bad math."""
+    if not isinstance(source, str) or not any(opener in source for opener, _, _ in MARKERS):
+        return False
+    try:
+        return any(span.mark for span in parse_inline(source))
+    except InlineMathError:
+        return False
+
+
+def unmatched_markers(source):
+    """Markers that will be printed literally because no closing marker paired with them.
+
+    Escaped markers and formula regions are skipped: ``\\*\\*`` is intent, an unclosed ``**`` is a
+    typo the page should report.
+    """
+    if not isinstance(source, str):
+        return []
+    found, index = [], 0
+    while index < len(source):
+        if source.startswith(ESCAPES, index):
+            index += 2
+            continue
+        if source.startswith('\\(', index):
+            end = source.find('\\)', index)
+            index = end+2 if end >= 0 else len(source)
+            continue
+        if source[index] == '$':
+            end = index+1
+            while end < len(source):
+                if source[end] == '\\':
+                    end += 2
+                    continue
+                if source[end] == '$':
+                    break
+                end += 1
+            index = end+1
+            continue
+        marker = next(((opener, closer, name) for opener, closer, name in MARKERS
+                       if source.startswith(opener, index)), None)
+        if marker is None:
+            index += 1
+            continue
+        opener, closer_text, name = marker
+        closer = _closing_marker(source, index+len(opener), closer_text)
+        if closer is None:
+            found.append(name)
+            index += len(opener)
+        else:
+            index = closer+len(closer_text)
+    return found
+
+
+def strip_markup(source):
+    """Prose without emphasis markers, for paths that cannot carry runs (native list items)."""
+    if not isinstance(source, str):
+        return source
+    try:
+        return ''.join(span.text for span in parse_inline(source))
+    except InlineMathError:
+        return source

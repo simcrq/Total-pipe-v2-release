@@ -38,6 +38,8 @@
 | 文字与原生数学混排 | [行内公式](../Total-pipe/docs/inline-math.md) |
 | 合并表头、公式格和行高 | [原生科研表格](../Total-pipe/docs/native-tables.md) |
 | 流程、DAG、连接符与图文共存 | [原生流程图](../Total-pipe/docs/native-graphics.md) |
+| 学术 / 商业 / 印刷风格包与稀疏页平衡 | [视觉风格包](../Total-pipe/docs/visual-style.md) |
+| 设计层可选设备：标签组、图注出处、目录、结论框 | [设计层设备清单](../Total-pipe/docs/art-direction.md) |
 | 机制、架构、漏斗、Bézier 与 Path | [科研图形组件](../Total-pipe/docs/native-components.md) |
 | 外部布局建议和回退 | [布局提供方](../Total-pipe/docs/layout-provider.md) |
 | OfficeCLI 写入与实际结构 QA | [OfficeCLI 后端](../Total-pipe/docs/officecli-backend.zh-CN.md) |

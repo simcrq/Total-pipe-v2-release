@@ -94,6 +94,11 @@ def inspect_pdf(pdf, layout):
                     continue
                 if e['kind'] != 'text':
                     continue
+                if (e.get('inline_layout') or {}).get('formula_count'):
+                    # A PDF text layer does not preserve an OMML superscript's order (10⁸ extracts
+                    # as "8…10"), so comparing characters here reports a defect that is not there.
+                    # The inline-math REVIEW already asks for a human look at the baseline.
+                    continue
                 expected = normalize(e['text'])
                 x, y, width, height = e['bbox']
                 region = page.crop((x * scale_x, y * scale_y,

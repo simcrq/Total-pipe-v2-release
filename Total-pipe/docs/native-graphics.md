@@ -71,17 +71,20 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
   它强制 `shape=rect`（可省略 `shape`），不接受 ellipse/diamond/hexagon。
 - 节点按数组顺序排列；横向从左到右、纵向从上到下。必须显式连接每对相邻节点，
   且恰好一次；`kind` 可省略，当前只接受 `arrow`。不推断、补写或改变科学关系。
-- `shape` 支持 `rect`、`rounded-rect`（默认）、`ellipse`、`diamond`、`hexagon`。
-  `compact` 只用 `rect`；纵向链的 `hexagon` 使用最接近上/下顶点的连接点，
-  不假装存在边中点。
-- 节点可带 `tone: "default" | "emphasis"`；`emphasis` 只加深主题色 tint 并加粗描边，
+- `shape` 支持 `rect`、`rounded-rect`、`ellipse`、`diamond`、`hexagon`。
+  不写时由风格包决定（`academic` 为 `rect`，`commercial` 为 `rounded-rect`），
+  节点级 `shape` 优先。`compact` 只用 `rect`；纵向链的 `hexagon` 使用最接近上/下顶点的连接点，
+  不假装存在边中点。见 [视觉风格包](visual-style.md)。
+- 节点可带 `tone: "default" | "emphasis"`；`emphasis` 使用风格包里的 emphasis token，
   仍是同一套 theme，不是新的配色。用于标出结论步或关键分支。
 - `title` 必填，最多 80 字符；`body` 可省略，最多 180 字符。
   实际可容纳字数取决于形状和文本宽度；菱形内部空间较小。
 - 图形和节点 ID 使用 1–64 个英文字母、数字、连字符或下划线。
   节点 ID 在图内唯一；编译后对象名包含图形和节点 ID，可在选择窗格中定位。
-- 字体继承 deck theme，描边与箭头使用 `theme.accent`。文字独立测量并居中，
-  不低于 18 pt；装不下时返回 `SPLIT_REQUIRED`，保留原文。
+- 字体继承 deck theme；描边与箭头取自 `presentation.visual_style`（默认 `academic` 用前景色细线）。
+  节点框按标签实测收紧：高度取标签行高加内边距，宽度取最长标签宽度（上限 320 px），
+  不再出现「框很大、字很少」的空盒。文字独立测量并居中，不低于 18 pt；
+  装不下时返回 `SPLIT_REQUIRED`，保留原文。
 - 不写 `x/y/w/h/bbox`。旧平面表示一页最多一张原生图形；独立页使用 `native-graphic`。
   `process-flow`、`figure-parameters` 可与 blocks 和论文图片混排，见下文。
   其他 archetype 下的非空 `graphics` 会明确报错，避免内容被忽略。

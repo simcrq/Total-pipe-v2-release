@@ -8,6 +8,7 @@
     {"id":"story_prompt","kind":"component","adapter":"story_prompt","sources":["pdf","markdown","workflow"],"timeout_sec":120},
     {"id":"story","kind":"agent","artifact":"story_plan","sources":["pdf","markdown","workflow"],"instructions_ref":"story","max_attempts":2},
     {"id":"rpa","kind":"component","adapter":"rpa","sources":["pdf","markdown","workflow"],"timeout_sec":600},
+    {"id":"page_design","kind":"agent","artifact":"page_design","sources":["pdf","markdown","workflow"],"prepare":"page_design","instructions_ref":"page_design","max_attempts":2},
     {"id":"deck_ir","kind":"agent","artifact":"deck_ir","instructions_ref":"ir","max_attempts":3},
     {"id":"design","kind":"component","adapter":"design","skip_if":"design_complete","timeout_sec":120},
     {"id":"visual_design","kind":"agent","artifact":"visual_proposal","skip_if":"design_complete","instructions_ref":"design","max_attempts":3},
@@ -17,6 +18,7 @@
   "instructions": {
     "queries":"agent/schemas/queries.schema.json",
     "story":"skills/total-pipe-deck/SKILL.md#2-科学故事story-planner",
+    "page_design":"work/page_design_prompt.json",
     "ir":"work/ir_prompt.json",
     "design":"work/visual_prompt.json"
   }

@@ -25,7 +25,14 @@
         "list_gap": {
           "type": "number", "minimum": 0.1, "maximum": 1.5,
           "description": "Space between list items as a fraction of the line height (default 0.45)."
-        }
+        },
+        "visual_style": {"$ref": "#/$defs/visual-style"},
+        "page_numbers": {"type": "boolean",
+          "description": "Set true or false: continuous page numbers in the footer of every designed page (default true)."},
+        "agenda": {"oneOf": [{"const": true}, {"type": "object", "additionalProperties": false,
+          "properties": {"title": {"type": "string", "maxLength": 20}}}]},
+        "footer": {"type": "string", "maxLength": 120,
+          "description": "One line of page furniture set at the left of the footer, e.g. the deck title or lab name."}
       }
     },
     "theme": {
@@ -84,6 +91,16 @@
     }}}}}
   }],
   "$defs": {
+    "visual-style": {
+      "type": "object", "additionalProperties": false,
+      "description": "Named shape/fill/rule language. academic: square nodes, hairline rules, no fill. commercial: tinted rounded cards (legacy default). print: black-only rules.",
+      "properties": {
+        "pack": {"enum": ["academic", "commercial", "print"]},
+        "overrides": {"type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean"]},
+          "description": "Dotted token overrides, e.g. graphic.node.fill or graphic.edge.width."}
+      }
+    },
     "frame-border": {
       "type": "object", "additionalProperties": false, "required": ["color"],
       "properties": {"color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
@@ -96,7 +113,9 @@
         "border": {"$ref": "#/$defs/frame-border"}, "fill": {"$ref": "#/$defs/frame-fill"},
         "title_fill": {"$ref": "#/$defs/frame-fill"},
         "title_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
-        "title_align": {"enum": ["left", "center"]}
+        "title_align": {"enum": ["left", "center"]},
+        "title_band": {"enum": ["strip", "chip"],
+          "description": "strip fills the whole title row; chip hugs the title text as a rounded label (requires title_fill)."}
       }
     },
     "takeaway-frame": {
@@ -138,10 +157,13 @@
            "weights": {"type": "array", "minItems": 1, "maxItems": 12,
                        "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
            "align": {"enum": ["start", "center", "distribute"]},
+           "fit": {"enum": ["stretch", "hug"]},
            "gap": {"enum": ["compact", "standard", "spacious"]}},
          "allOf": [{"if": {"properties": {"type": {"const": "columns"}}},
                     "then": {"properties": {"children": {"maxItems": 4}, "weights": {"maxItems": 4}},
                              "not": {"required": ["align"]}}},
+                   {"if": {"properties": {"type": {"const": "stack"}}, "required": ["type"]},
+                    "then": {"not": {"required": ["fit"]}}},
                    {"if": {"required": ["weights"]},
                     "then": {"properties": {"align": {"const": "start"}}}}]},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "title", "body"],
@@ -548,7 +570,7 @@
           "properties": {
             "archetype": {
               "enum": [
-                "composite-research", "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
+                "cover", "composite-research", "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
                 "hero-dual-evidence", "evidence-hypothesis", "dual-demonstration",
                 "three-limitations", "three-conclusions"
               ]
@@ -634,6 +656,8 @@
                 "properties": {
                   "asset_id": {"type": "string", "minLength": 1},
                   "caption": {"type": "string", "maxLength": 180},
+                  "source_label": {"type": "string", "maxLength": 80,
+                    "description": "Where the panel comes from, set as a weakened prefix: 'Xie et al., Fig. 1g'."},
                   "alt": {"type": "string"},
                   "panel_count": {"type": "integer", "minimum": 1, "maximum": 6},
                   "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$",
@@ -680,6 +704,10 @@
             "takeaway_marker": {"$ref": "#/$defs/takeaway-marker"},
             "takeaway_frame": {"$ref": "#/$defs/takeaway-frame"},
             "variant": {"enum": ["default", "spacious"]},
+            "page_number": {"type": "boolean",
+              "description": "Per-page override of presentation.page_numbers; false hides the number only."},
+            "section": {"type": "string", "maxLength": 24,
+              "description": "Marks the first page of a section. The compiler numbers the section and, with presentation.agenda, lists it on the contents page."},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},
             "optional_overrides": {"type": "object", "maxProperties": 0}

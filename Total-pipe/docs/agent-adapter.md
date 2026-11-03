@@ -65,7 +65,64 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 **Story 不为 RPA 槽位缩短科学内容。** RPA 只规划它当前能容纳的页面；若仍有完整 brief 无法规划，
 `rpa_validation.status=partial`，`unplanned_slide_briefs` 随 IR 提示包下发。IR 必须为这些 brief
 补页或拆页，优先 `composite-research` + `layout_tree`，保留完整 body/key_points 和 EV；不能靠删句、
-缩写术语或把内容藏进 notes 通过。`check_ir` 仍按 normalized brief 数检查页数下界和全文保全。
+缩写术语或把内容藏进 notes 通过。
+
+### 页面设计阶段（page_design）
+
+RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**页面设计表**，再写 IR。
+设计表只写决策，不写坐标：
+
+```json
+{"schema_version":"1.0","deck_id":"<id>",
+ "devices":{"sections":[{"page":"P1","label":"背景"}],"agenda":{"title":"目录"},
+            "footer":"组会报告","page-numbers":true},
+ "pages":[
+  {"id":"P1","from_story":["S1"],"role":"setup","claim":"基准为 N=512、K=50。",
+   "takeaway_from":"S1.answer",
+   "items":[{"id":"p1-a","text":"N=512、K=50","source":"S1.key_points[0]","evidence":["EV0001"]}],
+   "form":"spec-table","anchor":{"kind":"table","why":"条件并列"},"rationale":"表格比句子更好查",
+   "devices":{"emphasis":["K=50"],"takeaway-frame":"fill","panel-group":["条件","边界"]}}]}
+```
+
+**执行方式**：与 Story 一样交给独立子代理，不主 Agent 代写。RPA 完成后接入层写出两份文件：
+`work/page_design_prompt.json`（约 40 KB：Story、briefs、证据、可用图、forms 与 devices 清单、输出 shape）
+与 `work/page_design_task.md`（任务书）。主 Agent 把这两份交给子代理，收回子代理写的
+`work/page_design.json` 再 advance。提示是**能力清单**——每个形式与设备买来什么、放不下怎么退化——
+不是规则清单；设计层按这场报告的需要选择，不要为了稳妥而不用。
+
+- `forms` 是一份封闭的形式库（下表由 `deck_compiler.design.capabilities()` 发布），每个形式对应一个
+  编译器能渲染的构图；`anchor` 必须与形式一致（表格页不能声明图作锚点）。
+- `devices` 是设计层设备（见 [设计层设备清单](art-direction.md)）：页级 `emphasis` / `highlight` /
+  `panel-group` / `caption-source` / `takeaway-frame` / `sequence-rail`；篇级 `sections` / `agenda` /
+  `footer` / `page-numbers`。每项都有退化路径，所以选它不会让构建失败。
+- 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**（同一页可被
+  多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须出现在所引
+  evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为同一个数）；
+  页数可以少于 brief 数（合并）或多于（拆分），但不能超过两倍。设备只校验形状
+  （名字在清单里、取值个数与长度），**不判断它在页面上会占多少空间**。
+- 通过后，IR 提示包会带上 `page_design`（含 devices）与"逐页实现、不得重新设计"的指令；IR 交回时按设计校验
+  （`DESIGN_REALIZATION_FAILED`）：页数一致、每页保留设计声明的 evidence、设计页上的数字不能丢、
+  设计点名的设备必须出现在页面上。机械类设备（标记、图注出处、结论框、章节、目录、页脚、页码）由编译器
+  在 IR 校验前直接写进 IR，作者漏写也不会丢；结构类（`panel-group`）由 IR 自己搭 panel。
+- 有设计表时，`check_ir` 不再做"逐字保留 brief 原文"的比对——设计表已经是溯源记录；没有设计表的
+  旧路径行为不变。
+
+| 形式 | 锚点 | 渲染为 | 适用 |
+| --- | --- | --- | --- |
+| cover | none | 封面页（标题 + 一句定位，无页脚无页码，items 可为空） | 开场 |
+| spec-table / comparison-table | table | 原生表格 | 并列条件、参数、对比 |
+| equation-reading | formula | 公式 + 读法栏 | 算子、定义、更新式 |
+| mechanism-flow | graphic | 原生流程/DAG + 一行注 | 有顺序或分支的机制 |
+| figure-reading | figure | 图 + 读数面板 | 论文图就是论点 |
+| three-limits | number | 三列（可带小标题） | 并列边界 |
+| statement | none | 一句主张放大成主句 + 1–2 条注 | 一页就是一句话 |
+| text-columns | none | 2–3 组短陈述并排（可带 chip 标签） | 平行短内容，没有表可依 |
+| numbered-points | none | 带 01–0N 标签的并列要点 | 两到四条并列要点 |
+| problem-route-result | graphic | 三节点流程（问题 → 做法 → 结果）+ 文本带 | 三段式论证，没有现成图 |
+| text-stack / closing-statement | none | 兜底堆叠 / 单句结论 | 只有一两句、无法分组时 |
+
+视觉语言另由 `presentation.visual_style` 选择风格包（`academic`/`commercial`/`print`），见
+[视觉风格包](visual-style.md)。
 
 Deck IR 还接受两个 authoring shorthand，在 schema 校验前展开为 canonical IR：
 

@@ -64,7 +64,7 @@ class MatrixParseTests(unittest.TestCase):
         self.assertIsNotNone(root.find('.//m:rad/m:e/m:sSup', MATH_NS))
         self.assertIsNotNone(root.find('.//m:sSub', MATH_NS))
         self.assertEqual(root.find('.//m:dPr/m:ctrlPr/a:rPr', MATH_NS).get('sz'), '3375')
-        self.assertEqual(F.to_plain(ast), '(1/2, √(x²); 0, y_(i+1))^T')
+        self.assertEqual(F.to_plain(ast), '(1\u20442, √(x²); 0, y_(i+1))^T')
 
     def test_blank_cells_and_trailing_row_separator_preserve_the_shape(self):
         ast = F.parse(r'\begin{bmatrix}1&\\&2\\\end{bmatrix}')

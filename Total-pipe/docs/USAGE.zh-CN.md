@@ -374,6 +374,37 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
 查询 native_inline_equation 能力；RPA content_refs 的 block.inline_math / table.has_inline_math 传递需求。
 保留原生核对 REVIEW。完整协议与三页样例见 [行内公式](inline-math.md)。
 
+#### 句内强调与页脚
+
+正文均质是机器写的最大观感差。强调写在文本里，编译成 run 级属性（颜色/加粗/高亮），
+不新增文本框、不改变页面构图：
+
+```json
+{"id":"p3-cause", "component":"body",
+ "text":"接触宽度 **W** 与势垒高度通过 ==Φ_B== 耦合，而不是按面积平均。"}
+```
+
+`**…**` 走主题色 + 加粗，`==…==` 走高亮底色；字面标记写 `\*\*` / `\==`。
+标记不跨 `$…$`；未闭合按字面输出并报 `EMPHASIS_UNCLOSED`；原生列表一项只有一种 run 样式，
+带标记的块会被去掉标记并报 `EMPHASIS_IN_LIST`（要保留强调就把该块写 `text_flow:"plain"`）。
+粗体按真实粗体字面测宽，因此强调会占版面：一页一处，同页出现两个正文号先删多余的强调。
+
+设计页默认带细页脚线与连续页码；整篇可声明
+
+```json
+{"presentation": {"page_numbers": true, "footer": "NbS2/MoS2 非对称接触 · 组会报告"}}
+```
+
+`page_numbers:false` 关掉全篇页码，`slides[i].presentation.page_number=false` 只藏单页；
+页脚一行 ≤120 字符，evidence id 仍只进 speaker notes。细节见 [视觉风格包](visual-style.md)。
+
+长报告还可以只声明结构、不画结构：`slides[i].presentation.section`（一行 ≤24 字符）标记章节起点，
+`presentation.agenda` 打开目录页，编译器在第 1 页之后插入「01 章节名 …… 起始页」的目录并按最终页序重算页码；
+章节少于 2 个不生成（`AGENDA_EMPTY`），超过 8 个只列前 8 个（`AGENDA_TRUNCATED`）。
+分组标签用 panel 的 `frame.title_band:"chip"` + 实色 `title_fill`；论文图注加
+`figure_refs.source_label`（≤80 字符）会渲染成弱化前缀。三者的字段与限制见
+[带边框容器](framed-containers.md) 与 [视觉风格包](visual-style.md)。
+
 #### 独立公式语法
 
 支持分式、`\sqrt{…}` / `\sqrt[3]{…}`、上下标和嵌套分组、Greek、求和/积分、

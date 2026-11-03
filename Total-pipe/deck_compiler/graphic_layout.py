@@ -22,6 +22,72 @@ CONNECTION_SITES = {
 }
 NODE_TONES = ('default', 'emphasis')
 PROCESS_LAYOUTS = ('chain', 'staggered', 'compact')
+NODE_PAD_X, NODE_PAD_Y = 18., 12.
+
+
+def _wrap(text, face, max_width):
+    """Greedy wrap that works for CJK, where there are no spaces to break on."""
+    lines, current = [], ''
+    for char in text:
+        if face.getlength(current+char) <= max_width or not current:
+            current += char
+        else:
+            lines.append(current)
+            current = char
+    if current:
+        lines.append(current)
+    return lines or ['']
+
+
+def _chain_width(nodes, limit, theme, font_paths):
+    """Widest label that still fits one line, clamped to the column the chain can afford."""
+    from .fonts import load_font_file
+    from .style import node_style
+    style = node_style(theme)
+    size = float(style.get('title_size', 30))
+    if not font_paths:
+        return limit
+    face = load_font_file(font_paths['bold_font_file' if style.get('bold', True) else 'font_file'], size)
+    # The label box is 94% of the node width, so the required width is the measured line divided
+    # back out of that factor.
+    need = max(face.getlength(node['title']) for node in nodes)/.94+4
+    return max(160., min(limit, need))
+
+
+def node_fit(nodes, node_width, theme, font_paths, max_height):
+    """The height a chain of nodes needs, so a box is not taller than its label.
+
+    A process box is a label with a rule around it, not a card. Sizing it from the measured label
+    removes the empty band that made a three-step mechanism look like a slide of empty boxes.
+    The measurement follows what ``node_elements`` will draw: the text sits inside the preset's
+    contour (a diamond keeps half the box, an ellipse two thirds), title and body split the inner
+    height 45/55, and a body line costs its own line height. A box measured for one title line
+    used to clip a two-line body on every diamond node.
+    """
+    from .fonts import load_font_file
+    from .style import node_style
+    style = node_style(theme)
+    size = float(style.get('title_size', 30))
+    body_size = float(style.get('body_size', 26))
+    if not font_paths:
+        return min(max_height, max(72., size*1.25+2*NODE_PAD_Y)), 1
+    face = load_font_file(font_paths['bold_font_file' if style.get('bold', True) else 'font_file'], size)
+    body_face = load_font_file(font_paths['font_file'], body_size)
+    inset = {'diamond': (.5, .5), 'ellipse': (.66, .66), 'hexagon': (.66, .76)}
+    lines, need = 1, 0.
+    for node in nodes:
+        geometry = SHAPES[node.get('shape') or style.get('shape', 'rect')]
+        sx, sy = inset.get(geometry, (.94, .78))
+        title_lines = _wrap(node['title'], face, max(24., node_width*sx))
+        lines = max(lines, len(title_lines))
+        title_need = len(title_lines)*size*1.25
+        body = str(node.get('body') or '')
+        body_need = len(_wrap(body, body_face, max(24., node_width*sx)))*body_size*1.25 if body.strip() else 0.
+        # A label-only node keeps the inner height for the title; a node with a body splits it
+        # 45/55 the way node_elements does, so both parts have to be paid for.
+        inner = max(title_need/.45, (body_need+8)/.55) if body_need else title_need
+        need = max(need, inner/sy+2*NODE_PAD_Y)
+    return min(max_height, max(72., need)), lines
 EMBEDDED_ARCHETYPES = frozenset({'process-flow', 'figure-parameters'})
 
 
@@ -243,31 +309,31 @@ def graphic_obstacle_collisions(connectors, elements):
 
 
 def node_elements(graphic_id, node, bbox, theme, text_heights=None, shape_override=None,
-                  title_size=30, body_size=26):
+                  title_size=None, body_size=None):
     """The v2 node/label renderer, also used by measured DAG nodes."""
+    from .style import node_style
     nx, node_y, node_width, node_height = bbox
-    accent = theme.get('accent', '#C2410C')
     foreground = theme.get('foreground', '#142735')
-    background = theme.get('background', '#FFFFFF')
-    # A restrained theme tint, computed once; the PPTX still carries a solid editable fill.
-    # `tone=emphasis` is a stronger tint plus a heavier rule, not a new palette.
+    # A node is drawn in the deck's style pack: the pack owns shape, fill, rule weight and type
+    # size, so "academic" and "commercial" are data rather than branches in the emitters.
     tone = node.get('tone', 'default')
-    mix = .18 if tone == 'emphasis' else .08
-    fill = '#' + ''.join(f'{round(int(accent[k:k+2], 16)*mix + int(background[k:k+2], 16)*(1-mix)):02X}'
-                         for k in (1, 3, 5))
+    style = node_style(theme, tone)
+    title_size = title_size or style.get('title_size', 30)
+    body_size = body_size or style.get('body_size', 26)
     elements = []
     prefix = f"graphic:{graphic_id}:node:{node['id']}"
     metadata = {'graphic_id': graphic_id, 'node_id': node['id']}
     if tone != 'default':
         metadata['tone'] = tone
-    geometry = SHAPES[shape_override or node.get('shape', 'rounded-rect')]
+    declared = shape_override or node.get('shape')
+    geometry = SHAPES[declared] if declared else SHAPES[style.get('shape', 'rounded-rect')]
     elements.append({'id': prefix, 'kind': 'shape', 'role': 'graphic-node',
                      'bbox': [nx, node_y, node_width, node_height],
-                     'geometry': geometry, 'fill': fill, 'line': accent,
-                     'line_width': 3.5 if tone == 'emphasis' else 2, **metadata})
+                     'geometry': geometry, 'fill': style['fill'], 'line': style['stroke'],
+                     'line_width': float(style['stroke_width']), **metadata})
     # A rectangle inside each preset's contour, including a diamond's sloping sides.
     sx, sy = {'diamond': (.5, .5), 'ellipse': (.66, .66),
-              'hexagon': (.66, .76)}.get(geometry, (.84, .78))
+              'hexagon': (.66, .76)}.get(geometry, (.94, .78))
     inner_w, inner_h = node_width*sx, node_height*sy
     inner_x, inner_y = nx+(node_width-inner_w)/2, node_y+(node_height-inner_h)/2
     body = node.get('body', '')
@@ -275,7 +341,8 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None, shape_overri
     if text_heights and body.strip():
         title_need, body_need = text_heights
         title_h = (inner_h-8)*title_need/(title_need+body_need)
-    elements.append({'id': prefix+':title', 'kind': 'text', 'role': 'heading',
+    elements.append({'id': prefix+':title', 'kind': 'text',
+                     'role': 'heading' if style.get('bold', True) else 'body',
                      'text': node['title'], 'bbox': [inner_x, inner_y, inner_w, title_h],
                      'font_size': title_size, 'max_lines': 2, 'color': foreground, **metadata})
     if body.strip():
@@ -299,19 +366,24 @@ def compile_graphic(graphic, region, theme, font_paths=None):
     direction = graphic.get('direction', 'horizontal')
     layout = graphic.get('layout', 'chain')
     accent = theme.get('accent', '#C2410C')
+    from .style import edge_style
+    edge_color, edge_width = edge_style(theme)
     elements = []
 
     if direction == 'vertical':
         gap = 20.0
-        node_height = (height-gap*(count-1))/count
-        # Keep a vertical flow readable as a column of cards; letting each node
-        # take the full body width turns ellipses and diamonds into flat bands.
+        # A vertical chain also fits its labels: three short step names in a tall region used to
+        # become three 190 px boxes with one line each, which reads as an empty table, not a flow.
         node_width = min(width-32, 560.0)
-        if node_width < 240 or node_height < 84:
-            raise ValueError('Vertical process needs at least 240 px width and 84 px per node')
+        node_height, _ = node_fit(graphic['nodes'], node_width, theme, font_paths,
+                                  (height-gap*(count-1))/count)
+        if node_width < 240 or node_height < 72:
+            raise ValueError('Vertical process needs at least 240 px width and 72 px per node')
         node_x = x+(width-node_width)/2
+        total = node_height*count+gap*(count-1)
+        start_y = y+max(0., (height-total)/2)
         for index, node in enumerate(graphic['nodes']):
-            ny = y+index*(node_height+gap)
+            ny = start_y+index*(node_height+gap)
             elements.extend(node_elements(graphic['id'], node, [node_x, ny, node_width, node_height], theme))
         nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
         for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
@@ -331,7 +403,7 @@ def compile_graphic(graphic, region, theme, font_paths=None):
                     'end_site': CONNECTION_SITES[end['geometry']]['top'],
                     'start': start_point, 'end': end_point, 'bbox': bbox,
                     'geometry': 'bentConnector3', 'adjustments': adjustments, 'flip_v': False,
-                    'line': accent, 'line_width': 2.5,
+                    'line': edge_color, 'line_width': edge_width,
                     'head_end': 'none', 'tail_end': 'triangle'}
             from .dag_layout import connector_points
             edge['route'] = connector_points(bbox, 'bentConnector3', adjustments, False)
@@ -363,24 +435,25 @@ def compile_graphic(graphic, region, theme, font_paths=None):
                              'end_site': CONNECTION_SITES[end['geometry']]['left'],
                              'start': start_point, 'end': end_point,
                              'bbox': [start_point[0], start_point[1], tx-start_point[0], 0],
-                             'geometry': 'straightConnector1', 'line': accent, 'line_width': 2.5,
+                             'geometry': 'straightConnector1', 'line': edge_color, 'line_width': edge_width,
                              'head_end': 'none', 'tail_end': 'triangle'})
         return elements
 
     gap = 32.0
-    node_width = min(320.0, (width - gap*(count-1))/count)
+    limit = min(320.0, (width - gap*(count-1))/count)
+    node_width = _chain_width(graphic['nodes'], limit, theme, font_paths)
     total_width = node_width*count + gap*(count-1)
     start_x = x + (width-total_width)/2
     if layout == 'staggered':
         offset = 18.0
-        node_height = min(170.0, height-32-2*offset)
-        if node_width < 160 or node_height < 120:
-            raise ValueError('Staggered process needs at least 160 px per node and 152 px of height')
+        node_height, _ = node_fit(graphic['nodes'], node_width, theme, font_paths, height-32-2*offset)
+        if node_width < 160 or node_height < 72:
+            raise ValueError('Staggered process needs at least 160 px per node and 72 px of height')
         base_y = y+(height-node_height)/2
     else:
-        node_height = min(180.0, height-32)
-        if node_width < 160 or node_height < 120:
-            raise ValueError('Process graphic needs at least 160 px per node and 152 px of height')
+        node_height, _ = node_fit(graphic['nodes'], node_width, theme, font_paths, height-32)
+        if node_width < 160 or node_height < 72:
+            raise ValueError('Process graphic needs at least 160 px per node and 72 px of height')
         base_y = y+(height-node_height)/2
     for index, node in enumerate(graphic['nodes']):
         nx = start_x + index*(node_width+gap)
@@ -409,7 +482,7 @@ def compile_graphic(graphic, region, theme, font_paths=None):
                     'end_site': CONNECTION_SITES[end['geometry']]['left'],
                     'start': start_point, 'end': end_point, 'bbox': bbox,
                     'geometry': geometry, 'adjustments': adjustments, 'flip_v': flip_v,
-                    'line': accent, 'line_width': 2.5,
+                    'line': edge_color, 'line_width': edge_width,
                     'head_end': 'none', 'tail_end': 'triangle'}
             from .dag_layout import connector_points
             edge['route'] = connector_points(bbox, geometry, adjustments, flip_v)
@@ -422,6 +495,6 @@ def compile_graphic(graphic, region, theme, font_paths=None):
                              'end_site': CONNECTION_SITES[end['geometry']]['left'],
                              'start': start_point, 'end': end_point,
                              'bbox': [start_point[0], start_point[1], tx-start_point[0], 0],
-                             'geometry': 'straightConnector1', 'line': accent, 'line_width': 2.5,
+                             'geometry': 'straightConnector1', 'line': edge_color, 'line_width': edge_width,
                              'head_end': 'none', 'tail_end': 'triangle'})
     return elements

@@ -22,7 +22,9 @@ def design_complete(job):
         return False
     from deck_compiler.visual_planner import pending_design
     try:
-        a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'))
+        work = path.parent
+        design = read(work/'page_design.json') if (work/'page_design.json').is_file() else None
+        a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'), design=design)
         pending = pending_design(read(path))
         return not pending['academic_design_required'] and not pending['slide_ids']
     except (ValueError, KeyError, TypeError):
@@ -74,8 +76,24 @@ def envelope(job, stage, failure=None):
     if kind == 'agent':
         status = 'waiting_agent'
         artifact = stage['artifact']
-        prompt = {'story': work/'story_prompt.json', 'deck_ir': work/'ir_prompt.json',
+        prompt = {'story': work/'story_prompt.json', 'page_design': work/'page_design_prompt.json',
+                  'deck_ir': work/'ir_prompt.json',
                   'visual_design': work/'visual_prompt.json'}.get(sid)
+        if stage.get('prepare') and prompt and not prompt.is_file():
+            # An agent stage may need a prompt assembled from upstream work. Only the component
+            # loop used to call adapters.execute, so a prompt owned by an agent stage stayed
+            # missing until a human materialised it by hand.
+            try:
+                a.execute(stage['prepare'], job)
+            except (a.Failure, ValueError, OSError, KeyError):
+                pass
+        if sid == 'deck_ir' and (work/'page_design.json').is_file():
+            # The approved design goes into a separate prompt file: rewriting ir_prompt.json would
+            # change an artifact the RPA stage already checkpointed and invalidate the job.
+            try:
+                prompt = a.finalize_design(work) or prompt
+            except (ValueError, OSError, KeyError):
+                pass
         action = {'type': 'invoke_subagent' if sid == 'story' else 'author_artifact',
             'reason': 'STORY_PLANNING_REQUIRED' if sid == 'story' else artifact.upper()+'_REQUIRED',
             'artifact_kind': artifact, 'expected_output': str(work/(artifact+'.json')),
@@ -87,6 +105,15 @@ def envelope(job, stage, failure=None):
             **({'input_path': str(prompt)} if prompt else {}),
             **({'schema_path': str(Path(__file__).parent/'schemas/queries.schema.json')} if sid == 'queries' else {}),
             **({'required_capability': 'independent_subagent', 'delegation': job['inputs']} if sid == 'story' else {})}
+        if sid == 'page_design':
+            # The design is a judgement call, not a form to fill in: hand it to a subagent with the
+            # capability brief, the same way Story is delegated, instead of having the main agent
+            # design the deck inline while it is also running the pipeline.
+            task = work/'page_design_task.md'
+            action.update({'type': 'invoke_subagent', 'required_capability': 'independent_subagent',
+                           'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED',
+                           'input_path': str(prompt) if prompt else None,
+                           'instructions_path': str(task) if task.is_file() else str(prompt)})
     if kind == 'terminal':
         status = 'candidate_ready'
         action = {'type': 'none', 'reason': 'CANDIDATE_READY', 'candidate': str(out/'build/candidate.pptx'),
@@ -238,9 +265,20 @@ def _accept(job, stage, upstream, kind, path):
         elif kind == 'story_plan':
             workflow = read(work/'evidence_pointer.json')['workflow']
             a.check_story(read(work/'story_prompt.json'), value, read(workflow))
+        elif kind == 'page_design':
+            workflow = read(work/'evidence_pointer.json')['workflow']
+            evidence = {entry['evidence_id']: entry['text']
+                        for entry in read(workflow)['evidence_registry']}
+            a.check_design(value, read(work/'story_plan.json'), evidence)
         elif kind == 'deck_ir':
+            design = read(work/'page_design.json') if (work/'page_design.json').exists() else None
+            # The design's devices are written by the compiler before validation, so an author
+            # cannot forget them and the deck cannot drift away from the approved design.
+            value, art_notes = a.apply_art_direction(value, design)
+            if art_notes:
+                write(work/'art_direction_notes.json', art_notes)
             a.check_ir(value, read(work/'normalized_content.json') if (work/'normalized_content.json').exists() else None,
-                       job['request'].get('supplement', 'off'))
+                       job['request'].get('supplement', 'off'), design=design)
         elif kind == 'visual_proposal':
             from deck_compiler.visual_planner import apply_proposal
             try:
@@ -255,15 +293,15 @@ def _accept(job, stage, upstream, kind, path):
         save(job)
         raise
     destination = work/(kind+'.json')
-    if destination != path:
-        if kind == 'deck_ir':
-            a.import_ir(path, destination, job['request'].get('supplement', 'off'))
-        else:
-            write(destination, value)
-    elif kind == 'deck_ir':
-        # Persist authoring shorthands (latex, diagram, auto inline math) after
-        # validation so Design and Build consume the canonical representation.
+    if kind == 'deck_ir':
+        # Persist the canonical representation, including the devices written from the design and
+        # the authoring shorthands (latex, diagram, automatic inline math) expanded in place.
+        a.persist_ir(value, path, destination)
+    elif destination != path:
         write(destination, value)
+    if kind == 'page_design':
+        # The design is approved; the IR stage must now realize it instead of re-deciding it.
+        a.finalize_design(work, value)
     paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None] if kind == 'deck_ir' else [destination]
     checkpoint(job, stage['id'], paths, upstream)
     job.pop('last_error', None)

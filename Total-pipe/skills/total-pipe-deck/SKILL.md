@@ -29,6 +29,12 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
 | 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
+| 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |
+| 页脚家具 `page_numbers` / `footer` | 长报告要能按页码引用、要有署名 | 仅设计页生效；一行 ≤120 字符；evidence id 仍留在备注 |
+| panel chip 标题 `frame.title_band` | 一页分 2–3 组时，让组标签自己说话 | `chip` 必须配 `title_fill`；标题过宽自动退回整行色带 |
+| 图注出处 `figure_refs.source_label` | 论文图注要能看出处 | ≤80 字符；弱化前缀，参与图注测量 |
+| 目录页 `presentation.agenda` + `slide.presentation.section` | 长报告要目录和章节 | 需要 ≥2 个章节与 `academic_design`；目录页由编译器插入并重算页码 |
+| 设计层设备 `page_design.devices` | 让设计阶段主动选标签组/强调/图注出处/结论框/目录 | 每项都有退化路径，不用承担构建失败风险；结构类（标签组）仍需 IR 自己搭 |
 | 独立公式 `formula` | 展示式推导 | 过高会挤压正文 |
 | 原生表格 | 多材料/多条件对照 | ≤4 表/页、≤32 行 × 12 列、字号 ≥18 pt |
 | `process` | 3–4 步线性流程；`compact` 可放 3–8 步 | 节点数硬限制；支持 `direction=vertical`、横向 `layout=staggered` 和全方形 `layout=compact`，节点可 `tone=emphasis`；纵向 4 步需短标题，compact 字号 24 css px 且 `body` 尽量省略；`body` 可选，只有流程名时更紧凑 |
@@ -208,6 +214,56 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 需要重规划，不能自动拆散。总结页保留 summary 类别；不要为通过容量改成错误类别。
 `max_chars` 只是粗筛，`SLOT_WRAP_RISK` 也不能代替实际渲染。
 
+### 3.1 页面设计阶段（page_design）
+
+Agent 接入层在 RPA 之后要求先交一份页面设计表，再写 IR。设计表回答四个问题：这一页承载哪条
+Story 内容、论点是什么、用哪种形式、眼睛落在什么锚点上。
+
+```json
+{"id":"P4","from_story":["S4"],"role":"result","claim":"200 次迭代误差 1.2×10^-3，达标迭代少 1.8 倍。",
+ "takeaway_from":"S4.answer",
+ "items":[{"id":"p4-err","text":"200 次迭代后相对误差 1.2×10^-3。","source":"S4.key_points[0]",
+           "evidence":["EV0001"]}],
+ "form":"figure-reading","anchor":{"kind":"figure","why":"论文图就是论点"},"rationale":"图占左侧 2/3"}
+```
+
+- **形式库**：`cover`（封面，items 可为空、无页脚页码）、`spec-table` / `comparison-table`（表）、
+  `equation-reading`（公式）、`mechanism-flow`
+  （原生流程）、`figure-reading`（图）、`three-limits`（三列）、`statement`（一句主张放大）、
+  `text-columns`（2–3 组并排）、`numbered-points`（带序号要点）、`problem-route-result`
+  （问题 → 做法 → 结果三节点流程 + 文本带）、`text-stack` / `closing-statement`
+  （兜底堆叠 / 单句结论）。`anchor.kind` 必须与形式匹配。文本带的多栏用 `columns fit="hug"`，
+  让行高贴合最高内容而不是撑满整栏。
+- **守恒**：Story 的每个 answer / key_point / ending **只属于一页**（同一页可被多个 item 引用展开，
+  跨页重复才报错）；数字只能来自所引 evidence（`$95.8\%$` 与 `95.8%` 视为同一个数，`Fig. 3e` 的
+  面板号不算测量值）；页数可与 brief 数不同（合并或拆分），但不得超过两倍。
+- **实现校验**：IR 必须一页对一页实现设计（同页数、同 evidence、设计页上的数字不丢），否则
+  `DESIGN_REALIZATION_FAILED`。设计通过后，IR 阶段不再逐字比对 brief 原文。
+
+#### 设计层设备（art direction）
+
+设计表不只选形式，还要为每页点名**要用的设备**：`emphasis`（1–3 个短语）、`highlight`（1–2 个符号）、
+`panel-group`（2–3 个标签）、`caption-source`（图注出处）、`takeaway-frame`（结论框）、`sequence-rail`；
+篇级还有 `sections`、`agenda`、`footer`、`page-numbers`。
+
+```json
+{"pages":[{"id":"P4","devices":{"emphasis":["1.8 倍"],"takeaway-frame":"fill"}}],
+ "devices":{"footer":"组会报告","page-numbers":true,
+            "sections":[{"page":"P1","label":"器件与背景"},{"page":"P4","label":"结果"}],
+            "agenda":{"title":"目录"}}}
+```
+
+- **为什么现在可以大胆用**：每个设备都有退化路径（chip → 整行色带 → 普通分组；目录 → 不生成；
+  出处 → 只留图注），不会把构建打红。设计提示词明确要求「不许为了稳妥而不用」；一页不用任何设备
+  必须在 rationale 里说明。
+- **谁写**：机械设备由编译器写进 IR（标记、出处、结论框、章节、目录、页脚、页码），作者漏写也不会丢；
+  结构设备 `panel-group` 由 IR 自己搭 panel 并加 `frame.title_fill` + `title_band:"chip"`，缺了报
+  `DESIGN_REALIZATION_FAILED`。
+- **校验边界**：设备校验只看形状，不看它会占多少版面；内容不变式（Story 一次、数字来自 evidence）
+  照旧。完整清单与退化表见 [设计层设备清单](../../docs/art-direction.md)。
+- 视觉语言用 `presentation.visual_style` 选包：`academic`（默认，直角细线无填充）、`commercial`
+  （浅色圆角卡片）、`print`（纯黑细线）。见 [视觉风格包](../../docs/visual-style.md)。
+
 ## 4. Canonical Deck IR：正文、图片、图形和公式
 
 按 §0 的四问逐页选能力：命中才读下面小节对应的协议；都不命中就保持平面页，并写明为什么不用。
@@ -355,6 +411,41 @@ table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字�
 
 Agent 接入层还接受更短的 `{"id":"equation","latex":"..."}`，校验前补成
 `component:"formula"` + `text`；正文、标题或 takeaway 中的 `$…$` / `\(…\)` 自动开启行内模式。
+
+### 句内强调与页脚家具
+
+正文均质是机器写的最大观感差。强调写在文本里，不另加文本框：
+`**词**` 渲染成主题色加粗，`==符号==` 渲染成高亮底色，均为 run 级属性，PowerPoint 里可直接改。
+
+- 一处即可：一句话最多一个标记词；整段都红等于没有强调。
+- 不跨公式：`$…$` 里的内容不参与强调解析；要强调就强调公式前后的词。
+- 不放进原生列表：列表一项只有一种 run 样式，带标记的块会保留原文、去掉标记并报
+  `EMPHASIS_IN_LIST`；要保留强调就写 `text_flow:"plain"`。
+- 加粗按真实粗体字面测宽，因此强调可能让该块换行或缩一号；若同页出现两个正文号，
+  先删多余的强调，不要整页缩号（`BODY_SIZE_VARIANCE`）。
+- 未闭合标记按字面输出并报 `EMPHASIS_UNCLOSED`，不会吞掉后文；字面星号写 `\*\*`。
+
+设计页默认带页脚家具：一条 1 px 细线、左下角一行弱化文字、右下角页码。整篇声明：
+
+```json
+{"presentation": {"page_numbers": true, "footer": "NbS2/MoS2 非对称接触 · 组会报告"}}
+```
+
+`page_numbers:false` 关掉页码；单页 `slides[i].presentation.page_number=false` 只藏这一页；
+页脚文字一行 ≤120 字符。evidence id 不进页脚，它们留在 speaker notes。细节读
+`Total-pipe/docs/visual-style.md`。
+
+### 分组标签、图注出处与目录
+
+- **分组标签**：`panel.frame` 加 `"title_band": "chip"` 并把 `title_fill` 设成实色，标题就从整行色带
+  变成按文字收拢的圆角标签（白字默认居中）。chip 只在原有标题行内绘制，不改面板高度与正文起点；
+  标题宽到收不住时自动退回整行色带。没有 `title_fill` 的 chip 校验直接报错。
+- **图注出处**：`figure_refs.source_label` 写作者/文献/图号（≤80 字符），编译器以弱化墨色把它接在
+  图注前，整体仍是一个可编辑图注；前缀计入图注测量，不会盖到图上。
+- **目录页**：`presentation.agenda` 打开后，编译器在第 1 页之后插入一页目录；章节来自
+  `slides[i].presentation.section`（一行 ≤24 字符，标记章节起点），页码按最终页序计算。
+  少于两个章节不生成并报 `AGENDA_EMPTY`，超过 8 个章节列前 8 个并报 `AGENDA_TRUNCATED`。
+  目录页与内容页共用页眉、细线与页脚；它不占 Story 条目、不引入新内容。
 展开结果会写回 `work/deck_ir.json`，直接调用编译器时仍写 canonical 字段。
 
 `anchor` 可省略；存在时指向本页前方的非公式 block。无标签公式默认贴在前一说明块下方，
