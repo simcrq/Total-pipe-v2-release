@@ -323,8 +323,13 @@ def check(ir, design):
             opener = '**' if name == 'emphasis' else '=='
             visible = ' '.join(str(holder.get('text') or holder.get('takeaway') or '')
                                for _, holder in _text_fields(slide))
+            # The IR normalizes scientific notation (10^8 -> $10^{8}$) after the device is applied.
+            # Compare against the same text with math delimiters and grouping braces removed so a
+            # phrase the designer saw in the brief still matches its native-math form.
+            plain = visible.replace('$', '').replace('{', '').replace('}', '')
             for phrase in devices.get(name) or []:
-                if f'{opener}{phrase}{opener}' not in visible:
+                marker = f'{opener}{phrase}{opener}'
+                if marker not in visible and marker not in plain:
                     missing.append((page.get('id'), f'{name} {phrase!r} is not marked'))
         captions = devices.get('caption-source')
         figures = (slide.get('composition') or {}).get('figure_refs') or []
