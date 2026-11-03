@@ -11,7 +11,7 @@ VERSIONS = ('1.0', '1.1', '1.2')
 MAX_DEPTH = 6
 MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
-LEAVES = ('block', 'figure', 'graphic', 'table')
+LEAVES = ('block', 'figure', 'graphic', 'table', 'chart')
 GAPS = {'compact': 12., 'standard': 24., 'spacious': 32.}
 STACK_ALIGNMENTS = ('start', 'center', 'distribute')
 # A column row may either fill the region (stretch, the historical behaviour) or stop at the
@@ -38,6 +38,8 @@ def capabilities():
                                           'title_band': True}, 'takeaway': {'measured': True}},
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
+            'chart': {'types': ['line', 'bar'], 'bases': ['evidence', 'explain'],
+                      'min_size_px': [420, 260], 'max_series': 4},
             'legacy_flat_ir': True}
 
 
@@ -159,6 +161,9 @@ def validate_tree(tree, composition):
     tables = composition.get('tables', [])
     expected += [('table', t['id']) for t in (tables if isinstance(tables, list) else [])
                  if isinstance(t, dict) and isinstance(t.get('id'), str)]
+    charts = composition.get('charts', [])
+    expected += [('chart', c['id']) for c in (charts if isinstance(charts, list) else [])
+                 if isinstance(c, dict) and isinstance(c.get('id'), str)]
     actual = Counter(references)
     for key in expected:
         if actual[key] != 1:
@@ -382,6 +387,15 @@ class RegionCompiler:
             height = self.graphic_height(graphic, width, path, available)
             preferred = width*graphic['view_box'][3]/graphic['view_box'][2]+8 if graphic['type'] == 'path' else height
             need = Need(height, max(height, preferred), self.graphic_min_width(graphic))
+        elif kind == 'chart':
+            from .chart_render import chart_need
+            chart = next((item for item in self.comp.get('charts') or []
+                          if isinstance(item, dict) and item.get('id') == node['ref']), None)
+            if chart is None:
+                raise LayoutTreeError(path, 'CHART_REF_UNKNOWN',
+                                      f'chart {node["ref"]!r} is not in composition.charts',
+                                      [1, 1], available)
+            need = chart_need(chart, width)
         elif kind == 'panel':
             from .container_frames import panel_metrics
             pad, stroke, overhead = panel_metrics(node)
@@ -426,7 +440,8 @@ class RegionCompiler:
                 code = ('INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
                         else 'INSUFFICIENT_TEXT_SPACE')
             else:
-                code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE'}.get(
+                code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE',
+                        'chart': 'INSUFFICIENT_CHART_SPACE'}.get(
                     kind, 'INSUFFICIENT_DRAWING_SPACE')
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
                                   [width, need.hard], [width, height])

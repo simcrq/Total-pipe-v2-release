@@ -293,6 +293,8 @@ def graphic_obstacle_collisions(connectors, elements):
     from .dag_layout import segment_hits_node
     findings = []
     for edge in connectors:
+        if edge.get('role') == 'chart-line':
+            continue  # A plot line is not a routed graphic edge; chart internals are one scene.
         route = edge.get('route') or [edge['start'], edge['end']]
         for other in elements:
             if other['kind'] == 'connector' or other.get('collision_mode') == 'container':

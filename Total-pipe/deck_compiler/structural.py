@@ -104,9 +104,9 @@ def verify(path, layout):
                     if len(connectors) != sum(e['kind'] == 'connector' for e in slide['elements']):
                         add('CONNECTOR_COUNT_MISMATCH', 'Native connector count differs from layout', n)
                     graphic_names = [s.find('p:nvSpPr/p:cNvPr', NS).get('name') for s in shapes
-                                     if s.find('p:nvSpPr/p:cNvPr', NS).get('name', '').startswith('graphic:')]
+                                     if s.find('p:nvSpPr/p:cNvPr', NS).get('name', '').startswith(('graphic:', 'chart:'))]
                     graphic_names += [s.find('p:nvCxnSpPr/p:cNvPr', NS).get('name') for s in connectors
-                                      if s.find('p:nvCxnSpPr/p:cNvPr', NS).get('name', '').startswith('graphic:')]
+                                      if s.find('p:nvCxnSpPr/p:cNvPr', NS).get('name', '').startswith(('graphic:', 'chart:'))]
                     if sorted(graphic_names) != sorted(expected_graphics):
                         add('GRAPHIC_OBJECT_MISMATCH',
                             'Native graphic object names/count differ from the compiled layout', n)

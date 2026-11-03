@@ -1418,6 +1418,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     adaptations.append({'action': 'vertical_balance', **plan['balanced']})
                 by_id = {b['id']: b for b in blocks}
                 graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
+                charts_by_id = {c['id']: c for c in comp.get('charts', [])}
                 for entry in plan['nodes']:
                     first, issue_start = len(elements), len(issues)
                     if entry['type'] == 'panel':
@@ -1443,6 +1444,37 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         figure(figs[entry['ref']], entry['bbox'], entry['ref']+1)
                     elif entry['type'] == 'graphic':
                         native_graphic(entry['bbox'], graphics_by_id[entry['ref']])
+                    elif entry['type'] == 'chart':
+                        from .chart_render import ChartLayoutError, compile_chart
+                        chart = charts_by_id[entry['ref']]
+                        try:
+                            rendered = compile_chart(chart, entry['bbox'], theme, font_paths)
+                        except ChartLayoutError as error:
+                            issues.append(issue(error.rule, 'FAIL', str(error), n, chart['id'],
+                                                detector='geometric-preflight',
+                                                component=entry['component']))
+                            continue
+                        for element in rendered:
+                            if element['kind'] in ('shape', 'connector'):
+                                elements.append(element)
+                            else:
+                                before = len(elements)
+                                text(element['id'], element['text'], element['bbox'], element['role'],
+                                     element['font_size'],
+                                     20 if element['role'] == 'caption' else 24,
+                                     element['max_lines'], 'middle', element['color'],
+                                     align=element.get('align'))
+                                if len(elements) > before:
+                                    elements[-1].update({key: element[key] for key in
+                                        ('graphic_id', 'overlap_group', 'node_id') if key in element})
+                        issues.append(issue(
+                            'CHART_DATA_REVIEW' if chart.get('basis') == 'evidence' else 'CHART_ILLUSTRATIVE_REVIEW',
+                            'REVIEW',
+                            'Confirm every plotted point against the cited evidence; the compiler checked '
+                            'the chart structure, not the paper text.' if chart.get('basis') == 'evidence'
+                            else 'This chart is an illustrative schematic, not measured data; confirm the '
+                                 '示意 badge is visible in the rendered slide.',
+                            n, chart['id'], detector='scientific-review', confidence='MEDIUM'))
                     elif entry['type'] == 'table':
                         from .native_table import compile_table
                         table = next(t for t in comp['tables'] if t['id'] == entry['ref'])

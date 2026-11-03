@@ -204,6 +204,10 @@ def validate(ir):
         for message in validate_tables(comp.get('tables', []), sem.get('evidence_refs', [])):
             check(False, message, n, 'TABLE_INVALID')
         check(not comp.get('tables') or has_tree, 'Native tables require a region tree', n, 'TABLE_INVALID')
+        from .chart_layout import validate_charts
+        for message in validate_charts(comp.get('charts', []), sem.get('evidence_refs', [])):
+            check(False, message, n, 'CHART_INVALID')
+        check(not comp.get('charts') or has_tree, 'Charts require a region tree', n, 'CHART_INVALID')
         check(archetype != 'composite-research' or has_tree,
               'composite-research requires composition.layout_tree', n, 'LAYOUT_TREE_INVALID')
         if has_tree:

@@ -68,5 +68,26 @@ class ChartContractTests(unittest.TestCase):
             jsonschema.validate(chart, SCHEMA)
 
 
+    def test_chart_leaf_compiles_as_a_native_plot(self):
+        from deck_compiler.layout import compile_deck
+        deck = json.loads((ROOT/'examples/composite-layout.deck_ir.json').read_text(encoding='utf-8'))
+        deck['slides'] = [deck['slides'][0]]
+        slide = deck['slides'][0]
+        slide['semantic'] = {'title': '编程窗口随沟道长度变化', 'purpose': '验证原生图表渲染。',
+                             'takeaway': '示意数据，不是论文数值。', 'evidence_refs': ['EV0012'],
+                             'caveats': [], 'speaker_notes': 'chart contract test'}
+        slide['composition'] = {
+            'archetype': 'composite-research', 'blocks': [], 'figure_refs': [],
+            'charts': [self.chart()],
+            'layout_tree': {'version': '1.2', 'regions': {'body': {'id': 'body-chart',
+                                                                   'type': 'chart', 'ref': 'window'}}}}
+        layout, issues = compile_deck(deck, ROOT/'examples')
+        self.assertFalse([issue for issue in issues if issue['severity'] == 'FAIL'], issues)
+        elements = layout['slides'][0]['elements']
+        self.assertTrue(any(element['id'].startswith('chart:window:line:') for element in elements))
+        self.assertTrue(any(element['id'] == 'chart:window:badge' for element in elements)
+                        if self.chart().get('basis') == 'explain' else True)
+
+
 if __name__ == '__main__':
     unittest.main()

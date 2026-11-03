@@ -1,6 +1,7 @@
 # 数据图（chart）IR 契约 v1
 
-状态：**契约已冻结，渲染器未实现**（C1）。本文件定义字段、校验和渲染边界；`chart_layout.py`
+状态：**C1/C2 已实现**——契约、layout tree 叶子、line/bar 原生渲染；逐点 evidence 比对与
+scatter/误差棒仍待后续。本文件定义字段、校验和渲染边界；`chart_layout.py`
 负责 Schema 表达不了的规则，`schemas/chart-ir.schema.json` 是可执行的字段契约，
 `examples/chart-ir.example.json` 是可校验的样例。
 
@@ -12,7 +13,7 @@
 - **画示意。** 没有数据、但结构需要一张曲线时，用 `basis=explain` + `illustrative=true`，
   渲染时必须带可见的“示意”标记，不能伪装成论文数据。
 
-## 在 Deck IR 里的位置（C2 接入）
+## 在 Deck IR 里的位置
 
 ```json
 "composition": {
@@ -88,10 +89,11 @@ Schema 负责：类型、枚举、长度上限、必填。
 ## 渲染契约（C2）
 
 - 原生形状 + 文本框，不嵌图片、不生成 chart part，保证可编辑且能被现有几何/字号检查覆盖。
-- 画布：左边距 96、右边距 24、上边距 28、下边距 72；y 轴标题旋转 90°。
-- 刻度：x 4–5 个（log 轴按 10 的幂），y 4 个；标签 18pt 下限，轴标题 20pt。
+- 画布：左边距 96、右边距 24、上边距 46、下边距 104；y 轴标题横排放在绘图区上方，不做旋转。
+- 刻度：x 4–5 个（log 轴按 10 的幂，并补轴两端），y 4 个；刻度标签 20px（15pt，`caption` 角色），
+  轴标题 24px（18pt，`body` 角色）。
 - 折线 2.5px、标记 6px；柱状图零基线，柱间距 30%。
-- 图例放右上角，series 多于 2 组时才显示；`source` 放右下角 18pt。
+- 图例放右上角，按 series 顺序排列；`source` 放右下角 20px。
 - explain 图在左上角加“示意”徽标（与 supplement 的可见标记一致）。
 - 放不下时返回 `CHART_CAPACITY`，由树把页拆开，绝不缩字号或裁刻度。
 
@@ -107,8 +109,8 @@ Schema 负责：类型、枚举、长度上限、必填。
 
 | 期 | 内容 |
 | --- | --- |
-| C1 | 字段契约 + Schema + `validate_charts` + 样例 + 测试（本次） |
-| C2 | `layout_tree` 叶子 `chart`、测量、line/bar 渲染、`CHART_CAPACITY` |
+| C1 | 字段契约 + Schema + `validate_charts` + 样例 + 测试（已完成） |
+| C2 | `layout_tree` 叶子 `chart`、测量、line/bar 渲染、`CHART_CAPACITY`（已完成） |
 | C3 | scatter、误差棒、双轴 |
 | C4 | 流水线逐点 evidence 校验与 `CHART_DATA_REVIEW` |
 

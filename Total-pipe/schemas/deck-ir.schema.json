@@ -182,7 +182,7 @@
                         "items": {"$ref": "#/$defs/region-figure"}},
            "gap": {"enum": ["compact", "standard", "spacious"]}}},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
-         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic", "table"]},
+         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic", "table", "chart"]},
                         "ref": {"type": "string", "minLength": 1}}},
         {"$ref": "#/$defs/region-figure"}
       ]
@@ -235,6 +235,53 @@
           }
         }}
       }
+    },
+    "chart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "basis", "x", "y", "series"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"enum": ["line", "bar"]},
+        "basis": {"enum": ["evidence", "explain"]},
+        "illustrative": {"type": "boolean", "default": false},
+        "x": {
+          "type": "object", "additionalProperties": false, "required": ["label", "values"],
+          "properties": {
+            "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+            "scale": {"enum": ["linear", "log"], "default": "linear"},
+            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}}
+          }
+        },
+        "y": {
+          "type": "object", "additionalProperties": false, "required": ["label"],
+          "properties": {
+            "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+            "scale": {"enum": ["linear", "log"], "default": "linear"},
+            "unit": {"type": "string", "maxLength": 24}
+          }
+        },
+        "series": {
+          "type": "array", "minItems": 1, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["label", "values", "evidence_refs"],
+            "properties": {
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+              "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}},
+              "evidence_refs": {"type": "array", "uniqueItems": true,
+                                "items": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+            }
+          }
+        },
+        "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
+        "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
+      },
+      "allOf": [
+        {"if": {"properties": {"basis": {"const": "explain"}}},
+         "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
+        {"if": {"properties": {"basis": {"const": "evidence"}}},
+         "then": {"properties": {"illustrative": {"const": false}}}}
+      ]
     },
     "academic-design": {
       "type": "object", "additionalProperties": false,
@@ -579,6 +626,11 @@
               "type": "array", "maxItems": 8,
               "items": {"$ref": "#/$defs/graphic"},
               "description": "One editable process/DAG, scientific component, Path IR scene or composite. Optional on process-flow and figure-parameters; required on native-graphic. Only Path IR uses local coordinates; page geometry is compiler-owned."
+            },
+            "charts": {
+              "type": "array", "maxItems": 4,
+              "items": {"$ref": "#/$defs/chart"},
+              "description": "Data plots (line/bar) referenced by a layout_tree chart leaf. Values are evidence-bound or explicitly illustrative; see docs/chart-ir.md."
             },
             "blocks": {
               "type": "array",
