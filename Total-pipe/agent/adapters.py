@@ -352,16 +352,15 @@ def finalize_design(work, design=None):
     prompt['design_devices'] = capabilities()['art_direction']['devices']
     instructions = prompt.get('instructions', '').split(DESIGN_MARKER)[0]
     prompt['instructions'] = instructions+DESIGN_MARKER+(
-        ' Realize it page by page: same pages, same claims, same form and anchor for each, and the devices '
-        'each page names. A device is a decision, not a suggestion: **…** / ==…== go into the text that '
-        'carries the claim, figure_refs carry source_label, a panel group is built as layout_tree panels '
-        'whose frame carries title_fill and title_band="chip", a takeaway-frame becomes '
-        'presentation.takeaway_frame, and the deck devices (sections, agenda, footer, page-numbers) go into '
-        'the deck presentation. The compiler writes the mechanical ones for you and degrades them instead of '
-        'failing; the panel groups are yours to build. Do not redesign, drop an item or move one to another '
-        'page. If a form cannot be realized at the required font floors, split that page and keep every item; '
-        'never delete content or shrink below the type scale. Set presentation.visual_style to the pack that '
-        'fits the venue.')
+        ' The design describes each page in words (shape, anchor, marks); it does not name a form. '
+        'Realize it page by page: same pages, same claims, same anchor, and the shape description is the '
+        'brief for how the page should read. Choose the form and devices from design_forms that realize '
+        'that description; marks are phrases that must carry the claim (**…** in the text that carries it). '
+        'The compiler writes the mechanical devices for you and degrades them instead of failing; panel '
+        'groups and layout trees are yours to build. Do not redesign, drop an item or move one to another '
+        'page. If the described shape cannot be realized at the required font floors, split that page and '
+        'keep every item; never delete content or shrink below the type scale. Set '
+        'presentation.visual_style to the pack that fits the venue.')
     # With an approved design the RPA plan and the raw content model are no longer inputs: the pages,
     # their claims and their items are the design. Carrying them anyway made the prompt 1.6 MB, which
     # is the same "too big to read" failure the design prompt just fixed.
@@ -624,38 +623,29 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
 
 
 DESIGN_INSTRUCTIONS = (
-    'You are designing a research talk, not filling a template. The room comes before the page: the '
-    'request names a presentation type and a brief, and between them they say who is in the room, what '
-    'they already know, how long the talk runs and how long one page stays on screen, and whether the '
-    'page is spoken to or read on its own. Settle that first and write it down as deck.setting. It '
-    'decides density and page shape, not decoration: a page that stays up while the room argues has to '
-    'give the eye something to hold, and a page meant to be read alone cannot depend on the voice. Do '
-    'not import the habits of a different room. You have the Story (what the talk '
-    'argues), the briefs (one unit of content each), the evidence behind them, the figure panels that '
-    'exist, and the catalogue of forms and devices this compiler can actually draw. Everything you '
-    'name is drawn natively and stays editable in PowerPoint. '
-    'Read the Story first, then decide the walk-through: what a listener should believe after page 1, '
-    'what each following page adds, and where the deck lands. One page argues one thing; give it the '
-    'form whose job matches that thing — a table when the content is parallel values, a figure when '
-    'the paper figure is the argument, a formula when the page is about an operator, a flow when the '
-    'order carries meaning, columns when three limits stand side by side. A page with no figure, '
-    'table or formula still needs a shape: one statement at display size when the page is a single '
-    'claim, two or three short groups side by side when the material is parallel, numbered points '
-    'when it is a list. Stacked blocks are the fallback for a page that really is one or two bare '
-    'lines with nothing to group; if you can name the groups, do not stack them. '
-    'Then make the page read: a labelled group when it carries two or three parallel groups, a boxed '
-    'takeaway when the page ends in a claim, the phrase that carries the claim (marked in the item '
-    'text itself), the provenance of a paper figure, a numbered rail for an ordered process. The '
-    'devices list says what each one buys and how it degrades if the page cannot hold it — a device '
-    'never costs you the build, so choose the page you want rather than the page you are sure of. A '
-    'page that genuinely is one statement needs no device; say why in its rationale. '
-    'Deck-level devices describe the deck as a whole: sections and a contents page when the talk is '
-    'long enough to need a map, a footer line for the venue, page numbers unless they would be wrong. '
-    'What happens after you: the pipeline checks that every Story answer and key point appears '
-    'exactly once across the pages, that each item cites evidence containing its numbers, and that '
-    'each form matches its anchor. Everything else — where the eye lands, how much air a page gets, '
-    'which words are marked — is your judgement. Do not write layout coordinates and do not write '
-    'Deck IR: this design is the thing the next stage realizes.'
+    'You are designing a research talk. Think like a designer, not like software: nothing you decide '
+    'here depends on what a tool can draw, and you are not asked to be realizable. The room comes '
+    'first: the request names a presentation type and a brief, and between them they say who is in the '
+    'room, what they already know, how long the talk runs, how long one page stays on screen, and '
+    'whether the page is spoken to or read on its own. Pick the occasion and write setting before you '
+    'touch a page. '
+    'Read the Story, then decide the walk-through: what a listener should believe after page 1, what '
+    'each following page adds, and where the deck lands. One page argues one thing. '
+    'For every page describe, in words, what the viewer should see: what is large and what is small, '
+    'where the eye lands first, what sits beside what, and how the page uses its space. Say what object '
+    'the page is about — a figure, a table, an equation, a number, or nothing. Say which phrase on the '
+    'page carries the claim. Do not name software features, templates, layouts or components; if you '
+    'find yourself choosing between two ways to draw something, you have gone one level too low — '
+    'describe the effect instead. '
+    'A page that is two or three short sentences in a column is a design problem, not a page: either '
+    'give it a shape that earns the space (one fact made large, a comparison made visible, a relation '
+    'drawn out) or merge it into a neighbour. Never hand that problem to whoever builds the slides. '
+    'The next stage translates your description into what the deck can render. Your job is to be clear '
+    'about the design, not careful about the tool. '
+    'The pipeline checks that every Story answer and key point appears exactly once across the pages, '
+    'and that each item cites evidence containing its numbers. Everything else — density, scale, where '
+    'the eye lands, how much air a page gets — is your judgement. Do not write layout coordinates and '
+    'do not write Deck IR: this design is what the next stage realizes.'
 )
 
 
@@ -665,47 +655,47 @@ def design_task(prompt=None):
     briefs = len((prompt or {}).get('briefs') or [])
     return f"""# 页面设计任务（子代理）
 
-你是这次 deck 的页面设计师。你决定这场报告按什么顺序讲、每一页靠什么成立。
+你是这次 deck 的页面设计师。你决定这场报告按什么顺序讲、每一页靠什么成立。你只负责想，不负责实现。
 
 - **输入**：`work/page_design_prompt.json`。里面是 Story（论证骨架）、{briefs} 条 briefs（每条要讲的内容）、
-  证据原文、{figures} 张可用的论文图，以及这套编译器能画的**形式**（forms）和**设备**（devices）清单，
-  每项都写了它买来什么、放不下时怎么退化。
+  证据原文、{figures} 张可用的论文图和 `room`（这场报告的场合与对象）。没有能力清单，也不需要知道
+  最终用什么画。
 - **输出**：`work/page_design.json`，结构照输入里的 `shape`。
-- **先看场合，再排页**：输入里的 `room` 是这场报告的场合与对象。先从 `occasions` 里选一个键写进
-  `setting.occasion`：`group-meeting`（组会）、`research-report`（会议/答辩）、`research-sharing`
-  （文献分享）、`lecture`（讲课）、`commercial`（商业路演）。每个键都写了听众、时长、讲者口述还是听众
-  自读、以及“一页要扛住什么、别出现什么”。再写 `setting.audience`（听众是谁、已经知道什么）和
-  `setting.reading`（spoken/read/mixed）。后面的密度、文字量和页面形态都按它来；同一篇论文在这五种
-  场合里应该长得不一样。
-- **你的判断范围**：一页放哪条内容、用什么形式、要不要标签组/结论框/强调/出处/目录，都是你定。
-  设备的退化写在清单里，用了不会让构建失败；一页确实不需要设备时，在 rationale 里写一句为什么。
+- **先看场合，再排页**：从 `occasions` 里选一个键写进 `setting.occasion`：`group-meeting`（组会）、
+  `research-report`（会议/答辩）、`research-sharing`（文献分享）、`lecture`（讲课）、`commercial`
+  （商业路演）。再写 `setting.audience`（听众是谁、已经知道什么）和 `setting.reading`
+  （spoken/read/mixed）。后面的密度、文字量和页面形态都按它来；同一篇论文在这五种场合里应该长得不一样。
+- **每页写 `shape`**：用一两句话描述读者看到什么——什么大、眼睛先落在哪、什么和什么并排、空白怎么用；
+  再说这页围绕什么对象（图 / 表 / 公式 / 数字 / 无）。不要写软件功能、模板、组件，也不要考虑“能不能做”。
+- **你的判断范围**：一页放哪条内容、页面怎么组织、哪句话该被强调，都是你定。哪句话承载主张，写进
+  `marks`。
+- **两三行字的页**：这是一个设计问题，不是一页。要么给它一个配得上版面的形状（把一件事实放大、把对比
+  摆出来、把关系画出来），要么并进相邻页。不要把问题留给做幻灯片的人。
 - **写完自查**：JSON 合法；每条 Story 的 answer / key_point / ending 恰好落在一页上；每个 item 引了
-  含它数字的 evidence；每页的 form 与 anchor 对得上。
+  含它数字的 evidence。
 - **不要做**：不要写页面坐标，不要写 Deck IR，不要去读管线源码或别的 deck。
 
-做完用几句话说明：几页、每页的形式、以及你在哪几处做了取舍。"""
+做完用几句话说明：几页、每页让读者看到什么、以及你在哪几处做了取舍。"""
 
 
 def ir_task(prompt=None):
     """The brief an orchestrator hands to the IR subagent once the design is approved."""
     pages = ((prompt or {}).get('page_design') or {}).get('pages') or []
-    devices = ((prompt or {}).get('page_design') or {}).get('devices') or {}
     return f"""# Deck IR 实现任务（子代理）
 
 设计已经批准。你要做的是**逐页实现**它，不是重新设计。
 
-- **输入**：`work/ir_prompt_designed.json`。里面是设计表（{len(pages)} 页，含每页的 claim、form、
-  anchor、items 与 devices）、Story、证据、可用 archetype / layout_tree 能力、类型尺度与 IR schema。
-  篇级设备：{', '.join(devices) or '无'}。
+- **输入**：`work/ir_prompt_designed.json`。里面是设计表（{len(pages)} 页，每页有 claim、anchor、items、
+  `shape` 描述与 `marks`）、Story、证据、可用 archetype / layout_tree 能力、类型尺度与 IR schema。
 - **输出**：`work/deck_ir.json`，符合 schema 的 canonical Deck IR（不要写作者简写）。
   图片资产从 `figures` 里选，`path` 相对 `workflow_root`；IR 的 `assets` 用绝对路径。
-- **规则只有三条**：页序与页数照设计；每页语义（title / takeaway / evidence_refs）与设计一致；设计点名的
-  设备都要真的落在页面上——文字标记、图注 source_label、结论框、panel 的 chip 标题、章节与目录。
-  机械类设备编译器会在校验前替你写进 IR，结构类（panel-group）要你自己搭 panel。
+- **你要做翻译**：设计用文字描述了每页让读者看到什么，没有指定形式。你从可用能力里选最能实现那段
+  `shape` 的 archetype / layout_tree / graphic / chart；`marks` 里的短语用对应的文字标记落在页面上。
+  设计的页数、claim、items 与 anchor 不变，页面的实现方式由你定。
 - **写不出来时**：拆这一页或调整页面内的区域结构，不删内容、不缩字号、不改数字。空间确实不够时，
   把问题留在回复里（哪一页、缺多少），不要悄悄简化。
 
-做完用几句话说明：页数、每页用的 archetype / layout_tree 结构、以及哪几页用了哪些设备。"""
+做完用几句话说明：页数、每页用的 archetype / layout_tree 结构、以及你如何把 `shape` 翻成页面。"""
 
 
 def execute(stage, job):
@@ -811,8 +801,6 @@ def execute(stage, job):
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'deck_plan.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
         from deck_compiler.design import capabilities as design_capabilities, default_occasion
-        from deck_compiler.style import capabilities as style_capabilities
-        from deck_compiler.type_scale import constraints
         workflow = read(work/'evidence_pointer.json')['workflow']
         value = read(workflow)
         evidence = {entry['evidence_id']: entry['text'] for entry in value['evidence_registry']}
@@ -853,28 +841,25 @@ def execute(stage, job):
             'briefs': briefs,
             'evidence': evidence,
             'figures': figures,
-            'forms': capabilities['forms'],
-            'rules': capabilities['rules'],
-            'devices': capabilities['art_direction'],
             'roles': capabilities['roles'],
-            'type_scale': constraints(),
-            'visual_style': style_capabilities(),
             'shape': {
                 'schema_version': '1.0', 'deck_id': '<string>',
                 'setting': {'audience': '<who, and what they already know>',
                             'occasion': '<one key from occasions, e.g. group-meeting>',
                             'reading': 'spoken|read|mixed'},
-                'devices': {'<deck device>': '<setting, e.g. sections/agenda/footer/page-numbers>'},
                 'pages': [{'id': 'P1', 'from_story': ['S1'], 'role': 'setup',
                            'claim': '<one declarative sentence the page argues>',
                            'takeaway_from': '<optional: the Story item this page concludes with>',
                            'items': [{'id': 'p1-a', 'text': '<display text>',
                                       'source': 'S1.key_points[0]', 'evidence': ['EV0001'],
                                       'kind': 'text|formula|figure|graphic'}],
-                           'form': '<one of forms>', 'anchor': {'kind': 'table', 'why': '<one line>'},
-                           'devices': {'emphasis': ['<exact phrase on this page>'],
-                                       'panel-group': ['<label>', '<label>']},
-                           'rationale': '<why this form and these devices carry this claim>'}]},
+                           'anchor': {'kind': 'figure|table|formula|number|none',
+                                      'why': '<what object the page is about>'},
+                           'shape': '<one or two sentences a designer would say to another designer: '
+                                    'what the viewer sees, what is large, where the eye lands, what '
+                                    'sits beside what>',
+                           'marks': ['<phrase on this page that must carry the claim>'],
+                           'rationale': '<why this page is shaped this way for this room>'}]},
             'instructions': DESIGN_INSTRUCTIONS,
         }
         write(work/'page_design_prompt.json', prompt)

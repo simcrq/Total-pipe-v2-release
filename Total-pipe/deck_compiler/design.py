@@ -216,8 +216,15 @@ def validate_design(design, story, evidence):
             page_id = '?'
         if page.get('role') not in ROLES:
             problems.append(f"{page_id}: role must be one of {list(ROLES)}")
+        # The designer describes what the page should look like in words; naming a compiler form is
+        # optional and left to the stage that knows the renderer. Legacy designs that name a form are
+        # still checked against it, because they asked for that form explicitly.
         form = page.get('form')
-        if form not in FORMS:
+        shape = str(page.get('shape') or '').strip()
+        if form is None and not shape:
+            problems.append(f'{page_id}: describe what the page should look like (shape), in one or two '
+                            'sentences a designer would say to another designer')
+        if form is not None and form not in FORMS:
             problems.append(f'{page_id}: unknown form {form!r}; use one of {sorted(FORMS)}')
         anchor = (page.get('anchor') or {}).get('kind')
         if anchor not in ANCHORS:
@@ -228,10 +235,21 @@ def validate_design(design, story, evidence):
             problems.append(f'{page_id}: claim is required')
         if not str(page.get('rationale') or '').strip():
             problems.append(f'{page_id}: rationale is required')
+        marks = page.get('marks')
+        if marks is not None:
+            if not isinstance(marks, list) or not all(isinstance(mark, str) and mark.strip() for mark in marks):
+                problems.append(f'{page_id}: marks must be a list of phrases from this page')
+            else:
+                page_text = ' '.join(str(item.get('text') or '') for item in page.get('items') or [])
+                page_text = (page_text+' '+str(page.get('claim') or '')+str(shape))
+                for mark in marks:
+                    if _squash(mark) not in _squash(page_text):
+                        problems.append(f'{page_id}: mark {mark!r} does not occur in this page\'s text')
         if 'devices' in page:
             problems += [f'{page_id} devices: {message}'
                          for message in validate_devices(page['devices'], PAGE)]
-        if not page.get('items') and page.get('form') != 'cover':
+        opening = page.get('form') == 'cover' or (page.get('role') == 'context' and not page.get('from_story'))
+        if not page.get('items') and not opening:
             problems.append(f'{page_id}: at least one item is required (only a cover may be empty)')
         takeaway_from = page.get('takeaway_from')
         if takeaway_from:
@@ -278,10 +296,14 @@ def validate_design(design, story, evidence):
 
 
 def summary(design):
-    """The design decisions an IR author needs, without the Story bodies."""
-    return {'devices': dict((design or {}).get('devices') or {}),
-            'setting': dict((design or {}).get('setting') or {}),
+    """The design decisions an IR author needs, without the Story bodies.
+
+    The design speaks in shapes, not forms: the IR stage is the one that knows what can be drawn,
+    so it receives the description and chooses the composition that realizes it.
+    """
+    return {'setting': dict((design or {}).get('setting') or {}),
             'pages': [{'id': page.get('id'), 'role': page.get('role'), 'claim': page.get('claim'),
+                       'shape': page.get('shape'), 'marks': list(page.get('marks') or []),
                        'form': page.get('form'), 'anchor': (page.get('anchor') or {}).get('kind'),
                        'devices': dict(page.get('devices') or {}),
                        'items': [{'id': item.get('id'), 'text': item.get('text'),

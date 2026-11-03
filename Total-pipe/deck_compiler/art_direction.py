@@ -251,6 +251,11 @@ def apply_deck(ir, design):
 def apply_page(slide, page):
     """Write one page's devices into its IR slide. Returns ``(slide, notes)``."""
     notes, devices = [], page_devices(page)
+    # `marks` is how a capability-blind design says "this phrase carries the claim"; the mark is
+    # materialized as emphasis, which is the compiler's name for the same decision.
+    marks = [mark for mark in page.get('marks') or [] if isinstance(mark, str) and mark.strip()]
+    if marks:
+        devices['emphasis'] = list(devices.get('emphasis') or [])+marks
     for name in ('emphasis', 'highlight'):
         for phrase in devices.get(name) or []:
             opener = '**' if name == 'emphasis' else '=='
@@ -319,6 +324,9 @@ def check(ir, design):
                 missing.append((page.get('id'), f'section label {expected!r} is missing'))
     for slide, page in zip(ir.get('slides') or [], (design or {}).get('pages') or []):
         devices = page_devices(page)
+        marks = [mark for mark in page.get('marks') or [] if isinstance(mark, str) and mark.strip()]
+        if marks:
+            devices['emphasis'] = list(devices.get('emphasis') or [])+marks
         for name in ('emphasis', 'highlight'):
             opener = '**' if name == 'emphasis' else '=='
             visible = ' '.join(str(holder.get('text') or holder.get('takeaway') or '')

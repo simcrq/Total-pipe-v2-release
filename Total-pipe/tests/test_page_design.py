@@ -112,6 +112,17 @@ class PageDesignTests(unittest.TestCase):
         problems = ' '.join(validate_design(design, STORY, EVIDENCE))
         self.assertIn('setting.occasion must be one of', problems)
 
+    def test_a_page_can_be_described_in_words_instead_of_named_as_a_form(self):
+        design = copy.deepcopy(DESIGN)
+        page = design['pages'][0]
+        page['shape'] = '三列读数，每列一个数字加一行标签，上方一条细线'
+        page['marks'] = ['N=512']
+        page.pop('form')
+        self.assertEqual(validate_design(design, STORY, EVIDENCE), [])
+        page['marks'] = ['N=999']
+        problems = ' '.join(validate_design(design, STORY, EVIDENCE))
+        self.assertIn('mark', problems)
+
     def test_capabilities_and_summary(self):
         published = capabilities()
         self.assertIn('figure-reading', published['forms'])

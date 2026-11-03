@@ -70,27 +70,28 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 ### 页面设计阶段（page_design）
 
 RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**页面设计表**，再写 IR。
-设计表只写决策，不写坐标：
+设计表只写决策，不写坐标；**也不写形式或组件**——设计者不需要知道这套编译器的能力，只需要想清楚
+每一页要让读者看到什么：
 
 ```json
 {"schema_version":"1.0","deck_id":"<id>",
  "setting":{"audience":"同组同行，已熟悉二维器件与浮栅存储","occasion":"group-meeting",
             "reading":"spoken"},
- "devices":{"sections":[{"page":"P1","label":"背景"}],"agenda":{"title":"目录"},
-            "footer":"组会报告","page-numbers":true},
  "pages":[
   {"id":"P1","from_story":["S1"],"role":"setup","claim":"基准为 N=512、K=50。",
    "takeaway_from":"S1.answer",
    "items":[{"id":"p1-a","text":"N=512、K=50","source":"S1.key_points[0]","evidence":["EV0001"]}],
-   "form":"spec-table","anchor":{"kind":"table","why":"条件并列"},"rationale":"表格比句子更好查",
-   "devices":{"emphasis":["K=50"],"takeaway-frame":"fill","panel-group":["条件","边界"]}}]}
+   "anchor":{"kind":"table","why":"条件并列"},
+   "shape":"两张条件并排，数字比标签大两档；读者先看到 512，再看到 K=50 的对照",
+   "marks":["K=50"],
+   "rationale":"组会同行的条件页，两个数字要能同时被查到"}]}
 ```
 
 **执行方式**：与 Story 一样交给独立子代理，不主 Agent 代写。RPA 完成后接入层写出两份文件：
-`work/page_design_prompt.json`（约 40 KB：Story、briefs、证据、可用图、forms 与 devices 清单、输出 shape）
-与 `work/page_design_task.md`（任务书）。主 Agent 把这两份交给子代理，收回子代理写的
-`work/page_design.json` 再 advance。提示是**能力清单**——每个形式与设备买来什么、放不下怎么退化——
-不是规则清单；设计层按这场报告的需要选择，不要为了稳妥而不用。
+`work/page_design_prompt.json`（Story、briefs、证据、可用图、场合与输出 shape）与
+`work/page_design_task.md`（任务书）。主 Agent 把这两份交给子代理，收回子代理写的
+`work/page_design.json` 再 advance。提示里**没有 forms / devices / type_scale / visual_style**：
+设计是能力无关的，选形式是 IR 阶段的翻译工作。
 
 `setting` 是必填的**场合与对象**：`occasion` 从五个键里选一个——`group-meeting`（组会）、
 `research-report`（会议/答辩）、`research-sharing`（文献分享/journal club）、`lecture`（讲课）、
@@ -100,20 +101,18 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 `PAGE_DESIGN_INVALID`；`room.default_occasion` 是接入层按 `presentation_type` 与 brief 猜的默认值，
 设计者可以改。
 
-- `forms` 是一份封闭的形式库（下表由 `deck_compiler.design.capabilities()` 发布），每个形式对应一个
-  编译器能渲染的构图；`anchor` 必须与形式一致（表格页不能声明图作锚点）。
-- `devices` 是设计层设备（见 [设计层设备清单](art-direction.md)）：页级 `emphasis` / `highlight` /
-  `panel-group` / `caption-source` / `takeaway-frame` / `sequence-rail`；篇级 `sections` / `agenda` /
-  `footer` / `page-numbers`。每项都有退化路径，所以选它不会让构建失败。
-- 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**（同一页可被
-  多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须出现在所引
-  evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为同一个数）；
-  页数可以少于 brief 数（合并）或多于（拆分），但不能超过两倍。设备只校验形状
-  （名字在清单里、取值个数与长度），**不判断它在页面上会占多少空间**。
-- 通过后，IR 提示包会带上 `page_design`（含 devices）与"逐页实现、不得重新设计"的指令；IR 交回时按设计校验
-  （`DESIGN_REALIZATION_FAILED`）：页数一致、每页保留设计声明的 evidence、设计页上的数字不能丢、
-  设计点名的设备必须出现在页面上。机械类设备（标记、图注出处、结论框、章节、目录、页脚、页码）由编译器
-  在 IR 校验前直接写进 IR，作者漏写也不会丢；结构类（`panel-group`）由 IR 自己搭 panel。
+- `anchor` 是**这页围绕什么对象**（figure / table / formula / number / none），是内容事实，不是能力。
+- `shape` 是一两句设计交代：读者看到什么、什么大、眼睛先落在哪、什么并排、空白怎么用。**必填**
+  （或给旧的 `form`，向后兼容）。
+- `marks` 是这页承载主张的短语；IR 阶段把它们落成文字标记，不需要设计者知道“强调设备”叫什么。
+- 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**
+  （同一页可被多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须
+  出现在所引 evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为
+  同一个数）；`marks` 必须是这页文本里出现过的短语；页数可以少于 brief 数（合并）或多于（拆分），但
+  不能超过两倍。
+- 通过后，IR 提示包会带上 `page_design`（含 `shape`、`marks`、`anchor`）与"逐页实现、不得重新设计"的
+  指令；IR 作者从 `design_forms` 里选择最能实现该 `shape` 的构图。IR 交回时按设计校验
+  （`DESIGN_REALIZATION_FAILED`）：页数一致、每页保留设计声明的 evidence、设计页上的数字不能丢。
 - 有设计表时，`check_ir` 不再做"逐字保留 brief 原文"的比对——设计表已经是溯源记录；没有设计表的
   旧路径行为不变。
 
