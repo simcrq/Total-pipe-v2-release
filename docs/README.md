@@ -41,6 +41,7 @@
 | 学术 / 商业 / 印刷风格包与稀疏页平衡 | [视觉风格包](../Total-pipe/docs/visual-style.md) |
 | 设计层可选设备：标签组、图注出处、目录、结论框 | [设计层设备清单](../Total-pipe/docs/art-direction.md) |
 | 机制、架构、漏斗、Bézier 与 Path | [科研图形组件](../Total-pipe/docs/native-components.md) |
+| 数据图（曲线/柱状）的字段、校验与渲染边界 | [Chart IR 契约](../Total-pipe/docs/chart-ir.md)，渲染器待接 |
 | 外部布局建议和回退 | [布局提供方](../Total-pipe/docs/layout-provider.md) |
 | OfficeCLI 写入与实际结构 QA | [OfficeCLI 后端](../Total-pipe/docs/officecli-backend.zh-CN.md) |
 | 复杂页溢出提示、留白与候选逐项签收 | [复杂页 QA 与维护](../Total-pipe/docs/complex-page-qa.md) |
