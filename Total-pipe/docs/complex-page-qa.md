@@ -19,8 +19,10 @@ OfficeCLI `OFFICECLI_FORMAT` 中的 `Text overflow` **警告估计**进入统一
 ## stack 的留白与显式分配
 
 `stack` 保留默认 `align: "start"`：按实测 minimum → preferred 贴合内容，余量留在底部。
-没有显式 weights 时可选 `center` 将内容组垂直居中，或 `distribute` 在实测高度之上按比例分配余量。
-两者都保留原文、原生公式和字号下限。显式 weights 本身按比例铺满，因此只能省略 align 或写 start。
+没有显式 weights 时可选 `center` 将内容组垂直居中（位移上限 56 px），或 `distribute` 把余量加进
+子项之间的间隙；但间隙只在仍 ≤48 px 时才继续加，再大就改为整组居中——三行字被拉开成三个洞，
+比底部留白更像坏页。两者都保留原文、原生公式和字号下限。显式 weights 本身按比例铺满，因此只能
+省略 align 或写 start。
 
 ```json
 {"id":"rows","type":"stack","align":"distribute","gap":"standard",

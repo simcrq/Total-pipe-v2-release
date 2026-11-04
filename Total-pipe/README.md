@@ -12,7 +12,7 @@
 
 | 入口 | 用途 |
 | --- | --- |
-| [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → Deck IR → Design → 编译 / 验收 |
+| [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → page_design → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
 | `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
 | `python -m agent.mcp_server` | 默认四工具入口 [.mcp.json](.mcp.json)，服务名 `total_pipe`；[用法](docs/agent-adapter.md) |
@@ -106,10 +106,12 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
-- [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、15% 留白反馈、合法相对权重与增量候选签收。
+- [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、间隙上限 48 px / 居中 56 px、15% 留白反馈、合法相对权重与增量候选签收。
 - [边框容器](docs/framed-containers.md)：panel 原生描边、填充与标题色带；独立 takeaway 框选；内边距、描边与完整内容共同测量。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
-- [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。
+- [原生数据图](docs/chart-ir.md)：`composition.charts` 与 layout tree `chart` 叶子；折线 / 柱状 / 散点、线性 / 对数轴、误差棒、图内标注；`basis` 区分证据图与示意说明。
+- [页面设计阶段](docs/agent-adapter.md#页面设计阶段page_design)：RPA 之后由独立子代理写 claim / anchor / shape / marks 与场合（组会 / 会议 / 文献分享 / 讲课 / 路演）；设计提示不含形式与设备，形式由 IR 阶段翻译。
+- [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线；机制关系边可带 `basis`（evidence / hypothesis / explain）。
 - [整套视觉设计](docs/scientific-visual-planner.md)：保留完整科研术语，文字超容量按 preserve-terms 生成候选及 REVIEW。
 
 旧平面 IR、layout tree 1.0 和未启用行内公式的文字仍兼容。

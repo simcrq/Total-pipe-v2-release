@@ -17,7 +17,7 @@ Claude 使用 `--client claude`，先检查配置可加 `--dry-run`。
 需要低层三服务时用 `--profile advanced`；[安装与恢复](Total-pipe/docs/agent-adapter.md)。
 
 ```text
-PWF 证据 → Story → pwf2rpa → RPA → canonical Deck IR
+PWF 证据 → Story → pwf2rpa → RPA → page_design → canonical Deck IR
   → 整套 Design → Deck Compiler → OfficeCLI → 候选 + QA
 ```
 

@@ -106,6 +106,8 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 - `shape` 是一两句设计交代：读者看到什么、什么大、眼睛先落在哪、什么并排、空白怎么用。**必填**
   （或给旧的 `form`，向后兼容）。
 - `marks` 是这页承载主张的短语；IR 阶段把它们落成文字标记，不需要设计者知道“强调设备”叫什么。
+- `figures`（可选）列出这页要用的资产 id。设计者按图号认面板，IR 只拿到 hash；这一列是两者之间
+  唯一的对应关系，没有它就只能由 IR 猜。
 - 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**
   （同一页可被多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须
   出现在所引 evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为
@@ -117,6 +119,9 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 - 有设计表时，`check_ir` 不再做"逐字保留 brief 原文"的比对——设计表已经是溯源记录；没有设计表的
   旧路径行为不变。
 
+以下是 IR 阶段可选的构图（`design_forms`）。设计表不写这一列：IR 作者按每页的 `shape` 与 `anchor`
+选择最能实现它的形式。
+
 | 形式 | 锚点 | 渲染为 | 适用 |
 | --- | --- | --- | --- |
 | cover | none | 封面页（标题 + 一句定位，无页脚无页码，items 可为空） | 开场 |
@@ -125,11 +130,11 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 | mechanism-flow | graphic | 原生流程/DAG + 一行注 | 有顺序或分支的机制 |
 | figure-reading | figure | 图 + 读数面板 | 论文图就是论点 |
 | three-limits | number | 三列（可带小标题） | 并列边界 |
-| statement | none | 一句主张放大成主句 + 1–2 条注 | 一页就是一句话 |
+| statement | none | 一句主张放大成主句 + 1–2 条注；可设 `type_scale="statement"` 让数字到 88 px | 一页就是一句话 |
 | text-columns | none | 2–3 组短陈述并排（可带 chip 标签） | 平行短内容，没有表可依 |
 | numbered-points | none | 带 01–0N 标签的并列要点 | 两到四条并列要点 |
 | problem-route-result | graphic | 三节点机制图（问题 → 做法 → 结果，边上带条件）+ 文本带 | 三段式论证，没有现成图 |
-| chart-reading | graphic | 原生折线/柱状图（坐标轴、图例、出处） | 数字在正文/表格，曲线说明趋势 |
+| chart-reading | graphic | 原生折线 / 柱状 / 散点图（坐标轴、误差棒、标注、出处） | 数字在正文/表格，曲线说明趋势 |
 | text-stack / closing-statement | none | 兜底堆叠 / 单句结论 | 只有一两句、无法分组时 |
 
 视觉语言另由 `presentation.visual_style` 选择风格包（`academic`/`commercial`/`print`），见

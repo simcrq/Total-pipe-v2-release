@@ -27,8 +27,8 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 
 ## 当前版本
 
-以下为当前仓库声明的版本，核对日期为 **2026-10-25**。产品、组件与文件协议分别版本化；
-复合布局、原生科研表格和行内公式已在当前源码中实现。
+以下为当前仓库声明的版本，核对日期为 **2026-11-04**。产品、组件与文件协议分别版本化；
+复合布局、原生科研表格、行内公式、原生数据图与页面设计阶段已在当前源码中实现。
 
 | 对象 | 当前声明 | 版本来源 |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | PaperWorkflow 插件 / MCP / Python 项目 | `0.2.0+codex.20260928131752` / `0.3.0` / `0.1.0` | [插件清单](PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](PaperWorkflow/mcp_server.py)、[pyproject.toml](PaperWorkflow/pyproject.toml) |
 | pwf2rpa | `1.4.2` | [模块版本](Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | `0.6.3-rc1`；插件构建 `0.6.3-rc1+codex.20260920125419` | [package.json](research-ppt-assistant/package.json)、[插件清单](research-ppt-assistant/.codex-plugin/plugin.json) |
-| 文件协议 | PaperWorkflow schema `4`；Deck IR `2.0`；layout tree `1.0` / `1.1` / `1.2` | [工作流实现](PaperWorkflow/utils/literature_workflow.py)、[Deck IR Schema](Total-pipe/schemas/deck-ir.schema.json) |
+| 文件协议 | PaperWorkflow schema `4`；Deck IR `2.0`；Chart IR `v1`；layout tree `1.0` / `1.1` / `1.2` | [工作流实现](PaperWorkflow/utils/literature_workflow.py)、[Deck IR Schema](Total-pipe/schemas/deck-ir.schema.json)、[Chart IR Schema](Total-pipe/schemas/chart-ir.schema.json) |
 
 仓库现有版本元数据尚未统一，服务握手可能返回上表中的组件版本。部署时同时记录 Git commit，
 并查询 `python -m deck_compiler capabilities` 确认功能；插件版本号不能代替运行时能力检查。
@@ -47,19 +47,20 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 
 | 组件 | 位置 / 入口 | 负责的内容与产物 |
 | --- | --- | --- |
-| 总调度 Skill | [Total-pipe/skills/total-pipe-deck/](Total-pipe/skills/total-pipe-deck/SKILL.md) | 调度证据、Story、RPA、Design、编译与验收；组织失败后的修订 |
+| 总调度 Skill | [Total-pipe/skills/total-pipe-deck/](Total-pipe/skills/total-pipe-deck/SKILL.md) | 调度证据、Story、RPA、页面设计、Design、编译与验收；组织失败后的修订 |
 | Agent 接入层 | [Total-pipe/agent/](Total-pipe/agent/)、[轻量 Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) | 以现有组件推进阶段、准备完整提示、验证与恢复 job；不编写科学内容 |
 | PaperWorkflow（PWF） | [PaperWorkflow/](PaperWorkflow/README.md)；`mcp_server.py` | PDF OCR / Markdown 接入、证据检索、图片与尺寸元数据；产出 `workflow.json`、`evidence.md` 和可搬移资源包 |
 | Story Planner | Skill 调度的独立 Agent 阶段；[提示包接口](Total-pipe/pwf2rpa/pwf2rpa/story.py) | 依据证据组织 `question / answer / evidence / next` 和可选 `key_points`，产出 `story_plan.json` |
 | pwf2rpa | [Total-pipe/pwf2rpa/](Total-pipe/pwf2rpa/README.md) | 确定性校验、内容与元数据传输；把 Story 转成 RPA 输入，产出 `rpa_input.json` |
 | Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 规范化内容、选择整页版式和子布局、绑定原文、验证规划；提供 320 个版式、40 类语义和 16 套主题 |
-| Scientific Visual Planner | 当前 Agent 的 Design 阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
+| 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) | 只看 Story、briefs、证据、图和场合，逐页写 claim、anchor、shape 与 marks；**不选形式、不看渲染能力**，同一篇论文在组会 / 会议 / 文献分享 / 讲课 / 路演里可以长成不同的页 |
+| Scientific Visual Planner | 整套视觉提案阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
 | Deck Compiler / Deck IR | [Total-pipe/deck_compiler/](Total-pipe/README.md) | 校验科学内容契约、递归分配区域、测量文本与公式、检查几何，生成确定坐标及 `layout_feedback.json` / `qa_report.json` |
 | 布局提供方 | [totalpipe_layout/](Total-pipe/totalpipe_layout/)、[提供方接口](Total-pipe/docs/layout-provider.md) | 内置 `packer` 为受支持的平面正文提供确定性几何建议；复杂测量页由编译器布局，单独记录 owned；也可选 `compiler` 或外部 `module:factory` |
 | OfficeCLI | 外部安装的命令行程序 | 按编译结果写入文字、图片、原生公式、表格、流程图、连接符与贝塞尔路径等 PowerPoint 对象 |
 | Microsoft PowerPoint | macOS / Windows 桌面程序 | 逐页检查实际排版并导出原生 PDF，供正式交付验收 |
 
-Story Planner 和 Scientific Visual Planner 是 Agent 工作阶段；提示包工具本身只准备输入和校验结果。
+Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段；提示包工具本身只准备输入和校验结果。
 可选的 DesignIntentPlanner 在 Story 后声明四步流程关系，详见使用说明；它不替代整套 Design。
 
 ## 完整流程与入口
@@ -71,6 +72,7 @@ Story Planner 和 Scientific Visual Planner 是 Agent 工作阶段；提示包�
   → [可选 DesignIntentPlanner：design_intent.json]
   → pwf2rpa：rpa_input.json
   → RPA：内容规范化、版式 / 子布局规划、原文绑定验证
+  → page_design：逐页 claim / anchor / shape / marks（能力无关，不选形式）
   → Agent 按 Schema 映射 canonical deck_ir.json
   → Scientific Visual Planner：整套 Design 提案 → 合入后的 Deck IR
   → Deck Compiler + 布局提供方：几何、容量和结构化反馈
@@ -93,7 +95,8 @@ Story Planner 和 Scientific Visual Planner 是 Agent 工作阶段；提示包�
 
 Story 阶段需要记录用户选择的模型、reasoning 和真实 subagent provenance。
 从已有证据、Story 或 Deck IR 继续时，按产物状态进入相应阶段。
-RPA 计划到 canonical Deck IR 的语义映射由 Agent 按 Schema 完成。
+RPA 之后先由独立子代理写页面设计表（场合 / shape / marks，不选形式），再由 Agent 按 Schema 映射
+canonical Deck IR；Design 的视觉提案阶段随后执行。
 
 ### 2. 已有 Deck IR：编译 CLI
 
@@ -178,7 +181,11 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **补充内容旁路**：`basis: supplement` 允许无论文 EV 的背景、类比、构造示例、推导说明或示意图；论文块仍强制 EV，补充块可选来源、构造示例须可见标注，Agent 检查论文数值/图/长引用泄漏；默认关闭，`supplement=inline|pages|both` 显式开启。见 [Deck IR 协议](Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement)。
 - **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
 - **可测量边框容器**：layout tree `1.2` 为 panel 增加原生边框与标题色带；takeaway 可独立框选。描边、内边距和完整内容参与容量计算，支持嵌套并保留旧树。见 [容器协议](Total-pipe/docs/framed-containers.md)。
-- **垂直分配**：平面文字栏、公式流、图侧文字栈和 packer 栏在保持实测字号/换行的前提下，把剩余正文高度按上/中/下各三分之一分配，不再把内容顶在上边、留出一整块下空白；表注仍允许低于 18 pt，其余投屏文字守住 18 pt 下限。
+- **原生数据图**：`composition.charts` + layout tree 的 `chart` 叶子；折线 / 柱状 / 散点，线性 / 对数轴，误差棒与图内标注。`basis: evidence` 的图必须绑 EV 与出处，`basis: explain` 的示意曲线须标“示意”。论文已有图时用 `figure-reading`，不重画。见 [Chart IR 契约](Total-pipe/docs/chart-ir.md)。
+- **机制图关系边**：流程 / 机制图的边上可写标签，`basis` 区分 `evidence`（须引用）、`hypothesis`（未证实）与 `explain`（补充说明，点线、无引用；标签含数字时仍须引用）。见 [科研图形组件](Total-pipe/docs/native-components.md)。
+- **页面设计阶段**：RPA 之后、IR 之前，独立子代理只读 Story、briefs、证据、图和场合，逐页给 claim / anchor / shape / marks；提示里没有形式与设备清单，**设计者不需要知道编译器能画什么**。场合分五档（组会 / 会议答辩 / 文献分享 / 讲课 / 商业路演），写进 `setting`，决定密度与页面形态。形式选择移到 IR 阶段。见 [接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design)。
+- **类型尺度**：一页一个 body 字号（28 px / 21 pt），标题 44 px、注释 22 px、页脚 20 px。`metric` 默认比正文高一档；整页只讲一个数字时可设 `presentation.academic_design.type_scale="statement"`，把它提到 88 px，其余角色不变。
+- **垂直分配**：平面文字栏、公式流、图侧文字栈和 packer 栏在保持实测字号/换行的前提下分配剩余高度；stack 平台在间隙超过 48 px 时不再均分间隙，改为整组居中（上限 56 px），避免“三行字浮在版面上”。表注仍允许低于 18 pt，其余投屏文字守住 18 pt 下限。
 - **可追溯反馈**：`layout_feedback.json` 给出组件路径、所需 / 可用尺寸与建议，供上游用完整内容重规划。
 - **复杂页复审**：stack 保留默认贴合内容，可显式居中或分配余量，留白超过 15% 时给出 REVIEW 与相对权重建议；候选支持逐项签收和待复核视图，内容 / 几何变化后相关记录失效。见[复杂页 QA](Total-pipe/docs/complex-page-qa.md)。
 - **科学术语优先**：`preserve-terms` 保留长标题与正文，超预算可带 REVIEW 生成候选；公式真实宽高、图形可读性和原图尺寸仍执行容量门禁。
@@ -192,12 +199,14 @@ OfficeCLI 的 `Text overflow` 警告估计在 QA 中记为 INFO，保留原始 i
 | 文档 | 内容 |
 | --- | --- |
 | [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md) | 从证据到候选 / final 的完整操作、门禁和修订流程 |
-| [Agent 接入层](Total-pipe/docs/agent-adapter.md) / [修订设计](Total-pipe/docs/agent-adapter-design.md) | 默认四工具、安装、恢复、实际组件契约与设计评审 |
+| [Agent 接入层](Total-pipe/docs/agent-adapter.md) / [修订设计](Total-pipe/docs/agent-adapter-design.md) | 默认四工具、安装、恢复、页面设计阶段（场合 / shape / marks）与设计评审 |
 | [环境清单](Total-pipe/环境清单.md) | 安装、配置、平台范围与服务启动 |
 | [编译器入口](Total-pipe/README.md) | Deck IR 编译命令与产物 |
 | [Scientific Visual Planner](Total-pipe/docs/scientific-visual-planner.md) | 必做 Design、视觉提案及术语容量策略 |
 | [讲解契约](docs/explanation-contract.md) | Story 可见结构、IR 义务、覆盖账本与责任边界 |
 | [复合区域](Total-pipe/docs/composite-layouts.md) / [原生表格](Total-pipe/docs/native-tables.md) | 子布局规划、递归几何与尺寸反馈 |
+| [Chart IR](Total-pipe/docs/chart-ir.md) / [科研图形组件](Total-pipe/docs/native-components.md) | 数据图与机制图的字段、证据绑定和渲染边界 |
+| [设计层设备](Total-pipe/docs/art-direction.md) | IR 阶段的强调、标签组、图注出处、结论框与篇级设备清单 |
 | [行内公式](Total-pipe/docs/inline-math.md) / [Deck IR 协议](Total-pipe/docs/deck-compiler-v2.md) | 数学语法、混排测量和完整 IR 约束 |
 | [原生图形](Total-pipe/docs/native-graphics.md) / [科研组件与路径](Total-pipe/docs/native-components.md) | 可编辑流程、机制、架构与贝塞尔图形 |
 | [开发后文档同步 Skill](Total-pipe/skills/total-pipe-doc-sync/SKILL.md) | 开发收尾时核对 README、中文用法、环境与协议，提交前清理过时说明 |

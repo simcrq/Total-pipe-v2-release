@@ -35,6 +35,15 @@ Version 1.2 adds optional [native panel frames and title bands](framed-container
 participate in child measurement; slide presentation.takeaway_frame reserves a measured independent box,
 with optional markers and inline math. The compiler checks containment, external collisions and native layer order.
 
+Charts are a layout-tree leaf: `composition.charts` plus a `type: "chart"` leaf, contracted by
+[chart-ir.md](chart-ir.md) and `schemas/chart-ir.schema.json`. Line, bar and scatter share native axes,
+error bars and in-plot annotations; `basis: evidence` charts bind evidence refs and a source, while
+`basis: explain` charts are illustrative and carry the 示意 mark. Re-plotting a paper figure is not the
+default: use `figure-reading` when the paper already has the panel.
+
+`presentation.academic_design.type_scale: "statement"` promotes `metric` to 88 px for a page whose whole
+argument is that one number; body, takeaway and captions keep their deck sizes.
+
 - `schemas/deck-ir.schema.json` separates semantic, composition and presentation data.
   Blocks and figures use component names and asset references. Final bounding boxes are
   compiler output and are rejected in Deck IR.

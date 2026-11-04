@@ -10,7 +10,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 没有它时，旧平面表示继续使用原有布局与容量限制。已有 archetype 可采用区域树；新混排页可用
 `composite-research`，该 archetype 必须带树。标题、takeaway、caveat、脚注仍用现有 frame / academic_design。
 
-内容只在 canonical blocks、figure_refs、graphics、tables 中保存。下面的对象放进 `composition.layout_tree`：
+内容只在 canonical blocks、figure_refs、graphics、tables、charts 中保存。下面的对象放进 `composition.layout_tree`：
 
 ```json
 {
@@ -45,6 +45,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 | figure | ref 为 figure_refs 零基索引 | 原图、图注与来源检查一起复用 |
 | graphic | ref 为 graphic ID | 原有 process/DAG、机制、架构、漏斗、Path 或图形 composite |
 | table（1.1） | ref 为 table ID | 实测原生表格，含合并表头及 OMML 公式单元格 |
+| chart | ref 为 `composition.charts` 的 chart ID | 原生折线 / 柱状 / 散点图，按区域测量坐标轴、图例与出处 |
 
 节点 ID 全树唯一。间距 `compact/standard/spacious` 为 12/24/32 CSS px；panel 内边距
 `none/compact/standard` 为 0/12/20 CSS px。不能传页面 bbox/x/y/w/h。Path IR 原有局部坐标不变。

@@ -1,6 +1,6 @@
 # Total-pipe 使用说明
 
-本文对应当前仓库的 PaperWorkflow、Story、RPA、Scientific Visual Planner 和 Deck Compiler。
+本文对应当前仓库的 PaperWorkflow、Story、RPA、page_design、Scientific Visual Planner 和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
 组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
@@ -13,7 +13,8 @@
 ```text
 论文 PDF → PaperWorkflow workflow.json → Story Planner story_plan.json
   → [可选 DesignIntentPlanner design_intent.json] → pwf2rpa rpa_input.json
-  → RPA 规划与验证 → canonical deck_ir.json
+  → RPA 规划与验证
+  → page_design 页面设计表（claim / anchor / shape / marks，能力无关）→ canonical deck_ir.json
   → Scientific Visual Planner（design 阶段，默认必做）→ designed.deck_ir.json
   → Deck Compiler + packer → OfficeCLI → candidate.pptx / staging.pptx + QA
   → 需要正式 final 时：PowerPoint 原生验收 → REVIEW 审核 → promote
@@ -287,11 +288,12 @@ Path 和 composite 见 [native-components.md](native-components.md)。所有关�
 ### 复合内容区域
 
 现有整页框架可在 `composition.layout_tree` 中选用递归子布局，支持 `1.0/1.1/1.2`，外层 Deck IR 仍为 `2.0`。
-支持 columns、stack、panel、image_grid；叶节点引用 block ID、figure_refs 零基索引、graphic ID，
-或 1.1 的 table ID。已有 1.0 树保持兼容。
+支持 columns、stack、panel、image_grid；叶节点引用 block ID、figure_refs 零基索引、graphic ID、
+chart ID（`composition.charts`），或 1.1 的 table ID。已有 1.0 树保持兼容。
 每项内容恰好引用一次，不复制正文或填写页面坐标。新混排页可用 `composite-research`。
 
-stack 默认 `align: start` 贴合实测内容；可显式 center 居中或 distribute 按比例分配余量。
+stack 默认 `align: start` 贴合实测内容；可显式 center 居中（位移上限 56 px）或 distribute 把余量
+加进间隙——间隙超过 48 px 时不再均分，改为整组居中。
 weights 各项为 `[0.1,10]` 的相对值，按比例铺满，不能与 center / distribute 同用。
 未加权贴顶 stack 留白超过其高度 15% 时返回 `PAGE_UNDERFILL` REVIEW、`underfill_px`
 及可行的 `suggested_weights`，按实际意图调整或审核接受。
@@ -439,7 +441,30 @@ HTML 截图仅显示 fallback，实际根号、分式线和指数用 PowerPoint 
 启用 `preserve-terms` 时，说明文字仍超出真实容量也保留全文并标记 REVIEW；公式本身的真实宽高不足仍会报告失败。
 原有页面的普通正文数量限制仍生效，公式由几何容量判断。见 [4×4 矩阵与密集推导示例](../examples/matrix-derivation.deck_ir.json)。
 
-## 4. Design 阶段：默认执行视觉规划
+## 4. Design 阶段：页面设计 + 默认视觉规划
+
+### 4.1 页面设计（page_design）
+
+RPA 之后、写 canonical IR 之前，Agent 先交一份页面设计表，再写 IR。这一步**能力无关**：提示包里只有
+Story、briefs、证据、可用图和场合，没有 forms / devices / type_scale / visual_style，设计者不需要知道
+编译器能画什么，只负责想清楚每页让读者看到什么。
+
+设计表三件事：
+
+- `setting`：`occasion` 从五档里选——`group-meeting`（组会）、`research-report`（会议 / 答辩）、
+  `research-sharing`（文献分享）、`lecture`（讲课）、`commercial`（商业路演）；`audience` 写听众是谁、
+  已知道什么；`reading` 写讲者口述（spoken）、听众自读（read）还是混合。场合决定密度与页面形态；
+  缺 `setting` 报 `PAGE_DESIGN_INVALID`。
+- `pages[]`：每页 `claim`、`items`（带 evidence）、`anchor`（围绕图 / 表 / 公式 / 数字 / 无）、
+  `shape`（一两句话描述读者看到什么）与 `marks`（承载主张的短语），可选 `figures`（这页要用的资产 id）。
+- 守恒：Story 的每个 answer / key_point / ending 只属于一页；数字必须出现在所引 evidence 中；
+  `marks` 必须在本页文本里出现；页数可合并或拆分但不能超过 brief 数两倍。
+
+**形式不在设计阶段选。** 设计通过后，IR 作者从 `design_forms` 里选最能实现 `shape` 的构图，
+页序、页数、claim、items 与 anchor 不变；`marks` 由编译器落成 `**…**`。旧设计表里的 `form` / `devices`
+仍兼容，但新设计不再要求。完整契约见 [接入层文档](agent-adapter.md#页面设计阶段page_design)。
+
+### 4.2 视觉规划（Scientific Visual Planner）
 
 Canonical IR 完成后，当前 Agent 进行一次整套 Scientific Visual Planner，不需要新增模型服务。
 
