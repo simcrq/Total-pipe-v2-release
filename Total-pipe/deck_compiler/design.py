@@ -304,6 +304,7 @@ def summary(design):
     return {'setting': dict((design or {}).get('setting') or {}),
             'pages': [{'id': page.get('id'), 'role': page.get('role'), 'claim': page.get('claim'),
                        'shape': page.get('shape'), 'marks': list(page.get('marks') or []),
+                       'figures': list(page.get('figures') or []),
                        'form': page.get('form'), 'anchor': (page.get('anchor') or {}).get('kind'),
                        'devices': dict(page.get('devices') or {}),
                        'items': [{'id': item.get('id'), 'text': item.get('text'),

@@ -82,6 +82,7 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
    "takeaway_from":"S1.answer",
    "items":[{"id":"p1-a","text":"N=512、K=50","source":"S1.key_points[0]","evidence":["EV0001"]}],
    "anchor":{"kind":"table","why":"条件并列"},
+   "figures":["images/0bb7ce79….jpg"],
    "shape":"两张条件并排，数字比标签大两档；读者先看到 512，再看到 K=50 的对照",
    "marks":["K=50"],
    "rationale":"组会同行的条件页，两个数字要能同时被查到"}]}

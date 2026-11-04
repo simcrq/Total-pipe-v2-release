@@ -57,6 +57,10 @@ def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
     return max(34.0, len(lines) * size * 1.25 + 8)
 
 
+CAPTION_FIGURE_PREFIX = re.compile(
+    r'^(?:原文\s*)?[Ff]ig(?:ure)?\.?\s*([0-9]+[a-z]?)\s*[|｜·•:：\-–]\s*')
+
+
 def caption_with_source(ref):
     """A panel's caption with its provenance set as a weakened prefix.
 
@@ -69,6 +73,13 @@ def caption_with_source(ref):
     caption = str((ref or {}).get('caption') or '')
     if not label or not caption:
         return caption
+    # A caption that starts with the same figure it already labels ("Fig. 2c | ...") would print
+    # the provenance twice: once as the label, once as the first words of the caption.
+    prefix = CAPTION_FIGURE_PREFIX.match(caption)
+    if prefix and prefix.group(1).lower() in label.lower():
+        caption = caption[prefix.end():]
+        if not caption:
+            return f'[[{label}]]'
     return f'[[{label}]] · {caption}'
 
 

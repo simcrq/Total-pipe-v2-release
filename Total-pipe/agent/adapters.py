@@ -858,6 +858,7 @@ def execute(stage, job):
                            'shape': '<one or two sentences a designer would say to another designer: '
                                     'what the viewer sees, what is large, where the eye lands, what '
                                     'sits beside what>',
+                           'figures': ['<optional: asset_id from figures that this page shows>'],
                            'marks': ['<phrase on this page that must carry the claim>'],
                            'rationale': '<why this page is shaped this way for this room>'}]},
             'instructions': DESIGN_INSTRUCTIONS,
