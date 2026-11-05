@@ -16,7 +16,7 @@ v1 有以下阻断实现的问题，实施以本修订为准：
 | 声称不改编译器，却新增 `deck_compiler ir-prompt` | 提示包属于接入层，入口改为 `python -m agent ir-prompt`；组件源码不改 |
 | start 没有已有 IR 的路由，无法执行首个 smoke | 显式 source_kind=auto/pdf/markdown/workflow/deck_ir；已有 IR 直接进入校验 / Design / build |
 | Story 提示包的模型字段位置错误 | 比较 `story.planner` 与提示包 `delegation`；reasoning 为 high 或更高，不能提供 medium |
-| RPA `--file` 加 CLI 业务参数会被忽略 | 生成包含 presentation_type、完整 slide_briefs 和原始 workflow 的 plan-input.json；使用 full 输出 |
+| RPA 先选模板、page_design 又重新设计 | 默认 Agent 只做 normalize-content，页面方案归独立 page_design；低层模板规划 CLI 仍保留 |
 | Story 节点、内容 briefs 与最终页数含义不同 | 保留完整 briefs；slide_count 只约束最终论文页（1–40），设计 / IR 核验目标，不截断或复制内容 |
 | 阶段仅检查单个 artifact，且跳过 input 阶段 | 阶段声明 requires / produces；依次校验输入门禁、多产物、实际依赖哈希和配置指纹 |
 | 上游文件变化仅比较旧 registry hash | 每次递归读取实际输入和先前阶段产物；接入层源码 / 阶段表及 Git 版本变化也使相关 checkpoint 失效 |
@@ -80,8 +80,9 @@ stage_index 从 1 开始；status 为 running / waiting_agent / blocked / candid
 | evidence | bridge 在独立进程导入 PWF tool_literature_workflow；stdout 只返回 JSON，日志转 stderr；包目录不重排 |
 | story_prompt | 在 Total-pipe/pwf2rpa cwd 执行 `python -m pwf2rpa ... --make-story-prompt` |
 | story | 原有 story_to_specs 校验，加 delegation 的 model / reasoning 绑定；缺失 / 不一致分别报告 |
-| rpa | 严格 convert → normalize full → plan full → validate-deck full；validation_input 携原始完整 content_model |
-| deck_ir | 复用 canonical 语义校验；核对原始 briefs 的 body / key_points 在 IR 页面文字或讲稿中完整保留 |
+| rpa | convert → normalize-content full；保留完整标准化内容与引用，不重复做模板规划；页面方案归独立 page_design |
+| deck_ir | 复用 canonical 语义校验；无设计时逐条完整 body/key_points，有设计时核对唯一覆盖与逐页实现/EV/数字 |
+| deck_ir_patch | 既有 IR 的布局树/图片路径小修；双哈希、内容/分组不变、原编译器预检；失败保留旧候选，接受后完整 build/QA |
 | design | 既有 visual-prompt；提案只合入 presentation，相对资源路径保持语义 |
 | build | apply-visual-plan（如需要）→ build --skip-native；检查当前 candidate / staging / QA 的哈希与 FAIL |
 
@@ -89,8 +90,9 @@ stage_index 从 1 开始；status 为 running / waiting_agent / blocked / candid
 日志先屏蔽当前环境中的 token / key 等敏感值；不把密钥写入 job 或报告。
 容量 / 契约失败回到正确产物阶段，不重复跑相同内容，也不自动缩写或删图。
 
-IR 提示包含完整 workflow、原始 RPA 输入 / normalized content / plan、真实 catalog 与 schema、
-素材根和完整保留检查表。提示包是输入，接受产物时由状态依赖及语义 / 内容校验绑定。
+默认 IR 提示先保存编译契约与内容路径，page_design 通过后附完整设计、Story、证据、图片、真实 catalog
+与 schema；原始输入仍在工作文件中，不重复内联多份。显式外部 RPA 计划的 ir-prompt CLI 保留旧输入接口。
+提示包是输入，接受产物时由状态依赖及语义 / 内容校验绑定。
 不从 catalog 伪造 figure_refs / graphics 固定容量；用 catalog 的 blocks / figures 字段，
 图形、表格与树限制取当前能力声明。
 

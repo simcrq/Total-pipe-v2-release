@@ -1,7 +1,7 @@
 # Total-pipe v3
 
 从论文证据和科研叙事生成可编辑 PowerPoint 的模块化流水线。Agent 按 Skill 调度各组件，
-RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，OfficeCLI 写入原生 PPTX。
+默认 Agent 链路由 RPA 规范化内容、独立 page_design 决定页面表达；Deck Compiler 确定最终几何并检查容量，OfficeCLI 写入原生 PPTX。
 
 **默认入口：** [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) 与四工具接入层。
 **完整流程规范：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。
@@ -52,7 +52,7 @@ RPA 规划内容结构，Deck Compiler 确定最终几何并检查容量，Offic
 | PaperWorkflow（PWF） | [PaperWorkflow/](PaperWorkflow/README.md)；`mcp_server.py` | PDF OCR / Markdown 接入、证据检索、图片与尺寸元数据；产出 `workflow.json`、`evidence.md` 和可搬移资源包 |
 | Story Planner | Skill 调度的独立 Agent 阶段；[提示包接口](Total-pipe/pwf2rpa/pwf2rpa/story.py) | 依据证据组织 `question / answer / evidence / next` 和可选 `key_points`，产出 `story_plan.json` |
 | pwf2rpa | [Total-pipe/pwf2rpa/](Total-pipe/pwf2rpa/README.md) | 确定性校验、内容与元数据传输；把 Story 转成 RPA 输入，产出 `rpa_input.json` |
-| Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 规范化内容、选择整页版式和子布局、绑定原文、验证规划；提供 320 个版式、40 类语义和 16 套主题 |
+| Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 默认 Agent 仅使用内容规范化与引用传递；独立 CLI 仍提供模板规划、子布局和规划验证（320 个版式、40 类语义和 16 套主题） |
 | 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) | 只看 Story、briefs、证据、图和场合，逐页写 claim、anchor、shape 与 marks；**不选形式、不看渲染能力**，同一篇论文在组会 / 会议 / 文献分享 / 讲课 / 路演里可以长成不同的页 |
 | Scientific Visual Planner | 整套视觉提案阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
 | Deck Compiler / Deck IR | [Total-pipe/deck_compiler/](Total-pipe/README.md) | 校验科学内容契约、递归分配区域、测量文本与公式、检查几何，生成确定坐标及 `layout_feedback.json` / `qa_report.json` |
@@ -71,7 +71,7 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
   → Story Planner：story_plan.json
   → [可选 DesignIntentPlanner：design_intent.json]
   → pwf2rpa：rpa_input.json
-  → RPA：内容规范化、版式 / 子布局规划、原文绑定验证
+  → RPA：内容规范化与引用传递（默认 Agent 不重复做模板规划）
   → page_design：逐页 claim / anchor / shape / marks（能力无关，不选形式）
   → Agent 按 Schema 映射 canonical deck_ir.json
   → Scientific Visual Planner：整套 Design 提案 → 合入后的 Deck IR
@@ -90,6 +90,8 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 接入层默认返回紧凑摘要，`totalpipe_status(detail="full")` 可读取完整请求与产物清单；状态查询只读。
 `slide_count` 是最终论文页目标，与 Story 节点/brief 数量独立；本地执行区间与等待事件追加在
 `logs/events.jsonl`，用于区分组件执行、返工与外部等待，不将它当作模型 token 或整链提速基准。
+已有 canonical IR 可提交 `deck_ir_patch` 调整既有布局树或栅格图片路径；先用原编译器预检，失败保留
+旧 IR/候选/QA，apply 通过后再执行完整构建与 QA。接口与图片人审边界见[局部修补](Total-pipe/docs/agent-adapter.md#局部修补与布局预检)。
 
 ```text
 使用 total-pipe-agent，将 /absolute/path/paper.pdf 制作为中文研究汇报。

@@ -82,24 +82,51 @@ class AdapterTests(AgentCase):
                 a.run(['fake'], self.root, self.out, 'fake', 1)
         self.assertEqual(caught.exception.code, 'COMPONENT_TIMEOUT')
 
-    def test_rpa_file_payload_and_full_original_content_validation(self):
+    def test_rpa_normalize_only_preserves_complete_content_and_evidence(self):
         self.out.mkdir()
         work = self.out/'work'
         write(work/'evidence_pointer.json', {'workflow': str(self.root/'workflow.json')})
         write(self.root/'workflow.json', workflow())
-        payload = {'paperworkflow_v4': workflow(), 'slide_briefs': [{'id': 'SLIDE0001', 'body': 'Complete original body'}]}
+        payload = {'paperworkflow_v4': workflow(), 'slide_briefs': [{'id': 'SLIDE0001',
+            'body': 'Complete original scientific body with its experimental conditions.',
+            'key_points': ['The independent control retains the stated uncertainty.'],
+            'evidence_ids': ['EV0001']}]}
         def pwf(out, *args): write(work/'rpa_input.json', payload)
         calls = []
-        model = {'slide_briefs': payload['slide_briefs'], 'status': 'valid'}
+        model = {'slide_briefs': payload['slide_briefs'], 'status': 'valid',
+                 'evidence': workflow()['evidence_registry']}
         def rpa(command, path, out, **kwargs):
             calls.append((command, read(path)))
-            return model if command == 'normalize-content' else {'slides': [{'id': 'SLIDE0001'}]} if command == 'plan' else {'status': 'valid'}
+            self.assertEqual(command, 'normalize-content', 'The four-tool adapter must not run template planning or validation.')
+            return model
         job = {'request': {'out_dir': str(self.out), 'language': 'en', 'requirements': 'Preserve source details', 'presentation_type': 'journal_club'}}
         with patch.object(a, 'pwf_cli', side_effect=pwf), patch.object(a, 'rpa', side_effect=rpa):
             a.execute('rpa', job)
-        self.assertEqual(calls[1][1]['presentation_type'], 'journal_club')
-        self.assertEqual(calls[2][1]['content_model'], model)
-        self.assertEqual(calls[1][1]['paperworkflow_v4'], payload['paperworkflow_v4'])
+        self.assertEqual(calls, [('normalize-content', payload)])
+        self.assertEqual(read(work/'normalized_content.json'), model)
+        prompt = read(work/'ir_prompt.json')
+        self.assertEqual(read(prompt['content_paths']['normalized_content']), model)
+        self.assertEqual(read(work/'rpa_input.json')['paperworkflow_v4'], payload['paperworkflow_v4'])
+        self.assertEqual(prompt['request']['presentation_type'], 'journal_club')
+        self.assertFalse(prompt.get('deck_plan'))
+
+    def test_normalize_only_does_not_reintroduce_a_stale_template_plan(self):
+        work = self.out/'work'
+        write(work/'evidence_pointer.json', {'workflow': str(self.root/'workflow.json')})
+        write(self.root/'workflow.json', workflow())
+        write(work/'deck_plan.json', {'marker': 'STALE_TEMPLATE_PLAN_MUST_NOT_PROPAGATE'})
+        payload = {'paperworkflow_v4': workflow(), 'slide_briefs': [{'id': 'SLIDE0001', 'body': 'Complete body.'}]}
+        model = {'slide_briefs': payload['slide_briefs'], 'status': 'valid'}
+        def pwf(out, *args):
+            write(work/'rpa_input.json', payload)
+        job = {'request': {'out_dir': str(self.out), 'language': 'en', 'requirements': '',
+                          'presentation_type': 'group_meeting'}}
+        with patch.object(a, 'pwf_cli', side_effect=pwf), patch.object(a, 'rpa', return_value=model) as normalize:
+            outputs = a.execute('rpa', job)
+        normalize.assert_called_once()
+        self.assertEqual(normalize.call_args.args[0], 'normalize-content')
+        self.assertNotIn('STALE_TEMPLATE_PLAN_MUST_NOT_PROPAGATE', (work/'ir_prompt.json').read_text())
+        self.assertNotIn(work/'deck_plan.json', outputs)
 
     def test_missing_scientific_body_is_not_accepted_as_valid_ir(self):
         value = read(self.fixture_ir())

@@ -1,6 +1,6 @@
 ---
 name: total-pipe-deck
-description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX；保留 PaperWorkflow 证据、Story 与 RPA 规划，先做能力无关的页面设计，再执行整套视觉设计，最后由 Deck Compiler 和 OfficeCLI 编译、验收。
+description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX；保留 PaperWorkflow 证据、Story 与标准化内容，先做能力无关的页面设计，再执行整套视觉设计，最后由 Deck Compiler 和 OfficeCLI 编译、验收。
 ---
 
 # Total-pipe 研究汇报流水线
@@ -118,9 +118,9 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 
 `question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
 陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
-**RPA 槽位不是 Story 的写作上限**：RPA 可以只规划放得下的页，剩余完整 brief 以
-`unplanned_slide_briefs` 交给 IR；IR 用 `composite-research` + `layout_tree` 补页/拆页，
-不靠删句、缩写术语或藏 notes 通过。标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
+**RPA 槽位不是 Story 的写作上限**：默认四工具只调用 RPA 内容规范化，完整 brief 由独立页面设计安排，
+IR 用 `composite-research` + `layout_tree` 实现；不靠删句、缩写术语或藏 notes 通过。
+标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
 
@@ -198,8 +198,15 @@ python -m pwf2rpa <workflow.json> --story <story_plan.json> \
 ```bash
 node research-ppt-assistant/server/cli.mjs normalize-content \
   --file <rpa_input.json> --detail-level full > <normalized_content.json>
-node research-ppt-assistant/server/cli.mjs plan --file <rpa_input.json> \
-  --presentation-type group_meeting --slide-count <N> --detail-level standard > <deck_plan.json>
+```
+
+默认四工具只执行上面的内容规范化，接着要求独立 page_design；不先运行模板计划再重新设计。
+normalize 要求 `status=valid`。最终 IR 继续做内容、证据与已通过设计的实现检查。
+以下仅为显式使用低层 RPA 模板规划的路径；plan_input 必须含完整输入及 presentation_type 等业务字段：
+
+```bash
+node research-ppt-assistant/server/cli.mjs plan --file <plan_input.json> \
+  --detail-level full > <deck_plan.json>
 node research-ppt-assistant/server/cli.mjs validate-deck \
   --file <validation_input.json> --detail-level compact
 ```
@@ -210,7 +217,7 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 `normalized_content.json` 作为 `content_model`；`KEY_POINTS_LOST/SOURCE_TEXT_NOT_BOUND`
 要恢复原文，不能删改 content_model 消除错误。MCP 摘要、slot 短文本和设计消息不能替代源 Brief。
 
-RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox。
+该低层模板路径中 RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox。
 硬流程组须保留四条原文、顺序及 Slot Binding，`VISUAL_INTENT_NOT_BOUND/GROUP_SPLIT`
 需要重规划，不能自动拆散。总结页保留 summary 类别；不要为通过容量改成错误类别。
 `max_chars` 只是粗筛，`SLOT_WRAP_RISK` 也不能代替实际渲染。

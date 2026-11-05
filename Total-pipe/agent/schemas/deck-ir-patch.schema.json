@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content-preserving Deck IR repair v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "base_ir_sha256", "base_resources_sha256"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "mode": {"enum": ["preflight", "apply"]},
+    "base_ir_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "base_resources_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "asset_updates": {
+      "type": "object", "minProperties": 1,
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["path"],
+        "properties": {"path": {"type": "string", "minLength": 1}}
+      },
+      "description": "Existing raster asset IDs only. Paths may be relative to this patch. Origin/source_figure and all other metadata stay unchanged; dimensions are read from the image. Replaced pixels require scientific panel review."
+    },
+    "slide_updates": {
+      "type": "array", "minItems": 1, "maxItems": 40,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "layout_tree"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "layout_tree": {"$ref": "../../schemas/deck-ir.schema.json#/$defs/layout-tree"}
+        }
+      },
+      "description": "Existing slide IDs only. Complete canonical layout_tree; original content references and visible panel titles must be retained. No page, text, data, theme, font floor or provenance edits."
+    }
+  },
+  "anyOf": [{"required": ["asset_updates"]}, {"required": ["slide_updates"]}]
+}

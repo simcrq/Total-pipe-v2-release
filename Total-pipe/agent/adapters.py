@@ -12,7 +12,7 @@ from time import perf_counter
 
 from . import ROOT, COMPONENT
 from .state import read, write, sha, resources
-from .requests import prompt_request, presentation_type
+from .requests import prompt_request
 from .telemetry import span, timestamp
 
 sys.path.insert(0, str(COMPONENT/'pwf2rpa'))
@@ -810,41 +810,28 @@ def execute(stage, job):
     if stage == 'rpa':
         workflow = read(work/'evidence_pointer.json')['workflow']
         pwf_cli(out, workflow, '--story', work/'story_plan.json', '--out', work/'rpa_input.json')
-        payload = read(work/'rpa_input.json')
         model = rpa('normalize-content', work/'rpa_input.json', out)
         write(work/'normalized_content.json', model)
-        # Briefs are complete content units, not a page-count budget. Page design
-        # handles splitting/merging them into the user's requested final pages.
-        write(work/'plan_input.json', {**payload, 'presentation_type': presentation_type(request['presentation_type'])})
-        plan = rpa('plan', work/'plan_input.json', out, allow_unplanned=True)
-        write(work/'deck_plan.json', plan)
-        unplanned = plan.get('unplanned_slide_briefs') or []
-        if unplanned:
-            # Story content is not shortened to satisfy RPA slots. The planned
-            # pages stay RPA-owned; the unplanned briefs are handed to Deck IR,
-            # where composite-research + layout_tree can split or reflow them.
-            validation = {'status': 'partial', 'slides': [s.get('slide_id') for s in plan.get('slides', [])],
-                          'unplanned_slide_briefs': unplanned}
-        else:
-            write(work/'validation_input.json', {'slides': plan['slides'], 'content_model': model})
-            validation = rpa('validate-deck', work/'validation_input.json', out)
-        write(work/'rpa_validation.json', validation)
-        prompt = ir_prompt(read(workflow), payload, model, plan, request.get('supplement', 'off'))
-        prompt['unplanned_briefs'] = unplanned
-        if unplanned:
-            prompt['instructions'] += (
-                ' RPA left these briefs unplanned: '
-                + ', '.join(str(brief.get('slide_id') or brief.get('title') or '?') for brief in unplanned)
-                + '. Do NOT shorten the Story or drop content. Add one page per unplanned brief (or split a '
-                  'planned page only when necessary), using composite-research + layout_tree so the complete '
-                  'body/key_points and evidence fit. Keep the planned RPA pages. Every brief, key point and '
-                  'evidence ref must appear exactly once across the deck; two thin briefs may share a page '
-                  'when that reads better, so the page count may differ from the brief count.')
+        # The independent page designer owns the page plan. Running the template
+        # planner here produced a second, conflicting plan that was discarded later.
+        write(work/'rpa_validation.json', {'status': 'content_normalized', 'layout_owner': 'page_design',
+              'brief_count': len(model.get('slide_briefs', [])),
+              'evidence_count': len(model.get('evidence', []))})
+        prompt = ir_prompt({}, {}, {}, {}, request.get('supplement', 'off'))
+        for key in ('workflow', 'rpa_input', 'content_model', 'deck_plan'):
+            prompt.pop(key, None)
+        prompt['content_paths'] = {'workflow': str(workflow),
+                                  'rpa_input': str(work/'rpa_input.json'),
+                                  'normalized_content': str(work/'normalized_content.json')}
+        # finalize_design supplies the complete approved design, Story, evidence
+        # and figures before the IR author is invoked; no 1.6 MB intermediate plan.
         prompt['workflow_root'] = str(Path(workflow).parent)
         prompt['request'] = {**prompt_request(request),
                              'supplement': request.get('supplement', 'off')}
         write(work/'ir_prompt.json', prompt)
-        return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'deck_plan.json', 'rpa_validation.json', 'ir_prompt.json')]
+        for obsolete in ('plan_input.json', 'deck_plan.json', 'validation_input.json'):
+            (work/obsolete).unlink(missing_ok=True)
+        return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
         from deck_compiler.design import capabilities as design_capabilities, default_occasion
         workflow = read(work/'evidence_pointer.json')['workflow']

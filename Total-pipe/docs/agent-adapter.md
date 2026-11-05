@@ -45,7 +45,7 @@ python3.12 install.py --client codex --profile advanced
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
 | totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
-| totalpipe_advance | job_id；可提交 artifact_kind / artifact_path，回填 inputs，或指定 replan_from / acknowledge |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch），回填 inputs，或指定 replan_from / acknowledge |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -57,7 +57,7 @@ artifacts_summary（引用数、去重文件数与阶段名）。完整请求与
 `presentation_type` 支持 RPA 的 group_meeting / journal_club / proposal / progress_report / defense /
 paper_presentation / custom。入口将“组会”“研究生组会”“group-meeting”规范化为 group_meeting，
 research-sharing / 文献分享为 journal_club，research-report / 科研汇报为 paper_presentation。
-lecture / 讲课与 commercial / 路演使用 custom 的 RPA 规划，同时在 presentation_context 保留原场合。
+lecture / 讲课与 commercial / 路演规范为 custom，同时在 presentation_context 保留原场合。
 可在已识别标签后用逗号、分号或冒号补充听众/时长；未知标签在创建 job 前拒绝，建议把详细要求写在 requirements。
 同一请求可用等价标签恢复，包括旧 job 的已识别别名；保留原 job 请求及用户模型选择，不从产物重建授权。
 听众/时长说明、requirements 或 lecture/commercial 场合等实质要求改变时仍返回 JOB_OUTPUT_IN_USE。
@@ -77,10 +77,12 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 `slide_count` 表示最终论文页的精确目标（1–40），不是 Story 节点数或 RPA brief 数；未指定时由设计者
 按内容与场合安排，最多 40 个论文页。独立补充文字页额外计；带论文 EV、图、表或原生图形的页仍算论文页。
 
-**Story 不为 RPA 槽位缩短科学内容。** RPA 只规划它当前能容纳的页面；若仍有完整 brief 无法规划，
-`rpa_validation.status=partial`，`unplanned_slide_briefs` 留在原始 IR 提示包。页面设计在目标页数内为完整
-内容安排拆分或合并；IR 逐页实现已通过设计，优先 `composite-research` + `layout_tree`。空间不足回退
-页面设计；不能靠删句、缩写术语或把听众理解所必需的证据藏进 notes 通过。
+**默认 RPA 阶段只做内容规范化。** pwf2rpa 产生完整 rpa_input，RPA `normalize-content` 保留完整正文、
+key_points、引用与 EV；接入层不再调用 `plan/validate-deck` 生成随后被 page_design 覆盖的模板计划。
+`rpa_validation.status=content_normalized`、`layout_owner=page_design` 只声明规范化完成，不冒充模板或
+版面验证通过。旧 plan_input/deck_plan/validation_input 是该阶段拥有的过时派生物，阶段成功后移除。
+RPA 独立 CLI 的模板规划功能不变。页面设计在目标页数内安排完整内容；空间不足回退设计，不能删句、
+缩写术语或把听众理解所必需的证据藏进 notes。最终仍校验内容覆盖、证据、数字、字号与真实尺寸。
 
 ### 页面设计阶段（page_design）
 
@@ -220,13 +222,52 @@ python -m agent ir-prompt --workflow /abs/workflow.json --rpa /abs/rpa_input.jso
   --normalized /abs/normalized_content.json --plan /abs/deck_plan.json --out /abs/ir_prompt.json
 ```
 
-正常流程在 RPA 成功后自动生成同一个提示包。它包含完整 workflow、原始 content model、完整 plan、
-真实 catalog / 能力 / schema 及素材根。没有新增 `deck_compiler ir-prompt` 命令。
-RPA 的业务参数写在 plan_input.json；不能把 `--file` 后的命令行参数当成合并成功。
+上面的 CLI 供显式导入外部 RPA 计划使用，保留完整 workflow/content model/plan。默认四工具在 RPA
+规范化后只写编译契约、真实 catalog/schema 和 content_paths；页面设计通过后，ir_prompt_designed
+补齐完整设计、Story、证据与图片。原始科学内容保存在对应输入文件，不重复内联多份。没有新增
+`deck_compiler ir-prompt` 命令。显式低层 RPA 模板路径的业务参数须写在 plan_input.json，不能把
+`--file` 后的命令行参数当成合并成功。
 slide_count 不与 Story briefs 数量比较；例如 9 个论证节点、11 个 briefs 可以设计为 22 页。
 设计提交时用 PAGE_DESIGN_INVALID 报告页数目标不符；IR（包括已有 IR 导入）在 build 之前用
 SLIDE_COUNT_MISMATCH 拒绝目标不符。内容合并仍校验每条完整 body/key_points 与 EV，设计路径继续
 检查唯一覆盖、数字溯源及逐页实现；布局的字号、图片与图形尺寸门禁不变。
+
+## 局部修补与布局预检
+
+deck_ir / build / candidate_ready 且已有 `work/deck_ir.json` 时，回复的 `repair` 提供两个当前哈希、
+patch Schema 路径和建议输出路径。完整读取 [patch Schema](../agent/schemas/deck-ir-patch.schema.json)；
+布局树沿用 [Deck IR layout-tree](../schemas/deck-ir.schema.json) 定义。例如：
+
+```json
+{"schema_version":"1.0","mode":"preflight",
+ "base_ir_sha256":"<repair.base_ir_sha256>","base_resources_sha256":"<repair.base_resources_sha256>",
+ "asset_updates":{"existing-asset-id":{"path":"source_crops/reviewed.png"}}}
+```
+
+```bash
+python -m agent advance --job-id <job-id> --artifact-kind deck_ir_patch \
+  --artifact-path /abs/output/work/deck_ir_patch.json
+```
+
+- `mode=preflight` 调用现有 compiler/packer 测量，禁用自动内容修复，不写 PPTX、不改 canonical 或候选。
+  这是已有 IR 的修补预检，不是从设计 prose 猜测坐标。独立结果在 work/repairs 下，不能当最终 QA。
+- `mode=apply` 再核对基线和替换资源，在预检通过、canonical 原子写入成功后才失效 IR 下游并恢复正常
+  构建。最终 PPTX 仍整套写入、完整结构 QA；没有宣称逐页 OfficeCLI 重编译或原生验收已完成。
+- asset_updates 只允许既有 asset 的 path；路径相对 patch 文件。图片必须实际可读，尺寸由图片取得。
+  origin/source_figure 等来源元数据保持原样；像素变化不能由程序证明科学等价，必须重新检查论文图。
+- slide_updates 为 `[{id,layout_tree}]`；不能改页序、页数、semantic、blocks、数据、theme 或字号门槛。
+  布局树必须完整引用内容；可见 panel 标题及其叶子内容归属保持不变，不能把 Treatment 数据换进 Control。
+  科学内容、分组或出处修订使用完整 IR 和正常重规划。
+- 双哈希绑定当前 IR、图片、声明/解析的主题字体与编译器代码；测量和接受时再次核验字节。过期输入
+  返回 PATCH_STALE，不应用补丁。预检或 canonical 写入失败保留旧候选、QA 与 checkpoint。
+- 同基线/同补丁（含图片字节）的既有几何拒绝复用仍存在的反馈；资源/代码改变或反馈丢失会重新检查。
+  每个基线最多三次不同的内容/几何拒绝，重复不计次。依赖异常不缓存、不耗预算，可恢复后重试。
+  预算耗尽转完整 IR 重规划。同一已接受补丁重提不重复构建，并可继续中断的下游组件。
+- repair_result 给 changed_slide_ids、实测图片尺寸、反馈路径和状态。拒绝调用返回 blocked；后续 status
+  仍可报告未变的旧候选，并保留 last_repair，不能把它当作本轮修复成功。预检通过后 OfficeCLI 构建仍可能
+  因运行环境失败，按原构建反馈恢复；接受补丁不等于候选验收。
+- 没有自动签收 REVIEW；已有候选签收仅按原来的页面/资产签名规则复用，改变的页面需重新复核。
+  正式 final 仍要求完整 PowerPoint 原生验收。
 
 ## 执行耗时记录
 

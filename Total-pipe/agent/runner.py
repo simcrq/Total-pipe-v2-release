@@ -151,10 +151,19 @@ def envelope(job, stage, failure=None, detail='summary'):
             return error_envelope(JobError('QA_STATE_INVALID', str(error), 'Repair the candidate review records or rebuild.'), job['job_id'])
     artifacts = [{'stage': name, 'path': path, 'sha256': hashed}
                  for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()]
+    repair_info = None
+    if sid in ('deck_ir', 'build', 'candidate_ready'):
+        try:
+            from .repair import descriptor
+            repair_info = descriptor(out)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # Invalid/incomplete IR still has its ordinary full-authoring action.
     return {'job_id': job['job_id'], 'status': status, 'stage': sid,
             'stage_index': NAMES.index(sid)+1, 'stage_total': len(STAGES), 'next_action': action,
             'out_dir': str(out), 'state_path': str(out/'.totalpipe/job.json'),
             'events_path': str(out/'logs/events.jsonl'),
+            **({'repair': repair_info} if repair_info else {}),
+            **({'last_repair': job['last_repair']} if job.get('last_repair') else {}),
             **({'request': job['request'], 'artifacts': artifacts} if detail == 'full' else
                {'artifacts_summary': {'references': len(artifacts),
                                       'unique_files': len({item['path'] for item in artifacts}),
@@ -337,13 +346,166 @@ def _accept(job, stage, upstream, kind, path):
     job.pop('last_error', None)
 
 
+def _repair_rejection(job, stage, failure, result):
+    from .repair import SCHEMA
+    out = Path(job['request']['out_dir'])
+    work = out/'work'
+    response = envelope(job, stage)
+    limited = failure.code == 'PATCH_LIMIT_REACHED'
+    dependency = failure.code in ('PATCH_PREFLIGHT_UNAVAILABLE', 'PATCH_COMMIT_FAILED', 'PATCH_INPUT_UNAVAILABLE')
+    full_instructions = next((candidate for candidate in (
+        work/'deck_ir_task.md', work/'ir_prompt_designed.json', work/'ir_prompt.json') if candidate.is_file()),
+        COMPONENT/'schemas/deck-ir.schema.json')
+    action = {'type': 'resolve_dependency' if dependency else 'replan' if limited else 'author_artifact',
+        'reason': failure.code, 'artifact_kind': 'deck_ir' if limited else 'deck_ir_patch',
+        'expected_output': str(work/('deck_ir.json' if limited else 'deck_ir_patch.json')),
+        'schema_path': str(COMPONENT/'schemas/deck-ir.schema.json') if limited else str(SCHEMA),
+        'input_path': str(work/'deck_ir.json'),
+        'instructions_path': str(full_instructions if limited else SCHEMA),
+        'instructions_ref': 'ir' if limited else 'deck_ir_patch', 'target_stage': 'deck_ir',
+        'feedback_path': result['feedback_path'],
+        'constraints': ['Preserve scientific content, provenance and font/figure floors.'], 'max_attempts': 3}
+    if dependency:
+        action['remedy'] = a.redact(str(failure))+' Restore dependencies/permissions, then retry the same patch.'
+    if failure.code == 'PATCH_STAGE_MISMATCH':
+        action = response['next_action']
+    response.update(status='blocked', blocking=True, repair_result=result,
+        issues=[{'code': failure.code, 'severity': 'FAIL', 'message': a.redact(str(failure)), 'path': result['feedback_path']}],
+        next_action=action, retry={'safe': dependency, 'max': 3})
+    return response
+
+
+def _repair(job, stage, path):
+    """Return a dry-run/rejection response, or accept a patch and resume downstream."""
+    from . import repair
+    out, work = Path(job['request']['out_dir']), Path(job['request']['out_dir'])/'work'
+    path = confined(path, work)
+    fingerprint = digest({'invalid_patch_sha256': sha(path)})
+    base_path = work/'deck_ir.json'
+    result = None
+    try:
+        if stage['id'] not in repair.STAGES or not base_path.is_file():
+            raise a.Failure('PATCH_STAGE_MISMATCH', 'A repair requires existing canonical IR at deck_ir, '
+                            'build or candidate_ready.', 'author_artifact', 'deck_ir')
+        try:
+            patch = read(path)
+            fingerprint = repair.fingerprint(patch, path)
+        except OSError as error:
+            raise a.Failure('PATCH_INPUT_UNAVAILABLE', a.redact(str(error)),
+                            'resolve_dependency', 'deck_ir') from error
+        except (ValueError, TypeError, RecursionError) as error:
+            raise a.Failure('PATCH_INVALID', 'Write finite, valid JSON using the complete patch schema.',
+                            'author_artifact', 'deck_ir') from error
+        repair.validate_patch(patch)
+        prior = job.get('repair_receipts', {}).get(fingerprint)
+        if (prior and prior.get('ir_sha256') == sha(base_path)
+                and prior.get('resources_sha256') == digest(repair.resource_snapshot(base_path))):
+            return None, {**prior['result'], 'status': 'already_accepted', 'candidate_unchanged': True}
+        rejected = job.get('repair_rejections', {}).get(fingerprint)
+        if (rejected and rejected['base_resources_sha256'] == digest(repair.resource_snapshot(base_path))
+                and Path(rejected['result']['feedback_path']).is_file()):
+            failure = a.Failure(rejected['code'], rejected['message'], 'author_artifact', 'deck_ir')
+            result = {**rejected['result'], 'reused_preflight': True}
+            emit(out, 'repair_replayed', job_id=job['job_id'], stage=stage['id'], status='failure', code=failure.code)
+            return _repair_rejection(job, stage, failure, result), None
+        attempts = job.get('repair_attempts', {}).get(patch['base_resources_sha256'], [])
+        if len(attempts) >= 3:
+            raise a.Failure('PATCH_LIMIT_REACHED', 'Three distinct repairs were rejected for this base. '
+                            'Use full IR replan or manual review.', 'replan', 'deck_ir')
+        try:
+            prepared = repair.preflight(job, patch, path)
+        except a.Failure:
+            raise
+        except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
+            raise a.Failure('PATCH_PREFLIGHT_UNAVAILABLE', a.redact(str(error)),
+                            'resolve_dependency', 'deck_ir') from error
+        result = prepared.summary
+        if patch['mode'] == 'preflight':
+            job['last_repair'] = result
+            save(job)
+            response = envelope(job, stage)
+            response['repair_result'] = result
+            return response, None
+        # Check once more at the commit boundary, after compiler measurement.
+        if repair.resource_snapshot(base_path) != prepared.base_resources:
+            raise a.Failure('PATCH_STALE', 'Base changed before patch acceptance; nothing was applied.',
+                            'author_artifact', 'deck_ir')
+        if any(sha(Path(path)) != expected for path, expected in prepared.measured_resources.items()):
+            raise a.Failure('PATCH_STALE', 'Replacement bytes changed before acceptance; nothing was applied.',
+                            'author_artifact', 'deck_ir')
+        # Check upstream validity before invalidating anything. A repair never
+        # rewinds Story/page_design or reconstructs model authorization.
+        probe = {**job, 'checkpoints': dict(job['checkpoints'])}
+        invalidate(probe, 'deck_ir')
+        pending, upstream = current(probe)
+        if pending['id'] != 'deck_ir':
+            raise a.Failure('PATCH_STAGE_MISMATCH', 'Upstream inputs changed; advance their existing action first.',
+                            'author_artifact', 'deck_ir')
+        try:
+            a.persist_ir(prepared.value, base_path, base_path)
+        except OSError as error:
+            raise a.Failure('PATCH_COMMIT_FAILED', a.redact(str(error)),
+                            'author_artifact', 'deck_ir') from error
+        # A failed atomic IR write must never discard the last successful checkpoints.
+        invalidate(job, 'deck_ir')
+        checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(base_path).items() if hashed is not None], upstream)
+        result = {**result, 'status': 'accepted', 'candidate_unchanged': False, 'ir_sha256': sha(base_path)}
+        job.setdefault('repair_receipts', {})[fingerprint] = {
+            'ir_sha256': sha(base_path), 'resources_sha256': digest(repair.resource_snapshot(base_path)), 'result': result}
+        job['last_repair'] = result
+        job.pop('last_error', None)
+        save(job)
+        emit(out, 'repair_accepted', job_id=job['job_id'], stage='deck_ir', status='success')
+        return None, result
+    except a.Failure as failure:
+        # Rejected optional repairs leave the existing canonical/candidate and
+        # its QA untouched; status can still report the last built candidate.
+        measured_base = getattr(failure, 'repair_base_resources', None)
+        if measured_base is not None and (
+                repair.resource_snapshot(base_path) != measured_base or repair.fingerprint(patch, path) != fingerprint):
+            failure = a.Failure('PATCH_STALE', 'Resources changed after measurement; retry against the current base.',
+                                'author_artifact', 'deck_ir')
+        if failure.code in ('PATCH_INVALID', 'PATCH_PREFLIGHT_FAILED', 'CONTENT_LOSS', 'DESIGN_REALIZATION_FAILED'):
+            try:
+                base_key = digest(repair.resource_snapshot(base_path))
+            except (OSError, ValueError, KeyError, TypeError):
+                base_key = sha(base_path) or 'missing'
+            attempts = job.setdefault('repair_attempts', {}).setdefault(base_key, [])
+            if fingerprint not in attempts:
+                attempts.append(fingerprint)
+        feedback = work/'repairs'/('rejected-'+uuid.uuid4().hex+'.json')
+        write(feedback, {'code': failure.code, 'message': a.redact(str(failure)),
+                         'compiler_feedback': failure.log})
+        result = getattr(failure, 'repair_summary', result) or {}
+        result = {**result, 'status': 'rejected', 'code': failure.code, 'candidate_unchanged': True,
+                  'feedback_path': failure.log or str(feedback)}
+        if (failure.code == 'PATCH_PREFLIGHT_FAILED' and result.get('counts', {}).get('FAIL', 0)
+                and Path(result['feedback_path']).is_file()):
+            job.setdefault('repair_rejections', {})[fingerprint] = {
+                'base_resources_sha256': digest(repair.resource_snapshot(base_path)),
+                'code': failure.code, 'message': a.redact(str(failure)), 'result': result}
+        job['last_repair'] = result
+        save(job)
+        emit(out, 'repair_rejected', job_id=job['job_id'], stage=stage['id'], status='failure', code=failure.code)
+        return _repair_rejection(job, stage, failure, result), None
+
+
 def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None):
     try:
         out, _ = locate(job_id)
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
+            repair_result = None
             try:
+                if artifact_kind == 'deck_ir_patch':
+                    if not artifact_path or inputs is not None or replan_from or acknowledge is not None:
+                        raise ValueError('Submit a patch_path alone via artifact_kind=deck_ir_patch and artifact_path.')
+                    response, repair_result = _repair(job, stage, artifact_path)
+                    if response is not None:
+                        return response
+                    artifact_kind = artifact_path = None
+                    stage, upstream = current(job)
                 if replan_from:
                     if replan_from not in NAMES or replan_from in ('intake', 'candidate_ready'):
                         raise ValueError('Invalid replan_from')
@@ -382,6 +544,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     if stage['kind'] != 'component':
                         prepare_next(job, stage)
                         result = envelope(job, stage)
+                        if repair_result:
+                            result['repair_result'] = repair_result
                         emit(out, 'candidate_ready' if stage['kind'] == 'terminal' else 'waiting',
                              job_id=job_id, stage=stage['id'],
                              status='success' if stage['kind'] == 'terminal' else 'waiting',

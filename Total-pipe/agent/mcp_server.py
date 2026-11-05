@@ -26,7 +26,7 @@ DEFINITIONS = {
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
                         'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
-    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','page_design','deck_ir','visual_proposal']},
+    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','page_design','deck_ir','visual_proposal','deck_ir_patch']},
         'artifact_path': STRING, 'inputs': {'type': 'object', 'properties': {'model': STRING,
             'reasoning_effort': {'type': 'string', 'enum': ['high','xhigh','max','ultra']}, 'selected_by_user': {'const': True}},
             'required': ['model','reasoning_effort','selected_by_user'], 'additionalProperties': False},

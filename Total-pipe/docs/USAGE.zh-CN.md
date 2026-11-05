@@ -18,7 +18,7 @@
 ```text
 论文 PDF → PaperWorkflow workflow.json → Story Planner story_plan.json
   → [可选 DesignIntentPlanner design_intent.json] → pwf2rpa rpa_input.json
-  → RPA 规划与验证
+  → RPA 内容规范化与引用传递（默认四工具）
   → page_design 页面设计表（claim / anchor / shape / marks，能力无关）→ canonical deck_ir.json
   → Scientific Visual Planner（design 阶段，默认必做）→ designed.deck_ir.json
   → Deck Compiler + packer → OfficeCLI → candidate.pptx / staging.pptx + QA
@@ -104,9 +104,9 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 `question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
 陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
 `key_points` 可选；摘要不足以保留科学细节时使用，条数由内容决定。标题和正文保留完整正确的术语、
-化学态、单位与限定词，不为容量截断或强行缩写。**RPA 槽位不是 Story 的写作上限**：RPA 可以只规划
-当前放得下的页，剩余 brief 以 `unplanned_slide_briefs` 交给 IR；IR 用 `composite-research` +
-`layout_tree` 补页/拆页，保留完整 body、key_points 和 EV。`ending.limitation` 只记录论文边界；
+化学态、单位与限定词，不为容量截断或强行缩写。**RPA 槽位不是 Story 的写作上限**：默认四工具只做
+内容规范化，独立 page_design 在目标页数内安排完整 brief，IR 逐页实现设计，保留正文、key_points 和 EV。
+`ending.limitation` 只记录论文边界；
 输入文件是否取得、SI 是否审阅等进入工作记录。
 
 ### 节点的讲解形态
@@ -199,8 +199,15 @@ python -m pwf2rpa <workflow.json> --story <story_plan.json> \
 ```bash
 node research-ppt-assistant/server/cli.mjs normalize-content \
   --file <rpa_input.json> --detail-level full > <normalized_content.json>
-node research-ppt-assistant/server/cli.mjs plan --file <rpa_input.json> \
-  --presentation-type group_meeting --slide-count <N> --detail-level standard > <deck_plan.json>
+```
+
+默认四工具只执行规范化，然后进入独立页面设计。rpa_validation.json 的 content_normalized
+不代表模板规划或页面几何通过；页面设计和最终编译继续执行科学/布局门禁。完整证据不重复内联进多份提示。
+以下为独立低层 RPA 模板路径，不是默认 Agent 必经步骤；业务字段写在完整 plan_input 内：
+
+```bash
+node research-ppt-assistant/server/cli.mjs plan --file <plan_input.json> \
+  --detail-level full > <deck_plan.json>
 node research-ppt-assistant/server/cli.mjs validate-deck \
   --file <validation_input.json> --detail-level compact
 ```
@@ -217,12 +224,15 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 
 ## 3. 映射 Canonical Deck IR
 
-按 [Schema](../schemas/deck-ir.schema.json) 和 [组件目录](../deck_compiler/catalog.py) 映射，
-不复制 RPA 的最终 bbox：
+按已通过的 page_design、[Schema](../schemas/deck-ir.schema.json) 和 [组件目录](../deck_compiler/catalog.py)
+逐页实现；最终 bbox 仍由编译器决定：
 
 - `semantic`：完整标题、purpose、takeaway、evidence_refs、caveats 和 speaker_notes。
 - `composition`：完整 blocks、原图 figure_refs 与 assets 引用、显式原生 graphics。
 - `presentation`：统一 frame、文字容量策略和后续视觉决策。
+
+已有 IR 的布局/裁图小修可使用 [deck_ir_patch](agent-adapter.md#局部修补与布局预检)，先进行原编译器
+预检，再接受局部变更；不改科学文字、数据、来源或标题面板内容归属。预检通过不替代最终构建与原生验收。
 
 写 IR 前先决定页面结构：`composite-research` + `layout_tree` 是初始选项，不是容量失败后的补丁。
 页面有 3 个以上内容对象、原生图与文字同页，或需要 panels/columns 时，直接写树；树测量后仍溢出

@@ -31,8 +31,8 @@ description: 在 Total-pipe 仓库开发、修复或修改接口后，同步 REA
 - 完整入口是总调度 Skill；`totalpipe.py generate` 从已有 canonical Deck IR 开始。
 - Story、RPA、page_design、Deck IR 后的 Scientific Visual Planner 各有职责；页面设计与 Design 都是默认阶段。
   `page_design` 能力无关（只写场合、shape、marks），形式由 IR 阶段翻译。
-  提示包工具只准备输入；RPA 计划到 canonical IR 的语义映射由 Agent 完成。
-- RPA 规划相对结构；Deck Compiler 决定最终几何；OfficeCLI 写 PPTX。
+  提示包工具只准备输入；默认 Agent 的 RPA 只规范化内容，page_design 到 canonical IR 的映射由 Agent 完成。
+- 独立低层 RPA 仍可规划相对结构；Deck Compiler 决定最终几何；OfficeCLI 写 PPTX。
 - 产品插件、组件包、MCP 握手和文件协议的版本分开列出；从实际清单读取，
   不把旧 MCP 版本当成产品版本，也不为文档同步自行发版。
 - 编译器依赖与完整 PWF 环境分开说明。候选生成、结构 QA、PowerPoint 原生验收和 final 晋级分开表述。

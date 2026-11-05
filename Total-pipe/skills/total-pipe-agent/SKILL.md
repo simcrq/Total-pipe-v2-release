@@ -45,6 +45,7 @@ IR / Design 提示包是完整输入；原文 body、key_points、公式、单�
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。
 status 只读；同一提交可重复 advance，已完成组件不会重复执行，未完成下游继续运行。
+局部布局/裁图修复可按 repair 指定的完整 Schema 提交 deck_ir_patch，先预检；科学文字/数据/分组变更仍重规划。
 默认回复为摘要；完整请求/哈希清单用 status(detail="full")；各轮本地执行与等待时间点见 logs/events.jsonl。
 job_id 在重启后可用；job.json 损坏时不能从产物伪造用户选择，按 remedy 处理。
 候选 REVIEW 如实报告；仅真实复核后用 advance.acknowledge 传 reviewer、note、review_ids。

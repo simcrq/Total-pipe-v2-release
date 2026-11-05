@@ -20,6 +20,9 @@
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
 编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
+默认 Agent 的 RPA 阶段仅规范化内容，页面方案由独立 page_design 决定；RPA 独立 CLI 仍可做模板规划。
+已有 canonical IR 的局部布局/裁图补丁可先调用同一编译器预检，失败保留旧候选；通过后仍执行完整构建
+与 QA，详见[局部修补协议](docs/agent-adapter.md#局部修补与布局预检)。
 `packer` 是默认布局建议提供方，也可选 `compiler` 或外部 `module:factory`。
 它只接管受支持的平面正文建议；递归区域、视觉计划、公式、显式列表与原生图形等页面由编译器布局，
 逐页记为 `COMPILER_OWNED`，不计作提供方回退。状态和 coverage 定义见[提供方协议](docs/layout-provider.md)。

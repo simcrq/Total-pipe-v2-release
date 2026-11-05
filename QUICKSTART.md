@@ -17,7 +17,7 @@ Claude 使用 `--client claude`，先检查配置可加 `--dry-run`。
 需要低层三服务时用 `--profile advanced`；[安装与恢复](Total-pipe/docs/agent-adapter.md)。
 
 ```text
-PWF 证据 → Story → pwf2rpa → RPA → page_design → canonical Deck IR
+PWF 证据 → Story → pwf2rpa → RPA 内容规范化 → page_design → canonical Deck IR
   → 整套 Design → Deck Compiler → OfficeCLI → 候选 + QA
 ```
 
@@ -43,4 +43,6 @@ python -m deck_compiler build --ir designed.deck_ir.json --out build/my-deck \
 
 已有完整设计的 IR 可直接 build。候选在 `candidate.pptx` / `staging.pptx`，
 检查 `qa_report.json` 与 `layout_feedback.json` 后修订输入。
+已有 IR 的布局/裁图小修可按 `repair` 提供的 Schema 提交 deck_ir_patch：先用 preflight 查看原编译器反馈，
+再用 apply 接受，内容/来源变更仍走完整 IR 重规划。最终构建与 QA 保持完整。
 正式 `final.pptx` 还需 PowerPoint 逐页验收、原生 PDF、REVIEW 审核及 promote。
