@@ -92,6 +92,8 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 `logs/events.jsonl`，用于区分组件执行、返工与外部等待，不将它当作模型 token 或整链提速基准。
 已有 canonical IR 可提交 `deck_ir_patch` 调整既有布局树或栅格图片路径；先用原编译器预检，失败保留
 旧 IR/候选/QA，apply 通过后再执行完整构建与 QA。接口与图片人审边界见[局部修补](Total-pipe/docs/agent-adapter.md#局部修补与布局预检)。
+候选后可用 `advance.native` 接入 PowerPoint 原生导出、全页预览和实际 UI 复核，直接更新 QA，
+复用现有 PPTX；自动导出不代替眼检，正式 promote 仍用 CLI。见[原生验收接入](Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入)。
 
 ```text
 使用 total-pipe-agent，将 /absolute/path/paper.pdf 制作为中文研究汇报。

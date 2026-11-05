@@ -7,7 +7,7 @@ import uuid
 from . import COMPONENT
 from . import adapters as a
 from .state import (JobError, read, write, sha, digest, dependency, checkpoint, valid_record,
-                    locked, save, locate, home, confined)
+                    locked, save, locate, home, confined, snapshot)
 from .state import validate_job
 from .requests import (presentation_type as normalize_presentation_type, slide_count as validate_slide_count,
                        prompt_request, request_identity)
@@ -148,27 +148,53 @@ def envelope(job, stage, failure=None, detail='summary'):
         try:
             qa = show_qa(out/'build', include_acked=True)
         except (OSError, ValueError) as error:
-            return error_envelope(JobError('QA_STATE_INVALID', str(error), 'Repair the candidate review records or rebuild.'), job['job_id'])
+            try:
+                from .native_acceptance import _candidate
+                qa = _candidate(out/'build')
+                if not qa.get('native_evidence_stale'):
+                    raise ValueError(str(error))
+            except (OSError, ValueError, KeyError, TypeError):
+                return error_envelope(JobError('QA_STATE_INVALID', str(error), 'Repair the candidate review records or rebuild.'), job['job_id'])
+            status = 'blocked'
+            action = {'type': 'resolve_dependency', 'reason': 'NATIVE_EVIDENCE_STALE',
+                      'remedy': 'The candidate is intact but native evidence is missing or changed. '
+                                'Use advance.native operation=render with current hashes to regenerate it without rebuilding PPTX.'}
+        if qa['counts']['FAIL'] and not failure:
+            status = 'blocked'
+            action = {'type': 'review_required', 'reason': 'NATIVE_QA_FAILED',
+                      'qa_report': str(qa_path), 'feedback_path': str(out/'build/layout_feedback.json'),
+                      'remedy': 'Read the FAIL findings. If every FAIL is native-visual, correct the PDF and retry '
+                                'native render with force=true or ingest. Other failures require canonical IR repair. '
+                                'Do not acknowledge FAIL.'}
     artifacts = [{'stage': name, 'path': path, 'sha256': hashed}
                  for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()]
     repair_info = None
+    native_info = None
     if sid in ('deck_ir', 'build', 'candidate_ready'):
         try:
             from .repair import descriptor
             repair_info = descriptor(out)
         except (OSError, ValueError, KeyError, TypeError):
             pass  # Invalid/incomplete IR still has its ordinary full-authoring action.
+    if kind == 'terminal':
+        try:
+            from .native_acceptance import descriptor
+            native_info = descriptor(out, qa=qa)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     return {'job_id': job['job_id'], 'status': status, 'stage': sid,
             'stage_index': NAMES.index(sid)+1, 'stage_total': len(STAGES), 'next_action': action,
             'out_dir': str(out), 'state_path': str(out/'.totalpipe/job.json'),
             'events_path': str(out/'logs/events.jsonl'),
             **({'repair': repair_info} if repair_info else {}),
             **({'last_repair': job['last_repair']} if job.get('last_repair') else {}),
+            **({'native': native_info} if native_info else {}),
+            **({'last_native': job['last_native']} if job.get('last_native') else {}),
             **({'request': job['request'], 'artifacts': artifacts} if detail == 'full' else
                {'artifacts_summary': {'references': len(artifacts),
                                       'unique_files': len({item['path'] for item in artifacts}),
                                       'stages': list(job['checkpoints'])}}),
-            'issues': issues, 'blocking': bool(failure), 'retry': {'safe': False if failure else True,
+            'issues': issues, 'blocking': bool(failure) or status == 'blocked', 'retry': {'safe': False if failure else True,
             'max': (target_stage if failure else stage).get('max_attempts', 1)},
             **({'qa': {'counts': qa['counts'], 'unacked_count': qa.get('unacked_count', qa['counts']['REVIEW'])},
                 'candidate': str(out/'build/candidate.pptx')} if qa else {})}
@@ -490,7 +516,48 @@ def _repair(job, stage, path):
         return _repair_rejection(job, stage, failure, result), None
 
 
-def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None):
+def _native(job, stage, request):
+    """Optional post-candidate action; never invalidate an OfficeCLI build to export it."""
+    out = Path(job['request']['out_dir'])
+    result = None
+    try:
+        if stage['kind'] != 'terminal':
+            raise ValueError('Native acceptance requires a current built candidate; finish next_action first.')
+        from .native_acceptance import execute, validate_request
+        validate_request(request)
+        with span(out, job_id=job['job_id'], stage='candidate_ready', operation='native_'+request['operation']):
+            result = execute(job, request)
+        job['last_native'] = result
+    except Exception as error:
+        # External PDF parsers/rasterizers have their own exception types.
+        # Fail this explicit native operation without fabricating evidence;
+        # cancellation (BaseException) still propagates to the host.
+        result = {'operation': request.get('operation') if isinstance(request, dict) else None,
+                  'status': 'failed', 'error_type': type(error).__name__, 'message': a.redact(str(error))}
+        job['last_native'] = result
+    finally:
+        # Native QA and explicit UI records change derived evidence, not source
+        # content. Refresh this checkpoint even after a post-export preview error.
+        if stage['kind'] == 'terminal':
+            record = job['checkpoints'].get('build')
+            owned = {str(out/'build'/name) for name in ('qa_report.json', 'layout_feedback.json')}
+            if record and all(path in owned or snapshot(path) == hashed
+                              for path, hashed in record['files'].items()):
+                checkpoint(job, 'build', record['files'], record['upstream'])
+        save(job)
+    response = envelope(job, stage)
+    response['native_result'] = result
+    if result['status'] == 'failed':
+        response.update(status='blocked', blocking=True,
+            next_action={'type': 'resolve_dependency', 'reason': 'NATIVE_ACCEPTANCE_FAILED',
+                'remedy': result['message']+' Resolve the reported error and use current native hashes. The host must '
+                          'permit macOS Apple Events/LaunchServices or Windows COM. For a locked desktop or file-access '
+                          'dialog, unlock/grant access, then retry; alternatively export the exact staging '
+                          'in PowerPoint, inspect every slide and submit review, then ingest its PDF.'})
+    return response
+
+
+def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None):
     try:
         out, _ = locate(job_id)
         with locked(out):
@@ -498,6 +565,10 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
             stage, upstream = current(job)
             repair_result = None
             try:
+                if native is not None:
+                    if any(value is not None for value in (artifact_kind, artifact_path, inputs, replan_from, acknowledge)):
+                        raise ValueError('Submit native as a separate operation; do not mix artifacts, inputs, replan or acknowledge.')
+                    return _native(job, stage, native)
                 if artifact_kind == 'deck_ir_patch':
                     if not artifact_path or inputs is not None or replan_from or acknowledge is not None:
                         raise ValueError('Submit a patch_path alone via artifact_kind=deck_ir_patch and artifact_path.')

@@ -33,6 +33,7 @@ def main():
     p.add_argument('--artifact-path')
     p.add_argument('--inputs', type=Path)
     p.add_argument('--acknowledge', type=Path)
+    p.add_argument('--native', type=Path, help='Artifact-bound PowerPoint render/review/ingest operation JSON')
     p.add_argument('--replan-from')
     commands.add_parser('serve')
     commands.add_parser('setup', help='Print the repository installer location')
@@ -56,7 +57,7 @@ def main():
             result = {'status': 'PASS', 'output': str(args['out'].resolve())}
         else:
             args.pop('json', None)
-            for key in ('queries', 'inputs', 'acknowledge'):
+            for key in ('queries', 'inputs', 'acknowledge', 'native'):
                 if args.get(key) is not None:
                     args[key] = read(args[key])
             result = {'doctor': doctor, 'start': start, 'advance': advance, 'status': status}[command](**args)

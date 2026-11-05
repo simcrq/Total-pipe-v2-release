@@ -46,3 +46,5 @@ python -m deck_compiler build --ir designed.deck_ir.json --out build/my-deck \
 已有 IR 的布局/裁图小修可按 `repair` 提供的 Schema 提交 deck_ir_patch：先用 preflight 查看原编译器反馈，
 再用 apply 接受，内容/来源变更仍走完整 IR 重规划。最终构建与 QA 保持完整。
 正式 `final.pptx` 还需 PowerPoint 逐页验收、原生 PDF、REVIEW 审核及 promote。
+四工具任务可在候选后按 `native` 描述，用 `advance.native` 单独导出、生成全页预览并记录实际 UI 复核；
+复用已生成 PPTX，QA 随之更新。见[原生接入与恢复](Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入)，promote 仍用 CLI。

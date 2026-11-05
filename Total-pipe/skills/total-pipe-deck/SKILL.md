@@ -548,6 +548,11 @@ OfficeCLI 的 `Text overflow` 警告估计记为 INFO，保留原 issue，检查
 报告给出 REVIEW 总数及 unacked_count，不自动接受审核项，不能用候选笔记代替正式 final 的产物绑定签收。
 操作与图形维护限制见 `Total-pipe/docs/complex-page-qa.md`。
 
+四工具任务的候选后原生验收使用 `advance.native` 的 render / review / ingest：完整读回复中的
+native.schema_path，按 `Total-pipe/docs/agent-adapter.md` 的原生验收节操作。render 只导出当前候选的
+原生 PDF 与逐页预览并更新 QA；review 需实际在 PowerPoint 逐页查看后，显式提交当前哈希、全部页 ID、
+检查项和说明。预览/导出不自动证明 UI 眼检；失败按返回诊断恢复，不重跑已通过的上游。
+
 只有用户要求正式 final 才执行 `Total-pipe/docs/deck-compiler-v2.md` 的完整验收与 promote：
 直接在 PowerPoint 逐页检查当前 staging，记录绑定实际文件哈希的 UI review，再用该文件导出的
 原生 PDF 验证。OfficeCLI/HTML/PDF 截图不能冒充 PowerPoint UI 眼检。

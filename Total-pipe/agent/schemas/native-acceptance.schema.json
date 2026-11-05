@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Artifact-bound PowerPoint acceptance operation",
+  "type": "object",
+  "required": ["operation", "artifact_sha256", "layout_sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "operation": {"enum": ["render", "review", "ingest"]},
+    "artifact_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "layout_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "force": {"type": "boolean"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "note": {"type": "string", "minLength": 1},
+    "method": {"const": "powerpoint-ui"},
+    "reviewed_slide_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "checks": {"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true,
+      "items": {"enum": ["figure_caption_alignment", "scientific_panel_readability", "text_overflow_and_collisions", "font_rendering"]}},
+    "pdf_path": {"type": "string", "minLength": 1},
+    "pdf_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source": {"const": "powerpoint-export"}
+  },
+  "oneOf": [
+    {"properties": {"operation": {"const": "render"}},
+      "not": {"anyOf": [{"required": ["reviewer"]}, {"required": ["note"]}, {"required": ["method"]}, {"required": ["reviewed_slide_ids"]}, {"required": ["checks"]}, {"required": ["pdf_path"]}, {"required": ["pdf_sha256"]}, {"required": ["source"]}]}},
+    {"properties": {"operation": {"const": "review"}},
+      "required": ["reviewer", "note", "method", "reviewed_slide_ids", "checks"],
+      "not": {"anyOf": [{"required": ["force"]}, {"required": ["pdf_path"]}, {"required": ["pdf_sha256"]}, {"required": ["source"]}]}},
+    {"properties": {"operation": {"const": "ingest"}},
+      "required": ["reviewer", "pdf_path", "pdf_sha256", "source"],
+      "not": {"anyOf": [{"required": ["force"]}, {"required": ["note"]}, {"required": ["method"]}, {"required": ["reviewed_slide_ids"]}, {"required": ["checks"]}]}}
+  ]
+}

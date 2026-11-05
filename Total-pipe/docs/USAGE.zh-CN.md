@@ -563,6 +563,12 @@ MCP 对应 `totalpipe_qa` / `totalpipe_ack_review`，后者传 reviewer、note�
 
 用户要求正式 final 时，验收对象始终为本次 `staging.pptx`：
 
+默认四工具任务可在候选后按回复中的 `native.schema_path`，用 `totalpipe_advance(native=...)`
+单独提交 render / review / ingest，原生 PDF、逐页 PNG/预览索引和 UI 复核结果直接回写当前 QA。
+这复用现有候选，未重新编译 PPTX；自动导出不记录 UI review，科学 REVIEW 也不自动签收。
+完整字段与手动 PDF 接入见[原生验收协议](agent-adapter.md#原生-powerpoint-验收接入)。
+以下低层 CLI 路径继续保留，正式 promote 仍使用 CLI：
+
 1. 在 Microsoft PowerPoint 普通/阅读视图逐页检查文字、公式、原图与图注、panel、字体、越界和碰撞。
 2. 记录当前 staging/layout 哈希绑定的 UI review；PDF/HTML/截图不代替 PowerPoint 中的直接眼检。
 3. 在同一次控制流程中导出当前 staging 的 `native.pdf`，绑定该 PDF 并重新验证。

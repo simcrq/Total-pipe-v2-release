@@ -49,7 +49,9 @@ status 只读；同一提交可重复 advance，已完成组件不会重复执�
 默认回复为摘要；完整请求/哈希清单用 status(detail="full")；各轮本地执行与等待时间点见 logs/events.jsonl。
 job_id 在重启后可用；job.json 损坏时不能从产物伪造用户选择，按 remedy 处理。
 候选 REVIEW 如实报告；仅真实复核后用 advance.acknowledge 传 reviewer、note、review_ids。
-候选笔记不能替代 final 审核；promote / validate-native / record-powerpoint-review 仅用原 CLI。
+原生验收按 native.schema_path 完整协议，用 advance.native 单独提交 render / review / ingest；复用候选，不重跑上游。
+自动 PDF/PNG 导出不等于直接 PowerPoint 眼检；review 只在实际逐页检查后提交当前哈希、全部页 ID、检查项和说明。
+候选笔记不能替代 final 审核；promote 仍仅用原 CLI，原生接入与预览说明见接入层用法。
 
 需要完整 Story 规范时读 [总调度 Skill 的 Story 节](../total-pipe-deck/SKILL.md#2-科学故事story-planner)。
 复杂页、公式及原生对象的额外限制按提示包和 [当前文档索引](../../../docs/README.md) 按需读取。

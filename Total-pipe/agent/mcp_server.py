@@ -1,5 +1,6 @@
 """Four-tool server reusing the existing stdio transport (no MCP client)."""
 import importlib.util
+import json
 from pathlib import Path
 
 from . import COMPONENT, VERSION
@@ -14,6 +15,7 @@ transport.INSTRUCTIONS = ('Drive the evidence-to-candidate workflow using next_a
     'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
     'Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
     'When status is running, call advance; when blocked, resolve the reported issue. '
+    'Native render/review/ingest are explicit advance operations after candidate. Never auto-attest UI review. '
     'Candidate REVIEW notes do not satisfy PowerPoint final promotion; final remains CLI-only.')
 
 STRING = {'type': 'string', 'minLength': 1}
@@ -32,7 +34,8 @@ DEFINITIONS = {
             'required': ['model','reasoning_effort','selected_by_user'], 'additionalProperties': False},
         'replan_from': STRING, 'acknowledge': {'type': 'object', 'properties': {'reviewer': STRING, 'note': STRING,
             'review_ids': {'type': 'array', 'minItems': 1, 'items': STRING}},
-            'required': ['reviewer','note','review_ids'], 'additionalProperties': False}}, ['job_id']),
+            'required': ['reviewer','note','review_ids'], 'additionalProperties': False},
+        'native': json.loads((Path(__file__).parent/'schemas/native-acceptance.schema.json').read_text(encoding='utf-8'))}, ['job_id']),
     'totalpipe_status': (status, {'job_id': STRING,
         'detail': {'type': 'string', 'enum': ['summary', 'full'], 'default': 'summary'}}, ['job_id']),
 }

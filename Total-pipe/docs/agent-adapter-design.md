@@ -35,7 +35,8 @@ v1 有以下阻断实现的问题，实施以本修订为准：
 - 接入层只准备提示包、验证、记录和调用组件；queries、Story、IR、视觉提案由 Agent 编写。
 - 模型选择来自当前或此前明确的用户选择，通过 model_selection 回填；不静默代填。
 - Story provenance 自洽校验不证明真实调用。真实独立子代理及用户选择仍由宿主执行并如实记录。
-- 不创建 final，不暴露 promote / validate-native / record-powerpoint-review；正式验收使用原 CLI。
+- 不创建 final，不暴露 promote。候选后 advance.native 接入 render / review / ingest，复用现有
+  原生验证与 UI 记录；只记录真实眼检，正式晋级仍使用 CLI。
 - 安装器按调用者选择注册配置；开发测试只操作临时目录，不改开发机的全局设置或密钥。
 
 ## 阶段与入口
@@ -54,6 +55,7 @@ start 收 source、out_dir、language、presentation_type，可选 requirements�
 source_kind、supplementary_paths；不接受模型字段。PDF 的鉴权失败返回解决依赖动作。
 advance 收 job_id，可提交 artifact_kind / artifact_path，回填 inputs，或明确 replan_from。
 candidate acknowledgement 必须含 reviewer、note、review_ids；FAIL 无法签收。
+候选后的原生操作使用独立 native 参数，绑定 artifact/layout 哈希；详见现行接入层协议。
 
 next_action 保留七类 author_artifact / invoke_subagent / provide_input / replan /
 resolve_dependency / review_required / none。每类附可执行的路径、字段或 remedy。
@@ -85,6 +87,7 @@ stage_index 从 1 开始；status 为 running / waiting_agent / blocked / candid
 | deck_ir_patch | 既有 IR 的布局树/图片路径小修；双哈希、内容/分组不变、原编译器预检；失败保留旧候选，接受后完整 build/QA |
 | design | 既有 visual-prompt；提案只合入 presentation，相对资源路径保持语义 |
 | build | apply-visual-plan（如需要）→ build --skip-native；检查当前 candidate / staging / QA 的哈希与 FAIL |
+| native（候选后按需） | PowerPoint 导出/手动接入 → PDF 检查与全页预览；显式 UI review；QA checkpoint 同步，PPTX/上游不重跑 |
 
 未知非零退出、坏 JSON、超时和依赖缺失均保留诊断日志路径，并给出下一步。
 日志先屏蔽当前环境中的 token / key 等敏感值；不把密钥写入 job 或报告。

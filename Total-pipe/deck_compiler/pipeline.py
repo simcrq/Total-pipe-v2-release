@@ -239,7 +239,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
         return qa
 
 
-def record_powerpoint_review(out, reviewer, slide_ids=None):
+def record_powerpoint_review(out, reviewer, slide_ids=None, note=None, *, expected_hashes=None):
     """Bind a direct PowerPoint UI review to the current staging bytes.
 
     The caller records this only after inspecting the editable staging deck in
@@ -252,6 +252,9 @@ def record_powerpoint_review(out, reviewer, slide_ids=None):
         layout_path = out/'layout.json'
         if not staging.exists() or not layout_path.exists():
             raise ValueError('staging.pptx and layout.json are required')
+        if expected_hashes and (expected_hashes['artifact_sha256'] != file_hash(staging) or
+                expected_hashes['layout_sha256'] != file_hash(layout_path)):
+            raise ValueError('PowerPoint UI review request is stale')
         if not reviewer or not reviewer.strip():
             raise ValueError('PowerPoint reviewer is required')
         layout = json.loads(layout_path.read_text(encoding='utf-8'))
@@ -269,6 +272,7 @@ def record_powerpoint_review(out, reviewer, slide_ids=None):
             'layout_sha256': file_hash(layout_path),
             'reviewed_slide_ids': expected,
             'checks': POWERPOINT_REVIEW_CHECKS,
+            **({'note': note.strip()} if note else {}),
         }
         write_json(out/'powerpoint_review.json', evidence)
         state_path = out/'state.json'
@@ -299,7 +303,7 @@ def _load_powerpoint_review(out, staging, layout_path, reviewer=None):
     return evidence
 
 
-def ingest_native(out, pdf, reviewer=None):
+def ingest_native(out, pdf, reviewer=None, *, render_evidence=None, expected_hashes=None):
     """Attach a PowerPoint-exported PDF to the exact staging artifact.
 
     This is the deterministic continuation path when macOS shows a first-use
@@ -314,18 +318,37 @@ def ingest_native(out, pdf, reviewer=None):
         ir_path = out/'deck_ir.json'
         if not all(path.exists() for path in (staging, layout_path, ir_path, pdf)):
             raise ValueError('staging.pptx, layout.json, deck_ir.json and native PDF are required')
+        if expected_hashes and (expected_hashes['artifact_sha256'] != file_hash(staging) or
+                expected_hashes['layout_sha256'] != file_hash(layout_path) or
+                ('pdf_sha256' in expected_hashes and expected_hashes['pdf_sha256'] != file_hash(pdf))):
+            raise ValueError('Native import request is stale')
         if not pdf.read_bytes().startswith(b'%PDF'):
             raise ValueError('Native evidence is not a PDF')
-        review = _load_powerpoint_review(out, staging, layout_path, reviewer)
+        # CLI/manual imports still require direct UI review. Only this process's
+        # PowerPoint renderer can attach PDF evidence before that review exists.
+        rendered = render_evidence is not None
+        if rendered and (render_evidence.get('renderer') != 'powerpoint' or
+                render_evidence.get('artifact_sha256') != file_hash(staging) or
+                render_evidence.get('pdf_sha256') != file_hash(pdf)):
+            raise ValueError('PowerPoint render evidence is stale or incomplete')
+        review = None
+        if not rendered or (out/'powerpoint_review.json').exists():
+            review = _load_powerpoint_review(out, staging, layout_path, reviewer)
         layout = json.loads(layout_path.read_text(encoding='utf-8'))
         ir = json.loads(ir_path.read_text(encoding='utf-8'))
         prior = json.loads((out/'qa_report.json').read_text(encoding='utf-8'))
         if prior.get('artifact_sha256') != file_hash(staging):
             raise ValueError('staging.pptx changed after build; rebuild before native validation')
+        if (prior.get('ir_sha256') != digest(ir) or
+                prior.get('layout_sha256') != file_hash(layout_path)):
+            raise ValueError('IR or layout changed after build; rebuild before native validation')
+        bound = {path: file_hash(path) for path in (staging, layout_path, ir_path, pdf)}
         # Rebuild all artifact-derived findings against the current bytes.
         keep = [item for item in prior.get('items', [])
                 if item.get('source', {}).get('detector') not in ('native-visual', 'structural-ooxml')]
         items = keep + verify(staging, layout) + native.inspect_pdf(pdf, layout)
+        if any(file_hash(path) != value for path, value in bound.items()):
+            raise ValueError('Native validation input changed during inspection')
         native_path = out/'native.pdf'
         if pdf.resolve() != native_path.resolve():
             temp_pdf = out/'native.pdf.tmp'
@@ -336,15 +359,17 @@ def ingest_native(out, pdf, reviewer=None):
             'artifact_sha256': file_hash(staging),
             'pdf_sha256': file_hash(native_path),
             'pdf': str(native_path.resolve()),
-            'visual_review': review,
+            'layout_sha256': bound[layout_path],
+            'export_method': 'powerpoint-automation' if rendered else 'powerpoint-manual',
+            **({'visual_review': review} if review else {}),
         }
         write_json(out/'native.json', evidence)
         qa = report(items, evidence['artifact_sha256'], digest(ir), {
             'structural': True,
             'native': True,
             'renderer': 'powerpoint',
-            'visual_review': True,
-            'visual_review_method': 'powerpoint-ui',
+            'visual_review': review is not None,
+            'visual_review_method': 'powerpoint-ui' if review else None,
             'backend': 'officecli',
             'officecli_schema': prior.get('checks', {}).get('officecli_schema', False),
             'officecli_issues': prior.get('checks', {}).get('officecli_issues', False),
@@ -352,18 +377,21 @@ def ingest_native(out, pdf, reviewer=None):
             'officecli_commands_sha256': prior.get('checks', {}).get('officecli_commands_sha256'),
         })
         write_qa(out, qa, ir, layout)
+        write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         metrics_path = out/'metrics.json'
         if metrics_path.exists():
             metrics = json.loads(metrics_path.read_text(encoding='utf-8'))
             metrics['qa_counts'] = qa['counts']
             metrics['native_validated'] = True
-            metrics['powerpoint_visual_reviewed'] = True
+            metrics['powerpoint_visual_reviewed'] = review is not None
             write_json(metrics_path, metrics)
         write_json(out/'state.json', {
-            'phase': 'awaiting_review' if qa['counts']['REVIEW'] else 'validated',
+            'phase': 'failed' if qa['counts']['FAIL'] else
+                     'awaiting_powerpoint_review' if not review else
+                     'awaiting_review' if qa['counts']['REVIEW'] else 'validated',
             'artifact_sha256': evidence['artifact_sha256'],
-            'powerpoint_visual_reviewed': True,
-            'powerpoint_reviewer': review['reviewer'],
+            'powerpoint_visual_reviewed': review is not None,
+            'powerpoint_reviewer': review['reviewer'] if review else None,
         })
         return qa
 

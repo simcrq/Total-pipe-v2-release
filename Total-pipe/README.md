@@ -92,9 +92,12 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | `qa_report.json`、`officecli_issues.json` | 统一 QA 和保留的 OfficeCLI 原始问题 |
 | `qa_acknowledgements.json` | 候选逐项审核笔记，按未变化的页面证据保留；不替代正式 final 审核 |
 | `powerpoint_review.json`、`native.pdf`、`native.json` | 当前 staging 的直接 UI 检查与 PowerPoint 原生证据 |
+| `native_preview.json`、`native-preview/` | 绑定当前 PPTX/PDF 的逐页 PNG、contact sheet 和预览 HTML；不证明 UI 眼检 |
 | `final.pptx`、`state.json` | 完成验收 / REVIEW 审核 / promote 后的交付及状态 |
 
 修改页面从 canonical Deck IR 开始；派生文件由编译器重建。
+四工具候选可按 `native.schema_path` 用 `advance.native` 执行 render / review / ingest；复用现有 PPTX，
+同步原生 PDF、全页预览、实际 UI 复核与 QA checkpoint。字段及失败恢复见[原生验收协议](docs/agent-adapter.md#原生-powerpoint-验收接入)。
 候选可以交付并注明未解决项；正式 final 按 [使用说明第 6 节](docs/USAGE.zh-CN.md#6-正式-finalpowerpoint-验收与晋级)
 完成逐页 PowerPoint 检查、PDF 绑定及 REVIEW acknowledgement，再 promote。
 OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页面。

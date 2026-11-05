@@ -118,11 +118,16 @@ def doctor(deep=False, source_kind=None):
             pass
     add('powerpoint.native', powerpoint, 'Application detected; UI/export acceptance still required.' if powerpoint else
         'Native PowerPoint not detected.', 'Use Windows/macOS with Microsoft PowerPoint for formal final validation.', optional=True)
+    preview = importlib.util.find_spec('pypdfium2') is not None
+    add('powerpoint.preview', pdf and preview, 'PowerPoint PDF page preview dependencies available.' if pdf and preview else
+        'PDF page preview dependency missing.', 'Install the declared pdfplumber dependencies, including pypdfium2.', optional=True)
     needs = {'build'} if source_kind == 'deck_ir' else {'rpa', 'build'} if source_kind == 'workflow' else {'evidence', 'rpa', 'build'}
     capabilities = {'can_evidence_markdown': py and bridge and markdown_ready,
         'can_evidence_pdf': py and bridge and pdf_ready and auth,
         'can_rpa': py and node and rpa, 'can_build_editable': py and compiler and present and version and runtime,
         'can_native_final': py and compiler and powerpoint and pdf,
+        'can_native_preview': pdf and preview,
+        'native_acceptance_operations': ['render', 'review', 'ingest'],
         'runtime_verified': bool(deep and present and version and runtime),
         'authentication_verified': False,
         'blocked_stages': [name for name, ready in [('evidence', py and bridge and evidence_ready and (source_kind != 'pdf' or auth)),

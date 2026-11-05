@@ -45,7 +45,7 @@ python3.12 install.py --client codex --profile advanced
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
 | totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
-| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch），回填 inputs，或指定 replan_from / acknowledge |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch），回填 inputs，或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -268,6 +268,77 @@ python -m agent advance --job-id <job-id> --artifact-kind deck_ir_patch \
   因运行环境失败，按原构建反馈恢复；接受补丁不等于候选验收。
 - 没有自动签收 REVIEW；已有候选签收仅按原来的页面/资产签名规则复用，改变的页面需重新复核。
   正式 final 仍要求完整 PowerPoint 原生验收。
+
+## 原生 PowerPoint 验收接入
+
+候选后的回复新增 `native` 描述，含完整 `schema_path`、当前 staging 与 layout 的 SHA-256、
+全部 `slide_ids`、`required_checks`、预览路径与验收状态。四工具数量不变；向 advance 的 `native`
+字段提交一个操作，不能同时提交 artifact、inputs、replan 或 acknowledge。CLI 对应
+`python -m agent advance --job-id <job-id> --native /abs/native-operation.json`。
+
+先完整读取 [native Schema](../agent/schemas/native-acceptance.schema.json)。所有操作都绑定回复中的
+`artifact_sha256` / `layout_sha256`；不使用旧候选的哈希。以下哈希占位符应替换为当前实际值：
+
+```json
+{"operation":"render","artifact_sha256":"<当前 staging SHA-256>","layout_sha256":"<当前 layout SHA-256>"}
+```
+
+`render` 用 Microsoft PowerPoint 导出现有 staging 的私有字节副本，检查 PDF 并回写 QA，
+不重新运行 Story、page_design、Design 或 OfficeCLI。它不操作已打开用户文档的保存状态。
+成功后 `checks.native=true`，尚未直接眼检时 `checks.visual_review=false`；这两项分别报告。
+macOS 使用系统或用户 Applications 中的完整 PowerPoint.app 路径加载 AppleScript 术语，避免按名称
+或 bundle ID 查找命中不完整的应用字典；路径仅用于选择程序，文稿/输出路径仍通过参数传入。
+导出前检查实际打开文稿的完整路径；已打开的输入或不匹配的活动文稿会被拒绝，不关闭用户文稿。
+宿主还须允许 Apple Events/LaunchServices（Windows 为 COM）；受限 shell 即使能读到 app 也可能
+无法发出原生自动化请求，此时用已授权的 GUI 宿主执行，或通过下面的手动导出路径接入。
+已有有效原生 PDF 时重复调用复用导出；可选 `force:true` 强制再次导出。锁屏、自动化权限或文件访问
+弹窗导致失败时，解锁/授权后重试，或使用下面的 UI 导出接入。没有备用渲染器冒充 PowerPoint。
+
+每页 PNG 来自实际 PowerPoint PDF 的栅格化。`build/native_preview.json` 绑定 PPTX/PDF 与各预览文件
+哈希；`native-preview/<id>/pages.html` 可逐页查看，另有 contact sheet。预览缺失时重试 render 只
+重新栅格化现有 PDF。预览依赖失败在 `native_result.preview_error` 中报告，原生 PDF/QA 仍保留，
+不能声称已完成图片眼检。PNG/PDF 检查不等于直接检查 PowerPoint 可编辑页面。
+坏 PDF 的解析失败返回结构化 native failure（含 error_type），不附加原生证明；已验证 PDF 的可选
+预览解析/栅格化异常只记录 preview_error，可修复依赖后重试。宿主取消仍正常传播，不改写成成功。
+
+实际在 PowerPoint 中逐页查看当前 staging，核对图与图注、科学面板可读性、文字截断/重叠和字体后，
+提交明确的审核者、说明、全部实际页 ID 和检查项；不接受 `all` 代替逐页 ID：
+
+```json
+{"operation":"review","artifact_sha256":"<当前 staging SHA-256>","layout_sha256":"<当前 layout SHA-256>",
+ "reviewer":"<实际审核者>","note":"<实际逐页复核范围和发现>","method":"powerpoint-ui",
+ "reviewed_slide_ids":["<实际页 ID 1>","<实际页 ID 2>"],
+ "checks":["figure_caption_alignment","scientific_panel_readability","text_overflow_and_collisions","font_rendering"]}
+```
+
+只记录实际完成的检查；该声明由调用者负责，接口不会替调用者打开页面并判断科学内容。PowerPoint
+页面若有未保存修改，应先回到 canonical IR 修订/重建，不能对与磁盘 staging 不同的画面签收。
+`review` 可在 render 前或后执行；已有当前 PDF 时会更新 QA 中的 UI review 绑定。
+这不自动签收任何科学 REVIEW，也不创建 final。
+
+自动导出不可用时，在同一次控制流程中从当前 staging 手动导出 PDF。实际逐页 UI 检查并提交
+review 后，用以下操作接入；`source` 是调用者对真实来源的明确声明，不能由 PDF 文件扩展名推断：
+
+```json
+{"operation":"ingest","artifact_sha256":"<当前 staging SHA-256>","layout_sha256":"<当前 layout SHA-256>",
+ "reviewer":"<与 UI review 相同的审核者>","pdf_path":"/abs/powerpoint-export.pdf",
+ "pdf_sha256":"<该 PDF SHA-256>","source":"powerpoint-export"}
+```
+
+页数、文字区域、原生字体及结构检查会重新运行；新的 FAIL 必须修复。
+若当前 FAIL 全部来自 native-visual（例如错导 PDF 页数），可用 force render 或经过相同 UI 约束的
+ingest 换入正确 PDF 并重新验证；只有新检查不再失败才解除阻断。review、非强制缓存复用及任一
+非原生/无来源 FAIL 均不能走此恢复路径，不修改字号或科学门禁。
+原生 PDF 被删除/改变时，
+status 标记 `NATIVE_EVIDENCE_STALE`，可 render 恢复而不重建 PPTX。过期/缺失的 PPTX、IR 或布局仍
+要求重建。失败调用保留 `last_native`；后续 status 可能仍报告旧候选，不能把它当成本轮验收成功。
+原生动作不消耗科学产物修订次数；本地区间以 `native_render/native_review/native_ingest` 记入事件。
+
+`native.status` 区分 awaiting_native_render / awaiting_powerpoint_review /
+awaiting_review_acknowledgements / accepted / qa_failed。accepted 仅表示当前原生步骤及候选 REVIEW
+已完成，**正式晋级仍使用原 CLI promote 及其文件绑定 acknowledgement**，不由 advance 自动晋级。
+低层 CLI record-powerpoint-review / validate-native 保持兼容；需通过 Agent 恢复的 job 建议使用上述操作，
+以同步 QA checkpoint，避免把正常 QA 更新当成源文件改动。
 
 ## 执行耗时记录
 
