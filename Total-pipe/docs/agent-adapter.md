@@ -43,10 +43,24 @@ python3.12 install.py --client codex --profile advanced
 
 | 工具 | 输入与行为 |
 | --- | --- |
-| totalpipe_doctor | 可选 deep / source_kind；报告 12 类环境检查与阶段能力 |
+| totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
 | totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
 | totalpipe_advance | job_id；可提交 artifact_kind / artifact_path，回填 inputs，或指定 replan_from / acknowledge |
-| totalpipe_status | job_id；只读取实际哈希和状态，不执行组件 |
+| totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
+
+start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
+artifacts_summary（引用数、去重文件数与阶段名）。完整请求与逐文件哈希不重复塞入每次回复；
+需要时调用 `totalpipe_status(job_id, detail="full")`，返回原 request 与 artifacts 清单。
+自动化若依赖这两个字段，应显式选择 full。状态查询不改写 job、提示包、反馈或事件日志；提示缺失时
+返回 ADVANCE_REQUIRED，由 advance 准备完整提示。Agent 仍必须完整读取 next_action 指定的提示包和 Schema。
+
+`presentation_type` 支持 RPA 的 group_meeting / journal_club / proposal / progress_report / defense /
+paper_presentation / custom。入口将“组会”“研究生组会”“group-meeting”规范化为 group_meeting，
+research-sharing / 文献分享为 journal_club，research-report / 科研汇报为 paper_presentation。
+lecture / 讲课与 commercial / 路演使用 custom 的 RPA 规划，同时在 presentation_context 保留原场合。
+可在已识别标签后用逗号、分号或冒号补充听众/时长；未知标签在创建 job 前拒绝，建议把详细要求写在 requirements。
+同一请求可用等价标签恢复，包括旧 job 的已识别别名；保留原 job 请求及用户模型选择，不从产物重建授权。
+听众/时长说明、requirements 或 lecture/commercial 场合等实质要求改变时仍返回 JOB_OUTPUT_IN_USE。
 
 source_kind 可为 auto、pdf、markdown、workflow、deck_ir。JSON 自动按 schema_version 识别；
 已有 IR 保持语义，在 work 中保存以绝对资源路径重定位的副本，完整设计可直接 build。
@@ -60,12 +74,13 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 `basis=supplement`，不写 EV；`inline` 只允许页内块，`pages/both` 才允许独立补充页（页数不限）。
 补充页可写 `semantic.explanation`，义务写 `basis=supplement`、不写 `evidence_refs`；paper 义务不变。
 论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
-`slide_count` 仍按 RPA 论文 brief 计，补充页是额外页。
+`slide_count` 表示最终论文页的精确目标（1–40），不是 Story 节点数或 RPA brief 数；未指定时由设计者
+按内容与场合安排，最多 40 个论文页。独立补充文字页额外计；带论文 EV、图、表或原生图形的页仍算论文页。
 
 **Story 不为 RPA 槽位缩短科学内容。** RPA 只规划它当前能容纳的页面；若仍有完整 brief 无法规划，
-`rpa_validation.status=partial`，`unplanned_slide_briefs` 随 IR 提示包下发。IR 必须为这些 brief
-补页或拆页，优先 `composite-research` + `layout_tree`，保留完整 body/key_points 和 EV；不能靠删句、
-缩写术语或把内容藏进 notes 通过。
+`rpa_validation.status=partial`，`unplanned_slide_briefs` 留在原始 IR 提示包。页面设计在目标页数内为完整
+内容安排拆分或合并；IR 逐页实现已通过设计，优先 `composite-research` + `layout_tree`。空间不足回退
+页面设计；不能靠删句、缩写术语或把听众理解所必需的证据藏进 notes 通过。
 
 ### 页面设计阶段（page_design）
 
@@ -111,8 +126,8 @@ RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**
 - 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**
   （同一页可被多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须
   出现在所引 evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为
-  同一个数）；`marks` 必须是这页文本里出现过的短语；页数可以少于 brief 数（合并）或多于（拆分），但
-  不能超过两倍。
+  同一个数）；`marks` 必须是这页文本里出现过的短语。页数可少于 brief 数（合并）或多于（拆分），
+  显式 slide_count 校验最终论文页目标；不再按 Story 节点数乘倍数限制页数。
 - 通过后，IR 提示包会带上 `page_design`（含 `shape`、`marks`、`anchor`）与"逐页实现、不得重新设计"的
   指令；IR 作者从 `design_forms` 里选择最能实现该 `shape` 的构图。IR 交回时按设计校验
   （`DESIGN_REALIZATION_FAILED`）：页数一致、每页保留设计声明的 evidence、设计页上的数字不能丢。
@@ -191,6 +206,7 @@ python -m agent doctor --deep --json
 python -m agent start --source /abs/deck_ir.json --out-dir /abs/output \
   --language zh --presentation-type group_meeting
 python -m agent status --job-id <job-id>
+python -m agent status --job-id <job-id> --detail full
 python -m agent advance --job-id <job-id> --artifact-kind story_plan \
   --artifact-path /abs/output/work/story_plan.json
 python -m agent advance --job-id <job-id> --inputs /abs/selection.json
@@ -207,9 +223,24 @@ python -m agent ir-prompt --workflow /abs/workflow.json --rpa /abs/rpa_input.jso
 正常流程在 RPA 成功后自动生成同一个提示包。它包含完整 workflow、原始 content model、完整 plan、
 真实 catalog / 能力 / schema 及素材根。没有新增 `deck_compiler ir-prompt` 命令。
 RPA 的业务参数写在 plan_input.json；不能把 `--file` 后的命令行参数当成合并成功。
-slide_count 与完整 Story briefs 数量冲突时要求改 Story，不截断 / 复制 brief。
-补充页不计入 slide_count；IR 页数下界仍按论文 brief 检查。
-IR 另校验完整 body / key_points、证据引用和页数下界，不能将多页内容塞成一页来消除容量问题。
+slide_count 不与 Story briefs 数量比较；例如 9 个论证节点、11 个 briefs 可以设计为 22 页。
+设计提交时用 PAGE_DESIGN_INVALID 报告页数目标不符；IR（包括已有 IR 导入）在 build 之前用
+SLIDE_COUNT_MISMATCH 拒绝目标不符。内容合并仍校验每条完整 body/key_points 与 EV，设计路径继续
+检查唯一覆盖、数字溯源及逐页实现；布局的字号、图片与图形尺寸门禁不变。
+
+## 执行耗时记录
+
+`logs/events.jsonl` 追加保存每轮运行事件，旧事件不被下轮构建覆盖。每行是 schema_version=1 的 JSON，
+含 UTC timestamp、event、job_id、stage；执行区间另有 span_id、operation、status 和终态 duration_ms。
+stage_started / stage_finished 覆盖导入、提交验收、提示准备和组件执行；component_started /
+component_finished 记录子进程调用。waiting、blocked、replan_requested 与 job_created/job_resumed
+记录暂停、失败与恢复时间点。组件 `logs/<name>.json` 仍保存最后一轮脱敏输出，新增 started_at /
+finished_at / duration_ms；各轮耗时从 JSONL 追溯。
+
+duration_ms 测量本地执行区间，不代表宿主模型的生成时间。waiting 到提交之间还可能包含用户、网络或
+队列等待，不能全算模型耗时；父 stage 与子 component 区间会重叠，统计时不要直接相加。
+事件采用固定字段，不记录提示正文、argv、模型私有推理或密钥。status 不追加事件；只有 start/advance
+与实际组件调用写事件。未完成的 started 区间可识别为中断，不能当作成功。
 
 ## 恢复与文件边界
 
@@ -227,7 +258,9 @@ doctor 的 can_native_final 仅说明依赖就绪，不能当作 PowerPoint 验�
 MinerU token / CLI 就绪不能证明云认证有效；缓存登录无法确认时报告不确定，并允许实际 OCR 返回诊断。
 字体、OCR 和 PowerPoint 不在所有机器上可用；能力与实际原生验收分别报告。
 
-## 本次实施验证（2026-10-25）
+## 历史实施验证（2026-10-25）
+
+以下只记录当时提交的验证，不代表后续源码的当前测试数量或耗时基准。
 
 在 macOS、Python 3.12.12、Node.js 24.20.0、OfficeCLI 1.0.158 上执行：
 

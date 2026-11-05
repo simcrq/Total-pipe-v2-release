@@ -87,6 +87,10 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提供 Agent 产物与用户选择。
 已有 IR / workflow 可从对应阶段继续；安装、状态与恢复详见[接入层说明](Total-pipe/docs/agent-adapter.md)。例如：
 
+接入层默认返回紧凑摘要，`totalpipe_status(detail="full")` 可读取完整请求与产物清单；状态查询只读。
+`slide_count` 是最终论文页目标，与 Story 节点/brief 数量独立；本地执行区间与等待事件追加在
+`logs/events.jsonl`，用于区分组件执行、返工与外部等待，不将它当作模型 token 或整链提速基准。
+
 ```text
 使用 total-pipe-agent，将 /absolute/path/paper.pdf 制作为中文研究汇报。
 围绕研究问题、方法、关键结果和局限组织证据与故事，完成整套 Design。

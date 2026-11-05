@@ -8,9 +8,12 @@ import shutil
 import subprocess
 import sys
 import signal
+from time import perf_counter
 
 from . import ROOT, COMPONENT
 from .state import read, write, sha, resources
+from .requests import prompt_request, presentation_type
+from .telemetry import span, timestamp
 
 sys.path.insert(0, str(COMPONENT/'pwf2rpa'))
 
@@ -80,18 +83,33 @@ def run_process(argv, cwd, timeout):
 
 
 def run(argv, cwd, out, name, timeout=120, json_output=True, allow_unplanned=False):
+    job_path = Path(out)/'.totalpipe/job.json'
+    try:
+        job_id = read(job_path).get('job_id') if job_path.is_file() else None
+    except (OSError, ValueError):
+        job_id = None
+    with span(out, stage=name, operation='component', component=name, job_id=job_id):
+        return _run(argv, cwd, out, name, timeout, json_output, allow_unplanned)
+
+
+def _run(argv, cwd, out, name, timeout, json_output, allow_unplanned):
     log = Path(out)/'logs'/(name+'.json')
+    started_at, started = timestamp(), perf_counter()
+    def record(value):
+        write(log, {**value, 'started_at': started_at, 'finished_at': timestamp(),
+                    'duration_ms': round((perf_counter()-started)*1000, 3)})
     try:
         process = run_process([str(a) for a in argv], cwd, timeout)
     except FileNotFoundError as error:
         code = 'OFFICECLI_MISSING' if 'officecli' in str(argv[0]).lower() else 'EXECUTABLE_MISSING'
+        record({'code': code})
         raise Failure(code, f'Executable unavailable: {argv[0]}') from error
     except subprocess.TimeoutExpired as error:
-        write(log, {'code': 'COMPONENT_TIMEOUT', 'message': redact(str(error))})
+        record({'code': 'COMPONENT_TIMEOUT', 'message': redact(str(error))})
         raise Failure('COMPONENT_TIMEOUT', 'Component timed out; its process was terminated. Retry or inspect the log.', log=str(log)) from error
     stdout, stderr = redact(process.stdout), redact(process.stderr)
-    write(log, {'argv': [redact(str(a)) for a in argv], 'exit_code': process.returncode,
-                'stdout': stdout, 'stderr': stderr})
+    record({'argv': [redact(str(a)) for a in argv], 'exit_code': process.returncode,
+            'stdout': stdout, 'stderr': stderr})
     value = None
     if json_output:
         try:
@@ -301,13 +319,15 @@ def normalize_authoring_ir(value):
     return value
 
 
-def check_design(value, story, evidence):
+def check_design(value, story, evidence, slide_count=None):
     """Refuse a page design that cannot be traced back to the Story or the evidence."""
     from deck_compiler.design import validate_design
-    problems = validate_design(value, story, evidence)
+    problems = validate_design(value, story, evidence, slide_count=slide_count)
     if problems:
-        raise Failure('PAGE_DESIGN_INVALID', ' '.join(problems[:6]),
-                      'author_artifact', 'page_design', str(problems))
+        failure = Failure('PAGE_DESIGN_INVALID', ' '.join(problems[:6]),
+                          'author_artifact', 'page_design')
+        failure.details = problems
+        raise failure
 
 
 DESIGN_MARKER = ' A page design is approved.'
@@ -345,8 +365,6 @@ def finalize_design(work, design=None):
     path = work/'ir_prompt_designed.json'
     prompt = read(source)
     pages = summary(design)
-    if prompt.get('page_design') == pages and DESIGN_MARKER in prompt.get('instructions', ''):
-        return path
     prompt['page_design'] = pages
     prompt['design_forms'] = capabilities()['forms']
     prompt['design_devices'] = capabilities()['art_direction']['devices']
@@ -358,8 +376,9 @@ def finalize_design(work, design=None):
         'that description; marks are phrases that must carry the claim (**…** in the text that carries it). '
         'The compiler writes the mechanical devices for you and degrades them instead of failing; panel '
         'groups and layout trees are yours to build. Do not redesign, drop an item or move one to another '
-        'page. If the described shape cannot be realized at the required font floors, split that page and '
-        'keep every item; never delete content or shrink below the type scale. Set '
+        'page. If the described shape cannot be realized at the required font floors, return layout '
+        'feedback for an upstream page-design replan within the requested paper-page target; keep every '
+        'item and never delete content or shrink below the type scale. Set '
         'presentation.visual_style to the pack that fits the venue.')
     # With an approved design the RPA plan and the raw content model are no longer inputs: the pages,
     # their claims and their items are the design. Carrying them anyway made the prompt 1.6 MB, which
@@ -388,8 +407,12 @@ def finalize_design(work, design=None):
             prompt['workflow_root'] = str(Path(workflow).parent)
         except (OSError, ValueError, KeyError):
             pass
-    write(path, prompt)
-    (work/'deck_ir_task.md').write_text(ir_task(prompt), encoding='utf-8')
+    if not path.is_file() or read(path) != prompt:
+        write(path, prompt)
+    task = work/'deck_ir_task.md'
+    text = ir_task(prompt)
+    if not task.is_file() or task.read_text(encoding='utf-8') != text:
+        task.write_text(text, encoding='utf-8')
     return path
 
 
@@ -397,15 +420,29 @@ def _digit_runs(text):
     return set(re.findall(r'\d+(?:\.\d+)?', str(text)))
 
 
+def paper_slides(value):
+    """Only standalone, uncited supplement text pages are outside the paper target.
+
+    A page that carries paper evidence or any non-text scientific object remains a
+    paper page, even when someone labels its text as supplement.
+    """
+    return [slide for slide, supplements, blocks in _supplement_blocks(value)
+            if not (blocks and len(supplements) == len(blocks)
+                    and not slide.get('semantic', {}).get('evidence_refs')
+                    and not any(slide['composition'].get(key)
+                                for key in ('figure_refs', 'graphics', 'tables', 'charts')))]
+
+
 def check_design_realization(value, design):
     """An approved page design fixes the structure; the IR must realize it, not re-decide it."""
     pages = design.get('pages') or []
-    if len(value['slides']) != len(pages):
+    slides = paper_slides(value)
+    if len(slides) != len(pages):
         raise Failure('DESIGN_REALIZATION_FAILED',
-                      f'The approved design has {len(pages)} pages but the IR has {len(value["slides"])}. '
+                      f'The approved design has {len(pages)} pages but the IR has {len(slides)} paper pages. '
                       'Realize one IR page per designed page; split inside a page instead of adding or '
                       'dropping pages.', 'author_artifact', 'deck_ir')
-    for index, (slide, page) in enumerate(zip(value['slides'], pages), 1):
+    for index, (slide, page) in enumerate(zip(slides, pages), 1):
         semantic = slide['semantic']
         cited = set(semantic.get('evidence_refs') or [])
         needed = {ref for item in page.get('items') or [] for ref in item.get('evidence') or []}
@@ -432,7 +469,7 @@ def check_design_realization(value, design):
                               f'approved design placed there.', 'author_artifact', 'deck_ir')
 
 
-def check_ir(value, normalized=None, supplement='off', design=None):
+def check_ir(value, normalized=None, supplement='off', design=None, slide_count=None):
     from deck_compiler.ir import validate
     original = copy.deepcopy(value)
     value = normalize_authoring_ir(value)
@@ -457,6 +494,25 @@ def check_ir(value, normalized=None, supplement='off', design=None):
         if failure.action == 'resolve_dependency':
             failure.action, failure.target = 'author_artifact', 'deck_ir'
         raise failure
+    if slide_count is not None:
+        from .requests import slide_count as validate_count
+        validate_count(slide_count)
+        count = len(paper_slides(value))
+        if count != slide_count:
+            raise Failure('SLIDE_COUNT_MISMATCH',
+                          f'IR has {count} paper pages; the requested final paper-page target is '
+                          f'{slide_count}. Replan the pages without dropping scientific content.',
+                          'author_artifact', 'deck_ir')
+    if design:
+        # An imported IR must realize an approved design too, even without an RPA model.
+        check_design_realization(value, design)
+        from deck_compiler.art_direction import check as check_devices
+        missing = check_devices(value, design)
+        if missing:
+            page, message = missing[0]
+            raise Failure('DESIGN_REALIZATION_FAILED',
+                          f'{page or "deck"}: the approved design chose a device this IR does not carry — '
+                          f'{message}. Devices are decisions; the page must show them.', 'author_artifact', 'deck_ir')
     if normalized:
         def texts(value):
             if isinstance(value, dict):
@@ -470,19 +526,6 @@ def check_ir(value, normalized=None, supplement='off', design=None):
         # notation is rewritten into $...$ math; otherwise a brief number such
         # as 1.2×10^-3 would no longer match its normalized LaTeX form.
         corpus = ''.join(texts(original.get('slides', []) if isinstance(original, dict) else []).split())
-        if design:
-            # The approved design already accounts for every Story item; the IR is checked against
-            # the design instead of against the verbatim brief text it was allowed to rewrite.
-            check_design_realization(value, design)
-            from deck_compiler.art_direction import check as check_devices
-            missing = check_devices(value, design)
-            if missing:
-                page, message = missing[0]
-                raise Failure('DESIGN_REALIZATION_FAILED',
-                              f'{page or "deck"}: the approved design chose a device this IR does not carry — '
-                              f'{message}. Devices are decisions; the page must show them.', 'author_artifact', 'deck_ir')
-        elif len(value['slides']) < len(normalized.get('slide_briefs', [])):
-            raise classify('CONTENT_LOSS', 'IR has fewer pages than the original complete briefs; revise Story explicitly before merging pages.', 'deck_ir')
         known = {entry.get('id', entry.get('evidence_id')) for entry in normalized.get('evidence', [])}
         if known and any(ref not in known for page in value['slides'] for ref in page['semantic']['evidence_refs']):
             raise classify('CONTENT_LOSS', 'IR evidence_refs must resolve to the original normalized evidence store.', 'deck_ir')
@@ -541,9 +584,9 @@ def persist_ir(value, source, destination):
     return destination
 
 
-def import_ir(source, destination, supplement='off'):
+def import_ir(source, destination, supplement='off', slide_count=None):
     value = read(source)
-    check_ir(value, supplement=supplement)
+    check_ir(value, supplement=supplement, slide_count=slide_count)
     return persist_ir(value, source, destination)
 
 
@@ -653,6 +696,9 @@ def design_task(prompt=None):
     """The brief an orchestrator hands to a design subagent, at the same level as the story planner."""
     figures = len((prompt or {}).get('figures') or [])
     briefs = len((prompt or {}).get('briefs') or [])
+    target = ((prompt or {}).get('request') or {}).get('slide_count')
+    pages = (f'最终论文页为 {target} 页，内容条目可以跨页拆分或合并，论证节点数不是页数。'
+             if target else '按内容与场合决定论文页数，最多 40 页，论证节点数不是页数。')
     return f"""# 页面设计任务（子代理）
 
 你是这次 deck 的页面设计师。你决定这场报告按什么顺序讲、每一页靠什么成立。你只负责想，不负责实现。
@@ -661,6 +707,7 @@ def design_task(prompt=None):
   证据原文、{figures} 张可用的论文图和 `room`（这场报告的场合与对象）。没有能力清单，也不需要知道
   最终用什么画。
 - **输出**：`work/page_design.json`，结构照输入里的 `shape`。
+- **页数**：{pages} 每个 Story 内容单元仍须恰好分配一次；补充页按独立通道处理。
 - **先看场合，再排页**：从 `occasions` 里选一个键写进 `setting.occasion`：`group-meeting`（组会）、
   `research-report`（会议/答辩）、`research-sharing`（文献分享）、`lecture`（讲课）、`commercial`
   （商业路演）。再写 `setting.audience`（听众是谁、已经知道什么）和 `setting.reading`
@@ -755,7 +802,7 @@ def execute(stage, job):
         pwf_cli(out, workflow, '--make-story-prompt', work/'story_prompt.json', '--story-model', selection['model'],
                 '--story-reasoning', selection['reasoning_effort'], '--model-selected-by-user')
         prompt = read(work/'story_prompt.json')
-        prompt['request'] = {key: request[key] for key in ('language', 'presentation_type', 'requirements')}
+        prompt['request'] = prompt_request(request)
         prompt['instructions'] += ('\n\nPresentation request: '+json.dumps(prompt['request'], ensure_ascii=False)+
                                    '\nUse the requested presentation language while preserving scientific terms and uncertainty.')
         write(work/'story_prompt.json', prompt)
@@ -766,10 +813,9 @@ def execute(stage, job):
         payload = read(work/'rpa_input.json')
         model = rpa('normalize-content', work/'rpa_input.json', out)
         write(work/'normalized_content.json', model)
-        count = request.get('slide_count')
-        if count and count != len(payload['slide_briefs']):
-            raise Failure('SLIDE_COUNT_REPLAN', 'Requested slide_count differs from the complete Story briefs; revise Story instead of truncating briefs.', 'replan', 'story')
-        write(work/'plan_input.json', {**payload, 'presentation_type': request['presentation_type']})
+        # Briefs are complete content units, not a page-count budget. Page design
+        # handles splitting/merging them into the user's requested final pages.
+        write(work/'plan_input.json', {**payload, 'presentation_type': presentation_type(request['presentation_type'])})
         plan = rpa('plan', work/'plan_input.json', out, allow_unplanned=True)
         write(work/'deck_plan.json', plan)
         unplanned = plan.get('unplanned_slide_briefs') or []
@@ -795,7 +841,7 @@ def execute(stage, job):
                   'evidence ref must appear exactly once across the deck; two thin briefs may share a page '
                   'when that reads better, so the page count may differ from the brief count.')
         prompt['workflow_root'] = str(Path(workflow).parent)
-        prompt['request'] = {**{key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+        prompt['request'] = {**prompt_request(request),
                              'supplement': request.get('supplement', 'off')}
         write(work/'ir_prompt.json', prompt)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'deck_plan.json', 'rpa_validation.json', 'ir_prompt.json')]
@@ -818,11 +864,12 @@ def execute(stage, job):
                   for brief in content.get('slide_briefs') or []]
         capabilities = design_capabilities()
         prompt = {
-            'request': {key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+            'request': prompt_request(request),
             'room': {
                 'presentation_type': request['presentation_type'],
                 'brief': request['requirements'],
-                'default_occasion': default_occasion(request['presentation_type'], request['requirements']),
+                'default_occasion': default_occasion(request.get('presentation_context', request['presentation_type']),
+                                                    request['requirements']),
                 'occasions': capabilities['occasions'],
                 'settle_before_designing': [
                     'which occasion this is — the five keys in occasions, each with its own audience, '
@@ -863,9 +910,14 @@ def execute(stage, job):
                            'rationale': '<why this page is shaped this way for this room>'}]},
             'instructions': DESIGN_INSTRUCTIONS,
         }
-        write(work/'page_design_prompt.json', prompt)
+        path = work/'page_design_prompt.json'
+        if not path.is_file() or read(path) != prompt:
+            write(path, prompt)
         # The subagent brief is prose, not state: it is handed to the design subagent verbatim.
-        (work/'page_design_task.md').write_text(design_task(prompt), encoding='utf-8')
+        task = work/'page_design_task.md'
+        text = design_task(prompt)
+        if not task.is_file() or task.read_text(encoding='utf-8') != text:
+            task.write_text(text, encoding='utf-8')
         return [work/'page_design_prompt.json', work/'page_design_task.md']
     if stage == 'design':
         compiler('visual-prompt', out, '--ir', work/'deck_ir.json', '--out', work/'visual_prompt.json',

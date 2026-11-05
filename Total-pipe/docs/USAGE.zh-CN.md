@@ -8,6 +8,11 @@
 `python3.12 install.py --client codex` 注册服务。按 next_action 读取完整产物提示，模型选择仍来自用户。
 [安装、推进与恢复](agent-adapter.md)；下文保留完整规范与低层 CLI 操作。
 
+四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
+`totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED
+调用 advance。各轮本地执行耗时、等待与重规划时间点追加在 `logs/events.jsonl`，不代表模型生成耗时。
+`presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
+
 ## 1. 输入、工作目录与产物
 
 ```text
@@ -275,7 +280,8 @@ arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸�
 - 补充内容可以是原生图：用 `composition.graphics` 的 process/DAG/mechanism/architecture/funnel/path/composite。
   Agent 还接受简单 `composition.diagram`（3–8 个节点的链式流程），自动展开为一个原生 `process` 图；
   复杂关系仍写完整 graphics。图不是论文图，不冒充 Evidence。
-- `slide_count` 仍按 RPA 论文 brief 计；补充页是额外页。
+- `slide_count` 是最终论文页的精确目标（1–40），与 Story 节点 / RPA brief 数量独立；纯补充文字页额外计。
+  带论文 EV、图、表或原生图形的页仍计论文页，不能靠补充标签避开目标检查。
 - QA：`SUPPLEMENT_UNCITED` 为 INFO，`SUPPLEMENT_CONSTRUCTED_UNLABELED` 为 REVIEW，
   `SUPPLEMENT_PAPER_FIGURE` 等为 FAIL；补充页不再被 `quality` 误判为“无论文引用”。
   完整字段与错误码见 [Deck IR 协议](deck-compiler-v2.md#supplement-content-basis-supplement)。
@@ -458,7 +464,8 @@ Story、briefs、证据、可用图和场合，没有 forms / devices / type_sca
 - `pages[]`：每页 `claim`、`items`（带 evidence）、`anchor`（围绕图 / 表 / 公式 / 数字 / 无）、
   `shape`（一两句话描述读者看到什么）与 `marks`（承载主张的短语），可选 `figures`（这页要用的资产 id）。
 - 守恒：Story 的每个 answer / key_point / ending 只属于一页；数字必须出现在所引 evidence 中；
-  `marks` 必须在本页文本里出现；页数可合并或拆分但不能超过 brief 数两倍。
+  `marks` 必须在本页文本里出现；内容可合并或拆分，页数按显式 slide_count 核对，不与节点数相乘。
+  未指定目标时最多 40 个论文页。页数目标不符须重排页面，不能截断或复制内容凑页。
 
 **形式不在设计阶段选。** 设计通过后，IR 作者从 `design_forms` 里选最能实现 `shape` 的构图，
 页序、页数、claim、items 与 anchor 不变；`marks` 由编译器落成 `**…**`。旧设计表里的 `form` / `devices`

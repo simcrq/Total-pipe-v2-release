@@ -26,6 +26,7 @@ def main():
     p.add_argument('--supplement', default='off', choices=('off', 'inline', 'pages', 'both'))
     p = commands.add_parser('status')
     p.add_argument('--job-id', required=True)
+    p.add_argument('--detail', choices=('summary', 'full'), default='summary')
     p = commands.add_parser('advance')
     p.add_argument('--job-id', required=True)
     p.add_argument('--artifact-kind')

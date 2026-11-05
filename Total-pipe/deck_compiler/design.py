@@ -111,9 +111,10 @@ def default_occasion(presentation_type, brief=''):
     ``presentation_type`` is free text upstream (paper_presentation, seminar, ...), so the brief is
     read too: a group meeting named in the requirements outranks a generic type.
     """
-    text = f'{presentation_type or ""} {brief or ""}'.lower()
+    text = f'{presentation_type or ""} {brief or ""}'.lower().replace('_', ' ').replace('-', ' ')
     for needle, occasion in (('组会', 'group-meeting'), ('group meeting', 'group-meeting'),
                              ('lab meeting', 'group-meeting'), ('journal club', 'research-sharing'),
+                             ('research sharing', 'research-sharing'),
                              ('文献分享', 'research-sharing'), ('文献', 'research-sharing'),
                              ('讲课', 'lecture'), ('课程', 'lecture'), ('lecture', 'lecture'),
                              ('教学', 'lecture'), ('路演', 'commercial'), ('商业', 'commercial'),
@@ -178,7 +179,7 @@ def capabilities():
                       'in its rationale.']}
 
 
-def validate_design(design, story, evidence):
+def validate_design(design, story, evidence, slide_count=None):
     """Errors that make a design untraceable. ``evidence`` maps id -> evidence text."""
     from .art_direction import DECK, PAGE, validate as validate_devices
     problems = []
@@ -290,8 +291,16 @@ def validate_design(design, story, evidence):
         elif len(pages_used) > 1:
             problems.append(f'Story item {source} appears on {len(pages_used)} pages '
                             f"({', '.join(pages_used)}); one unit belongs to one page")
-    if len(pages) > max(2, len(story.get('story', []))*2):
-        problems.append('page count is more than twice the Story entries; check for accidental splitting')
+    # Story nodes describe reasoning, not physical pages. Content coverage above is
+    # the invariant; an arbitrary multiple of the node count blocks legitimate splits.
+    if len(pages) > 40:
+        problems.append('page_design supports at most 40 paper pages')
+    if slide_count is not None:
+        if type(slide_count) is not int or not 1 <= slide_count <= 40:
+            problems.append('slide_count must be an integer in [1,40]')
+        elif len(pages) != slide_count:
+            problems.append(f'page_design has {len(pages)} pages; the requested final paper-page '
+                            f'target is {slide_count}. Replan pages while retaining every Story item.')
     return problems
 
 

@@ -9,6 +9,9 @@ from . import adapters as a
 from .state import (JobError, read, write, sha, digest, dependency, checkpoint, valid_record,
                     locked, save, locate, home, confined)
 from .state import validate_job
+from .requests import (presentation_type as normalize_presentation_type, slide_count as validate_slide_count,
+                       prompt_request, request_identity)
+from .telemetry import emit, span
 
 TABLE = read(Path(__file__).with_name('stages.json'))
 STAGES = TABLE['stages']
@@ -24,7 +27,8 @@ def design_complete(job):
     try:
         work = path.parent
         design = read(work/'page_design.json') if (work/'page_design.json').is_file() else None
-        a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'), design=design)
+        a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'), design=design,
+                   slide_count=job['request'].get('slide_count'))
         pending = pending_design(read(path))
         return not pending['academic_design_required'] and not pending['slide_ids']
     except (ValueError, KeyError, TypeError):
@@ -60,7 +64,18 @@ def invalidate(job, stage_id):
     job.pop('last_error', None)
 
 
-def envelope(job, stage, failure=None):
+def prepare_next(job, stage):
+    """Only advance may materialize prompts; status/envelope are read-only."""
+    work = Path(job['request']['out_dir'])/'work'
+    if stage.get('prepare'):
+        with span(work.parent, job_id=job['job_id'], stage=stage['id'], operation='prepare'):
+            a.execute(stage['prepare'], job)
+    elif stage['id'] == 'deck_ir' and (work/'page_design.json').is_file():
+        with span(work.parent, job_id=job['job_id'], stage=stage['id'], operation='prepare'):
+            a.finalize_design(work)
+
+
+def envelope(job, stage, failure=None, detail='summary'):
     out = Path(job['request']['out_dir'])
     work = out/'work'
     sid, kind = stage['id'], stage['kind']
@@ -79,21 +94,8 @@ def envelope(job, stage, failure=None):
         prompt = {'story': work/'story_prompt.json', 'page_design': work/'page_design_prompt.json',
                   'deck_ir': work/'ir_prompt.json',
                   'visual_design': work/'visual_prompt.json'}.get(sid)
-        if stage.get('prepare') and prompt and not prompt.is_file():
-            # An agent stage may need a prompt assembled from upstream work. Only the component
-            # loop used to call adapters.execute, so a prompt owned by an agent stage stayed
-            # missing until a human materialised it by hand.
-            try:
-                a.execute(stage['prepare'], job)
-            except (a.Failure, ValueError, OSError, KeyError):
-                pass
         if sid == 'deck_ir' and (work/'page_design.json').is_file():
-            # The approved design goes into a separate prompt file: rewriting ir_prompt.json would
-            # change an artifact the RPA stage already checkpointed and invalidate the job.
-            try:
-                prompt = a.finalize_design(work) or prompt
-            except (ValueError, OSError, KeyError):
-                pass
+            prompt = work/'ir_prompt_designed.json'
         action = {'type': 'invoke_subagent' if sid == 'story' else 'author_artifact',
             'reason': 'STORY_PLANNING_REQUIRED' if sid == 'story' else artifact.upper()+'_REQUIRED',
             'artifact_kind': artifact, 'expected_output': str(work/(artifact+'.json')),
@@ -114,6 +116,9 @@ def envelope(job, stage, failure=None):
                            'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED',
                            'input_path': str(prompt) if prompt else None,
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
+        if prompt and not prompt.is_file() and (stage.get('prepare') or sid == 'deck_ir'):
+            status = 'running'
+            action = {'type': 'none', 'reason': 'ADVANCE_REQUIRED', 'tool': 'totalpipe_advance'}
     if kind == 'terminal':
         status = 'candidate_ready'
         action = {'type': 'none', 'reason': 'CANDIDATE_READY', 'candidate': str(out/'build/candidate.pptx'),
@@ -144,10 +149,16 @@ def envelope(job, stage, failure=None):
             qa = show_qa(out/'build', include_acked=True)
         except (OSError, ValueError) as error:
             return error_envelope(JobError('QA_STATE_INVALID', str(error), 'Repair the candidate review records or rebuild.'), job['job_id'])
-    return {'job_id': job['job_id'], 'request': job['request'], 'status': status, 'stage': sid,
+    artifacts = [{'stage': name, 'path': path, 'sha256': hashed}
+                 for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()]
+    return {'job_id': job['job_id'], 'status': status, 'stage': sid,
             'stage_index': NAMES.index(sid)+1, 'stage_total': len(STAGES), 'next_action': action,
-            'artifacts': [{'stage': name, 'path': path, 'sha256': hashed}
-                          for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()],
+            'out_dir': str(out), 'state_path': str(out/'.totalpipe/job.json'),
+            'events_path': str(out/'logs/events.jsonl'),
+            **({'request': job['request'], 'artifacts': artifacts} if detail == 'full' else
+               {'artifacts_summary': {'references': len(artifacts),
+                                      'unique_files': len({item['path'] for item in artifacts}),
+                                      'stages': list(job['checkpoints'])}}),
             'issues': issues, 'blocking': bool(failure), 'retry': {'safe': False if failure else True,
             'max': (target_stage if failure else stage).get('max_attempts', 1)},
             **({'qa': {'counts': qa['counts'], 'unacked_count': qa.get('unacked_count', qa['counts']['REVIEW'])},
@@ -178,10 +189,11 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
             source_kind = 'deck_ir' if value.get('schema_version') == '2.0' else 'workflow'
     if source_kind not in ('pdf', 'markdown', 'workflow', 'deck_ir'):
         raise ValueError('Unsupported source_kind')
-    if not language.strip() or not presentation_type.strip():
+    if not isinstance(language, str) or not language.strip():
         raise ValueError('language and presentation_type are required')
-    if slide_count is not None and (type(slide_count) is not int or not 1 <= slide_count <= 40):
-        raise ValueError('slide_count must be in [1,40]')
+    original_type = presentation_type.strip() if isinstance(presentation_type, str) else presentation_type
+    presentation_type = normalize_presentation_type(presentation_type)
+    validate_slide_count(slide_count)
     if supplement not in ('off', 'inline', 'pages', 'both'):
         raise ValueError('supplement must be off, inline, pages or both')
     request = {'source': str(source), 'out_dir': str(out), 'language': language,
@@ -189,6 +201,8 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
         'supplementary_content_included': supplementary_content_included,
         'slide_count': slide_count, 'supplementary_paths': [str(Path(p).expanduser().resolve()) for p in supplementary_paths or []],
         'supplement': supplement}
+    if original_type != presentation_type:
+        request['presentation_context'] = original_type
     try:
         with locked(out):
             path = out/'.totalpipe/job.json'
@@ -196,8 +210,9 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
                 try:
                     job = read(path)
                     validate_job(job)
-                    if job['request'] != request:
+                    if request_identity(job['request']) != request_identity(request):
                         return error_envelope(JobError('JOB_OUTPUT_IN_USE', 'Output belongs to a different request.', 'Use a new output directory.'))
+                    emit(out, 'job_resumed', job_id=job['job_id'], status='success')
                     if queries is not None and source_kind in ('pdf', 'markdown'):
                         a.check_queries(queries)
                         query_path = out/'work/queries.json'
@@ -215,6 +230,7 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
                 job = {'schema_version': 1, 'job_id': uuid.uuid4().hex, 'created_at': datetime.now(timezone.utc).isoformat(),
                        'request': request, 'checkpoints': {}, 'inputs': {}, 'attempts': {}}
                 save(job)
+                emit(out, 'job_created', job_id=job['job_id'], status='success')
                 write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
                 if queries is not None and source_kind in ('pdf', 'markdown'):
                     a.check_queries(queries)
@@ -224,16 +240,28 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
                 if source_kind == 'deck_ir':
                     write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}, supplement),
                         'imported_deck_ir': read(source), 'source_base': str(source.parent),
-                        'request': {**{key: request[key] for key in ('language', 'presentation_type', 'requirements')},
+                        'request': {**prompt_request(request),
                                     'supplement': supplement}})
-                    a.import_ir(source, out/'work/deck_ir.json', supplement)
+                    with span(out, job_id=job['job_id'], stage='deck_ir', operation='import'):
+                        a.import_ir(source, out/'work/deck_ir.json', supplement, slide_count=slide_count)
                     stage, upstream = current(job)
                     checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(out/'work/deck_ir.json').items() if hashed is not None], upstream)
             write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
     except (JobError, OSError) as error:
         return error_envelope(error if isinstance(error, JobError) else JobError('OUTPUT_UNWRITABLE', str(error)))
     except a.Failure as error:
-        return envelope(job, current(job)[0], error)
+        stage, upstream = current(job)
+        if not error.log:
+            feedback = out/'work/submission_feedback.json'
+            write(feedback, {'code': error.code, 'message': a.redact(str(error)),
+                             'stage': stage['id'], 'target_stage': error.target})
+            error.log = str(feedback)
+        job['last_error'] = {'code': error.code, 'message': a.redact(str(error)),
+                             'action': error.action, 'target': error.target, 'log': error.log,
+                             'stage': stage['id'], 'at_stage': stage['id'], 'upstream': upstream}
+        save(job)
+        emit(out, 'blocked', job_id=job['job_id'], stage=stage['id'], status='failure', code=error.code)
+        return envelope(job, stage, error)
     return advance(job['job_id'])
 
 
@@ -269,7 +297,8 @@ def _accept(job, stage, upstream, kind, path):
             workflow = read(work/'evidence_pointer.json')['workflow']
             evidence = {entry['evidence_id']: entry['text']
                         for entry in read(workflow)['evidence_registry']}
-            a.check_design(value, read(work/'story_plan.json'), evidence)
+            a.check_design(value, read(work/'story_plan.json'), evidence,
+                           slide_count=job['request'].get('slide_count'))
         elif kind == 'deck_ir':
             design = read(work/'page_design.json') if (work/'page_design.json').exists() else None
             # The design's devices are written by the compiler before validation, so an author
@@ -278,7 +307,8 @@ def _accept(job, stage, upstream, kind, path):
             if art_notes:
                 write(work/'art_direction_notes.json', art_notes)
             a.check_ir(value, read(work/'normalized_content.json') if (work/'normalized_content.json').exists() else None,
-                       job['request'].get('supplement', 'off'), design=design)
+                       job['request'].get('supplement', 'off'), design=design,
+                       slide_count=job['request'].get('slide_count'))
         elif kind == 'visual_proposal':
             from deck_compiler.visual_planner import apply_proposal
             try:
@@ -317,6 +347,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 if replan_from:
                     if replan_from not in NAMES or replan_from in ('intake', 'candidate_ready'):
                         raise ValueError('Invalid replan_from')
+                    emit(out, 'replan_requested', job_id=job_id, stage=stage['id'],
+                         target_stage=replan_from, status='success')
                     invalidate(job, replan_from)
                     stage, upstream = current(job)
                 if inputs is not None:
@@ -327,36 +359,49 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     if stage['id'] != 'model_selection' and not job['inputs']:
                         raise ValueError('Model input is only accepted at model_selection')
                     job['inputs'] = inputs
+                    emit(out, 'input_accepted', job_id=job_id, stage='model_selection', status='success')
                     stage, upstream = current(job)
                 if artifact_kind is not None or artifact_path is not None:
                     if artifact_kind not in BY_ARTIFACT or not artifact_path:
                         raise ValueError('artifact_kind and artifact_path must identify a supported artifact')
-                    _accept(job, stage, upstream, artifact_kind, artifact_path)
+                    with span(out, job_id=job_id, stage=stage['id'], operation='accept'):
+                        _accept(job, stage, upstream, artifact_kind, artifact_path)
                 if acknowledge is not None:
                     if not isinstance(acknowledge, dict) or set(acknowledge) != {'reviewer', 'note', 'review_ids'}:
                         raise ValueError('acknowledge requires reviewer, note and explicit review_ids')
                     if stage['kind'] != 'terminal':
                         raise ValueError('Only a built candidate can be acknowledged')
                     from deck_compiler.qa_review import acknowledge_reviews
-                    acknowledge_reviews(out/'build', acknowledge['reviewer'], acknowledge['note'], acknowledge['review_ids'])
-                    record = job['checkpoints']['build']
-                    checkpoint(job, 'build', record['files'], record['upstream'])
+                    with span(out, job_id=job_id, stage='candidate_ready', operation='acknowledge'):
+                        acknowledge_reviews(out/'build', acknowledge['reviewer'], acknowledge['note'], acknowledge['review_ids'])
+                        record = job['checkpoints']['build']
+                        checkpoint(job, 'build', record['files'], record['upstream'])
                 save(job)
                 for _ in range(len(STAGES)):
                     stage, upstream = current(job)
                     if stage['kind'] != 'component':
-                        return envelope(job, stage)
-                    paths = a.execute(stage['adapter'], job)
-                    job.pop('last_error', None)
-                    checkpoint(job, stage['id'], paths, upstream)
+                        prepare_next(job, stage)
+                        result = envelope(job, stage)
+                        emit(out, 'candidate_ready' if stage['kind'] == 'terminal' else 'waiting',
+                             job_id=job_id, stage=stage['id'],
+                             status='success' if stage['kind'] == 'terminal' else 'waiting',
+                             wait_type=result['next_action']['type'])
+                        return result
+                    with span(out, job_id=job_id, stage=stage['id'], operation='execute'):
+                        paths = a.execute(stage['adapter'], job)
+                        job.pop('last_error', None)
+                        checkpoint(job, stage['id'], paths, upstream)
                 raise a.Failure('STAGE_LOOP', 'Stage did not reach a decision; inspect checkpoints.')
             except a.Failure as failure:
                 if not failure.log:
                     feedback = out/'work/submission_feedback.json'
                     write(feedback, {'code': failure.code, 'message': a.redact(str(failure)), 'stage': stage['id'],
-                                     'target_stage': failure.target})
-                    if failure.code != 'EVIDENCE_NOT_READY' and not (out/'build/layout_feedback.json').exists():
-                        failure.log = str(feedback)
+                                     'target_stage': failure.target,
+                                     **({'details': [a.redact(message) for message in failure.details]}
+                                        if getattr(failure, 'details', None) else {})})
+                    evidence_feedback = out/'work/evidence_feedback.json'
+                    failure.log = str(evidence_feedback if failure.code == 'EVIDENCE_NOT_READY'
+                                      and evidence_feedback.is_file() else feedback)
                 job['last_error'] = {'code': failure.code, 'message': a.redact(str(failure)), 'action': failure.action,
                                      'target': failure.target, 'log': failure.log, 'stage': stage['id']}
                 if failure.action in ('replan', 'author_artifact') and failure.target in NAMES and failure.target != stage['id']:
@@ -376,6 +421,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 pending, pending_upstream = current(job)
                 job['last_error'].update({'at_stage': pending['id'], 'upstream': pending_upstream})
                 save(job)
+                emit(out, 'blocked', job_id=job_id, stage=stage['id'], status='failure',
+                     code=failure.code, target_stage=failure.target)
                 return envelope(job, stage, failure)
             except (OSError, KeyError) as error:
                 failure = a.Failure('COMPONENT_FAILED', a.redact(str(error)))
@@ -384,12 +431,15 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                                      'target': failure.target, 'log': failure.log, 'stage': stage['id'],
                                      'at_stage': pending['id'], 'upstream': pending_upstream}
                 save(job)
+                emit(out, 'blocked', job_id=job_id, stage=stage['id'], status='failure', code=failure.code)
                 return envelope(job, stage, failure)
     except JobError as error:
         return error_envelope(error, job_id)
 
 
-def status(job_id):
+def status(job_id, detail='summary'):
+    if detail not in ('summary', 'full'):
+        raise ValueError('detail must be summary or full')
     try:
         out, _ = locate(job_id)
         with locked(out):
@@ -399,6 +449,6 @@ def status(job_id):
             if old and (old.get('at_stage') != stage['id'] or old.get('upstream') != upstream):
                 old = None
             failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
-            return envelope(job, stage, failure)
+            return envelope(job, stage, failure, detail=detail)
     except JobError as error:
         return error_envelope(error, job_id)

@@ -10,6 +10,7 @@ description: 从论文 PDF、Markdown、已有证据包或 Deck IR 生成可编�
 使用已安装仓库，安装 / 回切说明见 [接入层用法](../../docs/agent-adapter.md)。
 
 将用户提供的 source、out_dir、language、presentation_type 传给 totalpipe_start。
+slide_count 是最终论文页目标（1–40），不等于 Story 节点或 brief 数；独立补充文字页额外计。
 source_kind 支持 auto/pdf/markdown/workflow/deck_ir；从已有产物继续，保留用户已有要求。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对。
 只有补充材料内容已进入分析输入时，才传 supplementary_content_included=true。
@@ -39,11 +40,12 @@ RPA 之后会先要求 `page_design`：一页一个论点、一个锚点、一�
 只写 claim、anchor、`shape`、`marks` 和场合 `setting`（组会 / 会议 / 文献分享 / 讲课 / 路演）；
 形式由 IR 阶段从 `design_forms` 里翻译。
 校验只关心内容不变式：Story 每条内容恰好一次、数字来自所引 evidence、`marks` 出现在本页文本里、
-`setting.occasion` 在五个键内、页数不超过 brief 数两倍。
+`setting.occasion` 在五个键内、论文页数符合显式目标（未指定时最多 40 页）。
 IR / Design 提示包是完整输入；原文 body、key_points、公式、单位和不确定性保留在页面或讲稿。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。
 status 只读；同一提交可重复 advance，已完成组件不会重复执行，未完成下游继续运行。
+默认回复为摘要；完整请求/哈希清单用 status(detail="full")；各轮本地执行与等待时间点见 logs/events.jsonl。
 job_id 在重启后可用；job.json 损坏时不能从产物伪造用户选择，按 remedy 处理。
 候选 REVIEW 如实报告；仅真实复核后用 advance.acknowledge 传 reviewer、note、review_ids。
 候选笔记不能替代 final 审核；promote / validate-native / record-powerpoint-review 仅用原 CLI。

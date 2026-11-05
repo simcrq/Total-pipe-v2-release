@@ -17,7 +17,7 @@ v1 有以下阻断实现的问题，实施以本修订为准：
 | start 没有已有 IR 的路由，无法执行首个 smoke | 显式 source_kind=auto/pdf/markdown/workflow/deck_ir；已有 IR 直接进入校验 / Design / build |
 | Story 提示包的模型字段位置错误 | 比较 `story.planner` 与提示包 `delegation`；reasoning 为 high 或更高，不能提供 medium |
 | RPA `--file` 加 CLI 业务参数会被忽略 | 生成包含 presentation_type、完整 slide_briefs 和原始 workflow 的 plan-input.json；使用 full 输出 |
-| 已有 briefs 时 slide_count 并不能覆盖页数 | 保留完整 briefs；数量不一致返回重规划，不截断 / 复制内容 |
+| Story 节点、内容 briefs 与最终页数含义不同 | 保留完整 briefs；slide_count 只约束最终论文页（1–40），设计 / IR 核验目标，不截断或复制内容 |
 | 阶段仅检查单个 artifact，且跳过 input 阶段 | 阶段声明 requires / produces；依次校验输入门禁、多产物、实际依赖哈希和配置指纹 |
 | 上游文件变化仅比较旧 registry hash | 每次递归读取实际输入和先前阶段产物；接入层源码 / 阶段表及 Git 版本变化也使相关 checkpoint 失效 |
 | 相同提交立即短路会阻止崩溃后继续 | 不重复接受 / 计次；仍继续派生未完成组件；成功组件逐阶段持久化 |
@@ -104,8 +104,10 @@ Codex TOML 使用受管块 + 备份 + 解析前后语义检查；Claude JSON 合
 仓库 .mcp.json 保持相对路径；用户配置使用绝对解释器、cwd、Node 路径及 UTF-8 环境。
 安装前先握手目标 profile，再注册；默认准确检查四个工具，advanced 数量动态统计。
 
-doctor 的 12 类检查保留 Python / import / Node / RPA / OfficeCLI present-version-runtime /
-MinerU / bridge / 字体 / pdfplumber / PowerPoint。默认不写探针；deep 模式在临时目录实际写 PPTX。
+doctor 检查 Python / import / Node / RPA / OfficeCLI present-version-runtime /
+MinerU / bridge / 字体 / pdfplumber / PowerPoint；另通过 bridge 实际导入 evidence 运行模块，
+PDF 路径包含 pdf_handler / yaml，避免版本握手通过却在 OCR 阶段才发现依赖缺失。
+默认不写 PPTX 或运行 OCR；deep 模式在临时目录实际写 PPTX。
 OCR 支持官方 CLI 已登录或环境 token，配置 / CLI 状态不确定时不宣称已认证。
 字体使用现有字体解析能力，不将字体白名单等同于中文覆盖。
 原生 final 能力只表示依赖就绪，实际晋级仍需真实 UI / PDF / review 证据。

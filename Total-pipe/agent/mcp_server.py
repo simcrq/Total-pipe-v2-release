@@ -24,7 +24,8 @@ DEFINITIONS = {
         'queries': {'type': 'array'}, 'supplementary_paths': {'type': 'array', 'items': STRING},
         'supplementary_content_included': {'type': 'boolean'},
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
-        'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40}}, ['source','out_dir','language','presentation_type']),
+        'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
+                        'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
     'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','page_design','deck_ir','visual_proposal']},
         'artifact_path': STRING, 'inputs': {'type': 'object', 'properties': {'model': STRING,
             'reasoning_effort': {'type': 'string', 'enum': ['high','xhigh','max','ultra']}, 'selected_by_user': {'const': True}},
@@ -32,7 +33,8 @@ DEFINITIONS = {
         'replan_from': STRING, 'acknowledge': {'type': 'object', 'properties': {'reviewer': STRING, 'note': STRING,
             'review_ids': {'type': 'array', 'minItems': 1, 'items': STRING}},
             'required': ['reviewer','note','review_ids'], 'additionalProperties': False}}, ['job_id']),
-    'totalpipe_status': (status, {'job_id': STRING}, ['job_id']),
+    'totalpipe_status': (status, {'job_id': STRING,
+        'detail': {'type': 'string', 'enum': ['summary', 'full'], 'default': 'summary'}}, ['job_id']),
 }
 
 
@@ -78,7 +80,7 @@ for name, (function, properties, required) in DEFINITIONS.items():
     transport.TOOLS[name] = {'description': {'totalpipe_doctor': 'Check prerequisites and candidate/native capabilities.',
         'totalpipe_start': 'Start or resume a job from PDF, Markdown, workflow or Deck IR; never supplies a model implicitly.',
         'totalpipe_advance': 'Accept an explicit artifact or user input, then advance until the next decision or candidate.',
-        'totalpipe_status': 'Read derived state and QA without running components.'}[name],
+        'totalpipe_status': 'Read state and QA without writes or running components. Defaults to a compact summary; detail=full adds request and artifact inventory.'}[name],
         'handler': handler, 'inputSchema': schema, 'timeout': 1800}
 
 
