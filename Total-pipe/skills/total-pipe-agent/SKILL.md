@@ -32,15 +32,13 @@ status=running 时调用 totalpipe_advance；status=candidate_ready 时交付 ca
 queries 是对象数组，含唯一 id、query，可选 intent。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
 Story 提示的 delegation 绑定用户选择；模型字段仍是声明，必须真实执行子代理，不伪造 provenance。
 Story 缺模型选择时先询问；不得静默选择，也不得由主 Agent 代写。
-RPA 之后会先要求 `page_design`：一页一个论点、一个锚点、一段 `shape`（读者看到什么），Story 的每条
-内容恰好出现一次，数字只能来自所引 evidence；设计通过后 IR 必须逐页实现，不得重新设计。
-`page_design` 与 Story 一样交给**独立子代理**执行，不主 Agent 代写：读 `work/page_design_task.md` 作为任务书，
-把 `work/page_design_prompt.json` 与输出路径交给子代理，收回它写出的 `work/page_design.json` 再 advance。
-设计提示是**设计问题**，不含 forms / devices / type_scale：设计者不需要知道编译器能画什么，
-只写 claim、anchor、`shape`、`marks` 和场合 `setting`（组会 / 会议 / 文献分享 / 讲课 / 路演）；
-形式由 IR 阶段从 `design_forms` 里翻译。
-校验只关心内容不变式：Story 每条内容恰好一次、数字来自所引 evidence、`marks` 出现在本页文本里、
-`setting.occasion` 在五个键内、论文页数符合显式目标（未指定时最多 40 页）。
+RPA 之后先交 `page_design`，与 Story 一样由用户指定模型的**独立子代理**执行。
+完整读取 `work/page_design_task.md`、`work/page_design_prompt.json` 和 schema_path，提交真实产物。
+Story 负责科学内容；页面设计负责画什么、选什么图、如何排布与带着观众看，不重写 Story。
+1.1 每页只必填 id/content_refs/design；design 可自由文本或自定对象，正文与证据自动继承引用。
+可按需设计图形、图标、对照、图表、公式标注；选图须实际查看且列精确 figures，title/marks 可选。
+提示不灌输编译器能力清单；IR 完整保留自定说明，落实元素与视觉关系，不能替换成文字摘要。
+保留 Story 内容恰好分配一次、证据与选图追溯、setting、显式页数目标；旧 1.0 设计仍可恢复。
 IR / Design 提示包是完整输入；原文 body、key_points、公式、单位和不确定性保留在页面或讲稿。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。

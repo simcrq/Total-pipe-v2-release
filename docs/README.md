@@ -29,7 +29,8 @@
 | 能力 | 文档 |
 | --- | --- |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
-| 页面设计阶段：场合、shape 与 marks（能力无关） | [接入层：页面设计阶段](../Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) |
+| 页面设计 1.1：Story 引用、绘图、排布与讲解走读 | [接入层：页面设计阶段](../Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) |
+| 页面设计 1.1 实际子代理样例与回归 | [验证记录](agent-page-design-validation.md) |
 | 四工具候选后的 PowerPoint 导出、预览与真实 UI 复核 | [原生验收接入](../Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入) |
 | Story 可见结构、IR 义务与覆盖账本 | [讲解契约](explanation-contract.md) |
 | 补充内容、构造示例与论文泄漏检查 | [Supplement content、basis 与论文泄漏检查](../Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement) |

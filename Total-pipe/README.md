@@ -116,7 +116,7 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 - [边框容器](docs/framed-containers.md)：panel 原生描边、填充与标题色带；独立 takeaway 框选；内边距、描边与完整内容共同测量。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
 - [原生数据图](docs/chart-ir.md)：`composition.charts` 与 layout tree `chart` 叶子；折线 / 柱状 / 散点、线性 / 对数轴、误差棒、图内标注；`basis` 区分证据图与示意说明。
-- [页面设计阶段](docs/agent-adapter.md#页面设计阶段page_design)：RPA 之后由独立子代理写 claim / anchor / shape / marks 与场合（组会 / 会议 / 文献分享 / 讲课 / 路演）；设计提示不含形式与设备，形式由 IR 阶段翻译。
+- [页面设计阶段](docs/agent-adapter.md#页面设计阶段page_design)：RPA 之后由独立子代理引用 Story，交代原图、自绘元素、排布与讲解走读；1.1 不再重写科学正文，设计说明可自由组织，IR 负责实现。
 - [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线；机制关系边可带 `basis`（evidence / hypothesis / explain）。
 - [整套视觉设计](docs/scientific-visual-planner.md)：保留完整科研术语，文字超容量按 preserve-terms 生成候选及 REVIEW。
 

@@ -2,7 +2,8 @@
 
 design 阶段在 Canonical Deck IR 后默认执行一次 Agent 视觉决策。它沿用 `schema_version: "2.0"`，
 保留 Evidence、Story、RPA 和 v5 原生图形；没有新模型服务、Scene IR 或页面坐标接口。
-页面的内容形态已由 [page_design](agent-adapter.md#页面设计阶段page_design) 先行决定（场合、shape、marks）；
+页面的视觉讲解已由 [page_design](agent-adapter.md#页面设计阶段page_design) 先行决定
+（1.1 的 Story 引用、绘图元素、排布与走读；旧 1.0 的 shape / marks 仍兼容）；
 本阶段只决定整套风格与支持页面的视觉构图，不改页面主张。
 编译器只读取合入后的 Deck IR。低层 `compile_deck` 对没有新字段的 IR 保持旧行为；
 CLI/MCP 的 compile/build 和统一 generate 默认检查是否完成设计。

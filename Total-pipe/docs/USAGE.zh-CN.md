@@ -19,7 +19,7 @@
 论文 PDF → PaperWorkflow workflow.json → Story Planner story_plan.json
   → [可选 DesignIntentPlanner design_intent.json] → pwf2rpa rpa_input.json
   → RPA 内容规范化与引用传递（默认四工具）
-  → page_design 页面设计表（claim / anchor / shape / marks，能力无关）→ canonical deck_ir.json
+  → page_design 视觉讲解设计（Story 引用 / 绘图 / 排布 / 走读）→ canonical deck_ir.json
   → Scientific Visual Planner（design 阶段，默认必做）→ designed.deck_ir.json
   → Deck Compiler + packer → OfficeCLI → candidate.pptx / staging.pptx + QA
   → 需要正式 final 时：PowerPoint 原生验收 → REVIEW 审核 → promote
@@ -461,25 +461,17 @@ HTML 截图仅显示 fallback，实际根号、分式线和指数用 PowerPoint 
 
 ### 4.1 页面设计（page_design）
 
-RPA 之后、写 canonical IR 之前，Agent 先交一份页面设计表，再写 IR。这一步**能力无关**：提示包里只有
-Story、briefs、证据、可用图和场合，没有 forms / devices / type_scale / visual_style，设计者不需要知道
-编译器能画什么，只负责想清楚每页让读者看到什么。
+Story 负责科学内容与证据，独立页面设计子代理负责视觉讲解。完整读取任务书、提示包和
+[1.1 Schema](../schemas/page-design.schema.json) 后，交付 `page_design.json`。
 
-设计表三件事：
+每页只必填 `id`、`content_refs`（Story 路径）和 `design`（自由文本或自定对象）。内容与证据自动继承，
+不再要求重写 claim/items/anchor 理由/rationale。设计应具体说明选哪张原图、画哪些元素与关系、怎样排布、
+讲者先指哪里再指哪里；按需选图形、图标、图表和公式标注，不套统一模板。
+`figures` 指定实际看过的资产；`title` 与 `marks` 可选。新科学结论与数据不在这一阶段发明。
 
-- `setting`：`occasion` 从五档里选——`group-meeting`（组会）、`research-report`（会议 / 答辩）、
-  `research-sharing`（文献分享）、`lecture`（讲课）、`commercial`（商业路演）；`audience` 写听众是谁、
-  已知道什么；`reading` 写讲者口述（spoken）、听众自读（read）还是混合。场合决定密度与页面形态；
-  缺 `setting` 报 `PAGE_DESIGN_INVALID`。
-- `pages[]`：每页 `claim`、`items`（带 evidence）、`anchor`（围绕图 / 表 / 公式 / 数字 / 无）、
-  `shape`（一两句话描述读者看到什么）与 `marks`（承载主张的短语），可选 `figures`（这页要用的资产 id）。
-- 守恒：Story 的每个 answer / key_point / ending 只属于一页；数字必须出现在所引 evidence 中；
-  `marks` 必须在本页文本里出现；内容可合并或拆分，页数按显式 slide_count 核对，不与节点数相乘。
-  未指定目标时最多 40 个论文页。页数目标不符须重排页面，不能截断或复制内容凑页。
-
-**形式不在设计阶段选。** 设计通过后，IR 作者从 `design_forms` 里选最能实现 `shape` 的构图，
-页序、页数、claim、items 与 anchor 不变；`marks` 由编译器落成 `**…**`。旧设计表里的 `form` / `devices`
-仍兼容，但新设计不再要求。完整契约见 [接入层文档](agent-adapter.md#页面设计阶段page_design)。
+保留完整且唯一的 Story 内容分配、证据与图像追溯、页数目标及后续 IR 检查。IR 完整接收自定设计字段，
+实现元素、构图与讲解关系；旧 1.0 设计仍兼容。完整示例、限制和恢复见
+[接入层契约](agent-adapter.md#页面设计阶段page_design)。
 
 ### 4.2 视觉规划（Scientific Visual Planner）
 

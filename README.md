@@ -53,7 +53,7 @@
 | Story Planner | Skill 调度的独立 Agent 阶段；[提示包接口](Total-pipe/pwf2rpa/pwf2rpa/story.py) | 依据证据组织 `question / answer / evidence / next` 和可选 `key_points`，产出 `story_plan.json` |
 | pwf2rpa | [Total-pipe/pwf2rpa/](Total-pipe/pwf2rpa/README.md) | 确定性校验、内容与元数据传输；把 Story 转成 RPA 输入，产出 `rpa_input.json` |
 | Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 默认 Agent 仅使用内容规范化与引用传递；独立 CLI 仍提供模板规划、子布局和规划验证（320 个版式、40 类语义和 16 套主题） |
-| 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) | 只看 Story、briefs、证据、图和场合，逐页写 claim、anchor、shape 与 marks；**不选形式、不看渲染能力**，同一篇论文在组会 / 会议 / 文献分享 / 讲课 / 路演里可以长成不同的页 |
+| 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) | 根据 Story 引用设计原图、自绘元素、构图与讲解走读；不重写科学内容、不看编译器能力清单，同一篇论文在组会 / 会议 / 文献分享 / 讲课 / 路演里可以长成不同的页 |
 | Scientific Visual Planner | 整套视觉提案阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
 | Deck Compiler / Deck IR | [Total-pipe/deck_compiler/](Total-pipe/README.md) | 校验科学内容契约、递归分配区域、测量文本与公式、检查几何，生成确定坐标及 `layout_feedback.json` / `qa_report.json` |
 | 布局提供方 | [totalpipe_layout/](Total-pipe/totalpipe_layout/)、[提供方接口](Total-pipe/docs/layout-provider.md) | 内置 `packer` 为受支持的平面正文提供确定性几何建议；复杂测量页由编译器布局，单独记录 owned；也可选 `compiler` 或外部 `module:factory` |
@@ -72,7 +72,7 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
   → [可选 DesignIntentPlanner：design_intent.json]
   → pwf2rpa：rpa_input.json
   → RPA：内容规范化与引用传递（默认 Agent 不重复做模板规划）
-  → page_design：逐页 claim / anchor / shape / marks（能力无关，不选形式）
+  → page_design：Story 引用 + 视觉元素 / 排布 / 走读
   → Agent 按 Schema 映射 canonical deck_ir.json
   → Scientific Visual Planner：整套 Design 提案 → 合入后的 Deck IR
   → Deck Compiler + 布局提供方：几何、容量和结构化反馈
@@ -103,7 +103,7 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 
 Story 阶段需要记录用户选择的模型、reasoning 和真实 subagent provenance。
 从已有证据、Story 或 Deck IR 继续时，按产物状态进入相应阶段。
-RPA 之后先由独立子代理写页面设计表（场合 / shape / marks，不选形式），再由 Agent 按 Schema 映射
+RPA 之后先由独立子代理写视觉讲解设计（引用 Story，交代绘图、排布和走读），再由 Agent 按 Schema 映射
 canonical Deck IR；Design 的视觉提案阶段随后执行。
 
 ### 2. 已有 Deck IR：编译 CLI
@@ -191,7 +191,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **可测量边框容器**：layout tree `1.2` 为 panel 增加原生边框与标题色带；takeaway 可独立框选。描边、内边距和完整内容参与容量计算，支持嵌套并保留旧树。见 [容器协议](Total-pipe/docs/framed-containers.md)。
 - **原生数据图**：`composition.charts` + layout tree 的 `chart` 叶子；折线 / 柱状 / 散点，线性 / 对数轴，误差棒与图内标注。`basis: evidence` 的图必须绑 EV 与出处，`basis: explain` 的示意曲线须标“示意”。论文已有图时用 `figure-reading`，不重画。见 [Chart IR 契约](Total-pipe/docs/chart-ir.md)。
 - **机制图关系边**：流程 / 机制图的边上可写标签，`basis` 区分 `evidence`（须引用）、`hypothesis`（未证实）与 `explain`（补充说明，点线、无引用；标签含数字时仍须引用）。见 [科研图形组件](Total-pipe/docs/native-components.md)。
-- **页面设计阶段**：RPA 之后、IR 之前，独立子代理只读 Story、briefs、证据、图和场合，逐页给 claim / anchor / shape / marks；提示里没有形式与设备清单，**设计者不需要知道编译器能画什么**。场合分五档（组会 / 会议答辩 / 文献分享 / 讲课 / 商业路演），写进 `setting`，决定密度与页面形态。形式选择移到 IR 阶段。见 [接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design)。
+- **页面设计阶段**：RPA 之后、IR 之前，独立子代理只读 Story、briefs、证据、图和场合，以 content_refs 引用内容、以自由 design 交代绘图、排布与走读；不重写 Story，**不需要知道编译器能画什么**。场合分五档（组会 / 会议答辩 / 文献分享 / 讲课 / 商业路演），写进 `setting`，决定密度与页面形态。设计者选择视觉形式，IR 作者选择实现能力。见 [接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design)。
 - **类型尺度**：一页一个 body 字号（28 px / 21 pt），标题 44 px、注释 22 px、页脚 20 px。`metric` 默认比正文高一档；整页只讲一个数字时可设 `presentation.academic_design.type_scale="statement"`，把它提到 88 px，其余角色不变。
 - **垂直分配**：平面文字栏、公式流、图侧文字栈和 packer 栏在保持实测字号/换行的前提下分配剩余高度；stack 平台在间隙超过 48 px 时不再均分间隙，改为整组居中（上限 56 px），避免“三行字浮在版面上”。表注仍允许低于 18 pt，其余投屏文字守住 18 pt 下限。
 - **可追溯反馈**：`layout_feedback.json` 给出组件路径、所需 / 可用尺寸与建议，供上游用完整内容重规划。

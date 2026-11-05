@@ -26,7 +26,7 @@ def design_complete(job):
     from deck_compiler.visual_planner import pending_design
     try:
         work = path.parent
-        design = read(work/'page_design.json') if (work/'page_design.json').is_file() else None
+        design = a.load_design(work)
         a.check_ir(read(path), supplement=job['request'].get('supplement', 'off'), design=design,
                    slide_count=job['request'].get('slide_count'))
         pending = pending_design(read(path))
@@ -115,6 +115,7 @@ def envelope(job, stage, failure=None, detail='summary'):
             action.update({'type': 'invoke_subagent', 'required_capability': 'independent_subagent',
                            'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED',
                            'input_path': str(prompt) if prompt else None,
+                           'schema_path': str(COMPONENT/'schemas/page-design.schema.json'),
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
         if prompt and not prompt.is_file() and (stage.get('prepare') or sid == 'deck_ir'):
             status = 'running'
@@ -330,12 +331,14 @@ def _accept(job, stage, upstream, kind, path):
             a.check_story(read(work/'story_prompt.json'), value, read(workflow))
         elif kind == 'page_design':
             workflow = read(work/'evidence_pointer.json')['workflow']
+            flow = read(workflow)
             evidence = {entry['evidence_id']: entry['text']
-                        for entry in read(workflow)['evidence_registry']}
+                        for entry in flow['evidence_registry']}
             a.check_design(value, read(work/'story_plan.json'), evidence,
-                           slide_count=job['request'].get('slide_count'))
+                           slide_count=job['request'].get('slide_count'),
+                           figures=(flow.get('artifacts') or {}).get('figure_assets_metadata') or [])
         elif kind == 'deck_ir':
-            design = read(work/'page_design.json') if (work/'page_design.json').exists() else None
+            design = a.load_design(work)
             # The design's devices are written by the compiler before validation, so an author
             # cannot forget them and the deck cannot drift away from the approved design.
             value, art_notes = a.apply_art_direction(value, design)

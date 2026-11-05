@@ -86,58 +86,49 @@ RPA 独立 CLI 的模板规划功能不变。页面设计在目标页数内安�
 
 ### 页面设计阶段（page_design）
 
-RPA 之后、Deck IR 之前有一个 `page_design` 阶段：Agent 先交一份**页面设计表**，再写 IR。
-设计表只写决策，不写坐标；**也不写形式或组件**——设计者不需要知道这套编译器的能力，只需要想清楚
-每一页要让读者看到什么：
+Story 决定研究问题、论证顺序、科学结论和证据边界；页面设计决定**怎么把这些内容画出来、摆出来、带着观众看**。
+RPA 之后交给独立子代理，完整读取 `work/page_design_task.md`、`work/page_design_prompt.json` 和
+其中 `schema_path` 指向的 [page-design 1.1 Schema](../schemas/page-design.schema.json)。设计提示不提供
+编译器 forms / devices / type_scale 清单；设计者可以选择视觉形式，IR 作者负责翻译为实现能力。
 
 ```json
-{"schema_version":"1.0","deck_id":"<id>",
- "setting":{"audience":"同组同行，已熟悉二维器件与浮栅存储","occasion":"group-meeting",
-            "reading":"spoken"},
- "pages":[
-  {"id":"P1","from_story":["S1"],"role":"setup","claim":"基准为 N=512、K=50。",
-   "takeaway_from":"S1.answer",
-   "items":[{"id":"p1-a","text":"N=512、K=50","source":"S1.key_points[0]","evidence":["EV0001"]}],
-   "anchor":{"kind":"table","why":"条件并列"},
-   "figures":["images/0bb7ce79….jpg"],
-   "shape":"两张条件并排，数字比标签大两档；读者先看到 512，再看到 K=50 的对照",
-   "marks":["K=50"],
-   "rationale":"组会同行的条件页，两个数字要能同时被查到"}]}
+{"schema_version":"1.1","deck_id":"example",
+ "setting":{"audience":"有领域基础、未读本文的研究生","occasion":"group-meeting","reading":"spoken"},
+ "pages":[{"id":"P3","content_refs":["S2.answer"],
+   "figures":["images/<实际检查过的资产>.jpg"],
+   "design":{
+     "composition":"左侧以器件原图为主，右侧按材料上下顺序排列功能标签，标签与图层用细线对应。",
+     "drawing":"沿用原图；只加对应线与材料标签，少量黄色突出材料名，不把器件画成装饰卡片。",
+     "walkthrough":"先指原图定位层次，再沿对应线逐层指出功能，最后指向电极。"}}]}
 ```
 
-**执行方式**：与 Story 一样交给独立子代理，不主 Agent 代写。RPA 完成后接入层写出两份文件：
-`work/page_design_prompt.json`（Story、briefs、证据、可用图、场合与输出 shape）与
-`work/page_design_task.md`（任务书）。主 Agent 把这两份交给子代理，收回子代理写的
-`work/page_design.json` 再 advance。提示里**没有 forms / devices / type_scale / visual_style**：
-设计是能力无关的，选形式是 IR 阶段的翻译工作。
+以上只是单页结构示意；实际文件须覆盖完整 Story。`design` 的对象键是示例，**不是必填清单**。
+可查看 [独立子代理生成的 10 页实际样例](../examples/page-design-v11/README.zh-CN.md) 与
+[本次验证记录](../../docs/agent-page-design-validation.md)；该样例未声明完成幻灯片布局验收。
 
-`setting` 是必填的**场合与对象**：`occasion` 从五个键里选一个——`group-meeting`（组会）、
-`research-report`（会议/答辩）、`research-sharing`（文献分享/journal club）、`lecture`（讲课）、
-`commercial`（商业路演）；`audience` 写听众是谁、已经知道什么；`reading` 写页面是讲者口述
-（`spoken`）、听众自读（`read`）还是两者兼有。它不直接产生版面，但决定密度与页面形态：同一篇论文在
-这五种场合里可以合理地长成五套不同的页。缺 `setting` 或 `occasion` 不在键里会报
-`PAGE_DESIGN_INVALID`；`room.default_occasion` 是接入层按 `presentation_type` 与 brief 猜的默认值，
-设计者可以改。
+- 每页只必填 `id`、`content_refs` 和 `design`。`content_refs` 使用提示包 `content_catalog` 中的
+  Story 路径，正文与 evidence 自动继承，无需重写 claim / items / anchor 理由 / rationale。
+  开场等纯组织页可用空引用；Story 的每个 answer、key_point、ending 仍须恰好分配到一页。
+- `design` 可以是自由文本或自定字段对象，按页面需要说明原图、图形元素、箭头及关系、图标用途、
+  公式标注、对照方式、相对排布、视觉层级和讲者指向顺序。不要止于“解释机制”，也不要再抄一段 Story。
+  没有统一卡片、三栏、图标数量或字段模板。
+- `figures` 可选，但选用原图时列出精确 asset_id；先实际检查路径基于 `workflow_root` 的图像，
+  保留比例、图号及来源。IR 检查选图不得丢失。图标和示意不得增添科学主张，数据图不得猜点。
+- `title` 和 `marks` 可选；title 的数值仍要有继承的证据，marks 必须来自本页所分配 Story 或 title。
+  新的科学数据、外部知识或因果解释不由设计阶段发明，证据缺口回报上游。
+- `setting` 简述 audience / occasion / reading，沿用请求，无需重新分析听众。
+  occasion 取 `group-meeting` / `research-report` / `research-sharing` / `lecture` / `commercial`，
+  reading 取 spoken / read / mixed。
+- 校验保留唯一页 ID、完整且唯一的内容分配、已知证据、已知选图、显式页数目标（未指定最多 40 页）。
+  自由绘图说明中的布局数字不作为测量数据；其科学忠实性仍须人工核对，并由下游 IR 证据与图形 QA 复核。
+  ending 的证据自动继承 Story 节点证据的并集，仅为收束内容提供溯源，不是新结果。
+- IR 提示包完整保留自定设计字段；运行时从原 Story 派生内部内容绑定，不把副本写回设计文件。
+  IR 保留页序、分配、证据、数字、选图和视觉关系，实现设计指定的元素与构图；不能改成文字摘要。
+  空间不足时回报实际容量，回退页面设计，不删内容或缩字号。
+- 旧 `schema_version=1.0` 的 claim/items/anchor/shape/form/devices 继续兼容，不要求迁移旧任务。
+  这些是旧协议；新任务默认 1.1，不再强制设计者重复科学策划。
 
-- `anchor` 是**这页围绕什么对象**（figure / table / formula / number / none），是内容事实，不是能力。
-- `shape` 是一两句设计交代：读者看到什么、什么大、眼睛先落在哪、什么并排、空白怎么用。**必填**
-  （或给旧的 `form`，向后兼容）。
-- `marks` 是这页承载主张的短语；IR 阶段把它们落成文字标记，不需要设计者知道“强调设备”叫什么。
-- `figures`（可选）列出这页要用的资产 id。设计者按图号认面板，IR 只拿到 hash；这一列是两者之间
-  唯一的对应关系，没有它就只能由 IR 猜。
-- 校验只看内容不变式（`PAGE_DESIGN_INVALID`）：Story 的每个 answer/key_point/ending **只属于一页**
-  （同一页可被多个 item 引用展开，跨页重复才会报错）；evidence id 必须存在；条目与 claim 里的数字必须
-  出现在所引 evidence 中（`kind=formula` 的定义式除外；证据里的 `$95.8\%$` 与条目里的 `95.8%` 视为
-  同一个数）；`marks` 必须是这页文本里出现过的短语。页数可少于 brief 数（合并）或多于（拆分），
-  显式 slide_count 校验最终论文页目标；不再按 Story 节点数乘倍数限制页数。
-- 通过后，IR 提示包会带上 `page_design`（含 `shape`、`marks`、`anchor`）与"逐页实现、不得重新设计"的
-  指令；IR 作者从 `design_forms` 里选择最能实现该 `shape` 的构图。IR 交回时按设计校验
-  （`DESIGN_REALIZATION_FAILED`）：页数一致、每页保留设计声明的 evidence、设计页上的数字不能丢。
-- 有设计表时，`check_ir` 不再做"逐字保留 brief 原文"的比对——设计表已经是溯源记录；没有设计表的
-  旧路径行为不变。
-
-以下是 IR 阶段可选的构图（`design_forms`）。设计表不写这一列：IR 作者按每页的 `shape` 与 `anchor`
-选择最能实现它的形式。
+以下是 IR 阶段可选的构图（`design_forms`）。新设计表不写编译器键名：IR 作者按每页的 `design` 选择能实现设计的构图。
 
 | 形式 | 锚点 | 渲染为 | 适用 |
 | --- | --- | --- | --- |

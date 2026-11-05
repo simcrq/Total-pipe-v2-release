@@ -1,18 +1,13 @@
-"""A page design is a faithful partition of the Story, checked before any Deck IR exists.
+"""Check page-design provenance without asking the designer to rewrite the Story.
 
-Designing a deck means deciding which Story item lands on which page, what the page is about, and
-which form carries it. That freedom has exactly four ways to go wrong, and each one produces a deck
-that looks better and is wrong:
-
-* a Story item is dropped or used twice,
-* an evidence id does not exist,
-* a number appears that its cited evidence does not contain,
-* a form is named that the compiler cannot render.
-
-This module owns the vocabulary and the check. It never rewrites content; it only refuses a design
-that cannot be traced back to the Story.
+1.1 assigns Story paths to pages and leaves visual instructions open ended. Legacy 1.0 designs
+remain readable. Content bindings are derived for IR validation, never authored a second time.
 """
+import copy
 import re
+from pathlib import Path
+
+DESIGN_SCHEMA = Path(__file__).resolve().parents[1]/'schemas/page-design.schema.json'
 
 FORMS = {
     'cover': {'anchor': 'none', 'ir': 'title page: the deck title, one line, no body',
@@ -158,25 +153,126 @@ def story_items(story):
     return items
 
 
+def content_bindings(story):
+    """Stable content paths and inherited evidence; no new scientific interpretation."""
+    result = {}
+    all_refs = list(dict.fromkeys(ref for node in story.get('story', [])
+                                  for ref in node.get('evidence') or []))
+    for source, text in story_items(story).items():
+        if source.startswith('S'):
+            index = int(source.split('.')[0][1:])-1
+            refs = story['story'][index].get('evidence') or []
+        else:
+            # Ending lines synthesize the Story; this is inherited provenance, not fresh evidence.
+            refs = all_refs
+        result[source] = {'source': source, 'text': text, 'evidence': list(refs)}
+    return result
+
+
+def bind_design(design, story):
+    """Internal IR checks receive immutable Story content, not designer-authored paraphrases."""
+    if not design or design.get('schema_version') != '1.1':
+        return design
+    bound = copy.deepcopy(design)
+    catalog = content_bindings(story)
+    for page in bound.get('pages') or []:
+        page['items'] = [dict(catalog[source], id=source) for source in page['content_refs']]
+    bound['_content_bound'] = True
+    return bound
+
+
+def _validate_reference_design(design, story, evidence, slide_count):
+    """Validate only the stable handoff envelope; design prose is deliberately unconstrained."""
+    def text(value):
+        return isinstance(value, str) and bool(value.strip())
+    problems = []
+    if not text(design.get('deck_id')):
+        problems.append('deck_id is required')
+    setting = design.get('setting')
+    if (not isinstance(setting, dict) or not text(setting.get('audience'))
+            or not isinstance(setting.get('occasion'), str)
+            or setting['occasion'] not in OCCASIONS or setting.get('reading') not in READINGS):
+        problems.append('setting requires audience, a known occasion and reading=spoken|read|mixed')
+    pages = design.get('pages')
+    if not isinstance(pages, list) or not 1 <= len(pages) <= 40:
+        return problems+['page_design.pages must contain 1–40 pages']
+    for page in pages:
+        if not isinstance(page, dict):
+            problems.append('each page must be an object')
+            continue
+        if not text(page.get('id')):
+            problems.append('every page needs an id')
+        refs = page.get('content_refs')
+        if not isinstance(refs, list) or not all(text(ref) for ref in refs) or len(set(refs)) != len(refs):
+            problems.append('content_refs must be a list of unique Story paths')
+        # Instructions may be prose or a bespoke object. No fixed element/layout vocabulary.
+        instruction = page.get('design')
+        if not (text(instruction) or (isinstance(instruction, dict) and instruction)):
+            problems.append('each page needs non-empty design instructions (text or object)')
+        for key in ('figures', 'marks'):
+            if key in page and (not isinstance(page[key], list) or not all(text(v) for v in page[key])):
+                problems.append(f'{key} must be a list of non-empty strings')
+        if 'title' in page and not text(page['title']):
+            problems.append('title must be a non-empty string when supplied')
+    if problems:
+        return problems
+    catalog, used, ids = content_bindings(story), {}, set()
+    for page in design['pages']:
+        pid = page['id']
+        if pid in ids:
+            problems.append(f'duplicate page id {pid}')
+        ids.add(pid)
+        for source in page['content_refs']:
+            used.setdefault(source, set()).add(pid)
+            if source not in catalog:
+                problems.append(f'{pid}: unknown Story content_ref {source!r}')
+        refs = {ref for source in page['content_refs'] if source in catalog
+                for ref in catalog[source]['evidence']}
+        for ref in refs:
+            if ref not in evidence:
+                problems.append(f'{pid}: unknown evidence {ref}')
+        # A short optional display title is the only newly authored scientific text. Drawing
+        # instructions contain geometry/counts as well as science and cannot be scanned as data.
+        cited = ' '.join(evidence.get(ref, '') for ref in refs)
+        for number in _numbers(page.get('title', ''))-_numbers(cited):
+            problems.append(f'{pid}: title number {number} is not in the cited evidence')
+        text = ' '.join(catalog[source]['text'] for source in page['content_refs'] if source in catalog)
+        for mark in page.get('marks') or []:
+            if _squash(mark) not in _squash(text+' '+page.get('title', '')):
+                problems.append(f'{pid}: mark {mark!r} does not occur in assigned Story text or title')
+    for source in catalog:
+        count = len(used.get(source) or [])
+        if not count:
+            problems.append(f'unused Story item {source}')
+        elif count > 1:
+            problems.append(f'Story item {source} appears on {count} pages; one unit belongs to one page')
+    if slide_count is not None:
+        if type(slide_count) is not int or not 1 <= slide_count <= 40:
+            problems.append('slide_count must be an integer in [1,40]')
+        elif len(design['pages']) != slide_count:
+            problems.append(f'page_design has {len(design["pages"])} pages; the requested final '
+                            f'paper-page target is {slide_count}. Replan without dropping content.')
+    return problems
+
+
 def capabilities():
     from .art_direction import capabilities as art
-    return {'contract': 'totalpipe.page-design', 'forms': FORMS, 'anchors': list(ANCHORS),
-            'roles': list(ROLES), 'occasions': OCCASIONS, 'readings': list(READINGS),
-            'art_direction': art(),
-            'rules': ['Name the room in setting before the pages: pick the occasion from occasions, say '
-                      'who is listening and what they already know, and whether a page is spoken to or '
-                      'read alone. Density and page shape answer to that room, not to a template; the same '
-                      'content in two rooms may legitimately be two decks.',
-                      'Every Story answer, key point and ending line belongs to exactly one page; one unit '
-                      'may be elaborated by several items on its page.',
-                      'A page may merge two thin Story entries, and one dense entry may be split.',
-                      'Every number in a claim or item must occur in the evidence that item cites; LaTeX '
-                      'escapes such as $95.8\\%$ count as the same number.',
-                      'A formula item is a definition rendered as written; its constants are not measurements.',
-                      'Name a form from forms; the compiler renders exactly those compositions.',
-                      'Name the devices the page actually needs. A device always degrades instead of failing, '
-                      'so never drop one because it might cost space; a page with no device must say why '
-                      'in its rationale.']}
+    return {'contract': 'totalpipe.page-design', 'schema_version': '1.1',
+            'supported_versions': ['1.0', '1.1'],
+            # Renderer choices are for the IR author, never injected into the design prompt.
+            'forms': FORMS, 'anchors': list(ANCHORS), 'roles': list(ROLES),
+            'occasions': OCCASIONS, 'readings': list(READINGS), 'art_direction': art(),
+            'rules': ['Story owns scientific content and evidence. Page design owns visual explanation.',
+                      '1.1 assigns each Story content path to exactly one page with content_refs; '
+                      'text and evidence are inherited, not reauthored.',
+                      'Use design as free prose or a custom object describing visual elements, '
+                      'composition and presenter walkthrough. No fixed visual template.',
+                      'Keep the requested setting and final page count; merging and splitting '
+                      'content assignments does not change the scientific argument.',
+                      'Inspect selected original figures and preserve their source and aspect ratio. '
+                      'Data plots require actual data; do not invent scientific content.',
+                      'IR implements the complete visual handoff using renderer forms/devices. '
+                      'Legacy 1.0 designs retain their original validation.']}
 
 
 def validate_design(design, story, evidence, slide_count=None):
@@ -185,6 +281,10 @@ def validate_design(design, story, evidence, slide_count=None):
     problems = []
     if not isinstance(design, dict):
         return ['page_design must be an object']
+    if design.get('schema_version') == '1.1':
+        return _validate_reference_design(design, story, evidence, slide_count)
+    if design.get('schema_version', '1.0') != '1.0':
+        return ['unsupported page_design schema_version; use 1.1 (or legacy 1.0)']
     if 'devices' in design:
         problems += [f'deck devices: {message}' for message in validate_devices(design['devices'], DECK)]
     # The room is a design input, not a caption: without it, density and page shape are decided by
@@ -310,6 +410,12 @@ def summary(design):
     The design speaks in shapes, not forms: the IR stage is the one that knows what can be drawn,
     so it receives the description and chooses the composition that realizes it.
     """
+    if design.get('schema_version') == '1.1':
+        # Keep arbitrary designer instructions intact; do not whitelist away icons, diagrams,
+        # reading paths or bespoke composition. Scientific bodies remain in the separate Story.
+        return {'schema_version': '1.1', 'setting': copy.deepcopy(design['setting']),
+                'pages': [{key: copy.deepcopy(value) for key, value in page.items() if key != 'items'}
+                          for page in design['pages']]}
     return {'setting': dict((design or {}).get('setting') or {}),
             'pages': [{'id': page.get('id'), 'role': page.get('role'), 'claim': page.get('claim'),
                        'shape': page.get('shape'), 'marks': list(page.get('marks') or []),

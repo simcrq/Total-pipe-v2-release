@@ -1,0 +1,122 @@
+{
+  "schema_version": "1.1",
+  "deck_id": "rfgpt-group-meeting-page-design-v11-sample",
+  "setting": {
+    "audience": "研究生组会：同组同行与导师，有领域基础但未读本文。",
+    "occasion": "group-meeting",
+    "reading": "spoken"
+  },
+  "pages": [
+    {
+      "id": "P1",
+      "content_refs": [],
+      "title": "RFGPT：器件结构、光电模式与视觉任务",
+      "design": {
+        "composition": "留白较多的开场页。标题放在左上至中部；下方用一条细线串起三个章节标签：器件结构、工作模式、视觉任务。只作汇报路线提示，不放结论、数据或装饰性论文图片。",
+        "walkthrough": ["报出主题，再沿三个章节标签说明接下来的讲解路线。"]
+      }
+    },
+    {
+      "id": "P2",
+      "content_refs": ["S1.answer"],
+      "title": "器件差异带来的集成挑战",
+      "design": {
+        "composition": "上半部画一组外观不同、但不标材料或具体器件名称的简化轮廓，统一标注为“多阶段视觉器件类型与材料差异”；箭头通向“大规模集成制造复杂度”与“可扩展性受限”两个并列结果。下半部另起一条浅色区域，列出浮栅光晶体管的两项研究潜力：光学与电学可调突触可塑性、大动态范围。轮廓标为概念示意，不加尺度、器件参数或额外性能结论。",
+        "walkthrough": ["先从上方的器件差异指向集成复杂度和可扩展性，再移到下方，说明为什么关注浮栅光晶体管。"]
+      }
+    },
+    {
+      "id": "P3",
+      "content_refs": ["S2.answer"],
+      "title": "异质结构的材料分工",
+      "figures": ["images/72a6009bed66e6570d9cc566ba561aec4e4188d70a57c2215bb7b49d4139b1de.jpg"],
+      "design": {
+        "composition": "沿用用户喜欢的基线第3页方向：左侧约占页面一半，放大原 Figure 1b 器件结构图并保留原图比例、材料标记和图号；右侧用四行对齐说明 WSe2 沟道、h-BN 栅介电层、Gr 浮栅层、Au（30 nm）电极。只用少量金黄色强调 WSe2 与 Gr，其他文字保持深色。图下方留一条短流程带，画“机械剥离的纳米片 → 依次转移到 SiO2/Si 基底”，并标“流程示意”；不把缺失的 Figure S1 画成原图。",
+        "walkthrough": ["先指向 Figure 1b 中的基底与叠层，再沿右侧四行把材料对应到功能，最后指向底部的制备顺序示意。"],
+        "risk": "材料标签需在放大后的原图与右侧说明之间保持清楚对应；流程带应保持短小，避免和器件结构争夺视觉重点。"
+      }
+    },
+    {
+      "id": "P4",
+      "content_refs": ["S3.answer"],
+      "title": "接触几何与性能：只报告相关性",
+      "design": {
+        "composition": "不用统计图。页面中央放两个并列文字节点“接触面积比”和“器件性能指标”，以无箭头、无方向的中性点线连接，线上标“正文报告：统计相关性”。下方用醒目的边界短句标出“方向未报告；不作因果解读”，并以小号来源文字注明正文所指 Figure S9。",
+        "walkthrough": ["先读出两个变量，再指向无方向的点线，最后停在“不作因果解读”的边界提示。"],
+        "source_guardrails": ["不要绘制散点、趋势线、相关系数或效应大小。", "不要把 Figure S9 标成已查看的图像，也不要从其他资产替代它。"]
+      }
+    },
+    {
+      "id": "P5",
+      "content_refs": ["S4.answer"],
+      "title": "栅压极性关联两种光电工作模式",
+      "figures": [
+        "images/25c5ff5cd32359c18e4ab3a3c97fc0985eca2e6e7f80922915c1b7fb35bcfda4.jpg",
+        "images/0f5eafca3e5407820a9135dcbe2bcd425e4e0a8bd7d7a241ca20e9ad79202f91.jpg"
+      ],
+      "design": {
+        "composition": "上半部左右并置两张原图：Figure 2a 光探测模式、Figure 3a 光电突触模式；保留图内标记、比例和来源图号。下半部用一条简洁的双分支示意说明小 V_CG 下，WSe2 费米能级随栅压极性变化而趋向导带或价带；只标“依极性变化”，不标正负极性与导带/价带的具体对应。旁边标出“小 V_CG 不足以激活载流子隧穿”。页脚用一行文字区分证据层级：Fowler–Nordheim 隧穿是论文给出的机制归因；温度依赖输运测量支持非对称势垒结构。此行不得配造出的曲线或 Figure S6/S16 图像。",
+        "walkthrough": ["先从左侧光探测模式读到右侧光电突触模式，再转向下方的 V_CG 极性分支，最后读出机制归因与温度依赖输运的支持关系。"],
+        "risk": "本页信息量较高；两张原图保持同等可读性，下方机制说明压成短标签，避免出现第三个同等抢眼的图块。"
+      }
+    },
+    {
+      "id": "P6",
+      "content_refs": ["S5.answer"],
+      "title": "准线性关系与图像信息捕获",
+      "design": {
+        "composition": "做成一页留白充分的论点页：左侧较大的“准线性关系”，中间放一条细箭头并标“论文指出可确保”，右侧放“高质量图像信息的精准捕获”。下方小字写“作者陈述”。不用坐标轴、曲线、公式或数值；此页不从文字证据补画实验关系。",
+        "walkthrough": ["从“准线性关系”指向作者所述的图像信息捕获结果，强调这是论文陈述而非本页重绘的数据图。"]
+      }
+    },
+    {
+      "id": "P7",
+      "content_refs": ["S6.answer"],
+      "title": "九个器件响应导出卷积核",
+      "figures": ["images/32a4fce06c7338146052723cfebc950ec88037e9a99cc7cccd8776c5d335a345.jpg"],
+      "design": {
+        "composition": "用左至右的三段流程：左侧画九个等大的小点，标“9 个物理器件的实验光响应”；中间放空白 3×3 网格，标“卷积核权重，示意，不填数值”；右侧放 Figure 4b 的自采集 house 原图，保留原图比例与“Original”标记。两条细箭头只表示权重来源和图像应用顺序，不表示新测量或卷积输出。",
+        "walkthrough": ["从九个响应点出发，停在空白核网格说明权重来源，再指向 Figure 4b 的 house 图像说明应用对象。"],
+        "source_guardrails": ["不填写或估算卷积核权重。", "不把其他滤波结果当作本页必须展示的输出。"]
+      }
+    },
+    {
+      "id": "P8",
+      "content_refs": ["S7.answer", "S7.key_points[0]", "S7.key_points[1]"],
+      "title": "边缘增强的图像证据与识别结果",
+      "figures": [
+        "images/a8b0f50c12fe3a29015d4f0be3881b7dffe5f02f8afc898f2ff421e635d1bb4f.jpg",
+        "images/b43dd6dfedc6ca8508e60d85ec0c6e418cebf823d72bc85709833699f29c0bc9.jpg"
+      ],
+      "design": {
+        "composition": "主体并排放两张原图：Figure 4d 亮度直方图和 Figure 4e 识别准确率曲线，完整保留坐标、图例、Mask 标记与面板来源。直方图旁只加一处小标注“around 0.79”；准确率图旁单独做大号数字对照“16% → 62%”和“+46 个百分点”，数字作为文字结果，不重画曲线或拟合值。主体下方加一条横向分隔线，再以独立的小标题“另一个系统评估来源”引出 Oracle-MNIST 与 Supplementary Note S3。Oracle 注记不得放进 Figure 4d/e 的图组、准确率数字旁或其图注中，明确它不归属于 16% → 62% 对照；不补绘未提供的补充图。",
+        "walkthrough": ["先指向 Figure 4d 直方图里的 Mask 新峰，再移到 Figure 4e 准确率对照，停顿后越过分隔线，最后单独指出 Oracle-MNIST 是论文另一个系统评估来源。"],
+        "risk": "Figure 4d/e 与 Oracle-MNIST 分属不同评估语境；横向分隔线、独立小标题和留白必须清楚，避免把 Oracle-MNIST 读成 16% → 62% 的数据集。"
+      }
+    },
+    {
+      "id": "P9",
+      "content_refs": ["S8.answer", "S8.key_points[0]", "S8.key_points[1]"],
+      "title": "时间序列响应进入储备池阶段",
+      "figures": [
+        "images/f1bffa6c96a5c6b682799df5319e6cb814aac23fccc05a54dc39213bd71a561a.jpg",
+        "images/8051ddc86fdffd7ff38eda1b9046e8ddae6bd2c2a0040291282ed8b1081a796b.jpg",
+        "images/2c6fc3d95128f9938269c94483a64de2442b24e4952218a1b24c24fcda133f21.jpg"
+      ],
+      "design": {
+        "composition": "上方主区并置 Figure 5b 的时间序列电流响应与 Figure 5c 的 reservoir 系统示意；保留原图比例、序列标记和层级标题。先在 Figure 5b 用细黄色框轻点几条不同响应，再把视线引到 Figure 5c 中原图已有的“204 node”标记，不另画数量曲线。下方单独设窄带放 Figure 4g 轨迹点数量比较原图，并在旁边注明 Figure 4d 的分布结果按原文归一化；不要把该归一化说明误贴到 Figure 4g 的柱上。",
+        "walkthrough": ["先比较不同时间序列引出的器件响应，再沿 Figure 5c 指向 204-node reservoir layer，最后扫过 Figure 4g 的轨迹点数比较和归一化说明。"],
+        "risk": "本页跨 Figure 4 与 Figure 5，最容易拥挤；reservoir 响应与 204-node 架构必须占主区，Figure 4g 只保留为底部次级原图，避免三组证据等权竞争。"
+      }
+    },
+    {
+      "id": "P10",
+      "content_refs": ["ending.takeaway"],
+      "title": "结论与边界",
+      "design": {
+        "composition": "用一条三段式回顾路径收束页面：异质结构与双模式、图像卷积和边缘增强、时间序列 reservoir。每段仅用短标签和一枚简化线描提示，不复刻原图，也不在图标中添加新结果。页面中下部给 16% → 62% 留出最大数字层级；底部保留接触面积比与性能指标的边界条，明确这是作者报告的统计相关性，不推断方向或因果。其余 takeaway 正文留给继承内容呈现。",
+        "walkthrough": ["沿三段路径快速回看器件、图像和时间序列证据，最后停在识别率结果与相关性边界。"]
+      }
+    }
+  ]
+}

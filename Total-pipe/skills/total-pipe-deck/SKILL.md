@@ -7,7 +7,7 @@ description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX
 
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → RPA
-    → page_design（场合 / shape / marks，能力无关）→ canonical Deck IR
+    → page_design（Story 引用 / 绘图 / 排布 / 走读）→ canonical Deck IR
     → Scientific Visual Planner（design 阶段，默认必做）
     → 合入设计的 Deck IR → packer / compiler → OfficeCLI → candidate.pptx + QA
     → 用户要求正式 final 时：PowerPoint 原生验收 → 审核 → promote
@@ -35,7 +35,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | panel chip 标题 `frame.title_band` | 一页分 2–3 组时，让组标签自己说话 | `chip` 必须配 `title_fill`；标题过宽自动退回整行色带 |
 | 图注出处 `figure_refs.source_label` | 论文图注要能看出处 | ≤80 字符；弱化前缀，参与图注测量 |
 | 目录页 `presentation.agenda` + `slide.presentation.section` | 长报告要目录和章节 | 需要 ≥2 个章节与 `academic_design`；目录页由编译器插入并重算页码 |
-| 设计层设备（IR 阶段选用） | 强调、标签组、图注出处、结论框、目录 | 每项都有退化路径；设计阶段只写 `marks` 与 `shape`，由 IR 翻译成 `**…**`、panel、`source_label` 等；旧的 `page_design.devices` 仍兼容 |
+| 设计层设备（IR 阶段选用） | 强调、标签组、图注出处、结论框、目录 | 每项都有退化路径；设计阶段写视觉意图与可选 `marks`，由 IR 翻译成 `**…**`、panel、`source_label` 等；旧的 `page_design.devices` 仍兼容 |
 | 独立公式 `formula` | 展示式推导 | 过高会挤压正文 |
 | 原生表格 | 多材料/多条件对照 | ≤4 表/页、≤32 行 × 12 列、字号 ≥18 pt |
 | `process` | 3–4 步线性流程；`compact` 可放 3–8 步 | 节点数硬限制；支持 `direction=vertical`、横向 `layout=staggered` 和全方形 `layout=compact`，节点可 `tone=emphasis`；纵向 4 步需短标题，compact 字号 24 css px 且 `body` 尽量省略；`body` 可选，只有流程名时更紧凑 |
@@ -224,37 +224,19 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 
 ### 3.1 页面设计阶段（page_design）
 
-Agent 接入层在 RPA 之后要求先交一份页面设计表，再写 IR。设计表只回答设计问题：
-这一页承载哪条 Story 内容、论点是什么、围绕什么对象、读者应该看到什么。**它不选形式，也不看渲染
-能力**：提示包里没有 forms / devices / type_scale / visual_style，设计者不需要知道编译器能画什么。
+RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
+Story 是科学内容权威；页面设计只负责把内容变成可执行的视觉讲解，不再分析研究问题或重写正文。
 
-```json
-{"id":"P4","from_story":["S4"],"role":"result","claim":"200 次迭代误差 1.2×10^-3，达标迭代少 1.8 倍。",
- "takeaway_from":"S4.answer",
- "items":[{"id":"p4-err","text":"200 次迭代后相对误差 1.2×10^-3。","source":"S4.key_points[0]",
-           "evidence":["EV0001"]}],
- "anchor":{"kind":"figure","why":"论文图就是论点"},
- "shape":"图占左边大半页，右边三条读数与曲线高度齐平；眼睛先落在红线离开蓝线的那一点",
- "marks":["1.8 倍"],
- "rationale":"组会里会被追问迭代数，图必须能指到具体位置"}
-```
+新版 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
+设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
+不强制 claim/items/anchor 理由/rationale，也不限制所有页用同一字段或构图。
+`figures` 列出实际看过的精确资产 id；`title`、`marks` 可选。保留原图比例、来源及示意标记，不猜数据。
 
-- **先定场合**：`setting.occasion` 从五档里选——`group-meeting`（组会）、`research-report`（会议 / 答辩）、
-  `research-sharing`（文献分享）、`lecture`（讲课）、`commercial`（商业路演）；`audience` 写听众是谁、
-  已知道什么；`reading` 写讲者口述（spoken）、听众自读（read）还是混合。接入层会按
-  `presentation_type` 与 brief 给一个 `room.default_occasion`，设计者可改。缺 `setting` 报
-  `PAGE_DESIGN_INVALID`。
-- **`shape` 是设计交代**：一两句话写读者看到什么——什么大、眼睛先落在哪、什么并排、空白怎么用；
-  不写软件功能、模板或组件。`anchor` 只回答这页围绕什么对象（figure / table / formula / number / none）。
-- **`marks` 是承载主张的短语**，IR 阶段落成 `**…**`；设计者不需要知道“强调设备”叫什么。
-- **形式由 IR 翻译**：IR 作者从 `design_forms` 里选择最能实现 `shape` 的构图，页序、页数、claim、
-  items 与 anchor 不变。设计点名的旧 `form` / `devices` 仍兼容，但新设计不再要求。
-- **守恒**：Story 的每个 answer / key_point / ending **只属于一页**（同一页可被多个 item 引用展开，
-  跨页重复才报错）；数字只能来自所引 evidence（`$95.8\%$` 与 `95.8%` 视为同一个数，`Fig. 3e` 的
-  面板号不算测量值）；`marks` 必须是本页文本里出现过的短语；页数可与 brief 数不同（合并或拆分），
-  页数符合显式 slide_count 最终论文页目标（1–40），不按 Story 节点数乘倍数；未指定时最多 40 页。
-- **实现校验**：IR 必须一页对一页实现设计（同页数、同 evidence、设计页上的数字不丢），否则
-  `DESIGN_REALIZATION_FAILED`。设计通过后，IR 阶段不再逐字比对 brief 原文。
+正文与证据自动继承 Story；每个 answer/key_point/ending 仍恰好分配一页，空引用仅用于开场等组织页。
+setting 简述请求中的 audience/occasion/reading；论文页数按显式目标（1–40）检查。
+IR 完整接收自定设计说明，从能力中选择实现方式，保留页序、内容分配、选图、可见讲解义务与视觉关系。
+放不下回报容量并回退设计，不删科学内容或缩字号。
+旧 1.0 设计继续兼容。完整契约与例子见 [页面设计协议](../../docs/agent-adapter.md#页面设计阶段page_design)。
 
 #### 设计层设备（由 IR 阶段落地）
 

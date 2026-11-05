@@ -319,15 +319,33 @@ def normalize_authoring_ir(value):
     return value
 
 
-def check_design(value, story, evidence, slide_count=None):
+def check_design(value, story, evidence, slide_count=None, figures=None):
     """Refuse a page design that cannot be traced back to the Story or the evidence."""
     from deck_compiler.design import validate_design
     problems = validate_design(value, story, evidence, slide_count=slide_count)
+    if figures is not None and isinstance(value, dict) and value.get('schema_version') == '1.1':
+        known = {figure['asset_id'] for figure in figures}
+        for page in value.get('pages') or []:
+            if isinstance(page, dict) and isinstance(page.get('figures', []), list):
+                for asset in page.get('figures') or []:
+                    if isinstance(asset, str) and asset not in known:
+                        problems.append(f'{page.get("id")}: unknown figure asset {asset}')
     if problems:
         failure = Failure('PAGE_DESIGN_INVALID', ' '.join(problems[:6]),
                           'author_artifact', 'page_design')
         failure.details = problems
         raise failure
+
+
+def load_design(work):
+    """Load visual instructions and derive content from the immutable upstream Story."""
+    from deck_compiler.design import bind_design
+    work = Path(work)
+    path = work/'page_design.json'
+    if not path.is_file():
+        return None
+    design = read(path)
+    return bind_design(design, read(work/'story_plan.json')) if design.get('schema_version') == '1.1' else design
 
 
 DESIGN_MARKER = ' A page design is approved.'
@@ -353,7 +371,7 @@ def finalize_design(work, design=None):
     Idempotent: the IR envelope may be produced more than once (status polls, retries) and the
     instruction must not be appended twice.
     """
-    from deck_compiler.design import capabilities, summary
+    from deck_compiler.design import capabilities, summary, content_bindings
     source = work/'ir_prompt.json'
     if not source.is_file():
         return None
@@ -370,19 +388,18 @@ def finalize_design(work, design=None):
     prompt['design_devices'] = capabilities()['art_direction']['devices']
     instructions = prompt.get('instructions', '').split(DESIGN_MARKER)[0]
     prompt['instructions'] = instructions+DESIGN_MARKER+(
-        ' The design describes each page in words (shape, anchor, marks); it does not name a form. '
-        'Realize it page by page: same pages, same claims, same anchor, and the shape description is the '
-        'brief for how the page should read. Choose the form and devices from design_forms that realize '
-        'that description; marks are phrases that must carry the claim (**…** in the text that carries it). '
-        'The compiler writes the mechanical devices for you and degrades them instead of failing; panel '
-        'groups and layout trees are yours to build. Do not redesign, drop an item or move one to another '
-        'page. If the described shape cannot be realized at the required font floors, return layout '
-        'feedback for an upstream page-design replan within the requested paper-page target; keep every '
-        'item and never delete content or shrink below the type scale. Set '
-        'presentation.visual_style to the pack that fits the venue.')
-    # With an approved design the RPA plan and the raw content model are no longer inputs: the pages,
-    # their claims and their items are the design. Carrying them anyway made the prompt 1.6 MB, which
-    # is the same "too big to read" failure the design prompt just fixed.
+        ' Story owns scientific content; the approved page design owns its visual explanation. '
+        'For 1.1, resolve content_refs against Story without paraphrasing away conditions or boundaries. '
+        'Implement the complete design instructions: chosen images, drawn elements, relationships, '
+        'arrangement and presenter walkthrough. A design may use free prose or custom fields; do not '
+        'discard unfamiliar fields or replace its visuals with a text summary. For legacy 1.0 realize '
+        'claim, items, anchor and shape. Choose renderer forms/devices that implement the design, '
+        'not a new visual concept. Keep page order, content assignment, figure selections and visible '
+        'explanation obligations. Use native editable objects for drawings. If geometry cannot fit at '
+        'the required type scale, return measured feedback for page-design replanning; never drop '
+        'scientific content or shrink fonts. Set presentation.visual_style for the venue.')
+    # Story is the scientific authority; the approved design supplies the visual handoff.
+    # Do not carry duplicate RPA plans/raw models into the implementation prompt.
     trimmed = 'ir_prompt_designed.json trimmed to the design, story, evidence and compiler contracts'
     prompt = {key: value for key, value in prompt.items()
               if key not in ('workflow', 'rpa_input', 'content_model', 'deck_plan', 'unplanned_briefs')}
@@ -391,8 +408,15 @@ def finalize_design(work, design=None):
     # purpose), the evidence text behind each id, and the figure panels it may place.
     try:
         prompt['story'] = read(work/'story_plan.json')
+        if design.get('schema_version') == '1.1':
+            prompt['content_catalog'] = {
+                source: {'evidence': item['evidence']}
+                for source, item in content_bindings(prompt['story']).items()}
     except (OSError, ValueError):
-        pass
+        if design.get('schema_version') == '1.1':
+            raise Failure('PAGE_DESIGN_SOURCE_MISSING',
+                          'Restore the approved story_plan.json before preparing the IR handoff.',
+                          'resolve_dependency', 'page_design')
     pointer = work/'evidence_pointer.json'
     if pointer.is_file():
         try:
@@ -435,6 +459,9 @@ def paper_slides(value):
 
 def check_design_realization(value, design):
     """An approved page design fixes the structure; the IR must realize it, not re-decide it."""
+    if design.get('schema_version') == '1.1' and not design.get('_content_bound'):
+        raise Failure('DESIGN_REALIZATION_FAILED', 'Resolve content_refs with bind_design / load_design before IR validation.',
+                      'author_artifact', 'deck_ir')
     pages = design.get('pages') or []
     slides = paper_slides(value)
     if len(slides) != len(pages):
@@ -450,6 +477,15 @@ def check_design_realization(value, design):
             raise Failure('DESIGN_REALIZATION_FAILED',
                           f'Page {index} ({page.get("id")}) must keep evidence {sorted(needed-cited)} '
                           'from the approved design.', 'author_artifact', 'deck_ir')
+        if design.get('schema_version') == '1.1':
+            paths = [str((value.get('assets', {}).get(figure.get('asset_id'), {}) or {}).get('path', '')).replace('\\', '/')
+                     for figure in slide['composition'].get('figure_refs') or []]
+            for selected in page.get('figures') or []:
+                selected = selected.replace('\\', '/')
+                if not any(path == selected or path.endswith('/'+selected) for path in paths):
+                    raise Failure('DESIGN_REALIZATION_FAILED',
+                                  f'Page {index} ({page.get("id")}) lost selected figure {selected}.',
+                                  'author_artifact', 'deck_ir')
         visible = semantic.get('title', '')+' '+semantic.get('takeaway', '')+' '+semantic.get('speaker_notes', '')
         for block in slide['composition'].get('blocks') or []:
             visible += ' '+str(block.get('text', ''))+str(block.get('label', ''))
@@ -458,6 +494,20 @@ def check_design_realization(value, design):
         for table in slide['composition'].get('tables') or []:
             for cell in table.get('cells') or []:
                 visible += ' '+str(cell.get('text', ''))
+        if design.get('schema_version') == '1.1':
+            # Native drawings carry content too; geometry and object IDs do not count as data.
+            from deck_compiler.graphic_layout import graphic_texts
+            for graphic in slide['composition'].get('graphics') or []:
+                visible += ' '+' '.join(text for _, text in graphic_texts(graphic))
+            for chart in slide['composition'].get('charts') or []:
+                for axis in ('x', 'y'):
+                    visible += ' '+str(chart[axis].get('label', ''))+' '+str(chart[axis].get('unit', ''))
+                visible += ' '+str(chart['x'].get('values', []))
+                for series in chart.get('series') or []:
+                    visible += ' '+str(series.get('label', ''))
+                    for key in ('values', 'x_values', 'y_error'):
+                        visible += ' '+str(series.get(key, []))
+                visible += ' '+' '.join(note.get('text', '') for note in chart.get('annotations') or [])
         runs = _digit_runs(visible)
         for item in page.get('items') or []:
             if item.get('kind') == 'formula':
@@ -666,63 +716,63 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
 
 
 DESIGN_INSTRUCTIONS = (
-    'You are designing a research talk. Think like a designer, not like software: nothing you decide '
-    'here depends on what a tool can draw, and you are not asked to be realizable. The room comes '
-    'first: the request names a presentation type and a brief, and between them they say who is in the '
-    'room, what they already know, how long the talk runs, how long one page stays on screen, and '
-    'whether the page is spoken to or read on its own. Pick the occasion and write setting before you '
-    'touch a page. '
-    'Read the Story, then decide the walk-through: what a listener should believe after page 1, what '
-    'each following page adds, and where the deck lands. One page argues one thing. '
-    'For every page describe, in words, what the viewer should see: what is large and what is small, '
-    'where the eye lands first, what sits beside what, and how the page uses its space. Say what object '
-    'the page is about — a figure, a table, an equation, a number, or nothing. Say which phrase on the '
-    'page carries the claim. Do not name software features, templates, layouts or components; if you '
-    'find yourself choosing between two ways to draw something, you have gone one level too low — '
-    'describe the effect instead. '
-    'A page that is two or three short sentences in a column is a design problem, not a page: either '
-    'give it a shape that earns the space (one fact made large, a comparison made visible, a relation '
-    'drawn out) or merge it into a neighbour. Never hand that problem to whoever builds the slides. '
-    'The next stage translates your description into what the deck can render. Your job is to be clear '
-    'about the design, not careful about the tool. '
-    'The pipeline checks that every Story answer and key point appears exactly once across the pages, '
-    'and that each item cites evidence containing its numbers. Everything else — density, scale, where '
-    'the eye lands, how much air a page gets — is your judgement. Do not write layout coordinates and '
-    'do not write Deck IR: this design is what the next stage realizes.'
+    'Design the visual explanation of the approved Story. Story owns the scientific argument, '
+    'claims, evidence and boundaries; do not retell it, reinterpret it or write another outline. '
+    'Your output is a drawing and presentation brief for the IR author: what to put on the page, '
+    'what to draw or reuse, how to arrange it and how the presenter guides attention. '
+    'Assign each Story content path from content_catalog to exactly one page using content_refs; '
+    'the pipeline inherits its text and evidence automatically. Never copy Story paragraphs into '
+    'the design. A short display title or a necessary diagram label is fine. '
+    'Use design as free prose or a custom object, whichever communicates the page best. Describe '
+    'concrete visual objects: selected original panels, drawn shapes, layer stacks, arrows and '
+    'edge meanings, icons with a purpose, comparison axes, equation annotations or data charts. '
+    'Specify their relationship, relative placement, visual hierarchy and the order in which the '
+    'presenter points to them. A vague instruction such as explain the mechanism is insufficient. '
+    'Choose which visual forms serve the content; nothing you decide here depends on what a tool '
+    'can draw. You may name a diagram or composition, but do not choose compiler templates, '
+    'archetypes or API components. No mandatory cards, columns, icon quotas or decorative filler. '
+    'The room is given by the request; record setting briefly rather than analyzing it at length. '
+    'Inspect actual image files before selecting them; use the exact asset_id in figures, preserve '
+    'aspect ratio and figure/source labels, and say where annotations should point. Never guess '
+    'curve points or draw an unavailable supplementary figure. New measurements, causal claims or '
+    'external facts are outside this stage; flag missing Story/evidence upstream rather than inventing '
+    'them. Illustration is visibly schematic and must preserve the distinction between observation '
+    'and author interpretation. A data chart needs traceable data; otherwise use the original image. '
+    'Respect Story explain obligations: the visible page must contain the objects needed to understand '
+    'the conclusion, while optional detail can be spoken. Split or merge content references as '
+    'needed within the requested page count, retaining every content unit. Do not write Deck IR '
+    'or final coordinates. Make a concise, concrete design handoff, not a second scientific essay.'
 )
 
 
 def design_task(prompt=None):
-    """The brief an orchestrator hands to a design subagent, at the same level as the story planner."""
+    """Delegate visual explanation, without duplicating scientific planning."""
     figures = len((prompt or {}).get('figures') or [])
     briefs = len((prompt or {}).get('briefs') or [])
     target = ((prompt or {}).get('request') or {}).get('slide_count')
-    pages = (f'最终论文页为 {target} 页，内容条目可以跨页拆分或合并，论证节点数不是页数。'
-             if target else '按内容与场合决定论文页数，最多 40 页，论证节点数不是页数。')
-    return f"""# 页面设计任务（子代理）
+    pages = f'最终论文页为 {target} 页。' if target else '按内容和场合排页，最多 40 页。'
+    return f"""# 页面设计任务（独立子代理）
 
-你是这次 deck 的页面设计师。你决定这场报告按什么顺序讲、每一页靠什么成立。你只负责想，不负责实现。
+Story 已经决定讲什么以及证据边界。你的任务是把它变成可执行的视觉讲解设计，交给 IR 作者。
 
-- **输入**：`work/page_design_prompt.json`。里面是 Story（论证骨架）、{briefs} 条 briefs（每条要讲的内容）、
-  证据原文、{figures} 张可用的论文图和 `room`（这场报告的场合与对象）。没有能力清单，也不需要知道
-  最终用什么画。
-- **输出**：`work/page_design.json`，结构照输入里的 `shape`。
-- **页数**：{pages} 每个 Story 内容单元仍须恰好分配一次；补充页按独立通道处理。
-- **先看场合，再排页**：从 `occasions` 里选一个键写进 `setting.occasion`：`group-meeting`（组会）、
-  `research-report`（会议/答辩）、`research-sharing`（文献分享）、`lecture`（讲课）、`commercial`
-  （商业路演）。再写 `setting.audience`（听众是谁、已经知道什么）和 `setting.reading`
-  （spoken/read/mixed）。后面的密度、文字量和页面形态都按它来；同一篇论文在这五种场合里应该长得不一样。
-- **每页写 `shape`**：用一两句话描述读者看到什么——什么大、眼睛先落在哪、什么和什么并排、空白怎么用；
-  再说这页围绕什么对象（图 / 表 / 公式 / 数字 / 无）。不要写软件功能、模板、组件，也不要考虑“能不能做”。
-- **你的判断范围**：一页放哪条内容、页面怎么组织、哪句话该被强调，都是你定。哪句话承载主张，写进
-  `marks`。
-- **两三行字的页**：这是一个设计问题，不是一页。要么给它一个配得上版面的形状（把一件事实放大、把对比
-  摆出来、把关系画出来），要么并进相邻页。不要把问题留给做幻灯片的人。
-- **写完自查**：JSON 合法；每条 Story 的 answer / key_point / ending 恰好落在一页上；每个 item 引了
-  含它数字的 evidence。
-- **不要做**：不要写页面坐标，不要写 Deck IR，不要去读管线源码或别的 deck。
+- 完整读取 `work/page_design_prompt.json` 和其中 `schema_path` 指向的 Schema；输入含 Story、
+  {briefs} 条参考 briefs、证据、{figures} 张图的路径与尺寸、场合以及 `content_catalog` 引用索引。
+  Story 是内容权威，briefs 是传输参考，不需要重写其中的正文。
+- 输出 `work/page_design.json`，使用 1.1 协议。{pages} 每条 Story 内容用 `content_refs`
+  恰好分配一次；开场等纯组织页可为空。正文与 evidence 由管线从 Story 自动继承。
+- 每页只必填 `id`、`content_refs`、`design`。`design` 可以是一段话，也可以是你自定字段的对象；
+  不规定所有页面用同一套结构。说明**用什么原图、画什么元素与关系、如何排布、怎样带着观众看**。
+  可按需写图形、图标、图表、公式标注、对照、局部放大和指示线；不要止于“解释某机制”。
+- `figures` 列精确资产 id，先实际查看图再选择；相对路径基于 `workflow_root`。`title` 和 `marks`
+  都可选，marks 只用于需要强调的现有短语。不需要重写 claim、items、anchor 理由或 rationale。
+- `setting` 简述 audience、occasion（沿用 room.default_occasion 或选合适键）、reading（spoken/read/mixed）。
+  场合服务于设计，不展开第二次听众分析。
+- 内容顺序与科学结论沿用 Story，允许为视觉表达拆页、合页。讲解顺序写指向动作与对象，
+  不再复述整段科学解释。保留 explain 中必需可见的内容。
+- 可以决定图形与构图形式，不需要知道编译器能力；不写坐标、API 或 Deck IR，不读取编译器源码。
+  原图保持比例与来源；数据图不猜点；没有补充图就不虚构；示意须可见标注且不增添科学主张。
 
-做完用几句话说明：几页、每页让读者看到什么、以及你在哪几处做了取舍。"""
+交付时简述页数及最关键的视觉设计，不重述论文。"""
 
 
 def ir_task(prompt=None):
@@ -730,19 +780,19 @@ def ir_task(prompt=None):
     pages = ((prompt or {}).get('page_design') or {}).get('pages') or []
     return f"""# Deck IR 实现任务（子代理）
 
-设计已经批准。你要做的是**逐页实现**它，不是重新设计。
+页面设计已经批准。逐页实现视觉设计；Story 保持科学内容权威。
 
-- **输入**：`work/ir_prompt_designed.json`。里面是设计表（{len(pages)} 页，每页有 claim、anchor、items、
-  `shape` 描述与 `marks`）、Story、证据、可用 archetype / layout_tree 能力、类型尺度与 IR schema。
-- **输出**：`work/deck_ir.json`，符合 schema 的 canonical Deck IR（不要写作者简写）。
-  图片资产从 `figures` 里选，`path` 相对 `workflow_root`；IR 的 `assets` 用绝对路径。
-- **你要做翻译**：设计用文字描述了每页让读者看到什么，没有指定形式。你从可用能力里选最能实现那段
-  `shape` 的 archetype / layout_tree / graphic / chart；`marks` 里的短语用对应的文字标记落在页面上。
-  设计的页数、claim、items 与 anchor 不变，页面的实现方式由你定。
-- **写不出来时**：拆这一页或调整页面内的区域结构，不删内容、不缩字号、不改数字。空间确实不够时，
-  把问题留在回复里（哪一页、缺多少），不要悄悄简化。
+- 完整读取 `work/ir_prompt_designed.json` 及 IR Schema。其中有 {len(pages)} 页设计、Story、证据和实现能力。
+- 输出符合 canonical Schema 的 `work/deck_ir.json`。资产 path 基于 workflow_root，IR assets 用绝对路径。
+- 1.1 设计的 content_refs 指向 Story 原文；content_catalog 给出自动继承的 evidence，含 ending 的汇总来源。
+  设计里的 design 是绘图、构图与讲解交代，
+  包含具体元素、关系、排布和注意顺序。完整保留自定义设计说明，不把它退化成文字摘要。
+  自绘内容优先用原生对象；图形形式已由设计确定，你只选择可实现它的 archetype / layout_tree 等。
+- 页序、内容分配、选图和视觉关系不变；marks 如有则落实为文字强调。旧 1.0 设计的 claim/items/shape 同样实现。
+- 理解结论所需的证据必须可见，讲稿不能替代；保留单位、条件、误差和 Story explain 义务。
+  放不下时报告具体所需空间并回退页面设计，不改科学含义、不猜数据、不删内容、不缩字号。
 
-做完用几句话说明：页数、每页用的 archetype / layout_tree 结构、以及你如何把 `shape` 翻成页面。"""
+交付时简述实现选择与未解决限制。"""
 
 
 def execute(stage, job):
@@ -833,7 +883,7 @@ def execute(stage, job):
             (work/obsolete).unlink(missing_ok=True)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
-        from deck_compiler.design import capabilities as design_capabilities, default_occasion
+        from deck_compiler.design import capabilities as design_capabilities, default_occasion, content_bindings
         workflow = read(work/'evidence_pointer.json')['workflow']
         value = read(workflow)
         evidence = {entry['evidence_id']: entry['text'] for entry in value['evidence_registry']}
@@ -841,12 +891,13 @@ def execute(stage, job):
         # workflow keeps them under `figure_assets_metadata`; reading `artifacts.figures` (which no
         # PDF run fills) is why earlier designs never saw a single image.
         figures = [{'asset_id': item.get('asset_id'),
+                    'path': item.get('path') or item.get('asset_id'),
                     'width': item.get('source_width_px'), 'height': item.get('source_height_px')}
                    for item in (value.get('artifacts') or {}).get('figure_assets_metadata') or []]
         content = read(work/'normalized_content.json')
+        # RPA remains the content transport; its paraphrased bodies are not a second scientific
+        # authority next to Story. Keep only its index here, not repeated prose/claims.
         briefs = [{'id': brief.get('slide_id'), 'title': brief.get('title'),
-                   'body': brief.get('body'), 'key_points': brief.get('key_points') or [],
-                   'claims': brief.get('claims') or [],
                    'evidence': brief.get('evidence_ids') or []}
                   for brief in content.get('slide_briefs') or []]
         capabilities = design_capabilities()
@@ -857,44 +908,26 @@ def execute(stage, job):
                 'brief': request['requirements'],
                 'default_occasion': default_occasion(request.get('presentation_context', request['presentation_type']),
                                                     request['requirements']),
-                'occasions': capabilities['occasions'],
-                'settle_before_designing': [
-                    'which occasion this is — the five keys in occasions, each with its own audience, '
-                    'length, reading mode and what a page must survive in that room',
-                    'in this room, who is listening and what do they already know — what must not be explained again',
-                    'how long the talk runs and how long one page stays on screen before the next',
-                    'is the page spoken to, read alone, or both — who carries the detail, the voice or the page',
-                    'what the projector does to small type, thin rules and light greys at the back of the room',
-                ],
-                'why': 'The occasion is a constraint on density and page shape, not a template: a group '
-                       'meeting, a conference talk, a journal club, a lecture and a pitch legitimately '
-                       'produce different pages from the same paper. Write the chosen key into '
-                       'setting.occasion; refine the audience in setting.audience.',
+                'occasions': list(capabilities['occasions']),
+                'note': 'Reuse the requested audience, duration and reading mode; do not re-plan the scientific story.',
             },
             'story': read(work/'story_plan.json'),
             'briefs': briefs,
             'evidence': evidence,
             'figures': figures,
-            'roles': capabilities['roles'],
+            'schema_path': str(COMPONENT/'schemas/page-design.schema.json'),
+            'workflow_root': str(Path(workflow).parent),
+            'content_catalog': {source: {'evidence': binding['evidence']}
+                                for source, binding in content_bindings(read(work/'story_plan.json')).items()},
             'shape': {
-                'schema_version': '1.0', 'deck_id': '<string>',
-                'setting': {'audience': '<who, and what they already know>',
-                            'occasion': '<one key from occasions, e.g. group-meeting>',
+                'schema_version': '1.1', 'deck_id': '<string>',
+                'setting': {'audience': '<briefly reuse the request>',
+                            'occasion': '<room.default_occasion or another occasion key>',
                             'reading': 'spoken|read|mixed'},
-                'pages': [{'id': 'P1', 'from_story': ['S1'], 'role': 'setup',
-                           'claim': '<one declarative sentence the page argues>',
-                           'takeaway_from': '<optional: the Story item this page concludes with>',
-                           'items': [{'id': 'p1-a', 'text': '<display text>',
-                                      'source': 'S1.key_points[0]', 'evidence': ['EV0001'],
-                                      'kind': 'text|formula|figure|graphic'}],
-                           'anchor': {'kind': 'figure|table|formula|number|none',
-                                      'why': '<what object the page is about>'},
-                           'shape': '<one or two sentences a designer would say to another designer: '
-                                    'what the viewer sees, what is large, where the eye lands, what '
-                                    'sits beside what>',
-                           'figures': ['<optional: asset_id from figures that this page shows>'],
-                           'marks': ['<phrase on this page that must carry the claim>'],
-                           'rationale': '<why this page is shaped this way for this room>'}]},
+                'pages': [{'id': 'P1', 'content_refs': ['S1.answer'],
+                           'design': '<free prose or your own object: visual elements, drawing '
+                                     'instructions, arrangement and presenter pointing order>',
+                           'figures': ['<optional: exact asset_id actually inspected>']}]},
             'instructions': DESIGN_INSTRUCTIONS,
         }
         path = work/'page_design_prompt.json'

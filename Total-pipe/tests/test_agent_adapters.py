@@ -14,14 +14,16 @@ from agent_fixture import AgentCase, workflow, story
 class AdapterTests(AgentCase):
     def test_design_task_is_independent_of_compiler_capabilities(self):
         task = a.design_task({'figures': [{}, {}, {}], 'briefs': [{}]*5})
-        self.assertIn('5 条 briefs', task)
+        self.assertIn('5 条参考 briefs', task)
         self.assertIn('3 张', task)
         self.assertNotIn('forms', task)
         self.assertNotIn('devices', task)
         self.assertIn('page_design_prompt.json', task)
         self.assertIn('page_design.json', task)
-        self.assertIn('shape', task)
-        self.assertIn('marks', task)
+        self.assertIn('content_refs', task)
+        self.assertIn('精确资产 id', task)
+        self.assertIn('讲解顺序', task)
+        self.assertIn('不展开第二次听众分析', task)
         self.assertIn('nothing you decide here depends on what a tool can draw', a.DESIGN_INSTRUCTIONS)
         self.assertNotIn('MUST', a.DESIGN_INSTRUCTIONS)
 

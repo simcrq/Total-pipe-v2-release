@@ -199,7 +199,7 @@ def preflight(job, patch, path):
 
 def _preflight(job, patch, path):
     from deck_compiler.pipeline import compile_input
-    from .adapters import Failure, check_ir, persist_ir
+    from .adapters import Failure, check_ir, persist_ir, load_design
     out = Path(job['request']['out_dir'])
     base_path, work = out/'work/deck_ir.json', out/'work'
     before = resource_snapshot(base_path)
@@ -211,7 +211,7 @@ def _preflight(job, patch, path):
                          for aid in patch.get('asset_updates', {})}
     check_ir(value, read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None,
              job['request'].get('supplement', 'off'),
-             design=read(work/'page_design.json') if (work/'page_design.json').is_file() else None,
+             design=load_design(work),
              slide_count=job['request'].get('slide_count'))
     folder = work/'repairs'/uuid.uuid4().hex
     persist_ir(value, base_path, folder/'input.json')
