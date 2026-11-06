@@ -766,6 +766,9 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     for key, asset in ir.get("assets", {}).items():
         path = (base / asset["path"]).resolve()
         try:
+            if 'crop' in asset:
+                from .crops import verified_source
+                verified_source(asset, base)
             with Image.open(path) as image:
                 image.verify()
             with Image.open(path) as image:

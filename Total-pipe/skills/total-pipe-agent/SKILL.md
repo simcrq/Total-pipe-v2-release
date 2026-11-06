@@ -40,6 +40,8 @@ Story 负责科学内容；页面设计负责画什么、选什么图、如何�
 提示不灌输编译器能力清单；IR 完整保留自定说明，落实元素与视觉关系，不能替换成文字摘要。
 保留 Story 内容恰好分配一次、证据与选图追溯、setting、显式页数目标；旧 1.0 设计仍可恢复。
 IR / Design 提示包是完整输入；原文 body、key_points、公式、单位和不确定性保留在页面或讲稿。
+提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
+有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页，齐全后整套复验。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。
 status 只读；同一提交可重复 advance，已完成组件不会重复执行，未完成下游继续运行。

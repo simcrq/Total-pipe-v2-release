@@ -1,4 +1,5 @@
 import os
+import json
 from unittest.mock import patch
 
 from agent import doctor as module
@@ -19,7 +20,12 @@ class DoctorTests(AgentCase):
             '            raise ModuleNotFoundError("missing PDF runtime dependency sentinel")\n'
             'sys.meta_path.insert(0, BlockPdfRuntime())\n', encoding='utf-8')
         pythonpath = os.pathsep.join([str(injection), os.environ.get('PYTHONPATH', '')])
-        with patch.dict(os.environ, {'PYTHONPATH': pythonpath}):
+        original = module.probe
+        def probe(argv, *args, **kwargs):
+            if 'mineru_auth' in argv:
+                return True, json.dumps({'ok': True, 'result': {'ready': True, 'verified': True, 'status': 'verified'}})
+            return original(argv, *args, **kwargs)
+        with patch.dict(os.environ, {'PYTHONPATH': pythonpath}), patch.object(module, 'probe', side_effect=probe):
             result = module.doctor(source_kind='pdf')
         checks = {check['id']: check for check in result['checks']}
         self.assertEqual(checks['paperworkflow.bridge']['status'], 'PASS')
@@ -27,6 +33,30 @@ class DoctorTests(AgentCase):
         self.assertIn('missing PDF runtime dependency sentinel', checks['paperworkflow.runtime_imports']['detail'])
         self.assertFalse(result['can_evidence_pdf'])
         self.assertIn('evidence', result['blocked_stages'])
+
+    def test_pdf_doctor_uses_cli_verification_even_without_environment_token(self):
+        original = module.probe
+        for status in ('verified', 'invalid', 'unavailable'):
+            def probe(argv, *args, **kwargs):
+                if 'mineru_auth' in argv:
+                    return True, json.dumps({'ok': True, 'result': {
+                        'ready': status == 'verified', 'verified': status == 'verified', 'status': status}})
+                return original(argv, *args, **kwargs)
+            with self.subTest(status=status), patch.dict(os.environ, {'MINERU_TOKEN': ''}), patch.object(module, 'probe', side_effect=probe):
+                result = module.doctor(source_kind='pdf')
+            self.assertEqual(result['authentication_verified'], status == 'verified')
+            self.assertEqual(result['can_evidence_pdf'], status == 'verified')
+            check = next(c for c in result['checks'] if c['id'] == 'mineru.auth')
+            self.assertEqual(check['status'], 'PASS' if status == 'verified' else 'FAIL')
+
+    def test_non_pdf_doctor_skips_auth_network_probe(self):
+        original = module.probe
+        def probe(argv, *args, **kwargs):
+            self.assertNotIn('mineru_auth', argv)
+            return original(argv, *args, **kwargs)
+        with patch.object(module, 'probe', side_effect=probe):
+            result = module.doctor(source_kind='deck_ir')
+        self.assertEqual(next(c for c in result['checks'] if c['id'] == 'mineru.auth')['status'], 'SKIP')
 
     def test_missing_officecli_blocks_build_without_blocking_markdown_evidence(self):
         original = module.shutil.which

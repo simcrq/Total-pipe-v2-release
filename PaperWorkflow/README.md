@@ -118,10 +118,13 @@ pnpm dsh web
 curl --compressed -fsSL https://cdn-mineru.openxlab.org.cn/open-api-cli/install.sh -o /tmp/mineru-open-api-install.sh
 INSTALL_DIR="$HOME/.local/bin" sh /tmp/mineru-open-api-install.sh
 mineru-open-api auth
+mineru-open-api auth --verify
 # 当前 WSL 配置 api.mineru.ocr=true，插件会向官方 CLI 传递 --ocr。
 ~~~
 
 历史 `mode: api` 配置会自动迁移到官方 CLI；只有同时设置 `legacy_http: true` 时才启用旧的手写 HTTP 适配器。
+Total-pipe 的 PDF doctor 通过同一配置调用官方 `auth --verify`，识别 CLI 缓存登录；不上传文档，
+也不输出原始认证响应或密钥。认证失败和网络/CLI 无法验证分别报告。
 
 ## 输出与 Total-pipe 接口
 

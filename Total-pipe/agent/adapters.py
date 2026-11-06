@@ -345,7 +345,10 @@ def load_design(work):
     if not path.is_file():
         return None
     design = read(path)
-    return bind_design(design, read(work/'story_plan.json')) if design.get('schema_version') == '1.1' else design
+    if design.get('schema_version') == '1.1':
+        from .ir_pages import resolve_design_sources
+        return resolve_design_sources(bind_design(design, read(work/'story_plan.json')), work)
+    return design
 
 
 DESIGN_MARKER = ' A page design is approved.'
@@ -397,7 +400,17 @@ def finalize_design(work, design=None):
         'not a new visual concept. Keep page order, content assignment, figure selections and visible '
         'explanation obligations. Use native editable objects for drawings. If geometry cannot fit at '
         'the required type scale, return measured feedback for page-design replanning; never drop '
-        'scientific content or shrink fonts. Set presentation.visual_style for the venue.')
+        'scientific content or shrink fonts. Set presentation.visual_style for the venue. '
+        'Prefer per-page authoring via artifact_kind=deck_ir_page: each file is canonical Deck IR '
+        'with exactly one slide and the same shared header. See next_action.page_authoring for page IDs '
+        'and output paths. Submit a page when ready; the tool binds omitted Story evidence/notes and '
+        'known figure paths, measures capacity, and caches passing pages. Revise only failed pages. '
+        'All pages are assembled in approved order and checked together before downstream Design/build. '
+        'A figure_refs asset_id may directly name an inventory asset ID/path; source_figure may be '
+        'declared on either the reference or asset and is copied without guessing. For a lossless '
+        'rectangular crop, asset.crop records source_path, source_sha256 and box=[left,top,right,bottom]; '
+        'the source path may name the inventory and its hash is filled if omitted. Actual pixels '
+        'must match the source rectangle; no rescaling, masking or redrawing is certified as a crop.')
     # Story is the scientific authority; the approved design supplies the visual handoff.
     # Do not carry duplicate RPA plans/raw models into the implementation prompt.
     trimmed = 'ir_prompt_designed.json trimmed to the design, story, evidence and compiler contracts'
@@ -433,6 +446,8 @@ def finalize_design(work, design=None):
             pass
     if not path.is_file() or read(path) != prompt:
         write(path, prompt)
+    from .ir_pages import prepare_prompts
+    prepare_prompts(work, design, prompt)
     task = work/'deck_ir_task.md'
     text = ir_task(prompt)
     if not task.is_file() or task.read_text(encoding='utf-8') != text:
@@ -457,35 +472,61 @@ def paper_slides(value):
                                 for key in ('figure_refs', 'graphics', 'tables', 'charts')))]
 
 
-def check_design_realization(value, design):
-    """An approved page design fixes the structure; the IR must realize it, not re-decide it."""
+def design_realization_issues(value, design):
+    """Collect every design mismatch; split Story nodes retain evidence across their pages."""
+    issues = []
+    def add(message, slide=None):
+        issues.append({'code': 'DESIGN_REALIZATION_FAILED', 'severity': 'FAIL', 'message': message,
+                       **({'slide': slide} if slide is not None else {})})
     if design.get('schema_version') == '1.1' and not design.get('_content_bound'):
-        raise Failure('DESIGN_REALIZATION_FAILED', 'Resolve content_refs with bind_design / load_design before IR validation.',
-                      'author_artifact', 'deck_ir')
-    pages = design.get('pages') or []
-    slides = paper_slides(value)
+        add('Resolve content_refs with bind_design / load_design before IR validation.')
+        return issues
+    pages, slides = design.get('pages') or [], paper_slides(value)
     if len(slides) != len(pages):
-        raise Failure('DESIGN_REALIZATION_FAILED',
-                      f'The approved design has {len(pages)} pages but the IR has {len(slides)} paper pages. '
-                      'Realize one IR page per designed page; split inside a page instead of adding or '
-                      'dropping pages.', 'author_artifact', 'deck_ir')
+        add(f'The approved design has {len(pages)} pages but the IR has {len(slides)} paper pages. '
+            'Realize one IR page per designed page; split inside a page instead of adding or dropping pages.')
+        return issues
+    modern = design.get('schema_version') == '1.1'
+    groups = {}
+    deck_refs = {ref for slide in slides for ref in slide['semantic'].get('evidence_refs') or []}
     for index, (slide, page) in enumerate(zip(slides, pages), 1):
         semantic = slide['semantic']
         cited = set(semantic.get('evidence_refs') or [])
-        needed = {ref for item in page.get('items') or [] for ref in item.get('evidence') or []}
-        if not needed <= cited:
-            raise Failure('DESIGN_REALIZATION_FAILED',
-                          f'Page {index} ({page.get("id")}) must keep evidence {sorted(needed-cited)} '
-                          'from the approved design.', 'author_artifact', 'deck_ir')
-        if design.get('schema_version') == '1.1':
-            paths = [str((value.get('assets', {}).get(figure.get('asset_id'), {}) or {}).get('path', '')).replace('\\', '/')
-                     for figure in slide['composition'].get('figure_refs') or []]
+        items = page.get('items') or []
+        if modern:
+            page_groups = {}
+            for item in items:
+                source = item.get('source', item.get('id', ''))
+                group = source.split('.', 1)[0] if re.match(r'^S\d+\.', source) else 'ending'
+                needed = set(item.get('evidence') or [])
+                page_groups.setdefault(group, set()).update(needed)
+                entry = groups.setdefault(group, {'needed': set(), 'cited': set(), 'pages': []})
+                entry['needed'].update(needed)
+                entry['cited'].update(cited)
+                if page.get('id') not in entry['pages']:
+                    entry['pages'].append(page.get('id'))
+            for group, needed in page_groups.items():
+                if needed and not needed.intersection(cited):
+                    add(f'Page {index} ({page.get("id")}) needs an evidence anchor from Story {group}.', index)
+        else:
+            needed = {ref for item in items for ref in item.get('evidence') or []}
+            if not needed <= cited:
+                add(f'Page {index} ({page.get("id")}) must keep evidence {sorted(needed-cited)} from the approved design.', index)
+        if modern:
+            paths = [str((value.get('assets', {}).get(f.get('asset_id'), {}) or {}).get('path', '')).replace('\\', '/')
+                     for f in slide['composition'].get('figure_refs') or []]
+            from deck_compiler.crops import verified_source
+            for figure in slide['composition'].get('figure_refs') or []:
+                asset = value.get('assets', {}).get(figure.get('asset_id'), {})
+                if 'crop' in asset:
+                    try:
+                        paths.append(verified_source(asset).replace('\\', '/'))
+                    except (OSError, ValueError, TypeError) as error:
+                        add(f'Page {index} ({page.get("id")}) has invalid crop provenance: {error}.', index)
             for selected in page.get('figures') or []:
                 selected = selected.replace('\\', '/')
                 if not any(path == selected or path.endswith('/'+selected) for path in paths):
-                    raise Failure('DESIGN_REALIZATION_FAILED',
-                                  f'Page {index} ({page.get("id")}) lost selected figure {selected}.',
-                                  'author_artifact', 'deck_ir')
+                    add(f'Page {index} ({page.get("id")}) lost selected figure {selected}.', index)
         visible = semantic.get('title', '')+' '+semantic.get('takeaway', '')+' '+semantic.get('speaker_notes', '')
         for block in slide['composition'].get('blocks') or []:
             visible += ' '+str(block.get('text', ''))+str(block.get('label', ''))
@@ -494,8 +535,7 @@ def check_design_realization(value, design):
         for table in slide['composition'].get('tables') or []:
             for cell in table.get('cells') or []:
                 visible += ' '+str(cell.get('text', ''))
-        if design.get('schema_version') == '1.1':
-            # Native drawings carry content too; geometry and object IDs do not count as data.
+        if modern:
             from deck_compiler.graphic_layout import graphic_texts
             for graphic in slide['composition'].get('graphics') or []:
                 visible += ' '+' '.join(text for _, text in graphic_texts(graphic))
@@ -509,60 +549,76 @@ def check_design_realization(value, design):
                         visible += ' '+str(series.get(key, []))
                 visible += ' '+' '.join(note.get('text', '') for note in chart.get('annotations') or [])
         runs = _digit_runs(visible)
-        for item in page.get('items') or []:
+        for item in items:
             if item.get('kind') == 'formula':
-                continue  # a definition is rendered as written; its constants are not measurements
+                continue
             missing = _digit_runs(item.get('text', ''))-runs
             if missing:
-                raise Failure('DESIGN_REALIZATION_FAILED',
-                              f'Page {index} ({page.get("id")}) lost the numbers {sorted(missing)} that the '
-                              f'approved design placed there.', 'author_artifact', 'deck_ir')
+                add(f'Page {index} ({page.get("id")}) lost the numbers {sorted(missing)} that the approved design placed there.', index)
+    for group, entry in groups.items():
+        if design.get('_partial'):
+            continue  # A page submission is checked again in the complete assembled deck.
+        # Ending lines synthesize the whole deck, rather than duplicating its source ledger.
+        covered = deck_refs if group == 'ending' else entry['cited']
+        missing = entry['needed']-covered
+        if missing:
+            add(f'Story {group} must keep evidence {sorted(missing)} across its assigned pages {entry["pages"]}.')
+    return issues
 
 
-def check_ir(value, normalized=None, supplement='off', design=None, slide_count=None):
+def _raise_ir_issues(issues):
+    if not issues:
+        return
+    item = issues[0]
+    failure = classify(item['code'], item['message'], 'deck_ir')
+    if failure.action == 'resolve_dependency':
+        failure.action, failure.target = 'author_artifact', 'deck_ir'
+    failure.issues = issues
+    failure.details = [item['message'] for item in issues]
+    raise failure
+
+
+def check_design_realization(value, design):
+    _raise_ir_issues(design_realization_issues(value, design))
+
+
+def ir_issues(value, normalized=None, supplement='off', design=None, slide_count=None):
+    """The shared, complete acceptance checks, without writes or attempt accounting."""
     from deck_compiler.ir import validate
     original = copy.deepcopy(value)
     value = normalize_authoring_ir(value)
+    issues = []
+    def add(code, message, slide=None):
+        issues.append({'code': code, 'severity': 'FAIL', 'message': message,
+                       **({'slide': slide} if slide is not None else {})})
     mode = supplement if supplement in ('off', 'inline', 'pages', 'both') else 'off'
-    has_supplement = False
-    has_supplement_page = False
+    has_supplement = has_supplement_page = False
     for slide, supplements, blocks in _supplement_blocks(value):
         has_supplement = has_supplement or bool(supplements)
         has_supplement_page = has_supplement_page or (bool(blocks) and len(supplements) == len(blocks))
     if has_supplement and mode == 'off':
-        raise Failure('SUPPLEMENT_NOT_ENABLED',
-                      'This job did not enable supplement content; remove the supplement blocks/pages or start a job with supplement=inline/pages/both.',
-                      'author_artifact', 'deck_ir')
+        add('SUPPLEMENT_NOT_ENABLED', 'This job did not enable supplement content; remove the supplement blocks/pages or start a job with supplement=inline/pages/both.')
     if has_supplement_page and mode == 'inline':
-        raise Failure('SUPPLEMENT_PAGE_NOT_ENABLED',
-                      'supplement=inline only allows blocks on existing pages; start with supplement=pages/both for standalone supplement pages.',
-                      'author_artifact', 'deck_ir')
-    failures = [i for i in validate(value) if i['severity'] == 'FAIL']
-    if failures:
-        item = failures[0]
-        failure = classify(item['rule'], item['message'], 'deck_ir')
-        if failure.action == 'resolve_dependency':
-            failure.action, failure.target = 'author_artifact', 'deck_ir'
-        raise failure
+        add('SUPPLEMENT_PAGE_NOT_ENABLED', 'supplement=inline only allows blocks on existing pages; start with supplement=pages/both for standalone supplement pages.')
+    for item in validate(value):
+        if item['severity'] == 'FAIL':
+            add(item['rule'], item['message'], item.get('slide'))
+    # Subsequent checks need the canonical slide containers; malformed input already has FAILs.
+    if not isinstance(value.get('slides'), list) or any(not isinstance(s, dict) or
+            not isinstance(s.get('semantic'), dict) or not isinstance(s.get('composition'), dict)
+            for s in value['slides']):
+        return issues
     if slide_count is not None:
         from .requests import slide_count as validate_count
         validate_count(slide_count)
         count = len(paper_slides(value))
         if count != slide_count:
-            raise Failure('SLIDE_COUNT_MISMATCH',
-                          f'IR has {count} paper pages; the requested final paper-page target is '
-                          f'{slide_count}. Replan the pages without dropping scientific content.',
-                          'author_artifact', 'deck_ir')
+            add('SLIDE_COUNT_MISMATCH', f'IR has {count} paper pages; the requested final paper-page target is {slide_count}. Replan the pages without dropping scientific content.')
     if design:
-        # An imported IR must realize an approved design too, even without an RPA model.
-        check_design_realization(value, design)
+        issues.extend(design_realization_issues(value, design))
         from deck_compiler.art_direction import check as check_devices
-        missing = check_devices(value, design)
-        if missing:
-            page, message = missing[0]
-            raise Failure('DESIGN_REALIZATION_FAILED',
-                          f'{page or "deck"}: the approved design chose a device this IR does not carry — '
-                          f'{message}. Devices are decisions; the page must show them.', 'author_artifact', 'deck_ir')
+        for page, message in check_devices(value, design):
+            add('DESIGN_REALIZATION_FAILED', f'{page or "deck"}: the approved design chose a device this IR does not carry — {message}. Devices are decisions; the page must show them.')
     if normalized:
         def texts(value):
             if isinstance(value, dict):
@@ -572,18 +628,17 @@ def check_ir(value, normalized=None, supplement='off', design=None, slide_count=
             if isinstance(value, list):
                 return '\n'.join(texts(v) if isinstance(v, (dict, list)) else str(v) for v in value)
             return ''
-        # Content-loss compares the author's visible text before scientific
-        # notation is rewritten into $...$ math; otherwise a brief number such
-        # as 1.2×10^-3 would no longer match its normalized LaTeX form.
-        corpus = ''.join(texts(original.get('slides', []) if isinstance(original, dict) else []).split())
+        corpus = ''.join(texts(original.get('slides', [])).split())
         known = {entry.get('id', entry.get('evidence_id')) for entry in normalized.get('evidence', [])}
-        if known and any(ref not in known for page in value['slides'] for ref in page['semantic']['evidence_refs']):
-            raise classify('CONTENT_LOSS', 'IR evidence_refs must resolve to the original normalized evidence store.', 'deck_ir')
+        for index, page in enumerate(value['slides'], 1):
+            unknown = set(page['semantic'].get('evidence_refs') or [])-known
+            if known and unknown:
+                add('CONTENT_LOSS', f'IR evidence_refs must resolve to the original normalized evidence store: {sorted(unknown)}.', index)
         if not design:
             for brief in normalized.get('slide_briefs', []):
                 for content in [brief.get('body', ''), *brief.get('key_points', [])]:
                     if content and ''.join(str(content).split()) not in corpus:
-                        raise classify('CONTENT_LOSS', 'IR must retain each complete brief body and key_point in page text or speaker notes.', 'deck_ir')
+                        add('CONTENT_LOSS', 'IR must retain each complete brief body and key_point in page text or speaker notes.')
         for brief in normalized.get('slide_briefs', []):
             compact = (brief.get('metadata') or {}).get('story_compact_process')
             if not isinstance(compact, dict):
@@ -595,30 +650,27 @@ def check_ir(value, normalized=None, supplement='off', design=None, slide_count=
             carried = False
             for page in value['slides']:
                 for graphic in page.get('composition', {}).get('graphics', []) or []:
-                    if not isinstance(graphic, dict) or graphic.get('type') != 'process' \
-                            or graphic.get('layout') != 'compact':
+                    if not isinstance(graphic, dict) or graphic.get('type') != 'process' or graphic.get('layout') != 'compact':
                         continue
                     nodes = [node for node in graphic.get('nodes', []) if isinstance(node, dict)]
-                    if len(nodes) < node_count:
-                        continue
-                    titles = ''.join(''.join(str(node.get(key, '')).split())
-                                     for node in nodes for key in ('title', 'body'))
-                    if all(''.join(item.split()) in titles for item in items):
+                    titles = ''.join(''.join(str(node.get(key, '')).split()) for node in nodes for key in ('title', 'body'))
+                    if len(nodes) >= node_count and all(''.join(item.split()) in titles for item in items):
                         carried = True
                         break
                 if carried:
                     break
             if not carried:
-                raise classify(
-                    'CONTENT_LOSS',
-                    f'Story declared a {node_count}-step compact process, but the IR has no type=process/'
-                    'layout=compact graphic carrying every step; replace the RPA three-slot placeholder.',
-                    'deck_ir')
-    if normalized and mode != 'off':
-        from .supplement import leak_messages
-        leaks = leak_messages(value, normalized)
-        if leaks:
-            raise Failure('SUPPLEMENT_PAPER_LEAK', leaks[0], 'author_artifact', 'deck_ir')
+                add('CONTENT_LOSS', f'Story declared a {node_count}-step compact process, but the IR has no type=process/layout=compact graphic carrying every step; replace the RPA three-slot placeholder.')
+        if mode != 'off':
+            from .supplement import leak_messages
+            # Scientific notation normalization must not hide an author's paper value.
+            for message in leak_messages(original, normalized):
+                add('SUPPLEMENT_PAPER_LEAK', message)
+    return issues
+
+
+def check_ir(value, normalized=None, supplement='off', design=None, slide_count=None):
+    _raise_ir_issues(ir_issues(value, normalized, supplement, design, slide_count))
 
 
 def persist_ir(value, source, destination):
@@ -626,6 +678,8 @@ def persist_ir(value, source, destination):
     for asset in value.get('assets', {}).values():
         if not Path(asset['path']).is_absolute():
             asset['path'] = str((Path(source).parent/asset['path']).resolve())
+        if isinstance(asset.get('crop'), dict) and not Path(asset['crop']['source_path']).is_absolute():
+            asset['crop']['source_path'] = str((Path(source).parent/asset['crop']['source_path']).resolve())
     for key in ('font_file', 'bold_font_file', 'background_image'):
         ref = value.get('theme', {}).get(key)
         if ref and not Path(ref).is_absolute() and (Path(source).parent/ref).is_file():
@@ -726,6 +780,9 @@ DESIGN_INSTRUCTIONS = (
     'Use design as free prose or a custom object, whichever communicates the page best. Describe '
     'concrete visual objects: selected original panels, drawn shapes, layer stacks, arrows and '
     'edge meanings, icons with a purpose, comparison axes, equation annotations or data charts. '
+    'You may draw your own explanatory diagrams, mechanisms, processes and structures; using a paper '
+    'image is a choice, not a requirement for every page. Mark illustrative drawings as schematic, '
+    'keep paper facts and data bound to their evidence, and label constructed examples explicitly. '
     'Specify their relationship, relative placement, visual hierarchy and the order in which the '
     'presenter points to them. A vague instruction such as explain the mechanism is insufficient. '
     'Choose which visual forms serve the content; nothing you decide here depends on what a tool '

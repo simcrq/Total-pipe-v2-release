@@ -45,7 +45,7 @@ python3.12 install.py --client codex --profile advanced
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
 | totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
-| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch），回填 inputs，或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch）；deck_ir 可设 preflight=true；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -53,6 +53,48 @@ artifacts_summary（引用数、去重文件数与阶段名）。完整请求与
 需要时调用 `totalpipe_status(job_id, detail="full")`，返回原 request 与 artifacts 清单。
 自动化若依赖这两个字段，应显式选择 full。状态查询不改写 job、提示包、反馈或事件日志；提示缺失时
 返回 ADVANCE_REQUIRED，由 advance 准备完整提示。Agent 仍必须完整读取 next_action 指定的提示包和 Schema。
+
+PDF doctor 使用 PWF 的实际 CLI/配置执行 `mineru-open-api auth --verify`，识别环境变量、配置密钥及
+官方 CLI 缓存登录；只校验认证、不上传文档。`authentication_verified=true` 仅表示官方验证成功；
+网络/CLI 不可用与认证拒绝分别报告。Markdown/workflow/IR 的浅检查跳过该网络请求，deep 可显式验证。
+
+### 逐页 IR 与来源绑定
+
+已通过 page_design 1.1 时，`next_action.page_authoring.pages` 提供每页完整 input_path、输出路径和缓存状态。
+逐页读取提示包及完整 Schema，写一个 canonical Deck IR（slides 恰好一页，ID 与设计相同），再调用
+`advance(job_id, artifact_kind="deck_ir_page", artifact_path=...)`。各页共用相同 deck_id/theme/presentation 头部。
+逐页包保留本页全部分配文本、相关 Story 上下文、证据和完整实现指令；Schema 通过绝对路径引用。
+设计者可以自绘机制、流程、结构及解释性图示，保持可见的示意标识与科学来源边界。
+
+程序补入省略的 Story 证据清单和完整原文讲稿；显式提供的证据按逐页锚点/跨页完整覆盖检查。
+figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径，由证据包解析；source_figure 可在
+引用或资产上声明一次并复制绑定，不从文件名猜图号，不覆盖冲突声明。S14 与主文 14 保持区分。
+
+每页立即执行原有语义、证据、设计与 compiler/packer 容量检查；page_result 返回全部问题及 pending_pages。
+通过页冻结在 work/ir_pages，相同页/图片/字体/编译器字节可复用测量（保留原 REVIEW），只修失败页；
+每页各有3次不同拒稿额度。preflight=true 也可用于 deck_ir_page，检查不写缓存、不计次。
+全部页就绪后按批准页序组装，复验整套 Story、证据和页数，再继续篇级 Design 和完整构建。
+最终 PPTX 仍整套生成，未宣称逐页 OfficeCLI 或原生验收。改变公共头部须显式 replan_from="deck_ir"，
+这会重置全部页缓存；只改局部内容时继续提交对应页即可。
+
+### 完整 IR 提交预检
+
+在 deck_ir 阶段提交前调用：
+
+```json
+{"job_id":"<job_id>","artifact_kind":"deck_ir","artifact_path":"/absolute/job/work/deck_ir.json","preflight":true}
+```
+
+CLI 对应 `python -m agent advance --job-id <job_id> --artifact-kind deck_ir --artifact-path <path> --preflight`。
+`preflight_result` 汇总全部语义、设计、证据、补充泄漏问题，以及可测量的几何问题；正式提交共用相同
+验收检查，并将全部问题写入 submission_feedback.json。预检在临时目录调用原 compiler/packer，禁用
+自动内容修复和尚未完成的篇级视觉设计要求；不写 PPTX、不改 job/候选/事件、不消耗修订额度。
+输入结构无效时可能无法测量几何，查看 `geometry_checked`。顶层 status 仍描述当前任务，预检结果看
+`preflight_result.status`；CLI 退出码按预检结果。预检不等于接受产物，后续 Design、完整构建和原生验收仍必做。
+
+page_design 1.1 将一个 Story 节点拆到多页时，每页须引用该节点的证据锚点，节点完整证据由这些页的
+引用并集覆盖；不再要求每个子页重复整节点清单。ending 的综合证据由整套页覆盖。旧 1.0 显式逐页
+证据要求保持不变；逐页数值、图片、讲解义务和补充泄漏检查继续执行。
 
 `presentation_type` 支持 RPA 的 group_meeting / journal_club / proposal / progress_report / defense /
 paper_presentation / custom。入口将“组会”“研究生组会”“group-meeting”规范化为 group_meeting，
@@ -380,4 +422,5 @@ MinerU token / CLI 就绪不能证明云认证有效；缓存登录无法确认�
 Markdown 测试的 Story / IR / 视觉提案为明确标注的测试产物，未调用真实 Story 模型。
 安装验证仅使用临时客户端配置；deep doctor 实际创建、关闭并校验临时 PPTX。
 本次未执行云 PDF OCR、Windows 锁 / 进程树路径或 PowerPoint UI / 原生 PDF / final 晋级。
-doctor 检测到 PowerPoint 与字体，MinerU 认证仍报告未验证，不把依赖检测计为原生验收。
+该历史验证中的 doctor 仅检测到 PowerPoint 与字体、未验证 MinerU 认证；当前 PDF doctor 的官方认证探测见上文。
+依赖检测或认证验证均不计为 PowerPoint 原生验收。

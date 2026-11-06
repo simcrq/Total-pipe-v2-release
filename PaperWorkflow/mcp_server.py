@@ -262,7 +262,7 @@ def blocked_ocr(what: str) -> dict[str, Any]:
         "remedy": (
             "pip install loguru pyyaml requests into the interpreter that runs this "
             "server, then ensure the MinerU CLI configured in config.yaml "
-            "(api.mineru.cli_command) is installed and MINERU_TOKEN is set. "
+            "(api.mineru.cli_command) is installed and authenticated (environment, config or cached CLI login). "
             "Everything except PDF ingestion works without this."
         ),
     }

@@ -66,11 +66,27 @@ def doctor(deep=False, source_kind=None):
             add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.')
     else:
         add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.', 'Run deep diagnostics.', optional=True, skipped=True)
-    mineru = shutil.which('mineru-open-api')
-    auth = bool(mineru and os.environ.get('MINERU_TOKEN'))
-    add('mineru.auth', auth, 'CLI and token configured; cloud credentials are not verified.' if auth else
-        'OCR authentication not verified; cached CLI login may be available.' if mineru else 'MinerU CLI not found.',
-        'Install and authenticate the official mineru-open-api CLI; keep credentials outside job files.', optional=source_kind != 'pdf')
+    auth = verified = False
+    auth_skipped = source_kind in ('markdown', 'workflow', 'deck_ir') and not deep
+    auth_status = 'skipped'
+    if not auth_skipped:
+        ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'mineru_auth'])
+        try:
+            response = json.loads(detail)
+            result = response['result'] if ok and response.get('ok') else {}
+            auth, verified = result.get('ready') is True, result.get('verified') is True
+            auth_status = result.get('status', 'unavailable')
+        except (ValueError, KeyError, TypeError):
+            auth_status = 'unavailable'
+    descriptions = {'verified': 'Official MinerU CLI auth --verify succeeded (environment, PWF config or cached CLI login); no document uploaded.',
+                    'not_required': 'Configured flash extraction does not require authentication.',
+                    'missing_cli': 'Configured MinerU CLI not found.',
+                    'invalid': 'Official MinerU CLI rejected or could not find its credentials.',
+                    'unavailable': 'MinerU credential verification could not complete; check CLI/network or retry.',
+                    'skipped': 'OCR authentication not needed for this input; use source_kind=pdf or deep to verify.'}
+    add('mineru.auth', auth, descriptions.get(auth_status, descriptions['unavailable']),
+        'Run the configured mineru-open-api auth --verify; authenticate with mineru-open-api auth if needed. Keep credentials outside job files.',
+        optional=source_kind != 'pdf', skipped=auth_skipped)
     ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'version'])
     try:
         bridge = ok and json.loads(detail)['ok']
@@ -129,7 +145,7 @@ def doctor(deep=False, source_kind=None):
         'can_native_preview': pdf and preview,
         'native_acceptance_operations': ['render', 'review', 'ingest'],
         'runtime_verified': bool(deep and present and version and runtime),
-        'authentication_verified': False,
+        'authentication_verified': verified,
         'blocked_stages': [name for name, ready in [('evidence', py and bridge and evidence_ready and (source_kind != 'pdf' or auth)),
                            ('rpa', py and node and rpa), ('build', py and compiler and present and version and runtime)] if name in needs and not ready]}
     return {'status': 'FAIL' if any(c['status'] == 'FAIL' for c in checks) else 'WARNING' if any(c['status'] == 'WARNING' for c in checks) else 'PASS',

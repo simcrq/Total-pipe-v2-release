@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
+import tempfile
 import uuid
 
 from . import COMPONENT
@@ -117,6 +118,11 @@ def envelope(job, stage, failure=None, detail='summary'):
                            'input_path': str(prompt) if prompt else None,
                            'schema_path': str(COMPONENT/'schemas/page-design.schema.json'),
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
+        if sid == 'deck_ir':
+            from .ir_pages import descriptor
+            paging = descriptor(job, current(job)[1])
+            if paging:
+                action['page_authoring'] = paging
         if prompt and not prompt.is_file() and (stage.get('prepare') or sid == 'deck_ir'):
             status = 'running'
             action = {'type': 'none', 'reason': 'ADVANCE_REQUIRED', 'tool': 'totalpipe_advance'}
@@ -339,6 +345,8 @@ def _accept(job, stage, upstream, kind, path):
                            figures=(flow.get('artifacts') or {}).get('figure_assets_metadata') or [])
         elif kind == 'deck_ir':
             design = a.load_design(work)
+            from .ir_pages import bind_sources
+            value = bind_sources(value, design, work, path)
             # The design's devices are written by the compiler before validation, so an author
             # cannot forget them and the deck cannot drift away from the approved design.
             value, art_notes = a.apply_art_direction(value, design)
@@ -560,13 +568,67 @@ def _native(job, stage, request):
     return response
 
 
-def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None):
+def _preflight_ir(job, stage, artifact_path):
+    """Inspect the submitted bytes with acceptance checks and geometry, without changing the job."""
+    from deck_compiler.pipeline import compile_input
+    work = Path(job['request']['out_dir'])/'work'
+    path = confined(artifact_path, work)
+    before, artifact_sha = a.resources(path), sha(path)
+    design = a.load_design(work)
+    from .ir_pages import bind_sources
+    value, _ = a.apply_art_direction(bind_sources(read(path), design, work, path), design)
+    issues = a.ir_issues(value, read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None,
+                         job['request'].get('supplement', 'off'), design, job['request'].get('slide_count'))
+    geometry = False
+    try:
+        with tempfile.TemporaryDirectory(prefix='totalpipe-ir-preflight-') as temporary:
+            folder = Path(temporary)
+            a.persist_ir(value, path, folder/'input.json')
+            before.update({p: hashed for p, hashed in a.resources(folder/'input.json').items() if p != str(folder/'input.json')})
+            _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
+                                     enable_overflow_repair=False, require_visual_design=False)
+            seen = {(i.get('code', i.get('rule')), i['message'], i.get('slide')) for i in issues}
+            for item in qa['items']:
+                key = (item.get('rule', item.get('code')), item['message'], item.get('slide'))
+                if key not in seen:
+                    issues.append(item)
+                    seen.add(key)
+            geometry = qa['checks'].get('geometric', False)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        issues.append({'code': 'PREFLIGHT_DEPENDENCY_FAILED', 'severity': 'FAIL', 'message': a.redact(str(error))})
+    if any(snapshot(Path(p)) != expected for p, expected in before.items()):
+        issues.append({'code': 'PREFLIGHT_STALE', 'severity': 'FAIL',
+                       'message': 'Input IR or its resources changed during measurement; run preflight again.'})
+    counts = {level: sum(i.get('severity', 'FAIL') == level for i in issues)
+              for level in ('FAIL', 'WARNING', 'REVIEW', 'INFO')}
+    old = job.get('last_error')
+    failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+    response = envelope(job, stage, failure)
+    response['preflight_result'] = {'status': 'FAIL' if counts['FAIL'] else 'PASS',
+        'artifact_sha256': artifact_sha, 'resources_sha256': digest(before), 'issues': issues, 'counts': counts, 'geometry_checked': geometry,
+        'job_unchanged': True, 'candidate_unchanged': True,
+        'note': 'Preflight does not accept the artifact, consume revisions or replace final build/native QA.'}
+    return response
+
+
+def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None, preflight=False):
     try:
         out, _ = locate(job_id)
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
+            if preflight:
+                if artifact_kind not in ('deck_ir', 'deck_ir_page') or not artifact_path or any(v is not None for v in (inputs, replan_from, acknowledge, native)):
+                    raise ValueError('preflight=true requires only a deck_ir/deck_ir_page artifact and artifact_path.')
+                if stage['id'] != 'deck_ir':
+                    raise ValueError('IR preflight is available at the deck_ir stage.')
+                if artifact_kind == 'deck_ir_page':
+                    from .ir_pages import submit
+                    result, _ = submit(job, upstream, confined(artifact_path, out/'work'), dry=True)
+                    return {**envelope(job, stage), 'page_result': result}
+                return _preflight_ir(job, stage, artifact_path)
             repair_result = None
+            page_result = None
             try:
                 if native is not None:
                     if any(value is not None for value in (artifact_kind, artifact_path, inputs, replan_from, acknowledge)):
@@ -586,6 +648,7 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     emit(out, 'replan_requested', job_id=job_id, stage=stage['id'],
                          target_stage=replan_from, status='success')
                     invalidate(job, replan_from)
+                    if replan_from == 'deck_ir': job.pop('ir_pages', None)
                     stage, upstream = current(job)
                 if inputs is not None:
                     if (not isinstance(inputs, dict) or set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
@@ -597,6 +660,17 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     job['inputs'] = inputs
                     emit(out, 'input_accepted', job_id=job_id, stage='model_selection', status='success')
                     stage, upstream = current(job)
+                if artifact_kind == 'deck_ir_page':
+                    if stage['id'] != 'deck_ir' or not artifact_path:
+                        raise ValueError('Submit individual IR pages only at deck_ir.')
+                    from .ir_pages import submit
+                    result, assembled = submit(job, upstream, confined(artifact_path, out/'work'))
+                    if not assembled:
+                        return {**envelope(job, stage), 'page_result': result}
+                    checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(out/'work/deck_ir.json').items() if hashed is not None], upstream)
+                    job.pop('last_error', None)
+                    page_result = result
+                    artifact_kind = artifact_path = None
                 if artifact_kind is not None or artifact_path is not None:
                     if artifact_kind not in BY_ARTIFACT or not artifact_path:
                         raise ValueError('artifact_kind and artifact_path must identify a supported artifact')
@@ -620,6 +694,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                         result = envelope(job, stage)
                         if repair_result:
                             result['repair_result'] = repair_result
+                        if page_result:
+                            result['page_result'] = page_result
                         emit(out, 'candidate_ready' if stage['kind'] == 'terminal' else 'waiting',
                              job_id=job_id, stage=stage['id'],
                              status='success' if stage['kind'] == 'terminal' else 'waiting',
@@ -636,7 +712,9 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     write(feedback, {'code': failure.code, 'message': a.redact(str(failure)), 'stage': stage['id'],
                                      'target_stage': failure.target,
                                      **({'details': [a.redact(message) for message in failure.details]}
-                                        if getattr(failure, 'details', None) else {})})
+                                        if getattr(failure, 'details', None) else {}),
+                                     **({'issues': [{**i, 'message': a.redact(i['message'])} for i in failure.issues]}
+                                        if getattr(failure, 'issues', None) else {})})
                     evidence_feedback = out/'work/evidence_feedback.json'
                     failure.log = str(evidence_feedback if failure.code == 'EVIDENCE_NOT_READY'
                                       and evidence_feedback.is_file() else feedback)

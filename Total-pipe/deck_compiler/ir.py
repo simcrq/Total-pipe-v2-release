@@ -12,8 +12,8 @@ from .provenance import validate as validate_provenance
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
 
 
-SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
-CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
+SOURCE_FIGURE = re.compile(r"^S?[1-9][0-9]*[a-z]?$")
+CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*(S?[1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
 ACCENT = re.compile(r"^#[0-9A-Fa-f]{6}$")
 # A schematic drawn by the pipeline is not a paper figure, so its caption has to say so.
 SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
@@ -21,7 +21,7 @@ SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
 
 def caption_figure_ids(caption):
     """Return normalized paper figure/panel ids explicitly named by a caption."""
-    return {f"{number}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    return {f"{number.upper()}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
 
 
 def coarse_characters(text, inline_math=False):
@@ -113,7 +113,7 @@ def validate(ir):
         if isinstance(asset, dict) and "source_figure" in asset:
             check(isinstance(asset.get("source_figure"), str) and
                   bool(SOURCE_FIGURE.fullmatch(asset["source_figure"])),
-                  f"asset {key}: source_figure must look like 3 or 3a", rule="FIGURE_PROVENANCE_INVALID")
+                  f"asset {key}: source_figure must look like 3, 3a or S14", rule="FIGURE_PROVENANCE_INVALID")
         if isinstance(asset, dict):
             origin = asset.get("origin", "paper")
             check(origin in ("paper", "generated", "reference"),
@@ -365,7 +365,7 @@ def validate(ir):
             expected = f.get("source_figure")
             actual = asset.get("source_figure")
             check(isinstance(expected, str) and bool(SOURCE_FIGURE.fullmatch(expected)),
-                  "Figure reference requires source_figure such as 3 or 3a", n,
+                  "Figure reference requires source_figure such as 3, 3a or S14", n,
                   "FIGURE_PROVENANCE_REQUIRED")
             check(isinstance(actual, str) and bool(SOURCE_FIGURE.fullmatch(actual)),
                   f"Asset {f['asset_id']} requires source_figure", n,

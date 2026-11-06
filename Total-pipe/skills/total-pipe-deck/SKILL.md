@@ -258,6 +258,9 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 写 IR 前先决定页面结构：**`composite-research` + `layout_tree` 从一开始就是一等选项**，不要等
 容量失败才想起它。页面有 3 个以上内容对象、原生图与文字同页、或需要 panels/columns 时，直接写树；
 树测量后仍溢出再拆页，不先删内容。
+通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
+验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
+若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
 
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 

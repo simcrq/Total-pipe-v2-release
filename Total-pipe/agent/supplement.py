@@ -16,12 +16,12 @@ _UNIT = (r"%|‰|nm|µm|um|mm|cm|km|m|ms|s|min|h|kg|mg|µg|ug|ng|mL|ml|L|kJ|J|kW
          r"keV|MeV|eV|mV|kV|mA|A|kHz|MHz|GHz|Hz|dB|Ω|ohm|kPa|MPa|GPa|Pa|"
          r"mol|mmol|wt%|at%|ppm|ppb|°C|℃|K")
 _NUMBER = re.compile(
-    rf"(?<![\w.])(?:\d+(?:\.\d+)?(?:\s*[×x]\s*10\s*\^?\s*[-+]?\d+)?|"
+    rf"(?<![A-Za-z0-9_.])(?:\d+(?:\.\d+)?(?:\s*[×x]\s*10\s*\^?\s*[-+]?\d+)?|"
     rf"\d+(?:\.\d+)?\s*\^\s*[-+]?\d+|\d+\.\d+)"
-    rf"\s*(?:{_UNIT})(?![\w])",
+    rf"\s*(?:{_UNIT})(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
-_DECIMAL = re.compile(r"(?<![\w.])\d+\.\d+(?![\w.])")
+_DECIMAL = re.compile(r"(?<![A-Za-z0-9_.])\d+\.\d+(?![A-Za-z0-9_.])")
 _CJK = re.compile(r"[\u3400-\u9fff]")
 _LATIN_WORD = re.compile(r"[a-z0-9]+")
 
@@ -42,6 +42,13 @@ def _evidence_texts(normalized):
 
 
 def _number_tokens(text):
+    # Compare common canonical inline-math notation with the source measurement,
+    # including IR already normalized by a previous submission.
+    text = re.sub(r"\\(?:mathrm|text)\{([^{}]*)\}", r"\1", text)
+    text = re.sub(r"\^\{([-+]?\d+)\}", r"^\1", text)
+    for old, new in ((r"\Omega", "Ω"), (r"\%", "%"), (r"\times", "×"),
+                     (r"\,", " "), (r"\;", " "), (r"\!", ""), ("$", "")):
+        text = text.replace(old, new)
     return {token.casefold().replace(" ", "") for token in
             _NUMBER.findall(text) + _DECIMAL.findall(text)}
 

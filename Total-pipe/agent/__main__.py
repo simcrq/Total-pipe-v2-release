@@ -31,6 +31,7 @@ def main():
     p.add_argument('--job-id', required=True)
     p.add_argument('--artifact-kind')
     p.add_argument('--artifact-path')
+    p.add_argument('--preflight', action='store_true', help='Check Deck IR without accepting it or consuming a revision')
     p.add_argument('--inputs', type=Path)
     p.add_argument('--acknowledge', type=Path)
     p.add_argument('--native', type=Path, help='Artifact-bound PowerPoint render/review/ingest operation JSON')
@@ -62,7 +63,8 @@ def main():
                     args[key] = read(args[key])
             result = {'doctor': doctor, 'start': start, 'advance': advance, 'status': status}[command](**args)
         print(json.dumps(result, ensure_ascii=True))
-        return 1 if result.get('status') in ('FAIL', 'blocked', 'failed') else 0
+        state = result.get('page_result', result.get('preflight_result', {})).get('status', result.get('status'))
+        return 1 if state in ('FAIL', 'blocked', 'failed', 'revision_limit') else 0
     except (ValueError, OSError) as error:
         parser.exit(2, str(error)+'\n')
 

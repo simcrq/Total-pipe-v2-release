@@ -162,6 +162,7 @@ def resources(path):
         value = read(path)
         if value.get('schema_version') == '2.0':
             refs = [a['path'] for a in value.get('assets', {}).values()]
+            refs += [a['crop']['source_path'] for a in value.get('assets', {}).values() if isinstance(a.get('crop'), dict) and a['crop'].get('source_path')]
             refs += [value.get('theme', {}).get(k) for k in ('font_file', 'bold_font_file', 'background_image')]
         else:
             artifacts = value.get('artifacts', {})

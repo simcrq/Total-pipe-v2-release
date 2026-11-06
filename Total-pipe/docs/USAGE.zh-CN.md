@@ -11,6 +11,8 @@
 四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
 `totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED
 调用 advance。各轮本地执行耗时、等待与重规划时间点追加在 `logs/events.jsonl`，不代表模型生成耗时。
+IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 一次检查全部问题与几何容量，
+不消耗修订次数。详见[完整 IR 提交预检](agent-adapter.md#完整-ir-提交预检)；它不替代正式提交或最终 QA。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
 ## 1. 输入、工作目录与产物

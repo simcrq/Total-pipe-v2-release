@@ -73,6 +73,21 @@ class SupplementAgentTests(unittest.TestCase):
         a.check_ir(ir, n, 'inline')
         self.assertEqual(leak_messages(ir, n), [])
 
+    def test_measurement_boundaries_allow_adjacent_chinese_but_not_identifiers(self):
+        from agent.supplement import _number_tokens
+        self.assertIn('10^5ω', _number_tokens('效率达到10^5 Ω时'))
+        self.assertIn('0.537', _number_tokens('吸收率为0.537时'))
+        self.assertEqual(_number_tokens('sample10mA and state0.537x'), set())
+
+    def test_canonical_inline_math_cannot_hide_a_paper_measurement(self):
+        for text in (r'效率达到 $10^{5}$ Ω。', r'效率达到 $10^{5}\,\Omega$。'):
+            with self.subTest(text=text):
+                ir = supplement_ir(all_supplement=False)
+                ir['slides'][0]['composition']['blocks'][1]['text'] = text
+                with self.assertRaises(a.Failure) as caught:
+                    a.check_ir(ir, normalized(), 'inline')
+                self.assertEqual(caught.exception.code, 'SUPPLEMENT_PAPER_LEAK')
+
 
 if __name__ == '__main__':
     unittest.main()

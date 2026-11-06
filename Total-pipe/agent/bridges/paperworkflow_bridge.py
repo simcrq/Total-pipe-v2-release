@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]/'PaperWorkflow'
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--op', choices=('version', 'dependencies', 'literature_workflow', 'process_pdf', 'search_evidence'), required=True)
+    parser.add_argument('--op', choices=('version', 'dependencies', 'mineru_auth', 'literature_workflow', 'process_pdf', 'search_evidence'), required=True)
     parser.add_argument('--args', type=Path)
     parser.add_argument('--source-kind', choices=('markdown', 'pdf'), default='markdown')
     args = parser.parse_args()
@@ -23,6 +23,9 @@ def main():
             spec.loader.exec_module(module)
             if args.op == 'version':
                 result = module.SERVER_INFO
+            elif args.op == 'mineru_auth':
+                from utils.pdf_official_handler import OfficialMinerUProcessor
+                result = OfficialMinerUProcessor(module.load_config()).authentication()
             elif args.op == 'dependencies':
                 # The server imports handlers lazily. A version handshake cannot
                 # detect missing loguru/requests/yaml in the actual PDF path.

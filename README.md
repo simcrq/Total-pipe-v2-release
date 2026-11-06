@@ -2,6 +2,9 @@
 
 从论文证据和科研叙事生成可编辑 PowerPoint 的模块化流水线。Agent 按 Skill 调度各组件，
 默认 Agent 链路由 RPA 规范化内容、独立 page_design 决定页面表达；Deck Compiler 确定最终几何并检查容量，OfficeCLI 写入原生 PPTX。
+IR 阶段可用 `advance(preflight=true)` 在提交前汇总全部验收问题并测量容量，不消耗修订次数；
+拆页保留逐页证据锚点及节点级完整覆盖。PDF doctor 使用官方 CLI 验证现有 MinerU 登录，无需重复导出 token。
+page_design 1.1 后可逐页交 deck_ir_page，自动绑定 Story/素材、立即测量容量、保留通过页；齐全后整套复验。允许自绘解释图，原图裁片须校验来源矩形和原像素。
 
 **默认入口：** [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) 与四工具接入层。
 **完整流程规范：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。

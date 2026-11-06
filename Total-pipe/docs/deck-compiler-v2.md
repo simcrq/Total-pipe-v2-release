@@ -142,6 +142,16 @@ forbids paper figure numbers and requires a schematic caption. `reference` is cr
 or image; it requires `reference_source`, forbids `source_figure`, and does not require a visible schematic caption.
 Reference crops are visual source material, not independently verified scientific evidence. The compiled image element
 retains `reference_source` for traceability.
+Paper IDs preserve supplementary prefixes: `14`, `3a`, `S14`, and `S14a` are supported. The asset and
+reference must match exactly, and the visible caption must name the same ID (for example `Supplementary Fig. S14a`).
+An `S14` figure cannot be relabelled `14` to satisfy validation; main and supplementary figures remain distinct.
+
+Lossless rectangular paper crops may declare assets.<id>.crop with source_path, source_sha256, and
+box=[left, top, right, bottom] in source pixels. The compiler checks the source hash, bounds, output dimensions,
+and every pixel. Save crops losslessly (for example PNG); rescaling, masking, redraw and lossy re-encoding cannot
+be certified as that rectangle. The agent accepts a selected original via verified lineage, rather than renaming
+its crop. Original source bytes participate in cache validity. Labels, axes and scientific meaning still need
+actual visual review; a verified rectangle never automatically acknowledges REVIEW.
 
 For example, `assets.facility = {"path":"assets/facility-crop.png", "origin":"reference",
 "reference_source":"User-provided feasibility.pptx, slide 8, left panel"}` pairs with

@@ -123,7 +123,7 @@ def default_occasion(presentation_type, brief=''):
 NUMBER = re.compile(r'\d+(?:\.\d+)?(?:\s*[×x]\s*10\^?-?\d+)?%?')
 # A panel id is not a measurement: "Fig. 3e" names a source panel, and requiring its 3 in the
 # evidence rejected correct items that simply say which panel they show.
-FIGURE = re.compile(r'\bFig(?:ure)?\.?\s*\d+[a-z]?', re.IGNORECASE)
+FIGURE = re.compile(r'\bFig(?:ure)?\.?\s*S?\d+[a-z]?', re.IGNORECASE)
 
 
 def _squash(text):

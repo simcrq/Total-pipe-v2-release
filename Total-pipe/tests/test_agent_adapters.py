@@ -25,6 +25,7 @@ class AdapterTests(AgentCase):
         self.assertIn('讲解顺序', task)
         self.assertIn('不展开第二次听众分析', task)
         self.assertIn('nothing you decide here depends on what a tool can draw', a.DESIGN_INSTRUCTIONS)
+        self.assertIn('You may draw your own explanatory diagrams', a.DESIGN_INSTRUCTIONS)
         self.assertNotIn('MUST', a.DESIGN_INSTRUCTIONS)
 
     def test_story_binding_uses_delegation_and_existing_provenance_gate(self):
