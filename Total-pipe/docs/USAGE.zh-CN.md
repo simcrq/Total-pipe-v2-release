@@ -521,6 +521,19 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 普通 compile/build/generate 和四工具不会自动启用；没有槽位时保留原页，不自动移动正文。
 高级 MCP 对应 `totalpipe_explain_viz_prompt / totalpipe_apply_explain_viz`。
 
+也可把 options、slots 和 proposal 嵌入一个请求文件，直接交给正式构建入口，省去另写增强 IR：
+
+```bash
+python -m deck_compiler build --ir <designed.deck_ir.json> \
+  --explain-viz-request <request.json> --out <build-dir> --skip-native
+```
+
+compile 和统一 generate 同样支持该参数；高级 MCP `totalpipe_compile/totalpipe_build`
+对应绝对路径 `explain_viz_request`。不提供请求时不运行，源 IR 始终不写回；
+请求无效时记录 fallback 并编译原 IR，已有编译 FAIL 仍保留。构建目录保存
+`explain_viz.source.deck_ir.json`、`explain_viz.json`，QA 增加绑定本次输出的摘要与科学人审项。
+请求必须绑定已完成 Design 的当前 IR；Design 门槛不会被可选插件绕过。
+
 首版支持剥离角、2–4 层叠层与 2–4 步过程，标签及关系绑定当前页可见原文，
 只追加原生路径与独立文字。原有对象发生变化、标签不可读或布局编译失败时回退，
 成功仍需科学人审和原有候选/原生 QA。本轮按要求未运行验证；完整字段、命令及三模板样例见

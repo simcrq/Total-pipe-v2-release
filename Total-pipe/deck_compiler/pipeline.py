@@ -52,9 +52,59 @@ def locked(out):
         lock.unlink()
 
 
+def _compile_ir(ir, ir_path, layout_options):
+    """Compile one immutable IR with the original resource base and selected provider."""
+    provider_name = (layout_options or {}).get('name', 'compiler')
+    if provider_name not in ('compiler', 'deterministic', 'none') or (layout_options or {}).get('plugin'):
+        try:
+            from .layout_provider import compile_with_provider, load_provider
+            provider = load_provider((layout_options or {}).get('plugin') or provider_name,
+                                     (layout_options or {}).get('totalpipe_root'))
+            return compile_with_provider(ir_path, provider, deck_ir=ir)
+        except (ValueError, OSError, ImportError, RuntimeError, TypeError) as error:
+            return None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
+    return compile_deck(ir, ir_path.parent)
+
+
+def _projection_findings(ir, layout, issues):
+    if layout:
+        from .content_projection import validate_ir as validate_projection
+        seen = {(item.get('rule'), item.get('message'), item.get('slide')) for item in issues}
+        rendered = {slide['id']: slide for slide in layout['slides']}
+        for number, slide in enumerate(ir['slides'], 1):
+            for rule, severity, message in validate_projection(slide, ir.get('assets', {}), rendered.get(slide['id'])):
+                if (rule, message, number) not in seen:
+                    issues.append(issue(rule, severity, message, number, detector='content-projection'))
+                    seen.add((rule, message, number))
+    return layout, issues
+
+
+def _explain_outputs(ir_path, out, request):
+    """Remove stale audit state without deleting source inputs."""
+    paths = [out/'explain_viz.json', out/'explain_viz.source.deck_ir.json']
+    inputs = {ir_path.resolve()}
+    if isinstance(request, (str, Path)):
+        inputs.add(Path(request).resolve())
+    if request is not None and any(path.resolve() in inputs for path in paths):
+        raise ValueError('ExplainViz audit outputs must not overwrite its source IR or request')
+    for path in paths:
+        if path.resolve() not in inputs:
+            path.unlink(missing_ok=True)
+
+
+def _write_explain(out, ir_path, source, output_ir, prepared):
+    write_json(out/'explain_viz.source.deck_ir.json', source)
+    write_json(out/'explain_viz.json', {**prepared.audit(source, output_ir),
+        'source_ir_path': str(ir_path.resolve()), 'source_base': str(ir_path.resolve().parent)})
+    return prepared.summary(source, output_ir, out/'explain_viz.json')
+
+
 def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True,
-                  require_visual_design=True):
+                  require_visual_design=True, explain_viz_request=None):
+    ir_path, out = Path(ir_path), Path(out)
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
+    source_ir = ir
+    _explain_outputs(ir_path, out, explain_viz_request)
     if require_visual_design and not any(item['severity'] == 'FAIL' for item in validate(ir)):
         from .visual_planner import make_prompt, pending_design
         pending = pending_design(ir)
@@ -78,20 +128,20 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             qa['next_action'] = {'action': 'author_visual_proposal', 'apply_tool': 'totalpipe_apply_visual_plan',
                                  'prompt': str(prompt_path.resolve()),
                                  'ir': str(ir_path.resolve()), **pending}
+            if explain_viz_request is not None:
+                from .explain_viz.runtime import blocked
+                qa['explain_viz'] = _write_explain(out, ir_path, source_ir, ir, blocked(source_ir))
             write_qa(out, qa, ir, None)
             write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
-    provider_name = (layout_options or {}).get('name', 'compiler')
-    if provider_name not in ('compiler', 'deterministic', 'none') or (layout_options or {}).get('plugin'):
-        try:
-            from .layout_provider import compile_with_provider, load_provider
-            provider = load_provider((layout_options or {}).get('plugin') or provider_name,
-                                     (layout_options or {}).get('totalpipe_root'))
-            layout, issues = compile_with_provider(ir_path, provider)
-        except (ValueError, OSError, ImportError, RuntimeError, TypeError) as error:
-            layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
-    else:
-        layout, issues = compile_deck(ir, ir_path.parent)
+    prepared = None
+    if explain_viz_request is not None:
+        from .explain_viz.runtime import prepare
+        prepared = prepare(ir, explain_viz_request, ir_path.parent,
+            lambda value: _projection_findings(value, *_compile_ir(value, ir_path, layout_options)))
+        ir = prepared.result.deck_ir
+    layout, issues = (prepared.compiled if prepared and prepared.compiled is not None
+                      else _compile_ir(ir, ir_path, layout_options))
 
     # NEW: Detect severe text overflow and attempt automatic repair
     if enable_overflow_repair and layout is not None:
@@ -118,23 +168,8 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                 if was_modified:
                     # Recompile with the repaired IR that has additional slides
                     ir = repaired_ir
-                    if layout_options and (layout_options.get('plugin') or
-                                           layout_options.get('name', 'compiler') not in
-                                           ('compiler', 'deterministic', 'none')):
-                        # Re-run the provider on the new slide count
-                        temp_ir_path = out / 'deck_ir_repaired.json'
-                        write_json(temp_ir_path, ir)
-                        try:
-                            from .layout_provider import compile_with_provider, load_provider
-                            provider = load_provider(layout_options.get('plugin') or
-                                                     layout_options.get('name'),
-                                                     layout_options.get('totalpipe_root'))
-                            layout, issues = compile_with_provider(temp_ir_path, provider)
-                        except (ValueError, OSError, ImportError, RuntimeError, TypeError) as error:
-                            layout, issues = None, [issue('LAYOUT_PROVIDER_FAILED', 'FAIL', str(error), detector='layout-provider')]
-                        temp_ir_path.unlink(missing_ok=True)
-                    else:
-                        layout, issues = compile_deck(ir, ir_path.parent)
+                    # The repaired IR also keeps the original image/font base.
+                    layout, issues = _compile_ir(ir, ir_path, layout_options)
 
                     # Add INFO item about the repair
                     issues.append(issue('OVERFLOW_REPAIR_APPLIED', 'INFO',
@@ -149,15 +184,9 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                 issues.append(issue('OVERFLOW_REPAIR_FAILED', 'WARNING',
                     f"Automatic overflow repair failed: {error}", detector='overflow-repair'))
 
-    if layout:
-        from .content_projection import validate_ir as validate_projection
-        seen = {(item.get('rule'), item.get('message'), item.get('slide')) for item in issues}
-        rendered = {slide['id']: slide for slide in layout['slides']}
-        for number, slide in enumerate(ir['slides'], 1):
-            for rule, severity, message in validate_projection(slide, ir.get('assets', {}), rendered.get(slide['id'])):
-                if (rule, message, number) not in seen:
-                    issues.append(issue(rule, severity, message, number, detector='content-projection'))
-                    seen.add((rule, message, number))
+    layout, issues = _projection_findings(ir, layout, issues)
+    if prepared:
+        issues += prepared.findings()
     write_json(out/'deck_ir.json', ir)
     if not layout:
         for name in ('layout.json', 'layout_provider.json'):
@@ -170,13 +199,15 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
         for name, value in derive(ir, layout).items():
             write_json(out/'derived'/name, value)
     qa = report(issues, ir_sha256=digest(ir), checks={'semantic': True, 'geometric': layout is not None})
+    if prepared:
+        qa['explain_viz'] = _write_explain(out, ir_path, source_ir, ir, prepared)
     write_qa(out, qa, ir, layout)
     write_json(out/'layout_feedback.json', make_feedback(ir, layout, issues))
     return ir, layout, qa
 
 
 def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
-          require_visual_design=True):
+          require_visual_design=True, explain_viz_request=None):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -187,7 +218,9 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                      'powerpoint_review.json', 'layout.json', 'layout_provider.json'):
             (out/name).unlink(missing_ok=True)
         ir, layout, qa = compile_input(ir_path, out, layout_options,
-                                       require_visual_design=require_visual_design)
+                                       require_visual_design=require_visual_design,
+                                       explain_viz_request=explain_viz_request)
+        explain_summary = qa.get('explain_viz')
         items = qa['items']
         if qa['counts']['FAIL']:
             write_json(out/'state.json', {'phase': 'preflight_failed', 'previous_final_sha256': old_final})
@@ -233,6 +266,8 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                     'officecli_issues': structural_complete,
                     'officecli_runtime': officecli_runtime,
                     'officecli_commands_sha256': command_sha256})
+        if explain_summary is not None:
+            qa['explain_viz'] = explain_summary
         write_qa(out, qa, ir, layout)
         write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         write_json(out/'state.json', {'phase': 'failed' if qa['counts']['FAIL'] else 'awaiting_validation',
@@ -385,6 +420,8 @@ def ingest_native(out, pdf, reviewer=None, *, render_evidence=None, expected_has
             'officecli_runtime': prior.get('checks', {}).get('officecli_runtime'),
             'officecli_commands_sha256': prior.get('checks', {}).get('officecli_commands_sha256'),
         })
+        if 'explain_viz' in prior:
+            qa['explain_viz'] = prior['explain_viz']
         write_qa(out, qa, ir, layout)
         write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         metrics_path = out/'metrics.json'

@@ -5,6 +5,8 @@
 
 `slots.json` 绑定预留图形；`proposal.json` 绑定当前 IR 和槽位哈希，提供三个受约束 VisualSpec。
 修改源 IR 后须重新准备提案。输出可编辑原生路径和独立文字，不输出位图或原生编组。
+`request.json` 内嵌同一份槽位和提案，可让正式 compile/build 在内存中处理，无需另存增强 IR；
+修改槽位或提案后也应同步请求文件。
 
 从 `Total-pipe/` 运行：
 
@@ -23,6 +25,16 @@ python -m deck_compiler build --ir examples/explain-viz/enhanced.deck_ir.json \
 
 先查看 stdout 的 `status/applied_visuals/warnings` 与旁路审计。
 fallback/skipped 的输出保留原页，不表示新增图示成功。`--skip-native` 为开发模式，正式晋级仍需原生验收。
+
+也可直接从预留槽位 IR 构建：
+
+```bash
+python -m deck_compiler build --ir examples/explain-viz/reserved.deck_ir.json \
+  --explain-viz-request examples/explain-viz/request.json --out build/explain-viz --skip-native
+```
+
+查看 `build/explain-viz/explain_viz.json` 和 `qa_report.json` 的结果摘要。
+没有请求参数时不会启用插件。
 
 本轮按用户要求未执行以上命令，未附生成截图或 PPTX，也不声明样例编译通过。
 字段、门槛与限制见[协议](../../docs/explain-viz.md)。

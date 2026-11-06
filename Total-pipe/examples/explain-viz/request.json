@@ -1,0 +1,160 @@
+{
+  "version": "1.0",
+  "options": {
+    "mode": "auto",
+    "max_visuals_per_deck": 4
+  },
+  "slots": {
+    "version": "1.0",
+    "slots": [
+      {
+        "slide_id": "peel-angle",
+        "graphic_id": "explanation_visual"
+      },
+      {
+        "slide_id": "layer-stack",
+        "graphic_id": "explanation_visual"
+      },
+      {
+        "slide_id": "process-steps",
+        "graphic_id": "explanation_visual"
+      }
+    ]
+  },
+  "proposal": {
+    "version": "1.0",
+    "ir_sha256": "c1180dae17088ea1190683f9f8c826089df1a31cf482a2dc3edf4d16159234ad",
+    "slots_sha256": "967ca022205ad19bd5ab45e87181f9acd30a096358a6195362253a30d529022e",
+    "slides": [
+      {
+        "slide_id": "peel-angle",
+        "decision": "draw",
+        "reason": "用示意图表达当前页明确给出的空间关系或先后顺序。",
+        "teaching_goal": "剥离角 θ 的几何定义",
+        "scores": {
+          "explanation_gain": 0.95,
+          "relationship_clarity": 0.95,
+          "source_confidence": 1,
+          "layout_fit": 0.95,
+          "redundancy": 0
+        },
+        "visual_spec": {
+          "version": "1.0",
+          "template": "geometry/peel_angle@1",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "labels": {
+            "substrate": "衬底",
+            "film": "薄膜",
+            "theta": "θ"
+          },
+          "relations": [
+            {
+              "type": "attached_to",
+              "from": "film",
+              "to": "substrate",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            },
+            {
+              "type": "angle_between",
+              "from": "film",
+              "to": "substrate",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "slide_id": "layer-stack",
+        "decision": "draw",
+        "reason": "用示意图表达当前页明确给出的空间关系或先后顺序。",
+        "teaching_goal": "层叠结构的空间顺序",
+        "scores": {
+          "explanation_gain": 0.95,
+          "relationship_clarity": 0.95,
+          "source_confidence": 1,
+          "layout_fit": 0.95,
+          "redundancy": 0
+        },
+        "visual_spec": {
+          "version": "1.0",
+          "template": "layer_stack@1",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "labels": {
+            "layer_0": "栅极",
+            "layer_1": "介电层",
+            "layer_2": "薄膜"
+          },
+          "relations": [
+            {
+              "type": "above",
+              "from": "layer_0",
+              "to": "layer_1",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            },
+            {
+              "type": "above",
+              "from": "layer_1",
+              "to": "layer_2",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "slide_id": "process-steps",
+        "decision": "draw",
+        "reason": "用示意图表达当前页明确给出的空间关系或先后顺序。",
+        "teaching_goal": "流程中的先后步骤",
+        "scores": {
+          "explanation_gain": 0.95,
+          "relationship_clarity": 0.95,
+          "source_confidence": 1,
+          "layout_fit": 0.95,
+          "redundancy": 0
+        },
+        "visual_spec": {
+          "version": "1.0",
+          "template": "process_steps@1",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "labels": {
+            "step_0": "生长",
+            "step_1": "键合",
+            "step_2": "释放"
+          },
+          "relations": [
+            {
+              "type": "precedes",
+              "from": "step_0",
+              "to": "step_1",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            },
+            {
+              "type": "precedes",
+              "from": "step_1",
+              "to": "step_2",
+              "source_fact_ids": [
+                "block:definition"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

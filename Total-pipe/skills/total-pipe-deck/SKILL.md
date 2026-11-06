@@ -524,10 +524,15 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 可用 `explain-viz-prompt`（高级 MCP：`totalpipe_explain_viz_prompt`）准备候选与严格 Schema，
 当前 Agent 根据当前页可见事实编写提案，再用 `apply-explain-viz --mode auto|prefer`
 （高级 MCP：`totalpipe_apply_explain_viz`）生成新的源 IR 与审计文件。
+也可将 options、slots、proposal 合并为自包含请求，以
+`compile/build/generate --explain-viz-request <request.json>` 直接构建；高级 MCP
+`totalpipe_compile/totalpipe_build` 对应绝对路径 `explain_viz_request`。
+请求绑定已完成 Design 的当前源 IR，构建时在内存中增强，不改原文件，
+产出原输入快照与 `explain_viz.json`，QA 中保留实际新增数量及科学人审项。
 标签与关系必须有原文绑定，不从讲稿补写材料、数值、机制或方向；没有槽位则跳过，
 不得为了插图调整正文。不要直接修改已绑定验收哈希的 job 文件。
 检查 `status/applied_visuals/warnings`；fallback/skipped 不表示新增成功，成功仍须科学人审。
-普通 compile/build 和默认四工具不会隐式运行该步骤。字段与完整命令见
+未提供请求的 compile/build 和默认四工具不会隐式运行该步骤。字段与完整命令见
 `Total-pipe/docs/explain-viz.md`；本轮新增用例和样例按用户要求尚未运行验证。
 
 ## 6. 编译、候选与正式验收

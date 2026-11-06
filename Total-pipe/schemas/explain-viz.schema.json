@@ -1067,6 +1067,87 @@
           }
         }
       }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "off",
+            "auto",
+            "prefer"
+          ],
+          "default": "off"
+        },
+        "max_visuals_per_deck": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 4
+        },
+        "min_auto_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.75
+        },
+        "min_prefer_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.6
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "options"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.0"
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "slots": {
+          "$ref": "#/$defs/slots"
+        },
+        "proposal": {
+          "$ref": "#/$defs/proposal"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "options": {
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "auto",
+                      "prefer"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "slots",
+              "proposal"
+            ]
+          }
+        }
+      ]
     }
   }
 }

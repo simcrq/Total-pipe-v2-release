@@ -31,7 +31,8 @@ def generate_presentation(
     officecli: str = "officecli",
     skip_native: bool = True,
     enable_overflow_repair: bool = True,
-    skip_visual_design: bool = False
+    skip_visual_design: bool = False,
+    explain_viz_request=None
 ) -> Tuple[bool, Optional[Path], Dict[str, Any]]:
     """
     One-function pipeline: Deck IR → PPTX
@@ -45,6 +46,7 @@ def generate_presentation(
         skip_native: Skip native PowerPoint validation (dev mode)
         enable_overflow_repair: Enable automatic overflow repair
         skip_visual_design: Explicit legacy mode without an agent design pass
+        explain_viz_request: Optional self-contained ExplainViz request Path or dict
 
     Returns:
         Tuple of (success: bool, pptx_path: Optional[Path], qa_report: dict)
@@ -73,7 +75,8 @@ def generate_presentation(
             not skip_native,
             officecli,
             layout_options,
-            require_visual_design=not skip_visual_design
+            require_visual_design=not skip_visual_design,
+            explain_viz_request=explain_viz_request
         )
 
         # Check results
@@ -358,6 +361,8 @@ Examples:
                      help='Include native PowerPoint validation (requires PowerPoint)')
     gen.add_argument('--skip-visual-design', action='store_true',
                      help='Explicit legacy mode without the agent visual design stage')
+    gen.add_argument('--explain-viz-request', type=Path,
+                     help='Optional self-contained ExplainViz request JSON; omitted means disabled')
 
     # Validate command
     val = subparsers.add_parser('validate', help='Validate inputs (dry-run)')
@@ -413,7 +418,8 @@ Examples:
                 officecli=args.officecli,
                 skip_native=not args.native,
                 enable_overflow_repair=not args.no_overflow_repair,
-                skip_visual_design=args.skip_visual_design
+                skip_visual_design=args.skip_visual_design,
+                explain_viz_request=args.explain_viz_request
             )
 
             status_icon = "[OK]" if success else "[FAIL]"
@@ -425,6 +431,9 @@ Examples:
             if qa.get('next_action'):
                 print(f"[DESIGN] Read {qa['next_action']['prompt']}, author a visual proposal, "
                       "then run python -m deck_compiler apply-visual-plan and retry with the merged IR.")
+            if 'explain_viz' in qa:
+                explain = qa['explain_viz']
+                print(f"[EXPLAIN] {explain['status']}; {explain['applied_visuals']} diagrams; {explain['audit']}")
 
             if pptx_path:
                 print(f"\n[FILE] Generated: {pptx_path}")

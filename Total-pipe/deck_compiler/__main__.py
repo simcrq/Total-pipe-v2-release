@@ -12,6 +12,7 @@ def qa_summary(qa, out):
             'report': str(out/'qa_report.json'),
             'layout_feedback': str(out/'layout_feedback.json'),
             **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
+            **({'explain_viz': qa['explain_viz']} if 'explain_viz' in qa else {}),
             'design_notices': [
                 {'rule': item['rule'], 'slide': item['slide'], 'message': item['message']}
                 for item in qa['items']
@@ -49,6 +50,8 @@ def main():
                        help='packer (bundled deterministic), compiler (templates only) or module:factory')
         p.add_argument('--skip-visual-design', action='store_true',
                        help='Explicit legacy mode: compile without the agent visual design pass')
+        p.add_argument('--explain-viz-request', type=Path,
+                       help='Optional self-contained ExplainViz request JSON; omitted means disabled')
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
@@ -81,12 +84,9 @@ def main():
     try:
         if args.command == 'capabilities':
             from .layout_tree import capabilities
-            from .explain_viz.specs import TEMPLATES
+            from .explain_viz.specs import capabilities as explain_capabilities
             print(json.dumps({'deck_ir_version': '2.0', 'layout_tree': capabilities(),
-                'explain_viz': {'version': '1.0', 'default_mode': 'off',
-                    'modes': ['off', 'auto', 'prefer'], 'slot_policy': 'reserved_only',
-                    'templates': list(TEMPLATES), 'model_service': False,
-                    'prompt_command': 'explain-viz-prompt', 'apply_command': 'apply-explain-viz'},
+                'explain_viz': explain_capabilities(),
                 'backend': {'name': 'officecli', 'minimum_version': '1.0.152',
                             'runtime_probe_required': True}}))
             return 0
@@ -175,10 +175,12 @@ def main():
         if args.command == 'compile':
             with locked(out):
                 _, _, qa = compile_input(args.ir.resolve(), out, options,
-                                         require_visual_design=not args.skip_visual_design)
+                                         require_visual_design=not args.skip_visual_design,
+                                         explain_viz_request=args.explain_viz_request)
         else:
             qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
-                       require_visual_design=not args.skip_visual_design)
+                       require_visual_design=not args.skip_visual_design,
+                       explain_viz_request=args.explain_viz_request)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

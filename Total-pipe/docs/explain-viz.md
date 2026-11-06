@@ -1,12 +1,12 @@
 # ExplainViz：可选的原生讲解图
 
-ExplainViz 在已有 canonical Deck IR 进入正式 compile/build 前，向**明确预留的图形区域**追加
+ExplainViz 在已有 canonical Deck IR 编译时，向**明确预留的图形区域**追加
 原生路径与文字。默认 `off`；不改变 Story、页面设计、正文、原图、证据、讲稿或布局树，
 不替代必做的整套 Design。没有新模型服务、新 PPTX 后端或新的 Deck IR 字段。
 
 首版提供 `geometry/peel_angle@1`、`layer_stack@1`、`process_steps@1`。
 命令准备候选页及严格 Schema，当前 Agent 编写决策与 VisualSpec，程序再生成原生形状。
-普通 compile/build/generate 和默认四工具不会自动启用该步骤。
+compile/build/generate 只有显式传入请求文件才运行；默认四工具不增加隐式阶段。
 
 ## 1. 预留区域
 
@@ -84,6 +84,57 @@ CLI 文件读取、JSON 解析或输出路径错误仍会报错，源文件不�
 文件参数均为绝对路径，`out` 是 JSON 文件，不是构建目录。默认四工具接入层没有新增阶段，
 不要直接修改已经绑定验收哈希的 job 产物；需要启用时从源 IR 生成新输入再走既有接收与构建流程。
 
+### 在 compile/build/generate 中直接启用
+
+也可将配置、槽位和提案放进一个自包含请求文件，交给正式编译入口处理，无需先写增强 IR：
+
+```json
+{
+  "version": "1.0",
+  "options": {"mode": "auto", "max_visuals_per_deck": 4},
+  "slots": {"version": "1.0", "slots": []},
+  "proposal": {"version": "1.0", "ir_sha256": "当前源IR哈希", "slots_sha256": "当前槽位哈希", "slides": []}
+}
+```
+
+上面只展示字段结构，实际填写当前槽位和提案对象，不填写文件路径。
+可直接使用[三模板请求样例](../examples/explain-viz/request.json)。
+请求 Schema 位于 `explain-viz.schema.json#/$defs/request`；省略 `options.mode` 时为 off，
+off 请求可省略 slots/proposal，auto/prefer 请求必须同时包含二者。
+
+```bash
+python -m deck_compiler compile --ir examples/explain-viz/reserved.deck_ir.json \
+  --explain-viz-request examples/explain-viz/request.json --out build/explain-viz
+python -m deck_compiler build --ir examples/explain-viz/reserved.deck_ir.json \
+  --explain-viz-request examples/explain-viz/request.json --out build/explain-viz --skip-native
+# 同一候选构建流程的简化入口
+python totalpipe.py generate examples/explain-viz/reserved.deck_ir.json \
+  --explain-viz-request examples/explain-viz/request.json --out build/explain-viz
+```
+
+高级 MCP `totalpipe_compile/totalpipe_build` 对应可选参数 `explain_viz_request`，为绝对文件路径。
+CLI 与 MCP 的 capabilities 均声明此入口。Python `compile_input/build/generate_presentation`
+同名参数接受请求字典或本地路径；未传入时不调用插件、不添加 ExplainViz QA 字段。
+
+请求模式错误、文件不可读、提案过期或插件拒绝时，记录 fallback 并按原 IR 编译，
+不隐去原有编译 FAIL。必做的 Design 检查先执行；未完成时不读取请求、不运行插件，
+ExplainViz 摘要为 skipped/visual_design_required。
+
+运行时使用本次选择的布局提供方进行原页对比，并复用最终通过检查的同一份内存布局；
+新增图不会因提供方重新读取磁盘原 IR 而丢失。所有图片和字体继续按原源文件目录解析，
+增强不写回源文件，也不在源目录创建临时 IR。
+
+| 构建目录产物 | 内容 |
+| --- | --- |
+| `deck_ir.json` | 本次实际编译的 IR，可能含接受的讲解图 |
+| `explain_viz.source.deck_ir.json` | 增强前输入快照；相对路径基准仍是原源目录，属于审计归档 |
+| `explain_viz.json` | 逐页决策、对象清单、请求/输入/增强/最终 IR 哈希及 source_base |
+| `qa_report.json` 的 `explain_viz` 字段 | 结果摘要、实际新增数量和审计位置，构建与后续原生验收保留 |
+
+停用请求后会清理旧的 ExplainViz 审计，
+避免上次增强成功被误认为本次结果；审计输出不得覆盖输入或请求文件。
+布局失败回退不会自动重试 OfficeCLI 写入或撤销 PPTX，后端失败仍明确进入原构建 QA。
+
 ## 3. 决策、来源与模板
 
 提案格式见 [ExplainViz Schema](../schemas/explain-viz.schema.json)；文件协议独立为 `1.0`，
@@ -128,7 +179,7 @@ Python 入口可配置两个阈值，不能关闭来源、对象保持或编译�
 输出是原生可编辑自由形状与独立文本，沿用 OfficeCLI；没有 PowerPoint 原生编组。
 对象 ID 使用兼容现有 identifier 约束的 `evz_` 前缀及稳定 spec 哈希，不使用非法冒号前缀。
 
-应用时先编译原 IR，再对每页事务调用同一 `compile_deck`，最后复核整套：
+应用时先编译原 IR，再对每页事务使用同一编译链，最后复核整套：
 
 1. 输入无有效编译布局时全套保留原 IR。
 2. 新对象必须位于原有槽位内，不得与原有其他内容相撞；标签相互不重叠、不得低于 24 CSS px，
@@ -143,11 +194,13 @@ Python 入口可配置两个阈值，不能关闭来源、对象保持或编译�
 
 这些门槛检查来源绑定与几何，**不能证明科学关系真实**。每个接受的图都标记
 `semantic_review_required`，既有 `SCHEMATIC_REVIEW` 和完整候选 QA 继续保留。
+构建请求入口另增加 `EXPLAIN_VIZ_SEMANTIC_REVIEW`，不自动签收人审。
 此处的编译检查是 IR/布局检查，OfficeCLI 写入、渲染、PowerPoint 实际效果和最终晋级仍走原流程，
 不自动回退已经生成的 PPTX。
 
 ## 5. 开发状态
 
-本轮按用户要求停止验证，新增回归用例及三页样例尚未运行；没有新增测试通过或原生验收声明。
-评估、已知限制和基线状态见[实现评估](../../docs/explain-viz-evaluation.md)。
+首版和本轮按用户要求停止验证，新增回归用例及三页样例尚未运行；没有新增测试通过或原生验收声明。
+评估、已知限制和基线状态见[实现评估](../../docs/explain-viz-evaluation.md)，本轮范围见
+[构建接入说明](../../docs/explain-viz-build-integration.md)。
 自动寻找空白区域、局部重排、更多模板、独立模型 API、外部事实接入和决策集评估均留待后续。

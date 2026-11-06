@@ -197,7 +197,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **显式行内公式**：正文、标题 / takeaway、表格文字格可选开启；文字与数学片段按逐行宽度、上伸和下伸高度计算容量。图注、图形标签和 panel 标题暂不解析行内公式。
 - **复合区域与表格**：`columns / stack / panel / image_grid` 递归布局；layout tree `1.1` 增加原生表格，含合并表头、跨行跨列和公式格；保留旧平面 IR 与 `1.0` 树。
 - **原生科研图形**：流程、DAG、机制、分层架构、漏斗和贝塞尔路径；`process` 支持横向、纵向、错位和 3–8 步全方形紧凑布局，节点可单独强调；关系由上游显式声明，编译器分配区域。
-- **可选 ExplainViz**：默认关闭；Agent 提交绑定源 IR 和预留槽位的讲解图计划，确定性模板追加剥离角、层叠或过程原生对象。无槽位、来源不足、编译失败或原有对象变化时跳过/回退；不替代页面设计或科学人审。本轮按要求未运行验证，见[协议](Total-pipe/docs/explain-viz.md)与[评估](docs/explain-viz-evaluation.md)。
+- **可选 ExplainViz**：默认关闭；`compile/build/generate --explain-viz-request` 可直接处理绑定源 IR 和预留槽位的计划，追加剥离角、层叠或过程原生对象，输出原输入快照、审计与 QA 摘要。无槽位、来源不足、编译失败或原有对象变化时跳过/回退；不替代页面设计或科学人审。按要求未运行验证，见[协议](Total-pipe/docs/explain-viz.md)、[评估](docs/explain-viz-evaluation.md)与[构建接入](docs/explain-viz-build-integration.md)。
 - **原生列表**：整套或 block 独立设置符号样式与颜色，takeaway 可单独加前导标记；最低宽度 520 CSS px，高度按完整条目实测，术语保留策略不删除项目符号。见 [列表协议](Total-pipe/docs/native-lists.md)。
 - **讲解契约**：Story 的 `explain` 逐条绑定证据，声明读者必须看见的量、并列项、分组、对照、顺序、关系或示意曲线；IR 带进 `semantic.explanation`，编译生成 `derived/explanation_coverage.json`。required 义务缺原生载体时保留 REVIEW，不静默当纯文字页。见 [讲解契约](docs/explanation-contract.md)。
 - **补充内容旁路**：`basis: supplement` 允许无论文 EV 的背景、类比、构造示例、推导说明或示意图；论文块仍强制 EV，补充块可选来源、构造示例须可见标注，Agent 检查论文数值/图/长引用泄漏；默认关闭，`supplement=inline|pages|both` 显式开启。见 [Deck IR 协议](Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement)。

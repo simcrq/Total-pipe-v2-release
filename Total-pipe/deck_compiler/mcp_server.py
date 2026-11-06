@@ -69,6 +69,8 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Use totalpipe_ack_review only after actual review, with explicit ids, reviewer and note; '
     'notes survive unchanged page evidence and never replace artifact-bound final approval.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
+    'ExplainViz is optional and default off: explicitly pass explain_viz_request to compile/build '
+    'only with a source-bound proposal and pre-reserved Path IR scenes. Never bypass Design or scientific review. '
     'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
     'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
     'native table references to composition.tables, including merged headers and formula/matrix cells. '
@@ -88,7 +90,9 @@ def capability_handler(arguments):
     if arguments:
         raise ValueError('No arguments supported')
     from .layout_tree import capabilities
+    from .explain_viz.specs import capabilities as explain_capabilities
     return {'deck_ir_version': '2.0', 'layout_tree': capabilities(),
+            'explain_viz': explain_capabilities(),
             'backend': {'name': 'officecli', 'minimum_version': '1.0.152', 'runtime_probe_required': True}}
 
 
@@ -103,6 +107,8 @@ def invoke(command, arguments):
         argv += ['--ir', arguments['ir'], '--layout-provider', arguments.get('layout_provider', 'packer')]
         if arguments.get('skip_visual_design', False):
             argv += ['--skip-visual-design']
+        if arguments.get('explain_viz_request'):
+            argv += ['--explain-viz-request', arguments['explain_viz_request']]
     if command == 'build':
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
@@ -137,7 +143,9 @@ for name, command, description in (
         properties.update({'ir':{'type':'string', 'description':'Absolute canonical deck_ir.json path.'},
                            'layout_provider':{'type':'string','default':'packer'},
                            'skip_visual_design':{'type':'boolean','default':False,
-                               'description':'Explicit legacy mode only; bypass the default visual design stage.'}})
+                               'description':'Explicit legacy mode only; bypass the default visual design stage.'},
+                           'explain_viz_request': {'type': 'string',
+                               'description': 'Optional absolute path to self-contained ExplainViz request JSON. Omitted means disabled; input IR stays unchanged.'}})
         required.append('ir')
     if command in ('build', 'review-officecli'):
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}
@@ -163,7 +171,7 @@ for name, command, description in (
                 continue
             if not isinstance(value, str):
                 raise ValueError(f'{key} must be a string')
-        for key in ('ir','out'):
+        for key in ('ir','out','explain_viz_request'):
             if key in arguments and not Path(arguments[key]).is_absolute():
                 raise ValueError(f'{key} must be an absolute path')
         return invoke(command, arguments)

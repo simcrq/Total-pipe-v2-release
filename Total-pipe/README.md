@@ -90,6 +90,7 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | 文件 | 含义 |
 | --- | --- |
 | `deck_ir.json` | 本次构建冻结的科学内容输入 |
+| `explain_viz.source.deck_ir.json`、`explain_viz.json`（可选） | 显式 ExplainViz 请求的原输入归档、原目录基准、逐页决策与源/输出哈希；QA 内另有 explain_viz 摘要 |
 | `layout.json`、`layout_provider.json` | 最终几何、文本契约、提供方采用 / owned / 回退 / 拒绝记录及覆盖率 |
 | `derived/` | 从输入派生的规划、资源清单与 QA expectation |
 | `layout_feedback.json` | 绑定 IR 哈希的组件尺寸错误及上游修订建议 |
@@ -112,7 +113,7 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 ## 当前能力与协议
 
-- [可选 ExplainViz](docs/explain-viz.md)：编译前的显式 `explain-viz-prompt / apply-explain-viz`，默认 off；仅在已有预留 Path IR 中追加有来源的讲解图，保留原对象并执行布局编译回退。三模板[样例](examples/explain-viz/README.md)及新增用例本轮未运行，见[评估](../docs/explain-viz-evaluation.md)。
+- [可选 ExplainViz](docs/explain-viz.md)：显式 `explain-viz-prompt / apply-explain-viz`，或 `compile/build/generate --explain-viz-request` 直接构建，默认 off；仅在已有预留 Path IR 中追加有来源的讲解图，保留原对象并执行本次提供方的布局回退。三模板[样例](examples/explain-viz/README.md)及新增用例未运行，见[评估](../docs/explain-viz-evaluation.md)与[构建接入](../docs/explain-viz-build-integration.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。

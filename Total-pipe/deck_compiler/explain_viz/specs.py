@@ -10,6 +10,14 @@ SCORE_KEYS = ('explanation_gain', 'relationship_clarity', 'source_confidence',
               'layout_fit', 'redundancy')
 
 
+def capabilities():
+    return {'version': VERSION, 'default_mode': 'off', 'modes': ['off', 'auto', 'prefer'],
+            'slot_policy': 'reserved_only', 'templates': list(TEMPLATES), 'model_service': False,
+            'prompt_command': 'explain-viz-prompt', 'apply_command': 'apply-explain-viz',
+            'build_request_flag': '--explain-viz-request',
+            'request_schema': 'schemas/explain-viz.schema.json#/$defs/request'}
+
+
 def object_fields(value, required, optional=()):
     if not isinstance(value, dict) or not set(required) <= set(value) <= set(required) | set(optional):
         raise ValueError('invalid_fields')
