@@ -15,6 +15,8 @@ transport.INSTRUCTIONS = ('Drive the evidence-to-candidate workflow using next_a
     'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
     'Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
     'When status is running, call advance; when blocked, resolve the reported issue. '
+    'New atomic Stories use scientific_review before RPA, page design 1.3 and actual source/copy review before IR. '
+    'Scientific records are archived; approved audience copy and scoped qualifiers must be visible. Never auto-attest review. '
     'Native render/review/ingest are explicit advance operations after candidate. Never auto-attest UI review. '
     'Candidate REVIEW notes do not satisfy PowerPoint final promotion; final remains CLI-only.')
 
@@ -28,13 +30,15 @@ DEFINITIONS = {
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
                         'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
-    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','page_design','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},
+    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','scientific_review','page_design','page_design_review','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},
         'artifact_path': STRING, 'preflight': {'type': 'boolean', 'description': 'Validate Deck IR and geometry without acceptance, writes to the job or revision accounting.'}, 'inputs': {'type': 'object', 'properties': {'model': STRING,
             'reasoning_effort': {'type': 'string', 'enum': ['high','xhigh','max','ultra']}, 'selected_by_user': {'const': True}},
             'required': ['model','reasoning_effort','selected_by_user'], 'additionalProperties': False},
         'replan_from': STRING, 'acknowledge': {'type': 'object', 'properties': {'reviewer': STRING, 'note': STRING,
             'review_ids': {'type': 'array', 'minItems': 1, 'items': STRING}},
             'required': ['reviewer','note','review_ids'], 'additionalProperties': False},
+        'preview': {**json.loads((Path(__file__).parent/'schemas/ir-preview.schema.json').read_text(encoding='utf-8')),
+                    'description': 'Render selected draft IR pages to cached HTML PNGs without acceptance, revision use or candidate changes. Open PNGs, edit IR, repeat.'},
         'native': json.loads((Path(__file__).parent/'schemas/native-acceptance.schema.json').read_text(encoding='utf-8'))}, ['job_id']),
     'totalpipe_status': (status, {'job_id': STRING,
         'detail': {'type': 'string', 'enum': ['summary', 'full'], 'default': 'summary'}}, ['job_id']),

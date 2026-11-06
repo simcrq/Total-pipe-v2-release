@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 
 DESIGN_SCHEMA = Path(__file__).resolve().parents[1]/'schemas/page-design.schema.json'
+PROJECTION_SCHEMA = DESIGN_SCHEMA.with_name('page-design-v1.2.schema.json')
+ATOMIC_SCHEMA = DESIGN_SCHEMA.with_name('page-design-v1.3.schema.json')
 
 FORMS = {
     'cover': {'anchor': 'none', 'ir': 'title page: the deck title, one line, no body',
@@ -166,17 +168,29 @@ def content_bindings(story):
             # Ending lines synthesize the Story; this is inherited provenance, not fresh evidence.
             refs = all_refs
         result[source] = {'source': source, 'text': text, 'evidence': list(refs)}
+    if story.get('content_contract'):
+        from .content_projection import catalog
+        return catalog(story)
     return result
 
 
 def bind_design(design, story):
     """Internal IR checks receive immutable Story content, not designer-authored paraphrases."""
-    if not design or design.get('schema_version') != '1.1':
+    if not design or design.get('schema_version') not in ('1.1', '1.2', '1.3'):
         return design
     bound = copy.deepcopy(design)
     catalog = content_bindings(story)
     for page in bound.get('pages') or []:
+        if design.get('schema_version') == '1.3':
+            page.setdefault('reuse_refs', [])
+            page.setdefault('figure_sources', {})
         page['items'] = [dict(catalog[source], id=source) for source in page['content_refs']]
+        if design.get('schema_version') in ('1.2', '1.3'):
+            from .content_projection import page_sources
+            page['context_items'] = [dict(catalog[source], id=source) for source in sorted(page_sources(page, catalog))
+                                     if source not in page['content_refs']]
+    if design.get('schema_version') in ('1.2', '1.3'):
+        bound['_content_catalog'] = catalog
     bound['_content_bound'] = True
     return bound
 
@@ -234,9 +248,19 @@ def _validate_reference_design(design, story, evidence, slide_count):
         # A short optional display title is the only newly authored scientific text. Drawing
         # instructions contain geometry/counts as well as science and cannot be scanned as data.
         cited = ' '.join(evidence.get(ref, '') for ref in refs)
-        for number in _numbers(page.get('title', ''))-_numbers(cited):
+        for number in (_numbers(page.get('title', ''))-_numbers(cited)) if design.get('schema_version') != '1.3' else []:
             problems.append(f'{pid}: title number {number} is not in the cited evidence')
         text = ' '.join(catalog[source]['text'] for source in page['content_refs'] if source in catalog)
+        if design.get('schema_version') in ('1.2', '1.3'):
+            from .content_projection import validate_page
+            problems += [f'{pid}: {message}' for message in validate_page(page, story, evidence, _numbers)]
+            copy_items = page.get('display_copy')
+            copy_items = copy_items if isinstance(copy_items, list) else []
+            text = ' '.join(str(item.get('text', '')) for item in copy_items if isinstance(item, dict))
+            title = next((item.get('text') for item in copy_items
+                          if isinstance(item, dict) and item.get('role') == 'title'), None)
+            if page.get('title') and page['title'] != title:
+                problems.append(f'{pid}: title must agree with approved title display_copy')
         for mark in page.get('marks') or []:
             if _squash(mark) not in _squash(text+' '+page.get('title', '')):
                 problems.append(f'{pid}: mark {mark!r} does not occur in assigned Story text or title')
@@ -257,12 +281,14 @@ def _validate_reference_design(design, story, evidence, slide_count):
 
 def capabilities():
     from .art_direction import capabilities as art
-    return {'contract': 'totalpipe.page-design', 'schema_version': '1.1',
-            'supported_versions': ['1.0', '1.1'],
+    return {'contract': 'totalpipe.page-design', 'schema_version': '1.3',
+            'supported_versions': ['1.0', '1.1', '1.2', '1.3'],
             # Renderer choices are for the IR author, never injected into the design prompt.
             'forms': FORMS, 'anchors': list(ANCHORS), 'roles': list(ROLES),
             'occasions': OCCASIONS, 'readings': list(READINGS), 'art_direction': art(),
-            'rules': ['Story owns scientific content and evidence. Page design owns visual explanation.',
+            'rules': ['Story owns scientific records and evidence. Page design 1.2 owns faithful audience copy and visual explanation.',
+                      '1.2 routes each scientific item to approved copy/visuals or justified notes. Scoped qualifiers follow visible claims. '
+                      'Source/copy review is explicit; IR implements the approved projection.',
                       '1.1 assigns each Story content path to exactly one page with content_refs; '
                       'text and evidence are inherited, not reauthored.',
                       'Use design as free prose or a custom object describing visual elements, '
@@ -281,10 +307,14 @@ def validate_design(design, story, evidence, slide_count=None):
     problems = []
     if not isinstance(design, dict):
         return ['page_design must be an object']
-    if design.get('schema_version') == '1.1':
+    contract = (story.get('content_contract') or {}).get('version')
+    expected = '1.3' if contract == '2.0' else '1.2'
+    if contract and design.get('schema_version') != expected:
+        return [f'A Story with content_contract {contract} requires page design {expected}; do not downgrade to bypass visibility/review.']
+    if design.get('schema_version') in ('1.1', '1.2', '1.3'):
         return _validate_reference_design(design, story, evidence, slide_count)
     if design.get('schema_version', '1.0') != '1.0':
-        return ['unsupported page_design schema_version; use 1.1 (or legacy 1.0)']
+        return ['unsupported page_design schema_version; use 1.2 (or legacy 1.0/1.1)']
     if 'devices' in design:
         problems += [f'deck devices: {message}' for message in validate_devices(design['devices'], DECK)]
     # The room is a design input, not a caption: without it, density and page shape are decided by
@@ -410,10 +440,10 @@ def summary(design):
     The design speaks in shapes, not forms: the IR stage is the one that knows what can be drawn,
     so it receives the description and chooses the composition that realizes it.
     """
-    if design.get('schema_version') == '1.1':
+    if design.get('schema_version') in ('1.1', '1.2', '1.3'):
         # Keep arbitrary designer instructions intact; do not whitelist away icons, diagrams,
         # reading paths or bespoke composition. Scientific bodies remain in the separate Story.
-        return {'schema_version': '1.1', 'setting': copy.deepcopy(design['setting']),
+        return {'schema_version': design['schema_version'], 'setting': copy.deepcopy(design['setting']),
                 'pages': [{key: copy.deepcopy(value) for key, value in page.items() if key != 'items'}
                           for page in design['pages']]}
     return {'setting': dict((design or {}).get('setting') or {}),

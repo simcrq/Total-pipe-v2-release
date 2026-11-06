@@ -182,6 +182,7 @@ def resources(path):
 
 def code_hash():
     files = list(Path(__file__).parent.rglob('*.py'))+list(Path(__file__).parent.rglob('*.json'))
+    files.append(Path(__file__).resolve().parents[1]/'pwf2rpa/pwf2rpa/content_contract.py')
     revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True,
                               text=True, encoding='utf-8', errors='replace').stdout.strip() if (ROOT/'.git').exists() and shutil.which('git') else None
     return digest([revision, {str(p.relative_to(ROOT)): sha(p) for p in sorted(files)}])

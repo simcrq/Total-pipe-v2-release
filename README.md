@@ -4,7 +4,11 @@
 默认 Agent 链路由 RPA 规范化内容、独立 page_design 决定页面表达；Deck Compiler 确定最终几何并检查容量，OfficeCLI 写入原生 PPTX。
 IR 阶段可用 `advance(preflight=true)` 在提交前汇总全部验收问题并测量容量，不消耗修订次数；
 拆页保留逐页证据锚点及节点级完整覆盖。PDF doctor 使用官方 CLI 验证现有 MinerU 登录，无需重复导出 token。
-page_design 1.1 后可逐页交 deck_ir_page，自动绑定 Story/素材、立即测量容量、保留通过页；齐全后整套复验。允许自绘解释图，原图裁片须校验来源矩形和原像素。
+新任务使用科学记录与观众表达契约：Story 2.0 分离原子科学单元与叙事，先经主 Agent 科学源审读；page_design 1.3 忠实改写投屏文案，
+区分唯一所有权与明确复用，再经页面源文案审读进入 IR。条件只跟随其直接限定的可见断言，旧协议可恢复。
+逐页交 deck_ir_page 可自动绑定来源、测量容量并缓存通过页；齐全后整套复验。见[内容契约](Total-pipe/docs/content-projection.md)。
+IR 编写中可用 `advance.preview` 选页生成 HTML 渲染 PNG，实际看图后改源 IR；未变页复用缓存。
+这是编辑预览，最终候选仍整套构建，PowerPoint 原生验收仍须完成。见[选页渲染接口](Total-pipe/docs/agent-adapter.md#ir-选页渲染与看图修订)。
 
 **默认入口：** [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) 与四工具接入层。
 **完整流程规范：** [total-pipe-deck Skill](Total-pipe/skills/total-pipe-deck/SKILL.md)。
@@ -41,7 +45,7 @@ page_design 1.1 后可逐页交 deck_ir_page，自动绑定 Story/素材、立�
 | PaperWorkflow 插件 / MCP / Python 项目 | `0.2.0+codex.20260928131752` / `0.3.0` / `0.1.0` | [插件清单](PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](PaperWorkflow/mcp_server.py)、[pyproject.toml](PaperWorkflow/pyproject.toml) |
 | pwf2rpa | `1.4.2` | [模块版本](Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | `0.6.3-rc1`；插件构建 `0.6.3-rc1+codex.20260920125419` | [package.json](research-ppt-assistant/package.json)、[插件清单](research-ppt-assistant/.codex-plugin/plugin.json) |
-| 文件协议 | PaperWorkflow schema `4`；Deck IR `2.0`；Chart IR `v1`；layout tree `1.0` / `1.1` / `1.2` | [工作流实现](PaperWorkflow/utils/literature_workflow.py)、[Deck IR Schema](Total-pipe/schemas/deck-ir.schema.json)、[Chart IR Schema](Total-pipe/schemas/chart-ir.schema.json) |
+| 文件协议 | PaperWorkflow schema `4`；Story content contract `2.0`（兼容 `1.0`）；page_design `1.3`（兼容 `1.0/1.1/1.2`）；Deck IR `2.0`；Chart IR `v1`；layout tree `1.0/1.1/1.2` | [内容契约](Total-pipe/docs/content-projection.md)、[Deck IR Schema](Total-pipe/schemas/deck-ir.schema.json)、[Chart IR Schema](Total-pipe/schemas/chart-ir.schema.json) |
 
 仓库现有版本元数据尚未统一，服务握手可能返回上表中的组件版本。部署时同时记录 Git commit，
 并查询 `python -m deck_compiler capabilities` 确认功能；插件版本号不能代替运行时能力检查。
@@ -56,7 +60,8 @@ page_design 1.1 后可逐页交 deck_ir_page，自动绑定 Story/素材、立�
 | Story Planner | Skill 调度的独立 Agent 阶段；[提示包接口](Total-pipe/pwf2rpa/pwf2rpa/story.py) | 依据证据组织 `question / answer / evidence / next` 和可选 `key_points`，产出 `story_plan.json` |
 | pwf2rpa | [Total-pipe/pwf2rpa/](Total-pipe/pwf2rpa/README.md) | 确定性校验、内容与元数据传输；把 Story 转成 RPA 输入，产出 `rpa_input.json` |
 | Research PPT Assistant（RPA） | [research-ppt-assistant/](research-ppt-assistant/README.md) | 默认 Agent 仅使用内容规范化与引用传递；独立 CLI 仍提供模板规划、子布局和规划验证（320 个版式、40 类语义和 16 套主题） |
-| 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[接入层契约](Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) | 根据 Story 引用设计原图、自绘元素、构图与讲解走读；不重写科学内容、不看编译器能力清单，同一篇论文在组会 / 会议 / 文献分享 / 讲课 / 路演里可以长成不同的页 |
+| 页面设计（page_design） | Skill 调度的独立 Agent 阶段；[内容契约](Total-pipe/docs/content-projection.md) | 1.3 独立改写观众文案，设计原图/自绘与讲解，明确所有权、再次出现和直接限定；不改变科学含义、不看编译器能力清单 |
+| 源文案审读（page_review） | 主 Agent 实际检查，非自动签收 | 对照科学记录审读忠实性、限定范围和观众文案；绑定当前哈希，失败退回设计 |
 | Scientific Visual Planner | 整套视觉提案阶段；[协议](Total-pipe/docs/scientific-visual-planner.md) | 选择整套科研风格及支持页面的视觉构图，生成提案并合入 Deck IR 的 `presentation` |
 | Deck Compiler / Deck IR | [Total-pipe/deck_compiler/](Total-pipe/README.md) | 校验科学内容契约、递归分配区域、测量文本与公式、检查几何，生成确定坐标及 `layout_feedback.json` / `qa_report.json` |
 | 布局提供方 | [totalpipe_layout/](Total-pipe/totalpipe_layout/)、[提供方接口](Total-pipe/docs/layout-provider.md) | 内置 `packer` 为受支持的平面正文提供确定性几何建议；复杂测量页由编译器布局，单独记录 owned；也可选 `compiler` 或外部 `module:factory` |
@@ -72,10 +77,12 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 论文 PDF / Markdown
   → PaperWorkflow：workflow.json + evidence.md + 原图
   → Story Planner：story_plan.json
+  → scientific_review：实际审读原子科学记录、原文/SI必要条件与遗漏
   → [可选 DesignIntentPlanner：design_intent.json]
   → pwf2rpa：rpa_input.json
   → RPA：内容规范化与引用传递（默认 Agent 不重复做模板规划）
-  → page_design：Story 引用 + 视觉元素 / 排布 / 走读
+  → page_design 1.3：原子记录所有权 / 明确复用 + 观众文案 / 直接限定 + 视觉与走读
+  → page_review：实际源文案审读（旧 1.0/1.1 跳过）
   → Agent 按 Schema 映射 canonical deck_ir.json
   → Scientific Visual Planner：整套 Design 提案 → 合入后的 Deck IR
   → Deck Compiler + 布局提供方：几何、容量和结构化反馈
@@ -106,7 +113,7 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 
 Story 阶段需要记录用户选择的模型、reasoning 和真实 subagent provenance。
 从已有证据、Story 或 Deck IR 继续时，按产物状态进入相应阶段。
-RPA 之后先由独立子代理写视觉讲解设计（引用 Story，交代绘图、排布和走读），再由 Agent 按 Schema 映射
+RPA 之后先由独立子代理写观众表达和视觉讲解设计，主 Agent 实际源文案审读后，再按 Schema 映射
 canonical Deck IR；Design 的视觉提案阶段随后执行。
 
 ### 2. 已有 Deck IR：编译 CLI
@@ -169,6 +176,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 | OCR | PDF 输入默认调用 **MinerU 官方 `mineru-open-api` CLI**，需安装并认证；已有 Markdown / 证据包可从对应阶段继续 |
 | 字体 | 安装主题所需字体、使用语言的字形和 PowerPoint 数学字体；公式使用 Cambria Math。额外字体目录用 `TOTALPIPE_FONT_DIR` 指定 |
 | 原生验收 | **macOS 或 Windows + Microsoft PowerPoint**；Linux / WSL 可执行规划、编译和结构检查，正式晋级还需 PowerPoint 原生证据 |
+| 可选 IR 编辑预览 | OfficeCLI screenshot/html + 可启动的 Chrome/Edge/Chromium/Firefox 或其支持的 Playwright 浏览器；不能代替 PowerPoint 原生验收 |
 | 可选测量依赖 | `matplotlib` 提供数学字体度量；未安装或遇到不支持的数学结构时使用保守估计并保留 REVIEW。无需本地 LaTeX 或 torch |
 | 模型与网络 | Story / Design 使用 Agent 模型；默认 MinerU 云 OCR 需要网络与认证。仅从本地 Deck IR 编译不要求模型 API Key |
 

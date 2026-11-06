@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import uuid
 
@@ -43,6 +44,14 @@ def current(job):
             continue
         if stage.get('skip_if') == 'design_complete' and design_complete(job):
             continue
+        if stage.get('skip_if') == 'legacy_story':
+            path = Path(job['request']['out_dir'])/'work/story_plan.json'
+            if path.is_file() and (read(path).get('content_contract') or {}).get('version') != '2.0':
+                continue
+        if stage.get('skip_if') == 'legacy_page_design':
+            path = Path(job['request']['out_dir'])/'work/page_design.json'
+            if path.is_file() and read(path).get('schema_version') not in ('1.2', '1.3'):
+                continue
         upstream = dependency(job, previous)
         if stage['kind'] == 'input':
             values = job['request'] if stage['id'] == 'intake' else job.get('inputs', {})
@@ -93,6 +102,8 @@ def envelope(job, stage, failure=None, detail='summary'):
         status = 'waiting_agent'
         artifact = stage['artifact']
         prompt = {'story': work/'story_prompt.json', 'page_design': work/'page_design_prompt.json',
+                  'scientific_review': work/'scientific_review_prompt.json',
+                  'page_review': work/'page_design_review_prompt.json',
                   'deck_ir': work/'ir_prompt.json',
                   'visual_design': work/'visual_prompt.json'}.get(sid)
         if sid == 'deck_ir' and (work/'page_design.json').is_file():
@@ -116,8 +127,20 @@ def envelope(job, stage, failure=None, detail='summary'):
             action.update({'type': 'invoke_subagent', 'required_capability': 'independent_subagent',
                            'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED',
                            'input_path': str(prompt) if prompt else None,
-                           'schema_path': str(COMPONENT/'schemas/page-design.schema.json'),
+                           'schema_path': read(prompt).get('schema_path', str(COMPONENT/'schemas/page-design.schema.json')) if prompt and prompt.is_file() else str(COMPONENT/'schemas/page-design.schema.json'),
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
+        if sid == 'page_review':
+            from .content_review import SCHEMA
+            action.update({'schema_path': str(SCHEMA), 'instructions_path': str(work/'page_design_review_task.md'),
+                           'reason': 'ACTUAL_SOURCE_COPY_REVIEW_REQUIRED',
+                           'note': 'The orchestrator must actually review source/copy; never auto-attest or reuse the designer\'s self-review.'})
+        if sid == 'scientific_review':
+            from .science_review import SCHEMA
+            action.update({'schema_path': str(SCHEMA), 'instructions_path': str(work/'scientific_review_task.md'),
+                           'reason': 'ACTUAL_SCIENTIFIC_SOURCE_REVIEW_REQUIRED',
+                           'note': 'Actually audit atomicity and missing scientific prerequisites against paper and SI before page design; no auto-pass.'})
+        if sid == 'story' and prompt and prompt.is_file() and read(prompt).get('schema_path'):
+            action['schema_path'] = read(prompt)['schema_path']
         if sid == 'deck_ir':
             from .ir_pages import descriptor
             paging = descriptor(job, current(job)[1])
@@ -183,6 +206,10 @@ def envelope(job, stage, failure=None, detail='summary'):
             repair_info = descriptor(out)
         except (OSError, ValueError, KeyError, TypeError):
             pass  # Invalid/incomplete IR still has its ordinary full-authoring action.
+    preview_info = None
+    if sid in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
+        from .ir_preview import descriptor
+        preview_info = descriptor()
     if kind == 'terminal':
         try:
             from .native_acceptance import descriptor
@@ -194,6 +221,7 @@ def envelope(job, stage, failure=None, detail='summary'):
             'out_dir': str(out), 'state_path': str(out/'.totalpipe/job.json'),
             'events_path': str(out/'logs/events.jsonl'),
             **({'repair': repair_info} if repair_info else {}),
+            **({'ir_preview': preview_info} if preview_info else {}),
             **({'last_repair': job['last_repair']} if job.get('last_repair') else {}),
             **({'native': native_info} if native_info else {}),
             **({'last_native': job['last_native']} if job.get('last_native') else {}),
@@ -343,6 +371,22 @@ def _accept(job, stage, upstream, kind, path):
             a.check_design(value, read(work/'story_plan.json'), evidence,
                            slide_count=job['request'].get('slide_count'),
                            figures=(flow.get('artifacts') or {}).get('figure_assets_metadata') or [])
+        elif kind == 'page_design_review':
+            from .content_review import validate, ReviewRejected
+            try:
+                validate(work, value)
+            except ReviewRejected as error:
+                raise a.Failure('PAGE_DESIGN_REVIEW_REJECTED', str(error), 'replan', 'page_design') from error
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise a.Failure('PAGE_DESIGN_REVIEW_INVALID', str(error), 'author_artifact', 'page_review') from error
+        elif kind == 'scientific_review':
+            from .science_review import validate, ReviewRejected
+            try:
+                validate(work, value)
+            except ReviewRejected as error:
+                raise a.Failure('SCIENTIFIC_REVIEW_REJECTED', str(error), 'replan', 'story') from error
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise a.Failure('SCIENTIFIC_REVIEW_INVALID', str(error), 'author_artifact', 'scientific_review') from error
         elif kind == 'deck_ir':
             design = a.load_design(work)
             from .ir_pages import bind_sources
@@ -375,9 +419,11 @@ def _accept(job, stage, upstream, kind, path):
         a.persist_ir(value, path, destination)
     elif destination != path:
         write(destination, value)
-    if kind == 'page_design':
+    if kind == 'page_design' and value.get('schema_version') not in ('1.2', '1.3'):
         # The design is approved; the IR stage must now realize it instead of re-deciding it.
         a.finalize_design(work, value)
+    if kind == 'page_design_review':
+        a.finalize_design(work, a.load_design(work))
     paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None] if kind == 'deck_ir' else [destination]
     checkpoint(job, stage['id'], paths, upstream)
     job.pop('last_error', None)
@@ -611,12 +657,33 @@ def _preflight_ir(job, stage, artifact_path):
     return response
 
 
-def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None, preflight=False):
+def _preview_ir(job, stage, request):
+    """A rendering sandbox is not an acceptance attempt or a stage transition."""
+    from .ir_preview import execute
+    old = job.get('last_error')
+    failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+    response = envelope(job, stage, failure)
+    try:
+        response['preview_result'] = execute(job, request)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        response['preview_result'] = {'status': 'FAIL', 'message': a.redact(str(error)),
+                                      'job_unchanged': True, 'candidate_unchanged': True,
+                                      'powerpoint_ui_review': False}
+    return response
+
+
+def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None, preflight=False, preview=None):
     try:
         out, _ = locate(job_id)
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
+            if preview is not None:
+                if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from, acknowledge, native)):
+                    raise ValueError('Submit preview alone; it renders a draft without accepting or advancing it.')
+                if stage['id'] not in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
+                    raise ValueError('IR preview requires the deck_ir stage or later.')
+                return _preview_ir(job, stage, preview)
             if preflight:
                 if artifact_kind not in ('deck_ir', 'deck_ir_page') or not artifact_path or any(v is not None for v in (inputs, replan_from, acknowledge, native)):
                     raise ValueError('preflight=true requires only a deck_ir/deck_ir_page artifact and artifact_path.')

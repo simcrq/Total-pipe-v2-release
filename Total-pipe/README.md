@@ -21,8 +21,13 @@
 
 编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
 默认 Agent 的 RPA 阶段仅规范化内容，页面方案由独立 page_design 决定；RPA 独立 CLI 仍可做模板规划。
+Story 2.0 将科学断言与叙事段落分开，scientific_review 后由页面设计1.3分别声明所有权和复用；
+页面源文案实际审读后绑定 content_projection，原生caption及论文图号按语义实现；
+编译器分别检查完整记录归档、批准文案和可见页面对象。旧协议保持原行为。见[内容契约](docs/content-projection.md)。
 已有 canonical IR 的局部布局/裁图补丁可先调用同一编译器预检，失败保留旧候选；通过后仍执行完整构建
 与 QA，详见[局部修补协议](docs/agent-adapter.md#局部修补与布局预检)。
+IR 草稿可用四工具的 `advance.preview` 选页渲染：实际查看 PNG 后再修改源 IR，未变页复用缓存；
+它不接受 IR、不改候选或正式 QA，也不替代 PowerPoint 原生验收。见[选页渲染](docs/agent-adapter.md#ir-选页渲染与看图修订)。
 `packer` 是默认布局建议提供方，也可选 `compiler` 或外部 `module:factory`。
 它只接管受支持的平面正文建议；递归区域、视觉计划、公式、显式列表与原生图形等页面由编译器布局，
 逐页记为 `COMPILER_OWNED`，不计作提供方回退。状态和 coverage 定义见[提供方协议](docs/layout-provider.md)。

@@ -127,6 +127,11 @@ in `slide_briefs`; `evidence_texts` remains source material. Brief `body` text
 keeps paragraph breaks. There is no required point count; `key_points` is omitted
 from briefs when the Story node has none. Both `key_points` and `body` count
 toward layout capacity.
+That capacity statement applies to the standalone RPA planning path. The default Agent path
+normalizes content, then page design determines audience expression and record destinations;
+it does not require the full scientific record to be copied into visible prose.
+
+New Agent prompts require `content_contract.version="2.0"`: `units` are independently limitable scientific records with precise evidence and epistemic identity; `narrative_map` maps every answer/key_point/ending path to unit IDs. Qualifiers target concrete required assertions, never paragraphs or other qualifiers. A real scientific source review checks completeness and prerequisites before page design 1.3. Unique ownership and explicit repeated assertions are separate; only directly applicable conditions recur. The normalized Story preserves the ledger; legacy paragraph contract1.0/page-design1.2 and older prompts remain recoverable. See the [content projection protocol](../docs/content-projection.md). Structural checks never prove scientific atomicity or completeness; actual source and audience-copy reviews remain required.
 
 `explain` is optional but is the preferred reader-facing contract. It says what
 the audience must see, not which component to use. The closed vocabulary is

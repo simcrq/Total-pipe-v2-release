@@ -31,7 +31,7 @@ def fallback_list(block):
     A native list carries one run style, so a block whose author wrote emphasis stays plain: the
     emphasised phrase is worth more than the marker, and the list is the compiler's suggestion.
     """
-    if not isinstance(block, dict) or block.get('component') == 'formula':
+    if not isinstance(block, dict) or block.get('component') in ('formula', 'caption'):
         return block
     if block.get('text_flow') or block.get('inline_math'):
         return block

@@ -305,7 +305,11 @@ class RegionCompiler:
             raise LayoutTreeError(path, 'INSUFFICIENT_DRAWING_SPACE', 'No positive content width.', [1, 1], available)
         if kind == 'block':
             block = self.blocks[node['ref']]
-            if block['component'] == 'formula':
+            if block['component'] == 'caption':
+                from .layout import caption_measure
+                height, _ = caption_measure({'caption': block['text']}, width, self.fonts['font_file'], self.design)
+                need = Need(height, height)
+            elif block['component'] == 'formula':
                 from .layout import formula_label_width
                 from totalpipe_layout.formula import measure, parse
                 metrics = measure(parse(block['text']), 24)

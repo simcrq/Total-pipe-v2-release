@@ -30,8 +30,10 @@ class AdapterTests(AgentCase):
 
     def test_story_binding_uses_delegation_and_existing_provenance_gate(self):
         from pwf2rpa import Workflow, build_story_prompt
-        prompt = build_story_prompt(Workflow(workflow()), model='test-model', reasoning_effort='high', selected_by_user=True)
-        a.check_story(prompt, story(), workflow())
+        from atomic_fixture import atomic_story, atomic_workflow
+        valid = atomic_story()
+        prompt = build_story_prompt(Workflow(atomic_workflow(valid)), model='test-model', reasoning_effort='high', selected_by_user=True)
+        a.check_story(prompt, valid, atomic_workflow(valid))
         bad = story()
         bad['planner']['reasoning_effort'] = 'medium'
         with self.assertRaisesRegex(a.Failure, 'differs'):

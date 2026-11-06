@@ -45,7 +45,7 @@ python3.12 install.py --client codex --profile advanced
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
 | totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
-| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 deck_ir_patch）；deck_ir 可设 preflight=true；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -60,7 +60,7 @@ PDF doctor 使用 PWF 的实际 CLI/配置执行 `mineru-open-api auth --verify`
 
 ### 逐页 IR 与来源绑定
 
-已通过 page_design 1.1 时，`next_action.page_authoring.pages` 提供每页完整 input_path、输出路径和缓存状态。
+已通过 page_design 1.1，或 1.2 的实际源文案审读后，`next_action.page_authoring.pages` 提供每页完整 input_path、输出路径和缓存状态。
 逐页读取提示包及完整 Schema，写一个 canonical Deck IR（slides 恰好一页，ID 与设计相同），再调用
 `advance(job_id, artifact_kind="deck_ir_page", artifact_path=...)`。各页共用相同 deck_id/theme/presentation 头部。
 逐页包保留本页全部分配文本、相关 Story 上下文、证据和完整实现指令；Schema 通过绝对路径引用。
@@ -74,8 +74,38 @@ figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径
 通过页冻结在 work/ir_pages，相同页/图片/字体/编译器字节可复用测量（保留原 REVIEW），只修失败页；
 每页各有3次不同拒稿额度。preflight=true 也可用于 deck_ir_page，检查不写缓存、不计次。
 全部页就绪后按批准页序组装，复验整套 Story、证据和页数，再继续篇级 Design 和完整构建。
-最终 PPTX 仍整套生成，未宣称逐页 OfficeCLI 或原生验收。改变公共头部须显式 replan_from="deck_ir"，
+最终候选 PPTX 仍整套生成，草稿选页可按下一节单独渲染，不能充当原生验收。改变公共头部须显式 replan_from="deck_ir"，
 这会重置全部页缓存；只改局部内容时继续提交对应页即可。
+
+### IR 选页渲染与看图修订
+
+在 deck_ir 或之后的阶段，可单独调用 preview，不接受产物、不推进阶段、不占修订额度：
+
+```json
+{"job_id":"<job_id>","preview":{"artifact_path":"/absolute/job/work/pages/P01.json","slide_ids":["P01"]}}
+```
+
+输入为 work/ 中的完整 canonical Deck IR，可一页或整套；省略 slide_ids 时预览输入全部页。
+CLI 将该请求的 preview 对象写进 JSON，再用 `python -m agent advance --job-id <job_id> --preview <request.json>`。
+`ir_preview.schema_path` 给出完整协议。preview 不可与提交、preflight、replan、native 或签收混用。
+
+程序绑定原有 Story/来源，按页执行现有科学、设计与 compiler/packer 容量检查，用 OfficeCLI 写出
+独立的 preview.pptx，再用 **officecli-html** 截图。需要 OfficeCLI 的 screenshot/html 能力和本机可运行的
+Chrome/Edge/Chromium/Firefox（或其支持的 Playwright 浏览器）。无浏览器或宿主阻止启动时返回失败，
+不把未渲染的页标为成功。没有增加 OCR、模型调用或 PowerPoint 自动化。
+
+`preview_result.pages` 返回 slide_id、全部 issues/counts、PNG、预览 QA/反馈路径及 reused。
+Agent **实际打开 PNG**，检查文案是否易懂、图文是否匹配、文字是否截断/重叠，再改源 IR 并重新调用。
+图片写入 work/previews；按单页内容、来源、字体、编译器、渲染器与设计指纹复用，其他页变更不重渲未变页。
+缓存输出损坏时重新生成。输入或资源在渲染中变化则拒绝关联本轮结果。
+
+渲染图可能显示仍有 FAIL 的调试布局，preview_result 保留 FAIL；它不是通过门禁的候选。
+输入结构无效、无法编译时可以只有错误报告，没有 PNG。预览图及 QA 均不写入 build/，job/checkpoint、
+candidate 和正式 QA 保持不变。顶层 status/next_action 仍描述当前任务，预览状态看 preview_result.status。
+
+这是快速编辑预览。HTML 的字体、公式和形状可能与 PowerPoint 不同；单页页码从头计，自动目录页不渲染。
+篇级 Design 尚未合入时，预览反映当前草稿而非最终视觉。修订完成仍须正常提交、整套 Design、完整构建/QA
+和 PowerPoint 原生验收；本接口不签收 REVIEW，不做 candidate 增量拼装，不声称端到端速度倍率。
 
 ### 完整 IR 提交预检
 
@@ -128,6 +158,15 @@ RPA 独立 CLI 的模板规划功能不变。页面设计在目标页数内安�
 
 ### 页面设计阶段（page_design）
 
+新Story提示要求原子 content_contract 2.0；先进入scientific_review，主Agent对照原文/SI审查单元与遗漏。
+新页面设计使用 **1.3**：content_refs保持唯一所有权、reuse_refs明确再次展示，限定只绑定实际可见的具体断言。
+设计者忠实改写display_copy/content_map并记录真实figure_sources，随后page_review再审科学忠实性与观众语言。完整记录自动归档，
+原生caption与可见图号来源分别实现，关键限定跟随直接约束的主张同页可见。完整数据、Schema、审读和迁移规则见[科学记录与观众表达契约](content-projection.md)。
+page_review 由主 Agent 实际审读，用 artifact_kind=page_design_review 单独提交当前哈希和逐页具体检查；
+不能自动填 pass，也不代表已完成渲染图或 PowerPoint 验收。
+
+以下描述保留的 **1.1 恢复协议**。已有旧 Story/旧设计按原规则恢复，不静默改写为新契约。
+
 Story 决定研究问题、论证顺序、科学结论和证据边界；页面设计决定**怎么把这些内容画出来、摆出来、带着观众看**。
 RPA 之后交给独立子代理，完整读取 `work/page_design_task.md`、`work/page_design_prompt.json` 和
 其中 `schema_path` 指向的 [page-design 1.1 Schema](../schemas/page-design.schema.json)。设计提示不提供
@@ -168,7 +207,7 @@ RPA 之后交给独立子代理，完整读取 `work/page_design_task.md`、`wor
   IR 保留页序、分配、证据、数字、选图和视觉关系，实现设计指定的元素与构图；不能改成文字摘要。
   空间不足时回报实际容量，回退页面设计，不删内容或缩字号。
 - 旧 `schema_version=1.0` 的 claim/items/anchor/shape/form/devices 继续兼容，不要求迁移旧任务。
-  这些是旧协议；新任务默认 1.1，不再强制设计者重复科学策划。
+  这些是旧协议；新生成的原子content_contract Story默认1.3；段落契约1.0继续1.2，恢复的旧Story可继续1.1。
 
 以下是 IR 阶段可选的构图（`design_forms`）。新设计表不写编译器键名：IR 作者按每页的 `design` 选择能实现设计的构图。
 

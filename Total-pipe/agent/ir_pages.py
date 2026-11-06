@@ -27,6 +27,13 @@ def resolve_design_sources(design, work):
     inventory = _inventory(work)
     for page in design.get('pages', []):
         page['figures'] = [inventory.get(selected, selected) for selected in page.get('figures', [])]
+        if design.get('schema_version') in ('1.2', '1.3'):
+            if design.get('schema_version') == '1.3':
+                page['figure_sources'] = {inventory.get(ref, ref): meta for ref, meta in page.get('figure_sources', {}).items()}
+            for route in page.get('content_map', {}).values():
+                for carrier in route.get('carriers', []):
+                    if carrier.get('kind') == 'figure':
+                        carrier['ref'] = inventory.get(carrier['ref'], carrier['ref'])
     return design
 
 
@@ -38,19 +45,40 @@ def bind_sources(value, design, work, authored_path):
         return inventory.get(path, str((Path(authored_path).parent/Path(path)).resolve()))
     pages = {p['id']: p for p in (design or {}).get('pages', [])}
     assets = value.setdefault('assets', {})
-    for slide in value.get('slides', []):
+    for index, slide in enumerate(value.get('slides', [])):
         page = pages.get(slide.get('id'))
+        if page and (design or {}).get('schema_version') in ('1.2', '1.3'):
+            from deck_compiler.content_projection import bind_copy, snapshot
+            slide = bind_copy(slide, page)
+            value['slides'][index] = slide
+            expected = snapshot(page, design['_content_catalog'], design['_review'])
+            actual = slide.get('semantic', {}).get('content_projection')
+            if actual is not None and actual != expected:
+                raise ValueError('The approved audience projection changed; replan the page design and source/copy review.')
+            slide.setdefault('semantic', {})['content_projection'] = expected
+            supplements = {item['text']: item for item in page['display_copy'] if item.get('basis') == 'supplement'}
+            for block in slide.get('composition', {}).get('blocks', []):
+                supplement = supplements.get(block.get('text'))
+                if supplement:
+                    if block.get('basis', 'supplement') != 'supplement' or block.get('evidence_refs'):
+                        raise ValueError('Approved supplementary copy must stay in the supplement channel.')
+                    block['basis'], block['supplement'] = 'supplement', copy.deepcopy(supplement['supplement'])
         sem = slide.get('semantic')
         if page and isinstance(sem, dict):
-            items = page.get('items') or []
+            items = [*(page.get('items') or []), *(page.get('context_items') or [])]
             if 'evidence_refs' not in sem:
                 sem['evidence_refs'] = list(dict.fromkeys(ref for item in items for ref in item.get('evidence', [])))
             notes = sem.get('speaker_notes', '')
             for item in items:
                 text = item.get('text', '')
-                if text and text not in notes:
-                    notes += '\n\n'+item.get('source', item.get('id', 'Story'))+': '+text
+                source = item.get('source', item.get('id', 'Story'))
+                identity = ' ['+item['epistemic']+']' if item.get('epistemic') else ''
+                record = source+identity+': '+text
+                if text and (record not in notes if identity else text not in notes):
+                    notes += '\n\n'+record
             sem['speaker_notes'] = notes.strip()
+            if page.get('production_notes'):
+                sem['run_notes'] = list(dict.fromkeys([*sem.get('run_notes', []), *page['production_notes']]))
         for figure in slide.get('composition', {}).get('figure_refs', []):
             aid = figure.get('asset_id')
             if not isinstance(aid, str): continue
@@ -60,6 +88,21 @@ def bind_sources(value, design, work, authored_path):
             if not isinstance(asset, dict): continue
             if isinstance(asset.get('path'), str):
                 asset['path'] = resolve(asset['path'])
+            if page and (design or {}).get('schema_version') == '1.3':
+                manifest = page.get('figure_sources', {})
+                meta = manifest.get(aid) or manifest.get(asset.get('path'))
+                if not meta:
+                    raise ValueError(f'{aid}: no inspected figure identity in the approved design')
+                figure_id = meta['source_figure']
+                for obj in (asset, figure):
+                    if obj.get('source_figure', figure_id) != figure_id:
+                        raise ValueError(f'{aid}: IR figure identity conflicts with inspected source')
+                    obj['source_figure'] = figure_id
+                from deck_compiler.scientific_numbers import figure_source_label
+                label = figure_source_label(figure_id, figure.get('caption', ''))
+                if figure.get('source_label', label) != label:
+                    raise ValueError(f'{aid}: use the bound visible source label, not scientific prose in metadata')
+                figure['source_label'] = label
             if asset.get('origin', 'paper') == 'paper':
                 # A declared paper ID may be copied, but never guessed from a filename.
                 if 'source_figure' not in asset and figure.get('source_figure'):
@@ -80,15 +123,20 @@ def _filename(sid):
 
 def prepare_prompts(work, design, prompt):
     """Complete page-specific science and shared contracts, rather than the whole deck every time."""
-    if design.get('schema_version') != '1.1': return
+    if design.get('schema_version') not in ('1.1', '1.2', '1.3'): return
     from deck_compiler.design import bind_design
     design = bind_design(design, prompt['story'])
     shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities',
               'type_scale', 'visual_style', 'design_forms', 'design_devices', 'request', 'workflow_root') if k in prompt}
     for page in design['pages']:
-        refs = {ref for item in page.get('items', []) for ref in item.get('evidence', [])}
+        refs = {ref for item in [*page.get('items', []), *page.get('context_items', [])] for ref in item.get('evidence', [])}
         nodes = {int(item['source'].split('.')[0][1:])-1 for item in page.get('items', [])
                  if re.match(r'^S\d+\.', item.get('source', ''))}
+        ledger = prompt.get('story', {}).get('content_contract', {})
+        if ledger.get('version') == '2.0':
+            selected = {item['source'] for item in [*page.get('items', []), *page.get('context_items', [])]}
+            nodes = {int(path.split('.')[0][1:])-1 for path, refs in ledger['narrative_map'].items()
+                     if re.match(r'^S\d+\.', path) and selected.intersection(refs)}
         if any(item.get('source', '').startswith('ending.') for item in page.get('items', [])):
             nodes = set(range(len(prompt.get('story', {}).get('story', []))))
         value = {**shared, 'schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
@@ -127,8 +175,8 @@ def submit(job, upstream, path, dry=False):
     from deck_compiler.pipeline import compile_input
     work = Path(job['request']['out_dir'])/'work'
     design = a.load_design(work)
-    if not design or design.get('schema_version') != '1.1':
-        raise ValueError('Per-page IR requires an approved page_design 1.1.')
+    if not design or design.get('schema_version') not in ('1.1', '1.2', '1.3'):
+        raise ValueError('Per-page IR requires an approved page_design 1.1/1.2.')
     authored_sha = sha(path)
     value = bind_sources(read(path), design, work, path)
     if len(value.get('slides', [])) != 1:

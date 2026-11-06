@@ -16,6 +16,9 @@ def block_height(block, width, fonts, archetype, *, list_gap_ratio=.45, bullet_s
                  design=None):
     from .layout import formula_fit, formula_label_width, text_floor_height, native_list_height
     from .type_scale import body_size, display_floor
+    if block.get('component') == 'caption':
+        from .layout import caption_measure
+        return caption_measure({'caption': block['text']}, width, fonts['font_file'], design)[0]
     list_height = native_list_height(block, width, fonts['font_file'], list_gap_ratio,
                                      default_style=bullet_style)
     if list_height is not None:

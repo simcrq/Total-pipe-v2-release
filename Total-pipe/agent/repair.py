@@ -20,9 +20,10 @@ def resource_snapshot(ir_path):
     from deck_compiler.fonts import resolve_theme_fonts
     value = read(ir_path)
     result = resources(ir_path)
-    files = [p for root in ('deck_compiler', 'totalpipe_layout')
+    files = [p for root in ('deck_compiler', 'totalpipe_layout', 'pwf2rpa/pwf2rpa')
              for p in (COMPONENT/root).rglob('*.py')]
     files += list((COMPONENT/'schemas').rglob('*.json'))
+    files += list((COMPONENT/'pwf2rpa/schemas').rglob('*.json'))
     result['@compiler'] = digest([code_hash(), {str(p.relative_to(COMPONENT)): sha(p) for p in sorted(files)}])
     # The same immutable content is used for both snapshots. Layout-only patches
     # cannot change the text sample, theme or declared fonts.

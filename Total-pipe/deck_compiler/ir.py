@@ -21,7 +21,13 @@ SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
 
 def caption_figure_ids(caption):
     """Return normalized paper figure/panel ids explicitly named by a caption."""
-    return {f"{number.upper()}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    result = {f"{number.upper()}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    from .scientific_numbers import REFERENCE
+    for match in REFERENCE.finditer(str(caption or '')):
+        if match['kind'] == '图':
+            value = match['id']
+            result.add(('S' if value.upper().startswith('S') else '')+value.lstrip('Ss').lower())
+    return result
 
 
 def coarse_characters(text, inline_math=False):
@@ -246,6 +252,21 @@ def validate(ir):
             if isinstance(bid, str):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
+            caption = b.get('component') == 'caption'
+            if caption or 'caption_for' in b:
+                link = b.get('caption_for')
+                valid = (caption and isinstance(link, dict) and set(link) == {'kind', 'ref'}
+                         and isinstance(link.get('ref'), str) and bool(link['ref']))
+                check(valid, 'A native caption needs a caption_for visual identity', n, 'CAPTION_ANCHOR_INVALID')
+                if valid:
+                    kind, ref = link['kind'], link['ref']
+                    pool = comp.get({'graphic':'graphics', 'table':'tables', 'chart':'charts'}.get(kind, ''), [])
+                    found = any(obj.get('id') == ref for obj in pool if isinstance(obj, dict))
+                    if kind == 'figure': found = any(f.get('asset_id') == ref for f in figures)
+                    check(found, f'Caption {bid} must explain an existing visual on this page', n, 'CAPTION_ANCHOR_INVALID')
+                check(not any(key in b for key in ('label', 'anchor', 'bullet_style', 'bullet_color'))
+                      and not b.get('inline_math') and b.get('text_flow', 'plain') == 'plain',
+                      'Native captions use plain annotation text; body/list/formula treatments are not captions', n, 'CAPTION_INVALID')
             if 'bullet_style' in b:
                 from .fonts import BULLET_STYLES
                 check(isinstance(b['bullet_style'], str) and b['bullet_style'] in BULLET_STYLES,
@@ -374,7 +395,9 @@ def validate(ir):
                 check(expected == actual,
                       f"Caption expects Fig.{expected}, but asset {f['asset_id']} is Fig.{actual}", n,
                       "FIGURE_SOURCE_MISMATCH")
-                check(expected in caption_figure_ids(f.get("caption", "")),
+                projection = sem.get('content_projection', {})
+                source = f.get('source_label', '') if projection.get('version') == '2.0' else ''
+                check(expected in caption_figure_ids(f.get("caption", "")+' '+source),
                       f"Caption must explicitly name Fig.{expected}", n,
                       "FIGURE_CAPTION_MISMATCH")
         if archetype in ARCHETYPES and not has_tree:
@@ -432,6 +455,10 @@ def validate(ir):
                   n, "RUN_STATE_CAVEAT", severity="REVIEW")
         check(not pres.get("optional_overrides"), "Geometry overrides unsupported in v2.0; choose a variant", n)
         check(pres.get("variant", "default") in ("default", "spacious"), "Unknown component variant", n)
+        if 'content_projection' in sem:
+            from .content_projection import validate_ir as validate_projection
+            for rule, severity, message in validate_projection(s, assets):
+                check(False, message, n, rule, severity)
     errors.extend(validate_provenance(ir))
     return errors
 
@@ -465,4 +492,18 @@ def derive(ir, layout):
     ledger = explanation_coverage(ir)
     if ledger["slides"]:
         result["explanation_coverage.json"] = ledger
+    rendered = {slide['id']: slide for slide in layout['slides']}
+    projected = []
+    for slide in ir['slides']:
+        projection = slide['semantic'].get('content_projection')
+        if projection:
+            from .content_projection import validate_ir as validate_projection
+            findings = validate_projection(slide, ir.get('assets', {}), rendered.get(slide['id']))
+            projected.append({'slide_id': slide['id'], 'record_refs': list(projection['items']),
+                              'visible_refs': [ref for ref, route in projection['content_map'].items() if route['destination'] == 'visible'],
+                              'notes_refs': [ref for ref, route in projection['content_map'].items() if route['destination'] == 'notes'],
+                              'review': projection['review'], 'findings': [dict(rule=r, severity=s, message=m) for r, s, m in findings]})
+    if projected:
+        result['content_projection_coverage.json'] = {**provenance, 'version': '1.0', 'slides': projected,
+                                                     'note': 'Structural/visible-object checks; semantic fidelity and audience comprehension require actual review.'}
     return result

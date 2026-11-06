@@ -83,7 +83,11 @@ def caption_with_source(ref):
     return f'[[{label}]] · {caption}'
 
 
-def caption_measure(ref, width, font_file):
+def native_caption_size(design=None):
+    return min(CAPTION_FONT_SIZE, type_sizes(design)['caption']) if design else CAPTION_FONT_SIZE
+
+
+def caption_measure(ref, width, font_file, design=None):
     """``(height, lines)`` of a caption strip, measured the way it will be set.
 
     A labelled caption is set as runs, so it is measured by the inline engine that draws it: the
@@ -93,6 +97,8 @@ def caption_measure(ref, width, font_file):
     from .fonts import load_font_file
     content = caption_with_source(ref) if isinstance(ref, dict) else str(ref or '')
     size = float((ref or {}).get('caption_font_size', CAPTION_FONT_SIZE))
+    if design:
+        size = min(size, native_caption_size(design))
     if not content:
         return 0., 0
     if has_markup(content):
@@ -185,6 +191,8 @@ def native_list_height(block, width, font_file, gap_ratio=DEFAULT_LIST_GAP, padd
     flow; measuring it must not silently turn other prose into a compulsory list. With wrapping
     disabled, preserve-terms still reserves one complete marker row per item before overflow.
     """
+    if block.get('component') == 'caption':
+        return None
     if flow is None and block.get('text_flow') != DISTRIBUTED_ARROW_LIST:
         return None
     flow = flow or select_text_flow(block['text'], DISTRIBUTED_ARROW_LIST)
@@ -436,6 +444,8 @@ def graphic_page_regions(composition, region, assets, font_paths, visual_plan=No
         return
 
     def need(block, w):
+        if block.get('component') == 'caption':
+            return caption_measure({'caption': block['text']}, w, font_paths['font_file'], design)[0]
         list_height = native_list_height(block, w, font_paths['font_file'], list_gap_ratio,
                                          list_padding, default_style=bullet_style)
         if list_height is not None:
@@ -1036,6 +1046,14 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         bh = bottom-top
         def block(b, box, formula_size=None, formula_align='center'):
             label = b.get("label", "")
+            if b.get('component') == 'caption':
+                _, lines = caption_measure({'caption': b['text']}, box[2], font_paths['font_file'], design)
+                size = native_caption_size(design)
+                text(b['id'], b['text'], box, 'caption', size, size,
+                     max(2, lines))
+                if elements and elements[-1].get('id') == b['id']:
+                    elements[-1]['caption_for'] = dict(b['caption_for'])
+                return
             if b.get("component") == "formula":
                 # A formula is a measured unit: it cannot wrap, it is never fed through the text
                 # wrapper, and it is never silently set below 18 pt to make a page fit.

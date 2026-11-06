@@ -10,6 +10,8 @@
 | 了解组件、版本和完整入口 | [仓库 README](../README.md)、[快速开始](../QUICKSTART.md) |
 | Agent 端到端生成或修订 | [轻量接入 Skill](../Total-pipe/skills/total-pipe-agent/SKILL.md)、[四工具与恢复](../Total-pipe/docs/agent-adapter.md)；[完整规范](../Total-pipe/skills/total-pipe-deck/SKILL.md) |
 | Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
+| 原子科学记录、两次源审读与观众表达（Story2.0 / 设计1.3） | [内容契约](../Total-pipe/docs/content-projection.md)、[原设计动机](audience-content-contract-design.md) |
+| 旧内容契约1.2实现与回归（新协议见内容契约） | [验证记录](content-projection-validation.md) |
 | 安装、环境、字体和平台要求 | [环境清单](../Total-pipe/环境清单.md) |
 | 从 canonical Deck IR 编译 | [编译器 README](../Total-pipe/README.md)、[Deck IR / 公式协议](../Total-pipe/docs/deck-compiler-v2.md) |
 | 开发、检查或更新文档 | [开发与文档维护](development.md)、[文档同步 Skill](../Total-pipe/skills/total-pipe-doc-sync/SKILL.md) |
@@ -32,6 +34,8 @@
 | 页面设计 1.1：Story 引用、绘图、排布与讲解走读 | [接入层：页面设计阶段](../Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) |
 | 页面设计 1.1 实际子代理样例与回归 | [验证记录](agent-page-design-validation.md) |
 | 四工具候选后的 PowerPoint 导出、预览与真实 UI 复核 | [原生验收接入](../Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入) |
+| IR 编写过程的选页渲染与看图修订 | [选页渲染接口](../Total-pipe/docs/agent-adapter.md#ir-选页渲染与看图修订) |
+| IR 选页预览回归与本机真实渲染记录 | [验证记录](agent-ir-preview-validation.md) |
 | Story 可见结构、IR 义务与覆盖账本 | [讲解契约](explanation-contract.md) |
 | 补充内容、构造示例与论文泄漏检查 | [Supplement content、basis 与论文泄漏检查](../Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement) |
 | 递归内容区域与 RPA 子布局 | [复合布局](../Total-pipe/docs/composite-layouts.md) |

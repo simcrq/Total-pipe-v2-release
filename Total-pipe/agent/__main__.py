@@ -35,6 +35,7 @@ def main():
     p.add_argument('--inputs', type=Path)
     p.add_argument('--acknowledge', type=Path)
     p.add_argument('--native', type=Path, help='Artifact-bound PowerPoint render/review/ingest operation JSON')
+    p.add_argument('--preview', type=Path, help='Isolated IR preview request JSON: artifact_path and optional slide_ids')
     p.add_argument('--replan-from')
     commands.add_parser('serve')
     commands.add_parser('setup', help='Print the repository installer location')
@@ -58,12 +59,12 @@ def main():
             result = {'status': 'PASS', 'output': str(args['out'].resolve())}
         else:
             args.pop('json', None)
-            for key in ('queries', 'inputs', 'acknowledge', 'native'):
+            for key in ('queries', 'inputs', 'acknowledge', 'native', 'preview'):
                 if args.get(key) is not None:
                     args[key] = read(args[key])
             result = {'doctor': doctor, 'start': start, 'advance': advance, 'status': status}[command](**args)
         print(json.dumps(result, ensure_ascii=True))
-        state = result.get('page_result', result.get('preflight_result', {})).get('status', result.get('status'))
+        state = result.get('preview_result', result.get('page_result', result.get('preflight_result', {}))).get('status', result.get('status'))
         return 1 if state in ('FAIL', 'blocked', 'failed', 'revision_limit') else 0
     except (ValueError, OSError) as error:
         parser.exit(2, str(error)+'\n')

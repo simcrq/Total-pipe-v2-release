@@ -119,10 +119,13 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 `question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
 陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
 **RPA 槽位不是 Story 的写作上限**：默认四工具只调用 RPA 内容规范化，完整 brief 由独立页面设计安排，
-IR 用 `composite-research` + `layout_tree` 实现；不靠删句、缩写术语或藏 notes 通过。
+IR 按批准的观众表达实现；科学记录完整归档，关键证据和限定不能藏入 notes；不靠缩写术语或删科学含义通过。
 标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
+新提示要求content_contract.version=2.0：units记录独立可限定断言、精确EV与epistemic身份；narrative_map组织叙事。
+required主张可见，with_claim只绑定直接required单元，禁止条件级联。Story后先由主Agent实际scientific_review审读原文/SI及遗漏，再进入RPA/页面设计。
+完整字段、分类边界、审读与迁移规则见[科学记录与观众表达契约](../../docs/content-projection.md)。
 
 节点可带 `form` 声明这一步的讲解形态，并写出对应结构：
 
@@ -225,9 +228,15 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 ### 3.1 页面设计阶段（page_design）
 
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
-Story 是科学内容权威；页面设计只负责把内容变成可执行的视觉讲解，不再分析研究问题或重写正文。
+Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
 
-新版 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
+新任务`schema_version=1.3`使用display_copy/content_map；content_refs保持科学单元唯一所有权，reuse_refs明确再次展示，figure_sources记录真实图号。
+required 内容保持可见，with_claim 条件在主张出现的每页可见。主 Agent 随后实际执行 page_review，
+绑定当前 Story/设计哈希逐页检查忠实性、限定范围与观众文案；不能自动签收或复用设计者自评。
+IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 content_projection。文案或去向需改时回退设计并重审。
+数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
+
+恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
 设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
 不强制 claim/items/anchor 理由/rationale，也不限制所有页用同一字段或构图。
 `figures` 列出实际看过的精确资产 id；`title`、`marks` 可选。保留原图比例、来源及示意标记，不猜数据。
@@ -236,7 +245,7 @@ Story 是科学内容权威；页面设计只负责把内容变成可执行的�
 setting 简述请求中的 audience/occasion/reading；论文页数按显式目标（1–40）检查。
 IR 完整接收自定设计说明，从能力中选择实现方式，保留页序、内容分配、选图、可见讲解义务与视觉关系。
 放不下回报容量并回退设计，不删科学内容或缩字号。
-旧 1.0 设计继续兼容。完整契约与例子见 [页面设计协议](../../docs/agent-adapter.md#页面设计阶段page_design)。
+旧1.0/1.1设计与段落契约1.0/页面设计1.2继续兼容；不把旧任务自动改写为新语义。有 content_contract 的 Story 不能降级绕过新检查。
 
 #### 设计层设备（由 IR 阶段落地）
 
@@ -261,10 +270,13 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
 验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
 若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
+IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿选页渲染，实际打开返回 PNG 后再修改 IR。
+未变页按内容/资源指纹复用；预览不接受产物、不占修订、不改 candidate/正式 QA。它使用 officecli-html，
+不能证明 PowerPoint 原生显示，不能签收 REVIEW；完整 Design、构建及原生验收仍必做。完整协议见接入层用法的“IR 选页渲染与看图修订”。
 
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
-- `semantic`：完整展示标题、purpose、takeaway、证据、论文边界、讲稿。
+- `semantic`：标题、purpose、takeaway、证据、边界与讲稿；1.2 另由程序绑定 content_projection，区分科学归档与投屏表达。
 - `semantic.explanation`：把 brief 的 `metadata.story_explain` 原样带过来，逐个义务写
   `id / kind / required / content / evidence_refs`，并把 `carrier` 设为实际使用的原生对象。
   不能静默丢 required 义务；确实不做时写 `status=waived` 或 `unsupported` 和 `note`。
@@ -277,11 +289,11 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 映射时可先显式设顶层 `presentation.text_capacity_policy="preserve-terms"`，
 让完整长标题和正文在进入设计提示包前也能保留，不等到样式合入后再处理字符预算。
 
-标题优先取 `metadata.story_title` 中的完整 Story 标题，不使用 RPA 临时压缩的短标题。
+1.2 的标题来自批准的 display_copy；旧协议标题优先取 `metadata.story_title`，不使用 RPA 临时压缩的短标题。
 `semantic.title` 用陈述句或名词短语，保留科学含义，不以 `?` / `？` 结尾；不要把 Story 的
 `question` 直接复制成标题。
-逐条核对源 `key_points` 和正文：按原顺序进入 block、图形节点完整 title/body 或讲稿；
-必要的展示内容仍须可见，不能全部藏到 notes。段落边界保持换行，按需复制
+逐条核对源 `key_points` 和正文的科学记录归档，以及本页要求可见的载体；1.2 不要求照抄原句。
+必要的展示内容仍须可见，不能全部藏到 notes。旧协议段落边界保持换行，按需复制
 `design_ir.text_flow.mode` 到 block 的 `text_flow`；不要为了触发列表样式改写科研内容。
 证据编号和运行记录进入备注，不放到面向听众的标题、结论或 caveat。
 

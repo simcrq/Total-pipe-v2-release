@@ -149,6 +149,15 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                 issues.append(issue('OVERFLOW_REPAIR_FAILED', 'WARNING',
                     f"Automatic overflow repair failed: {error}", detector='overflow-repair'))
 
+    if layout:
+        from .content_projection import validate_ir as validate_projection
+        seen = {(item.get('rule'), item.get('message'), item.get('slide')) for item in issues}
+        rendered = {slide['id']: slide for slide in layout['slides']}
+        for number, slide in enumerate(ir['slides'], 1):
+            for rule, severity, message in validate_projection(slide, ir.get('assets', {}), rendered.get(slide['id'])):
+                if (rule, message, number) not in seen:
+                    issues.append(issue(rule, severity, message, number, detector='content-projection'))
+                    seen.add((rule, message, number))
     write_json(out/'deck_ir.json', ir)
     if not layout:
         for name in ('layout.json', 'layout_provider.json'):

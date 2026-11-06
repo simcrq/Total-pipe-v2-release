@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Total-pipe page design 1.3: atomic science, explicit repeated assertions and audience copy",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "deck_id",
+    "setting",
+    "pages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.3"
+    },
+    "deck_id": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "setting": {
+      "type": "object",
+      "required": [
+        "audience",
+        "occasion",
+        "reading"
+      ],
+      "properties": {
+        "audience": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "occasion": {
+          "enum": [
+            "group-meeting",
+            "research-report",
+            "research-sharing",
+            "lecture",
+            "commercial"
+          ]
+        },
+        "reading": {
+          "enum": [
+            "spoken",
+            "read",
+            "mixed"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "content_refs",
+          "design",
+          "display_copy",
+          "content_map"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "content_refs": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "design": {
+            "description": "Drawing, composition and presenter walkthrough instructions; custom structures welcome, no compiler vocabulary required.",
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              {
+                "type": "object",
+                "minProperties": 1
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "figures": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "display_copy": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "role",
+                "text",
+                "source_refs"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "role": {
+                  "enum": [
+                    "title",
+                    "takeaway",
+                    "body",
+                    "label",
+                    "caption"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "source_refs": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                },
+                "basis": {
+                  "enum": [
+                    "paper",
+                    "supplement",
+                    "organization"
+                  ]
+                },
+                "supplement": {
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "source",
+                    "constructed"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "background",
+                        "analogy",
+                        "example",
+                        "derivation",
+                        "diagram",
+                        "comparison"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    "constructed": {
+                      "type": "boolean"
+                    },
+                    "assumptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "content_map": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "destination"
+              ],
+              "properties": {
+                "destination": {
+                  "enum": [
+                    "visible",
+                    "notes"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "carriers": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "kind",
+                      "ref"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "copy",
+                          "figure",
+                          "formula",
+                          "table",
+                          "chart",
+                          "graphic"
+                        ]
+                      },
+                      "ref": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "locator": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "production_notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "reuse_refs": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "description": "Explicitly repeat required assertions owned by other pages. Conditions are activated only for assertions actually visible here."
+          },
+          "figure_sources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source_figure"
+              ],
+              "properties": {
+                "source_figure": {
+                  "type": "string",
+                  "pattern": "^S?[1-9][0-9]*[a-z]?$"
+                }
+              }
+            },
+            "description": "Exact selected asset ID to inspected paper figure/panel identity. Bound into visible source labels; not narrative copy."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

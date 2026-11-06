@@ -628,6 +628,7 @@
             "takeaway": {"type": "string", "minLength": 1},
             "inline_math": {"type": "array", "uniqueItems": true, "items": {"enum": ["title", "takeaway"]},
               "description": "Opt in selected semantic fields to measured $...$ or \\(...\\) native inline math. Other fields stay literal."},
+            "content_projection": {"type": "object", "additionalProperties": false, "required": ["version", "items", "display_copy", "content_map", "review"], "properties": {"version": {"enum": ["1.0", "2.0"]}, "items": {"type": "object"}, "display_copy": {"type": "array", "minItems": 2, "items": {"type": "object"}}, "content_map": {"type": "object"}, "review": {"type": "object"}, "figure_sources":{"type":"object"}}, "allOf":[{"if":{"properties":{"version":{"const":"2.0"}}},"then":{"required":["figure_sources"]}},{"if":{"properties":{"version":{"const":"1.0"}}},"then":{"not":{"required":["figure_sources"]}}}], "description": "Automatically bound approved science, audience copy, destinations and actual source reviews. Version2 also binds inspected figure identities. Notes never count as visible content."},
             "explanation": {"$ref": "#/$defs/explanation",
               "description": "Evidence-bound reader obligations copied from Story explain. The compiler measures coverage; this is not a layout request."},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
@@ -670,10 +671,13 @@
                     "enum": [
                       "body", "metric", "parameter", "process-step", "direct-evidence",
                       "hypothesis", "limitation", "conclusion", "callout", "comparison",
-                      "definition", "observation", "method", "result", "question", "source", "caveat", "formula"
+                      "definition", "observation", "method", "result", "question", "source", "caveat", "formula", "caption"
                     ]
                   },
                   "label": {"type": "string"},
+                  "caption_for": {"type":"object", "additionalProperties":false, "required":["kind","ref"], "properties": {
+                    "kind":{"enum":["figure","graphic","table","chart"]}, "ref":{"type":"string","pattern":"\\S"}
+                  }, "description":"Visual this native caption explains; must exist on this page."},
                   "text": {"type": "string", "minLength": 1},
                   "inline_math": {"type": "boolean", "default": false,
                     "description": "Prose only: explicitly enable measured native $...$ or \\(...\\) inline formulas; no auto-list conversion."},
@@ -692,6 +696,12 @@
                                     "description": "Paper block only: an optional subset of semantic.evidence_refs. A supplement block must not carry this field."}
                 },
                 "allOf": [{
+                  "if":{"required":["component"],"properties":{"component":{"const":"caption"}}},
+                  "then":{"required":["caption_for"],"properties":{"text_flow":{"const":"plain"},"inline_math":{"const":false}},
+                    "not":{"anyOf":[{"required":["label"]},{"required":["anchor"]},{"required":["bullet_style"]},{"required":["bullet_color"]}]}}
+                }, {
+                  "if":{"required":["caption_for"]}, "then":{"properties":{"component":{"const":"caption"}}}
+                }, {
                   "if": {"required": ["supplement"]},
                   "then": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}
                 }, {

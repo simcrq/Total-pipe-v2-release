@@ -13,22 +13,25 @@
 调用 advance。各轮本地执行耗时、等待与重规划时间点追加在 `logs/events.jsonl`，不代表模型生成耗时。
 IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 一次检查全部问题与几何容量，
 不消耗修订次数。详见[完整 IR 提交预检](agent-adapter.md#完整-ir-提交预检)；它不替代正式提交或最终 QA。
+边写 IR 边看图时，单独用 `advance(preview={artifact_path,slide_ids})`，实际打开返回 PNG 后改源 IR、重复预览；
+未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
 ## 1. 输入、工作目录与产物
 
 ```text
-论文 PDF → PaperWorkflow workflow.json → Story Planner story_plan.json
+论文 PDF → PaperWorkflow workflow.json → Story Planner story_plan.json → scientific_review 原子科学源审读
   → [可选 DesignIntentPlanner design_intent.json] → pwf2rpa rpa_input.json
   → RPA 内容规范化与引用传递（默认四工具）
-  → page_design 视觉讲解设计（Story 引用 / 绘图 / 排布 / 走读）→ canonical deck_ir.json
+  → page_design 1.3 原子记录与观众表达与视觉讲解 → page_review 实际源文案审读 → canonical deck_ir.json
   → Scientific Visual Planner（design 阶段，默认必做）→ designed.deck_ir.json
   → Deck Compiler + packer → OfficeCLI → candidate.pptx / staging.pptx + QA
   → 需要正式 final 时：PowerPoint 原生验收 → REVIEW 审核 → promote
 ```
 
-编译器直接接收 Canonical Deck IR（`schema_version: "2.0"`）。它是科学内容真源；
-`derived/` 中的计划、资源清单和 QA expectation 是只读派生物。
+编译器直接接收 Canonical Deck IR（`schema_version: "2.0"`）。它是唯一编译输入；科学含义由 Story 和证据决定，
+1.3的投屏文案由已审读页面设计决定；唯一所有权与再次展示分开，限定只绑定具体断言，IR 携带相应记录与表达快照。见[内容契约](content-projection.md)。
+`derived/` 中的计划、资源清单、内容覆盖账本和 QA expectation 是只读派生物。
 
 | 操作 | 工作目录 |
 | --- | --- |

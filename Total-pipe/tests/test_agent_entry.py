@@ -139,7 +139,7 @@ class EntryTests(AgentCase):
         self.assertNotEqual(runner.status(result['job_id'])['next_action']['reason'], 'JOB_NOT_FOUND')
 
     @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI required')
-    def test_actual_markdown_evidence_rpa_ir_design_and_build_with_explicit_test_story(self):
+    def test_legacy_markdown_evidence_rpa_ir_design_and_build_with_explicit_test_story(self):
         # This synthetic fixture tests orchestration, not a real model call or scientific acceptance.
         self.source.write_text('# Field response study\n\n# Abstract\n'
             'We measure the response under applied field and independent controls.\n\n# Methods\n'
@@ -152,7 +152,19 @@ class EntryTests(AgentCase):
             {'id': 'response', 'query': 'measured response applied field control'},
             {'id': 'probe', 'query': 'sample measured calibrated probe 300 K'}])
         self.assertEqual(result['stage'], 'model_selection', result)
-        result = runner.advance(result['job_id'], inputs={'model': 'test-model', 'reasoning_effort': 'high', 'selected_by_user': True})
+        # Restore the old prompt contract explicitly to exercise 1.0 task recovery. The new
+        # contract's required review and complete candidate path have their own integration test.
+        execute = runner.a.execute
+        def legacy_prompt(stage, job):
+            paths = execute(stage, job)
+            if stage == 'story_prompt':
+                prompt_path = self.out/'work/story_prompt.json'
+                prompt = read(prompt_path)
+                prompt.pop('content_contract_version', None)
+                write(prompt_path, prompt)
+            return paths
+        with patch('agent.runner.a.execute', side_effect=legacy_prompt):
+            result = runner.advance(result['job_id'], inputs={'model': 'test-model', 'reasoning_effort': 'high', 'selected_by_user': True})
         self.assertEqual(result['stage'], 'story', result)
         write(self.out/'work/story_plan.json', story())
         result = runner.advance(result['job_id'], artifact_kind='story_plan', artifact_path=str(self.out/'work/story_plan.json'))

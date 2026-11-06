@@ -174,6 +174,11 @@ def check_story(prompt, story, workflow):
         raise classify('STORY_PLANNER_PROVENANCE_MISSING', 'Story must record its real subagent provenance.')
     if any(actual.get(key) != expected.get(key) for key in ('model', 'reasoning_effort')):
         raise classify('STORY_PROVENANCE_MISMATCH', 'Story model / reasoning differs from the user-selected prompt delegation.')
+    from pwf2rpa.content_contract import validate_contract
+    problems = validate_contract(story, required=bool(prompt.get('content_contract_version')),
+                                 required_version=prompt.get('content_contract_version'))
+    if problems:
+        raise Failure('STORY_CONTENT_CONTRACT_INVALID', ' '.join(problems), 'author_artifact', 'story')
     try:
         story_to_specs(story, Workflow(workflow))
     except (ValueError, AdapterError) as error:
@@ -323,7 +328,16 @@ def check_design(value, story, evidence, slide_count=None, figures=None):
     """Refuse a page design that cannot be traced back to the Story or the evidence."""
     from deck_compiler.design import validate_design
     problems = validate_design(value, story, evidence, slide_count=slide_count)
-    if figures is not None and isinstance(value, dict) and value.get('schema_version') == '1.1':
+    if isinstance(value, dict) and value.get('schema_version') in ('1.2', '1.3'):
+        from .supplement import leak_messages
+        supplements = [{'id': item.get('id'), 'text': item.get('text'), 'basis': 'supplement'}
+                       for page in value.get('pages', []) if isinstance(page, dict)
+                       for item in (page.get('display_copy') if isinstance(page.get('display_copy'), list) else [])
+                       if isinstance(item, dict) and item.get('basis') == 'supplement']
+        if supplements:
+            problems += leak_messages({'slides': [{'id': 'design-copy', 'semantic': {}, 'composition': {'blocks': supplements}}]},
+                                      {'evidence': [{'id': key, 'text': text} for key, text in evidence.items()]})
+    if figures is not None and isinstance(value, dict) and value.get('schema_version') in ('1.1', '1.2', '1.3'):
         known = {figure['asset_id'] for figure in figures}
         for page in value.get('pages') or []:
             if isinstance(page, dict) and isinstance(page.get('figures', []), list):
@@ -345,13 +359,51 @@ def load_design(work):
     if not path.is_file():
         return None
     design = read(path)
-    if design.get('schema_version') == '1.1':
+    if design.get('schema_version') in ('1.1', '1.2', '1.3'):
         from .ir_pages import resolve_design_sources
-        return resolve_design_sources(bind_design(design, read(work/'story_plan.json')), work)
+        design = resolve_design_sources(bind_design(design, read(work/'story_plan.json')), work)
+        if design.get('schema_version') == '1.3':
+            from .science_review import binding as science_binding
+            try:
+                science_binding(work)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise Failure('SCIENTIFIC_REVIEW_REQUIRED', str(error), 'author_artifact', 'scientific_review') from error
+        if design.get('schema_version') in ('1.2', '1.3'):
+            from .content_review import binding
+            try:
+                design['_review'] = binding(work)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise Failure('PAGE_DESIGN_REVIEW_REQUIRED', str(error), 'author_artifact', 'page_review') from error
+        return design
     return design
 
 
 DESIGN_MARKER = ' A page design is approved.'
+
+PROJECTION_IR_INSTRUCTIONS = (
+    'Implement approved page design 1.2/1.3 as canonical Deck IR. Scientific records and audience copy '
+    'are separate: the tool archives complete assigned Story text and scoped qualifiers in notes; '
+    'do not copy those records, design directions, review notes or walkthrough instructions into prose. '
+    'Use only the approved display_copy for audience narrative (titles, takeaways, body, labels and captions). '
+    'You may write {"copy_ref":"id"} in a textual field; the tool resolves it before canonical Schema validation. '
+    'Keep literal data/formulas and traceable paper-figure/source metadata in their evidence carriers. '
+    'For 1.3, inspected figure identities and visible source labels are bound from figure_sources; '
+    'do not prepend them to approved caption text or put experimental conditions in source metadata. '
+    'Native diagram/table/chart captions use component=caption with caption_for={kind,ref}; '
+    'they are measured and emitted at the existing caption scale. Body prose cannot masquerade as a caption. '
+    'Implement content_map carriers exactly; notes never satisfy required visible content or scoped conditions. '
+    'The semantic.content_projection is bound automatically from the reviewed design, never authored or edited. '
+    'Preserve meaning, units, conditions, uncertainty, important controls and negative findings. '
+    'Do not add prose or simplify a claim. If approved copy or required objects do not fit, return measured '
+    'feedback and replan page_design, retaining scientific records. Use native editable drawings and formulas. '
+    'Select compiler capabilities to realize the approved visual relationships; do not redesign them. '
+    'All font floors, original-figure aspect ratios, provenance, supplement boundaries and scientific '
+    'geometry gates remain. Set the venue visual_style; declare no page coordinates. '
+    'Use composite-research/layout_tree when explicit grouping is needed, and simple archetypes otherwise. '
+    'Native data values cannot be guessed from raster curves. Explicit $...$ supports measured inline math. '
+    'Submit deck_ir_page for page measurement/caching; call preview and actually open its PNG while revising. '
+    'Complete full Design, build/QA and PowerPoint native acceptance after authoring.'
+)
 
 
 def apply_art_direction(value, design):
@@ -390,9 +442,12 @@ def finalize_design(work, design=None):
     prompt['design_forms'] = capabilities()['forms']
     prompt['design_devices'] = capabilities()['art_direction']['devices']
     instructions = prompt.get('instructions', '').split(DESIGN_MARKER)[0]
+    if design.get('schema_version') in ('1.2', '1.3'):
+        instructions = PROJECTION_IR_INSTRUCTIONS
     prompt['instructions'] = instructions+DESIGN_MARKER+(
         ' Story owns scientific content; the approved page design owns its visual explanation. '
-        'For 1.1, resolve content_refs against Story without paraphrasing away conditions or boundaries. '
+        'For legacy 1.1, resolve content_refs against Story without paraphrasing away conditions or boundaries. '
+        'For 1.2, realize display_copy and content_map; scientific records are not display text. '
         'Implement the complete design instructions: chosen images, drawn elements, relationships, '
         'arrangement and presenter walkthrough. A design may use free prose or custom fields; do not '
         'discard unfamiliar fields or replace its visuals with a text summary. For legacy 1.0 realize '
@@ -421,12 +476,12 @@ def finalize_design(work, design=None):
     # purpose), the evidence text behind each id, and the figure panels it may place.
     try:
         prompt['story'] = read(work/'story_plan.json')
-        if design.get('schema_version') == '1.1':
+        if design.get('schema_version') in ('1.1', '1.2', '1.3'):
             prompt['content_catalog'] = {
-                source: {'evidence': item['evidence']}
+                source: {key: item[key] for key in ('evidence', 'policy') if key in item}
                 for source, item in content_bindings(prompt['story']).items()}
     except (OSError, ValueError):
-        if design.get('schema_version') == '1.1':
+        if design.get('schema_version') in ('1.1', '1.2', '1.3'):
             raise Failure('PAGE_DESIGN_SOURCE_MISSING',
                           'Restore the approved story_plan.json before preparing the IR handoff.',
                           'resolve_dependency', 'page_design')
@@ -478,7 +533,7 @@ def design_realization_issues(value, design):
     def add(message, slide=None):
         issues.append({'code': 'DESIGN_REALIZATION_FAILED', 'severity': 'FAIL', 'message': message,
                        **({'slide': slide} if slide is not None else {})})
-    if design.get('schema_version') == '1.1' and not design.get('_content_bound'):
+    if design.get('schema_version') in ('1.1', '1.2', '1.3') and not design.get('_content_bound'):
         add('Resolve content_refs with bind_design / load_design before IR validation.')
         return issues
     pages, slides = design.get('pages') or [], paper_slides(value)
@@ -486,13 +541,23 @@ def design_realization_issues(value, design):
         add(f'The approved design has {len(pages)} pages but the IR has {len(slides)} paper pages. '
             'Realize one IR page per designed page; split inside a page instead of adding or dropping pages.')
         return issues
-    modern = design.get('schema_version') == '1.1'
+    modern = design.get('schema_version') in ('1.1', '1.2', '1.3')
     groups = {}
     deck_refs = {ref for slide in slides for ref in slide['semantic'].get('evidence_refs') or []}
     for index, (slide, page) in enumerate(zip(slides, pages), 1):
         semantic = slide['semantic']
+        if design.get('schema_version') in ('1.2', '1.3'):
+            from deck_compiler.content_projection import snapshot as projection_snapshot
+            expected = projection_snapshot(page, design['_content_catalog'], design['_review'])
+            if semantic.get('content_projection') != expected:
+                add(f'Page {index} ({page.get("id")}) lost or changed its approved audience projection.', index)
         cited = set(semantic.get('evidence_refs') or [])
         items = page.get('items') or []
+        if design.get('schema_version') == '1.3':
+            for item in [*items, *page.get('context_items', [])]:
+                missing = set(item.get('evidence', []))-cited
+                if missing:
+                    add(f'Page {index} ({page.get("id")}) must retain precise evidence {sorted(missing)} for unit {item.get("source")}.', index)
         if modern:
             page_groups = {}
             for item in items:
@@ -549,7 +614,7 @@ def design_realization_issues(value, design):
                         visible += ' '+str(series.get(key, []))
                 visible += ' '+' '.join(note.get('text', '') for note in chart.get('annotations') or [])
         runs = _digit_runs(visible)
-        for item in items:
+        for item in items if design.get('schema_version') not in ('1.2', '1.3') else []:
             if item.get('kind') == 'formula':
                 continue
             missing = _digit_runs(item.get('text', ''))-runs
@@ -596,6 +661,11 @@ def ir_issues(value, normalized=None, supplement='off', design=None, slide_count
     for slide, supplements, blocks in _supplement_blocks(value):
         has_supplement = has_supplement or bool(supplements)
         has_supplement_page = has_supplement_page or (bool(blocks) and len(supplements) == len(blocks))
+    for slide in value.get('slides', []) if isinstance(value, dict) else []:
+        projection = slide.get('semantic', {}).get('content_projection') if isinstance(slide, dict) and isinstance(slide.get('semantic'), dict) else None
+        copies = projection.get('display_copy', []) if isinstance(projection, dict) else []
+        if isinstance(copies, list) and any(isinstance(item, dict) and item.get('basis') == 'supplement' for item in copies):
+            has_supplement = True
     if has_supplement and mode == 'off':
         add('SUPPLEMENT_NOT_ENABLED', 'This job did not enable supplement content; remove the supplement blocks/pages or start a job with supplement=inline/pages/both.')
     if has_supplement_page and mode == 'inline':
@@ -666,6 +736,13 @@ def ir_issues(value, normalized=None, supplement='off', design=None, slide_count
             # Scientific notation normalization must not hide an author's paper value.
             for message in leak_messages(original, normalized):
                 add('SUPPLEMENT_PAPER_LEAK', message)
+            for slide in original.get('slides', []):
+                projection = slide.get('semantic', {}).get('content_projection')
+                copies = projection.get('display_copy', []) if isinstance(projection, dict) else []
+                supplementary = [{'id': item['id'], 'text': item['text'], 'basis': 'supplement'}
+                                 for item in copies if isinstance(item, dict) and item.get('basis') == 'supplement'] if isinstance(copies, list) else []
+                for message in leak_messages({'slides': [{'id': slide['id'], 'semantic': {}, 'composition': {'blocks': supplementary}}]}, normalized):
+                    add('SUPPLEMENT_PAPER_LEAK', message)
     return issues
 
 
@@ -769,7 +846,7 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
     return prompt
 
 
-DESIGN_INSTRUCTIONS = (
+LEGACY_DESIGN_INSTRUCTIONS = (
     'Design the visual explanation of the approved Story. Story owns the scientific argument, '
     'claims, evidence and boundaries; do not retell it, reinterpret it or write another outline. '
     'Your output is a drawing and presentation brief for the IR author: what to put on the page, '
@@ -801,6 +878,51 @@ DESIGN_INSTRUCTIONS = (
     'or final coordinates. Make a concise, concrete design handoff, not a second scientific essay.'
 )
 
+DESIGN_INSTRUCTIONS = (
+    'Design the audience expression and visual explanation of approved scientific records. '
+    'Story owns facts, argument, evidence and visibility policies. You own faithful display_copy: '
+    'rewrite for this audience, replace verbal repetition with a meaningful diagram, and give each page a clear claim. '
+    'Preserve scientific meaning, causal strength, comparison objects, units, uncertainty, controls and negative results. '
+    'Scientific record preservation does not require copying its sentences onto the screen. '
+    'Assign each scientific source in content_catalog exactly once with content_refs. Write display_copy (id, role, text, source_refs), '
+    'with exactly one title and takeaway. Roles are title/takeaway/body/label/caption, not layout templates. '
+    'Map every assigned source to visible carriers or justified notes using content_map. A visible route lists '
+    'carriers {kind,ref,locator}: copy refers to display_copy id; figure names a selected inspected asset; '
+    'formula/table/chart/graphic names the visual object you describe. Visual locators explain what evidence to read. '
+    'Follow content_contract: required sources stay visible; a with_claim qualifier is also mapped visible on every '
+    'page where an applies_to claim is visible, even when owned by another page. These contextual qualifiers may '
+    'repeat visually, while source ownership remains unique. notes_allowed needs a reason based on the page claim. '
+    'Do not turn important controls, uncertainty or negative findings into optional spoken detail. '
+    'Keep production_notes separate. design/claim rationale/walkthrough/negative authoring directions are not '
+    'display_copy. Do not dump evidence-audit prose onto slides; show scientific limitations where they restrict a claim. '
+    'Paper copy cites source_refs and inherits their evidence. Organizational copy uses basis=organization and no '
+    'source_refs or scientific numbers; it cannot supply scientific claims. Supplementary copy uses basis=supplement '
+    'and supplement={kind,source,constructed}, no paper refs, and visible labels for constructed examples. '
+    'Use design as free prose or a custom object for concrete visuals, their relationships, hierarchy and presenter '
+    'pointing order. You may draw your own explanatory diagrams, mechanisms, processes and structures. '
+    'Choose visual forms that serve the argument; nothing you decide here depends on what a tool can draw. '
+    'Do not select compiler templates, archetypes, APIs or coordinates. No mandatory cards, columns or icon quotas. '
+    'Inspect actual figure files before selecting exact asset IDs, preserve aspect ratio and source/figure labels. '
+    'Do not guess curve points or unavailable supplementary images. Label illustrative drawings as schematic. '
+    'Use setting to briefly reuse the requested room, audience and reading mode. After design, the orchestrator '
+    'performs source/copy review; do not supply a self-approval. Keep the handoff concrete and concise.'
+)
+
+ATOMIC_DESIGN_INSTRUCTIONS = (
+    'Atomic content_contract 2.0: scientific units, not narrative paragraphs, are the source of truth. '
+    'Own every unit exactly once via content_refs. If you repeat a required assertion owned by another page, '
+    'declare its ID in reuse_refs, actually display it and cite it; do not clone the assertion under a new ID. '
+    'Only qualifiers directly targeting assertions actually visible here follow them. Do not inherit an entire '
+    'Story node, unrelated experiment, or the conditions of a result you did not restate. '
+    'A concluding conceptual claim can omit a numerical result already explained; if the number is restated, '
+    'its source and applicable conditions must remain visible. Keep the whole scientific ledger in the deck. '
+    'For every selected figure, figure_sources maps its exact asset ID to {source_figure: inspected figure/panel ID}. '
+    'These are source identities, not measurements. The tool renders their visible provenance separately from '
+    'approved caption wording; never delete source labels to satisfy a numeric check. '
+    'If the approved science still mixes independently limitable claims or omits a prerequisite, report an upstream '
+    'Story problem instead of hiding conditions or adding unsupported facts. '
+)+DESIGN_INSTRUCTIONS
+
 
 def design_task(prompt=None):
     """Delegate visual explanation, without duplicating scientific planning."""
@@ -808,6 +930,25 @@ def design_task(prompt=None):
     briefs = len((prompt or {}).get('briefs') or [])
     target = ((prompt or {}).get('request') or {}).get('slide_count')
     pages = f'最终论文页为 {target} 页。' if target else '按内容和场合排页，最多 40 页。'
+    if ((prompt or {}).get('story') or {}).get('content_contract'):
+        atomic = (prompt['story']['content_contract'].get('version') == '2.0')
+        contract = '1.3（原子科学记录）' if atomic else '1.2'
+        return f"""# 页面表达与设计任务（独立子代理，{contract}）
+
+完整读取 `work/page_design_prompt.json` 和 schema_path 的完整 Schema。输入含 {briefs} 条参考 briefs、
+科学记录及其可见性契约、{figures} 张图、证据与场合。输出 `work/page_design.json`。{pages}
+
+- Story 决定科学含义及边界，你负责忠实改写成观众文案和视觉讲解，不重做科学大纲。
+- 每条科学记录用 content_refs 恰好分配一次；display_copy 写实际投屏的标题、结论、正文、图中标签和图注。
+  每项用 source_refs 追溯，关键英文术语和科学含义保持正确；不复制制作说明、核查过程或设计指令。
+- content_map 给每条分配记录标明 visible 的载体或 notes 的理由。required 必须可见；with_claim 的条件
+  跟随它限定的主张同页可见，必要时重复显示条件，而不重复分配原始记录。完整记录由程序归档到讲稿。
+- design 自由说明用什么原图、画什么元素与关系、如何排布、怎样带着观众看。figures 写精确资产 id，先看图。
+  图中数据不能猜点；示意与构造例须可见标识，论文与补充背景来源分开。
+- setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。无需知道编译器能力，不读源码。
+- 你不填写通过审查的记录。主 Agent 之后逐页对照科学记录审读文案，未通过会退回设计。
+
+输出设计，简述页数和关键视觉选择。不要把这份任务书改写成幻灯片正文。"""
     return f"""# 页面设计任务（独立子代理）
 
 Story 已经决定讲什么以及证据边界。你的任务是把它变成可执行的视觉讲解设计，交给 IR 作者。
@@ -835,6 +976,21 @@ Story 已经决定讲什么以及证据边界。你的任务是把它变成可�
 def ir_task(prompt=None):
     """The brief an orchestrator hands to the IR subagent once the design is approved."""
     pages = ((prompt or {}).get('page_design') or {}).get('pages') or []
+    if ((prompt or {}).get('page_design') or {}).get('schema_version') in ('1.2', '1.3'):
+        return f"""# Deck IR 实现任务（页面表达契约 1.2）
+
+源文案已由主 Agent 审读。完整读取 `work/ir_prompt_designed.json` 或指定逐页提示包及完整 IR Schema。
+实现 {len(pages)} 页的 display_copy、content_map 和视觉设计，保持页序、分配、选图和科学含义。
+
+- display_copy 是投屏文案权威；Story 是科学记录。可在文本字段写 {{"copy_ref":"文案 id"}}，提交时自动绑定。
+  不把 Story 长段、设计指令、walkthrough、核查备注重新填成正文；不自行增加或改写已批准的句子。
+- semantic.content_projection、完整讲稿、来源和 scoped qualifiers 由程序绑定。必需可见的对象、条件和对照
+  按 content_map 实现；讲稿和元数据不算页面可见。原生图表/公式承载的数据和原图来源保持可追溯。
+- 选择能力实现既定视觉；自绘优先用原生对象，布局树可直接使用。不写页面 bbox，不缩字号、不删内容。
+  容量不足时把测量反馈退回页面设计，不能修改科学含义或擅自润色文案。
+- 可以随时 preview，实际打开返回 PNG 后再修 IR；语义、补充归属、几何、完整 Design、构建及原生验收均保留。
+
+交付实现选择与真实未解决项。"""
     return f"""# Deck IR 实现任务（子代理）
 
 页面设计已经批准。逐页实现视觉设计；Story 保持科学内容权威。
@@ -958,6 +1114,10 @@ def execute(stage, job):
                    'evidence': brief.get('evidence_ids') or []}
                   for brief in content.get('slide_briefs') or []]
         capabilities = design_capabilities()
+        story = read(work/'story_plan.json')
+        projection = bool(story.get('content_contract'))
+        atomic = (story.get('content_contract') or {}).get('version') == '2.0'
+        design_version = '1.3' if atomic else '1.2'
         prompt = {
             'request': prompt_request(request),
             'room': {
@@ -968,13 +1128,13 @@ def execute(stage, job):
                 'occasions': list(capabilities['occasions']),
                 'note': 'Reuse the requested audience, duration and reading mode; do not re-plan the scientific story.',
             },
-            'story': read(work/'story_plan.json'),
+            'story': story,
             'briefs': briefs,
             'evidence': evidence,
             'figures': figures,
-            'schema_path': str(COMPONENT/'schemas/page-design.schema.json'),
+            'schema_path': str(COMPONENT/'schemas'/(f'page-design-v{design_version}.schema.json' if projection else 'page-design.schema.json')),
             'workflow_root': str(Path(workflow).parent),
-            'content_catalog': {source: {'evidence': binding['evidence']}
+            'content_catalog': {source: {key: binding[key] for key in ('evidence', 'policy') if key in binding}
                                 for source, binding in content_bindings(read(work/'story_plan.json')).items()},
             'shape': {
                 'schema_version': '1.1', 'deck_id': '<string>',
@@ -985,8 +1145,20 @@ def execute(stage, job):
                            'design': '<free prose or your own object: visual elements, drawing '
                                      'instructions, arrangement and presenter pointing order>',
                            'figures': ['<optional: exact asset_id actually inspected>']}]},
-            'instructions': DESIGN_INSTRUCTIONS,
+            'instructions': ATOMIC_DESIGN_INSTRUCTIONS if atomic else DESIGN_INSTRUCTIONS if projection else LEGACY_DESIGN_INSTRUCTIONS,
         }
+        if projection:
+            prompt['shape']['schema_version'] = design_version
+            page = prompt['shape']['pages'][0]
+            page['display_copy'] = [{'id': 'heading', 'role': 'title', 'text': '<faithful audience title>', 'source_refs': ['S1.answer']},
+                                    {'id': 'message', 'role': 'takeaway', 'text': '<clear conclusion>', 'source_refs': ['S1.answer']}]
+            page['content_map'] = {'S1.answer': {'destination': 'visible', 'carriers': [{'kind': 'copy', 'ref': 'message'}]}}
+            if atomic:
+                page['content_refs'] = ['C_assertion']
+                page['reuse_refs'] = []
+                page['figure_sources'] = {'<selected inspected asset ID>': {'source_figure': '<exact figure/panel ID>'}}
+                for item in page['display_copy']: item['source_refs'] = ['C_assertion']
+                page['content_map'] = {'C_assertion': {'destination': 'visible', 'carriers': [{'kind': 'copy', 'ref': 'message'}]}}
         path = work/'page_design_prompt.json'
         if not path.is_file() or read(path) != prompt:
             write(path, prompt)
@@ -996,6 +1168,12 @@ def execute(stage, job):
         if not task.is_file() or task.read_text(encoding='utf-8') != text:
             task.write_text(text, encoding='utf-8')
         return [work/'page_design_prompt.json', work/'page_design_task.md']
+    if stage == 'page_review':
+        from .content_review import prepare
+        return prepare(work)
+    if stage == 'scientific_review':
+        from .science_review import prepare
+        return prepare(work, request)
     if stage == 'design':
         compiler('visual-prompt', out, '--ir', work/'deck_ir.json', '--out', work/'visual_prompt.json',
                  '--requirements', request.get('requirements', ''))
