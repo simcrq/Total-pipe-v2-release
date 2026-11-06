@@ -1,0 +1,1072 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://totalpipe.local/schemas/explain-viz.schema.json",
+  "title": "ExplainViz proposal 1.0 (sidecar, not Deck IR)",
+  "$ref": "#/$defs/proposal",
+  "$defs": {
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "ir_sha256",
+        "slots_sha256",
+        "slides"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.0"
+        },
+        "ir_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "slots_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "slides": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slide_id",
+                  "reason",
+                  "decision"
+                ],
+                "properties": {
+                  "slide_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "\\S"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "\\S"
+                  },
+                  "decision": {
+                    "const": "skip"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slide_id",
+                  "reason",
+                  "decision",
+                  "scores",
+                  "teaching_goal",
+                  "visual_spec"
+                ],
+                "properties": {
+                  "slide_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "\\S"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "\\S"
+                  },
+                  "decision": {
+                    "const": "draw"
+                  },
+                  "scores": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "explanation_gain",
+                      "relationship_clarity",
+                      "source_confidence",
+                      "layout_fit",
+                      "redundancy"
+                    ],
+                    "properties": {
+                      "explanation_gain": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "relationship_clarity": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "source_confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "layout_fit": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "redundancy": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    }
+                  },
+                  "teaching_goal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240,
+                    "pattern": "\\S"
+                  },
+                  "visual_spec": {
+                    "$ref": "#/$defs/visual_spec"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "visual_spec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "geometry/peel_angle@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "substrate",
+                "film",
+                "theta"
+              ],
+              "properties": {
+                "substrate": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "film": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "theta": {
+                  "enum": [
+                    "θ",
+                    "theta",
+                    "Θ"
+                  ]
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "attached_to"
+                    },
+                    "from": {
+                      "const": "film"
+                    },
+                    "to": {
+                      "const": "substrate"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "angle_between"
+                    },
+                    "from": {
+                      "const": "film"
+                    },
+                    "to": {
+                      "const": "substrate"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "layer_stack@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "layer_0",
+                "layer_1"
+              ],
+              "properties": {
+                "layer_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_0"
+                    },
+                    "to": {
+                      "const": "layer_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "layer_stack@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "layer_0",
+                "layer_1",
+                "layer_2"
+              ],
+              "properties": {
+                "layer_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_2": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_0"
+                    },
+                    "to": {
+                      "const": "layer_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_1"
+                    },
+                    "to": {
+                      "const": "layer_2"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "layer_stack@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "layer_0",
+                "layer_1",
+                "layer_2",
+                "layer_3"
+              ],
+              "properties": {
+                "layer_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_2": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "layer_3": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_0"
+                    },
+                    "to": {
+                      "const": "layer_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_1"
+                    },
+                    "to": {
+                      "const": "layer_2"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "above"
+                    },
+                    "from": {
+                      "const": "layer_2"
+                    },
+                    "to": {
+                      "const": "layer_3"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "process_steps@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "step_0",
+                "step_1"
+              ],
+              "properties": {
+                "step_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_0"
+                    },
+                    "to": {
+                      "const": "step_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "process_steps@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "step_0",
+                "step_1",
+                "step_2"
+              ],
+              "properties": {
+                "step_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_2": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_0"
+                    },
+                    "to": {
+                      "const": "step_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_1"
+                    },
+                    "to": {
+                      "const": "step_2"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "template",
+            "source_fact_ids",
+            "labels",
+            "relations"
+          ],
+          "properties": {
+            "version": {
+              "const": "1.0"
+            },
+            "template": {
+              "const": "process_steps@1"
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "step_0",
+                "step_1",
+                "step_2",
+                "step_3"
+              ],
+              "properties": {
+                "step_0": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_1": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_2": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                },
+                "step_3": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+                }
+              }
+            },
+            "relations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_0"
+                    },
+                    "to": {
+                      "const": "step_1"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_1"
+                    },
+                    "to": {
+                      "const": "step_2"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "from",
+                    "to",
+                    "source_fact_ids"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "precedes"
+                    },
+                    "from": {
+                      "const": "step_2"
+                    },
+                    "to": {
+                      "const": "step_3"
+                    },
+                    "source_fact_ids": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(semantic\\.(title|takeaway)|block:.+)$"
+                      }
+                    }
+                  }
+                }
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      ]
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "slots"
+      ],
+      "properties": {
+        "version": {
+          "const": "1.0"
+        },
+        "slots": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "slide_id",
+              "graphic_id"
+            ],
+            "properties": {
+              "slide_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240,
+                "pattern": "\\S"
+              },
+              "graphic_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

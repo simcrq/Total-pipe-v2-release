@@ -216,5 +216,55 @@ for name, command, description in (
         'handler': lambda arguments, command=command: visual_invoke(command, arguments), 'timeout': 65}
 
 
+def explain_viz_invoke(command, arguments):
+    allowed = {'ir', 'slots', 'out'}
+    required = set(allowed)
+    if command == 'apply-explain-viz':
+        allowed |= {'proposal', 'mode', 'max_visuals_per_deck'}
+        required.add('proposal')
+    if not isinstance(arguments, dict) or set(arguments)-allowed or not required <= set(arguments):
+        raise ValueError('Missing or unknown ExplainViz arguments')
+    for key, value in arguments.items():
+        if key == 'max_visuals_per_deck':
+            if type(value) is not int or not 0 <= value <= 32:
+                raise ValueError('max_visuals_per_deck must be an integer in [0,32]')
+        elif key == 'mode':
+            if value not in ('off', 'auto', 'prefer'):
+                raise ValueError('mode must be off, auto or prefer')
+        elif not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError(f'{key} must be an absolute path')
+    argv = [sys.executable, '-m', 'deck_compiler', command,
+            '--ir', arguments['ir'], '--slots', arguments['slots'], '--out', arguments['out']]
+    if command == 'apply-explain-viz':
+        argv += ['--proposal', arguments['proposal'], '--mode', arguments.get('mode', 'off'),
+                 '--max-visuals-per-deck', str(arguments.get('max_visuals_per_deck', 4))]
+    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=560)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or result.stdout.strip())
+    return json.loads(result.stdout)
+
+
+for name, command, description in (
+    ('totalpipe_explain_viz_prompt', 'explain-viz-prompt',
+     'Optional ExplainViz: filter explicitly reserved Path IR scenes and prepare source facts and a strict proposal schema. No model call; out is a JSON file.'),
+    ('totalpipe_apply_explain_viz', 'apply-explain-viz',
+     'Optional ExplainViz: append source-bound editable paths and labels inside reserved scenes, with compiler rollback and an audit sidecar. Default mode off; use auto/prefer explicitly. Keep output alongside source IR. Fallback preserves input and is reported explicitly.'),
+):
+    properties = {key: {'type': 'string'} for key in ('ir', 'slots', 'out')}
+    required = ['ir', 'slots', 'out']
+    if command == 'apply-explain-viz':
+        properties.update({'proposal': {'type': 'string'},
+                           'mode': {'enum': ['off', 'auto', 'prefer'], 'default': 'off'},
+                           'max_visuals_per_deck': {'type': 'integer', 'minimum': 0,
+                                                    'maximum': 32, 'default': 4}})
+        required.append('proposal')
+    transport.TOOLS[name] = {'description': description,
+        'inputSchema': {'type': 'object', 'properties': properties, 'required': required,
+                        'additionalProperties': False},
+        'handler': lambda arguments, command=command: explain_viz_invoke(command, arguments),
+        'timeout': 570}
+
+
 if __name__ == '__main__':
     raise SystemExit(transport.main())

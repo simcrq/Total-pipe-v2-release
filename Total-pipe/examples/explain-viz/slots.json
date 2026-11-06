@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "slots": [
+    {
+      "slide_id": "peel-angle",
+      "graphic_id": "explanation_visual"
+    },
+    {
+      "slide_id": "layer-stack",
+      "graphic_id": "explanation_visual"
+    },
+    {
+      "slide_id": "process-steps",
+      "graphic_id": "explanation_visual"
+    }
+  ]
+}

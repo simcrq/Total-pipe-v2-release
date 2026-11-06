@@ -513,6 +513,19 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 先调整区域与行高；文字越界和碰撞保留 REVIEW。公式/图形容量、原图最小尺寸和科学关系仍是硬门禁。
 `VISUAL_PLAN_UNSATISFIABLE` 要调整设计，不能删改科学内容或静默忽略失败。
 
+### 4.3 可选 ExplainViz 讲解图
+
+已有 IR 明确预留 `layout_tree` 图形区域时，可在正式编译前执行
+`explain-viz-prompt`，由当前 Agent 根据候选页事实和严格 Schema 编写提案，再用
+`apply-explain-viz --mode auto|prefer` 生成新 IR 与审计文件。默认模式为 `off`，
+普通 compile/build/generate 和四工具不会自动启用；没有槽位时保留原页，不自动移动正文。
+高级 MCP 对应 `totalpipe_explain_viz_prompt / totalpipe_apply_explain_viz`。
+
+首版支持剥离角、2–4 层叠层与 2–4 步过程，标签及关系绑定当前页可见原文，
+只追加原生路径与独立文字。原有对象发生变化、标签不可读或布局编译失败时回退，
+成功仍需科学人审和原有候选/原生 QA。本轮按要求未运行验证；完整字段、命令及三模板样例见
+[ExplainViz 协议](explain-viz.md)，实现范围见[评估](../../docs/explain-viz-evaluation.md)。
+
 ## 5. 编译与候选
 
 在 `Total-pipe/` 中先做无 PPTX 的布局检查，或直接生成候选：
