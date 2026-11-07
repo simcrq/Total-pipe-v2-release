@@ -113,7 +113,7 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 ## 当前能力与协议
 
-- [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
+- [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排与跟随主题的图示着色，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。

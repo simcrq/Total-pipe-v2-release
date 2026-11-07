@@ -113,7 +113,7 @@ class DeckIRAdapter:
 
     def build_native_group(self, visual_spec, slot, theme):
         from .templates import build
-        group = build(visual_spec)
+        group = build(visual_spec, theme)
         x, y, w, h = slot['view_box']
         _, _, source_w, source_h = group['view_box']
         scale = min(w/source_w, h/source_h)
@@ -128,6 +128,16 @@ class DeckIRAdapter:
                             round(lw*scale, 6), round(lh*scale, 6)]
         group['view_box'] = list(slot['view_box'])
         return group
+
+    def visual_theme(self, deck_ir):
+        from ..visual_design import resolve_design
+        theme = dict(deck_ir['theme'])
+        design = resolve_design(deck_ir)
+        if design:
+            theme['accent'] = design['accent_color']
+        presentation = deck_ir.get('presentation') or {}
+        theme['_explain_viz_monochrome'] = (presentation.get('visual_style') or {}).get('pack') == 'print'
+        return theme
 
     def append_group(self, deck_ir, slide_id, graphic_id, group):
         from ..graphic_layout import validate_graphics

@@ -276,6 +276,49 @@ class ExplainVizNativeTests(unittest.TestCase):
                 self.assertEqual(path['commands'][0][2], path['commands'][1][2])
         self.assertEqual({label['text'] for label in group['labels']}, {'示意', '薄膜', '衬底', 'θ'})
 
+    def test_coloured_fills_preserve_geometry_labels_and_readable_light_dark_text(self):
+        from deck_compiler.background import contrast_ratio, relative_luminance
+        luminance = lambda value: relative_luminance(tuple(int(value[i:i+2], 16) for i in (1, 3, 5)))
+        themes = [dict(foreground='#142735', background='#FFFFFF', accent='#2563A6'),
+                  dict(foreground='#FFFFFF', background='#142735', accent='#F5D000'),
+                  dict(foreground='#4D4D4D', background='#FFFFFF', accent='#000000')]
+        for entry in inputs()[2]['slides']:
+            spec = entry['visual_spec']
+            original = build(spec)
+            for theme in themes:
+                with self.subTest(template=spec['template'], theme=theme):
+                    group = build(spec, theme)
+                    self.assertEqual(group['labels'], original['labels'])
+                    self.assertEqual([p['commands'] for p in group['paths']],
+                                     [p['commands'] for p in original['paths']])
+                    self.assertFalse(validate_graphics([{'id': 'coloured', 'type': 'path', **group}], 'native-graphic'))
+                    fills = [p['fill'] for p in group['paths'] if p['fill'].startswith('#')]
+                    self.assertTrue(fills)
+                    self.assertTrue(all(contrast_ratio(luminance(theme['foreground']), luminance(fill)) >= 4.5
+                                        for fill in fills))
+
+    def test_colouring_follows_design_accent_and_explicit_print_stays_monochrome(self):
+        ir, slots, proposal = inputs()
+        ir['presentation']['academic_design']['accent_color'] = '#B36200'
+        equivalent = copy.deepcopy(ir)
+        del equivalent['presentation']['academic_design']['accent_color']
+        equivalent['theme']['accent'] = '#B36200'
+        adapter = AcceptingAdapter()
+        def apply(source):
+            bound = {**proposal, 'ir_sha256': digest(source)}
+            return enhance(source, {'slots': slots, 'proposal': bound}, adapter=adapter)
+        coloured, themed = apply(ir), apply(equivalent)
+        self.assertEqual(len(coloured.manifest), 3, coloured.audit())
+        for a, b in zip(coloured.deck_ir['slides'], themed.deck_ir['slides']):
+            self.assertEqual(a['composition']['graphics'], b['composition']['graphics'])
+        ir['presentation']['visual_style'] = {'pack': 'print'}
+        printed = apply(ir)
+        self.assertEqual(len(printed.manifest), 3, printed.audit())
+        for slide in printed.deck_ir['slides']:
+            for path in slide['composition']['graphics'][0]['paths']:
+                self.assertIn(path.get('fill', 'none'), ('none', 'background'))
+                self.assertIn(path.get('stroke', 'foreground'), ('none', 'foreground'))
+
     def test_adapter_mapping_keeps_geometry_isotropic_in_offset_view_box(self):
         spec = inputs()[2]['slides'][0]['visual_spec']
         slot = placeholder()

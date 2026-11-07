@@ -517,6 +517,8 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 
 默认 auto：常规 compile/build/generate 及四工具候选构建都评估机会，无需额外请求文件。
 从当前页明确关系生成三个原生模板，先复用预留区域，再检测空白，最后有限尝试当前页正文区重排。
+默认以主题主色衍生浅色填充区分层与步骤，剥离角加浅色扇区；名称标签保留，颜色不代表数值。
+配色适配深浅背景，显式 print 风格保留单色线稿。
 来源、完整文字、原字号、原字体、标题与 takeaway 保持门槛不降低；失败保留原页。
 `--explain-viz-mode off` 显式禁用；高级 MCP 和四工具 start 对应 `explain_viz_mode`。
 

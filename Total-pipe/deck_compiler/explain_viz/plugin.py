@@ -132,7 +132,7 @@ class ExplainVizPlugin:
                         try:
                             slide = next(s for s in adapter.list_slides(candidate) if s['id'] == sid)
                             anchor = adapter.find_visual_slot(slide, slot)
-                            group = adapter.build_native_group(spec, anchor, candidate['theme'])
+                            group = adapter.build_native_group(spec, anchor, adapter.visual_theme(candidate))
                             ids = adapter.append_group(candidate, sid, slot['graphic_id'], group)
                             original_slide = next(s for s in slides if s['id'] == sid)
                             if not any(g['id'] == slot['graphic_id'] for g in
