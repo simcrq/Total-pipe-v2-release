@@ -59,6 +59,7 @@
 ## 样例和展示图
 
 - [复杂混排单页](../Total-pipe/examples/complex-mixed/README.zh-CN.md)：PPTX、Deck IR、参考素材及检查记录。
+- [空白检测与讲解标注三页](../Total-pipe/examples/explain-viz/whitespace-filled/README.md)：填充前后 IR、可编辑 PPTX、PowerPoint 原生预览与审计。
 - [行内公式样例](../Total-pipe/examples/inline-math.deck_ir.json)、[矩阵推导样例](../Total-pipe/examples/matrix-derivation.deck_ir.json)。
 - [原生表格](../Total-pipe/examples/native-table.deck_ir.json)、[边框容器](../Total-pipe/examples/framed-containers.deck_ir.json)、[原生图形](../Total-pipe/examples/native-components.deck_ir.json)。
 - [README 展示图来源与隐私检查](images/README.md)。

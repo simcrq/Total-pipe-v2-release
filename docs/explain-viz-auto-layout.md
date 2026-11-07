@@ -54,3 +54,8 @@ Microsoft PowerPoint 16.56 在 macOS 上通过 AppleScript 原生接口导出三
 中文、标签、剥离角方向、层叠上下顺序与流程顺序均与源文相符；原生 PDF 文字检查返回空问题列表。
 这是原生导出页面的检查，未进行 PowerPoint UI 逐页对象验收，也未消除现有 REVIEW。
 候选、PDF、PNG、独立验证记录及导出哈希证据位于被忽略的 `build/explain-viz-colored-20261107/`。
+
+后续又对这三页执行了一次空白填充：使用相同检测函数定位左右空白，由 Agent 从原文选取
+六处读图标注，共新增 18 个可编辑对象，原对象位置与字体保持。原生导出逐页复核后，
+已将[可重建样例](../Total-pipe/examples/explain-viz/whitespace-filled/README.md)纳入版本管理。
+该操作使用较小的标注区域门槛，最终编译关闭 ExplainViz，不是默认三模板对已增强页再次自动绘图。

@@ -47,3 +47,7 @@ python -m deck_compiler build --ir examples/explain-viz/automatic.deck_ir.json -
 ```
 
 本轮自动空白检测与局部重排的实际验证情况见[记录](../../../docs/explain-viz-auto-layout.md)。
+
+已着色页面的[三页空白填充成品](whitespace-filled/README.md)另附源 IR、可编辑 PPTX、
+PowerPoint 原生 PDF、逐页预览与检测审计。该成品使用同一空白检测函数，按原文加入读图标注，
+不表示默认 ExplainViz 会对已增强页再次自动生成注释。

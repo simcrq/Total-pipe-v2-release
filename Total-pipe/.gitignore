@@ -41,6 +41,8 @@ node_modules/
 *.pptx
 # Versioned, rebuildable mixed-content regression example.
 !examples/complex-mixed/complex-mixed.pptx
+# Versioned three-page whitespace-fill example with source IR and native previews.
+!examples/explain-viz/whitespace-filled/filled.pptx
 *.inspect.ndjson
 benchmarks/*/native.pdf
 benchmarks/*/native.json
