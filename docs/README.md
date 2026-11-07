@@ -10,6 +10,8 @@
 | 了解组件、版本和完整入口 | [仓库 README](../README.md)、[快速开始](../QUICKSTART.md) |
 | Agent 端到端生成或修订 | [轻量接入 Skill](../Total-pipe/skills/total-pipe-agent/SKILL.md)、[四工具与恢复](../Total-pipe/docs/agent-adapter.md)；[完整规范](../Total-pipe/skills/total-pipe-deck/SKILL.md) |
 | Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
+| 原子科学记录、两次源审读与观众表达（Story2.0 / 设计1.3） | [内容契约](../Total-pipe/docs/content-projection.md)、[原设计动机](audience-content-contract-design.md) |
+| 旧内容契约1.2实现与回归（新协议见内容契约） | [验证记录](content-projection-validation.md) |
 | 安装、环境、字体和平台要求 | [环境清单](../Total-pipe/环境清单.md) |
 | 从 canonical Deck IR 编译 | [编译器 README](../Total-pipe/README.md)、[Deck IR / 公式协议](../Total-pipe/docs/deck-compiler-v2.md) |
 | 开发、检查或更新文档 | [开发与文档维护](development.md)、[文档同步 Skill](../Total-pipe/skills/total-pipe-doc-sync/SKILL.md) |
@@ -29,7 +31,13 @@
 | 能力 | 文档 |
 | --- | --- |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
+| 页面设计 1.1：Story 引用、绘图、排布与讲解走读 | [接入层：页面设计阶段](../Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) |
+| 页面设计 1.1 实际子代理样例与回归 | [验证记录](agent-page-design-validation.md) |
+| 四工具候选后的 PowerPoint 导出、预览与真实 UI 复核 | [原生验收接入](../Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入) |
+| IR 编写过程的选页渲染与看图修订 | [选页渲染接口](../Total-pipe/docs/agent-adapter.md#ir-选页渲染与看图修订) |
+| IR 选页预览回归与本机真实渲染记录 | [验证记录](agent-ir-preview-validation.md) |
 | Story 可见结构、IR 义务与覆盖账本 | [讲解契约](explanation-contract.md) |
+| 补充内容、构造示例与论文泄漏检查 | [Supplement content、basis 与论文泄漏检查](../Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement) |
 | 递归内容区域与 RPA 子布局 | [复合布局](../Total-pipe/docs/composite-layouts.md) |
 | 边框、标题色带和 takeaway 框选 | [边框容器](../Total-pipe/docs/framed-containers.md) |
 | 原生列表、标记样式 / 颜色和实测容量 | [原生列表](../Total-pipe/docs/native-lists.md) |
@@ -37,7 +45,11 @@
 | 文字与原生数学混排 | [行内公式](../Total-pipe/docs/inline-math.md) |
 | 合并表头、公式格和行高 | [原生科研表格](../Total-pipe/docs/native-tables.md) |
 | 流程、DAG、连接符与图文共存 | [原生流程图](../Total-pipe/docs/native-graphics.md) |
+| 学术 / 商业 / 印刷风格包与稀疏页平衡 | [视觉风格包](../Total-pipe/docs/visual-style.md) |
+| IR 阶段设备：强调、标签组、图注出处、目录、结论框 | [设计层设备清单](../Total-pipe/docs/art-direction.md) |
 | 机制、架构、漏斗、Bézier 与 Path | [科研图形组件](../Total-pipe/docs/native-components.md) |
+| 自动讲解图、空白检测、正文区重排与回退 | [ExplainViz 协议](../Total-pipe/docs/explain-viz.md)、[当前实现与验证](explain-viz-auto-layout.md)、[首版评估](explain-viz-evaluation.md)、[构建接入历史](explain-viz-build-integration.md) |
+| 数据图（折线 / 柱状 / 散点、误差棒、图内标注）的字段、校验与渲染边界 | [Chart IR 契约](../Total-pipe/docs/chart-ir.md) |
 | 外部布局建议和回退 | [布局提供方](../Total-pipe/docs/layout-provider.md) |
 | OfficeCLI 写入与实际结构 QA | [OfficeCLI 后端](../Total-pipe/docs/officecli-backend.zh-CN.md) |
 | 复杂页溢出提示、留白与候选逐项签收 | [复杂页 QA 与维护](../Total-pipe/docs/complex-page-qa.md) |
@@ -47,6 +59,7 @@
 ## 样例和展示图
 
 - [复杂混排单页](../Total-pipe/examples/complex-mixed/README.zh-CN.md)：PPTX、Deck IR、参考素材及检查记录。
+- [空白检测与讲解标注三页](../Total-pipe/examples/explain-viz/whitespace-filled/README.md)：填充前后 IR、可编辑 PPTX、PowerPoint 原生预览与审计。
 - [行内公式样例](../Total-pipe/examples/inline-math.deck_ir.json)、[矩阵推导样例](../Total-pipe/examples/matrix-derivation.deck_ir.json)。
 - [原生表格](../Total-pipe/examples/native-table.deck_ir.json)、[边框容器](../Total-pipe/examples/framed-containers.deck_ir.json)、[原生图形](../Total-pipe/examples/native-components.deck_ir.json)。
 - [README 展示图来源与隐私检查](images/README.md)。

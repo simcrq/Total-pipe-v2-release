@@ -69,6 +69,8 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Use totalpipe_ack_review only after actual review, with explicit ids, reviewer and note; '
     'notes survive unchanged page evidence and never replace artifact-bound final approval.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
+    'ExplainViz defaults to auto: source-bound templates use reserved or detected empty regions, '
+    'then bounded local body reflow. Set explain_viz_mode=off to disable. Never bypass Design or scientific review. '
     'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
     'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
     'native table references to composition.tables, including merged headers and formula/matrix cells. '
@@ -88,7 +90,9 @@ def capability_handler(arguments):
     if arguments:
         raise ValueError('No arguments supported')
     from .layout_tree import capabilities
+    from .explain_viz.specs import capabilities as explain_capabilities
     return {'deck_ir_version': '2.0', 'layout_tree': capabilities(),
+            'explain_viz': explain_capabilities(),
             'backend': {'name': 'officecli', 'minimum_version': '1.0.152', 'runtime_probe_required': True}}
 
 
@@ -103,6 +107,10 @@ def invoke(command, arguments):
         argv += ['--ir', arguments['ir'], '--layout-provider', arguments.get('layout_provider', 'packer')]
         if arguments.get('skip_visual_design', False):
             argv += ['--skip-visual-design']
+        if arguments.get('explain_viz_request'):
+            argv += ['--explain-viz-request', arguments['explain_viz_request']]
+        if arguments.get('explain_viz_mode'):
+            argv += ['--explain-viz-mode', arguments['explain_viz_mode']]
     if command == 'build':
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
@@ -137,7 +145,11 @@ for name, command, description in (
         properties.update({'ir':{'type':'string', 'description':'Absolute canonical deck_ir.json path.'},
                            'layout_provider':{'type':'string','default':'packer'},
                            'skip_visual_design':{'type':'boolean','default':False,
-                               'description':'Explicit legacy mode only; bypass the default visual design stage.'}})
+                               'description':'Explicit legacy mode only; bypass the default visual design stage.'},
+                           'explain_viz_request': {'type': 'string',
+                               'description': 'Optional absolute path to ExplainViz configuration/proposal; omitted uses auto.'},
+                           'explain_viz_mode': {'enum': ['auto', 'off', 'prefer'],
+                               'description': 'Optional mode override; off explicitly disables automatic diagrams.'}})
         required.append('ir')
     if command in ('build', 'review-officecli'):
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}
@@ -163,7 +175,7 @@ for name, command, description in (
                 continue
             if not isinstance(value, str):
                 raise ValueError(f'{key} must be a string')
-        for key in ('ir','out'):
+        for key in ('ir','out','explain_viz_request'):
             if key in arguments and not Path(arguments[key]).is_absolute():
                 raise ValueError(f'{key} must be an absolute path')
         return invoke(command, arguments)
@@ -214,6 +226,58 @@ for name, command, description in (
     transport.TOOLS[name] = {'description': description,
         'inputSchema': {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False},
         'handler': lambda arguments, command=command: visual_invoke(command, arguments), 'timeout': 65}
+
+
+def explain_viz_invoke(command, arguments):
+    allowed = {'ir', 'slots', 'out'}
+    required = {'ir', 'out'}
+    if command == 'apply-explain-viz':
+        allowed |= {'proposal', 'mode', 'max_visuals_per_deck'}
+    if not isinstance(arguments, dict) or set(arguments)-allowed or not required <= set(arguments):
+        raise ValueError('Missing or unknown ExplainViz arguments')
+    for key, value in arguments.items():
+        if key == 'max_visuals_per_deck':
+            if type(value) is not int or not 0 <= value <= 32:
+                raise ValueError('max_visuals_per_deck must be an integer in [0,32]')
+        elif key == 'mode':
+            if value not in ('off', 'auto', 'prefer'):
+                raise ValueError('mode must be off, auto or prefer')
+        elif not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError(f'{key} must be an absolute path')
+    argv = [sys.executable, '-m', 'deck_compiler', command,
+            '--ir', arguments['ir'], '--out', arguments['out']]
+    if arguments.get('slots'):
+        argv += ['--slots', arguments['slots']]
+    if command == 'apply-explain-viz':
+        if arguments.get('proposal'):
+            argv += ['--proposal', arguments['proposal']]
+        argv += ['--mode', arguments.get('mode', 'auto'),
+                 '--max-visuals-per-deck', str(arguments.get('max_visuals_per_deck', 4))]
+    result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=560)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or result.stdout.strip())
+    return json.loads(result.stdout)
+
+
+for name, command, description in (
+    ('totalpipe_explain_viz_prompt', 'explain-viz-prompt',
+     'Optional ExplainViz: filter explicitly reserved Path IR scenes and prepare source facts and a strict proposal schema. No model call; out is a JSON file.'),
+    ('totalpipe_apply_explain_viz', 'apply-explain-viz',
+     'ExplainViz: append source-bound native diagrams, detect free regions and try bounded local body reflow. Default auto; off disables it. Keep output alongside source IR. Fallback preserves input.'),
+):
+    properties = {key: {'type': 'string'} for key in ('ir', 'slots', 'out')}
+    required = ['ir', 'out']
+    if command == 'apply-explain-viz':
+        properties.update({'proposal': {'type': 'string'},
+                           'mode': {'enum': ['off', 'auto', 'prefer'], 'default': 'auto'},
+                           'max_visuals_per_deck': {'type': 'integer', 'minimum': 0,
+                                                    'maximum': 32, 'default': 4}})
+    transport.TOOLS[name] = {'description': description,
+        'inputSchema': {'type': 'object', 'properties': properties, 'required': required,
+                        'additionalProperties': False},
+        'handler': lambda arguments, command=command: explain_viz_invoke(command, arguments),
+        'timeout': 570}
 
 
 if __name__ == '__main__':

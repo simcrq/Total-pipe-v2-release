@@ -1,0 +1,81 @@
+{
+  "schema_version": 4,
+  "workflow_id": "sample-restarted-fista",
+  "source": {
+    "input_path": "sample-papers/02-restarted-fista/paper.md",
+    "input_type": "markdown",
+    "source_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "source_fingerprint": "sample-restarted-fista"
+  },
+  "metadata": {
+    "title_guess": "Accelerated Sparse Recovery with Restarted FISTA"
+  },
+  "evidence_registry": [
+    {
+      "evidence_id": "EV0001",
+      "text": "Restarted FISTA reached a relative recovery error of 1.2 × 10^-3 after 200 iterations on the N = 512, K = 50 benchmark.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0002",
+      "text": "The restart schedule reduced the number of iterations to reach 10^-3 error by a factor of 1.8 compared with standard FISTA.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0003",
+      "text": "The proximal step uses the soft-thresholding operator with a step size of 1/L, where L is the Lipschitz constant of the gradient.",
+      "query_ids": ["methods"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0004",
+      "text": "The measurement matrix was drawn from a Gaussian ensemble with unit-column normalization, and measurements contained 30 dB additive white Gaussian noise.",
+      "query_ids": ["methods"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0005",
+      "text": "The restart condition triggers when the objective increases relative to the previous iterate.",
+      "query_ids": ["methods"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0006",
+      "text": "The method was evaluated on 100 random trials, and the median error is reported.",
+      "query_ids": ["methods"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0007",
+      "text": "The acceleration gain decreases when the true support is highly coherent.",
+      "query_ids": ["discussion"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0008",
+      "text": "Experiments use synthetic signals only; no hardware acquisition or real imaging data were tested.",
+      "query_ids": ["discussion"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0009",
+      "text": "At a coherence level of 0.8, the saving fell to 9%.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "measurement"
+    }
+  ],
+  "synthesis_readiness": {
+    "readiness": "ready"
+  }
+}

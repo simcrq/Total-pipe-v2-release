@@ -1,0 +1,53 @@
+# ExplainViz 三模板构造样例
+
+`reserved.deck_ir.json` 是三页既有 Deck IR，每页保留明确的背景矩形槽位：
+剥离角、层叠结构、过程步骤。文字和关系为开发用构造内容，不对应真实论文或实验。
+
+`slots.json` 绑定预留图形；`proposal.json` 绑定当前 IR 和槽位哈希，提供三个受约束 VisualSpec。
+修改源 IR 后须重新准备提案。输出可编辑原生路径和独立文字，不输出位图或原生编组。
+图示默认使用跟随主题主色的浅色填充，区分层和步骤，并着色剥离角示意区域；print 风格保留单色。
+`request.json` 内嵌同一份槽位和提案，可让正式 compile/build 在内存中处理，无需另存增强 IR；
+修改槽位或提案后也应同步请求文件。
+
+从 `Total-pipe/` 运行：
+
+```bash
+python -m deck_compiler explain-viz-prompt \
+  --ir examples/explain-viz/reserved.deck_ir.json \
+  --slots examples/explain-viz/slots.json --out examples/explain-viz/prompt.json
+python -m deck_compiler apply-explain-viz \
+  --ir examples/explain-viz/reserved.deck_ir.json \
+  --slots examples/explain-viz/slots.json \
+  --proposal examples/explain-viz/proposal.json --mode auto \
+  --out examples/explain-viz/enhanced.deck_ir.json
+python -m deck_compiler build --ir examples/explain-viz/enhanced.deck_ir.json \
+  --out build/explain-viz --skip-native
+```
+
+先查看 stdout 的 `status/applied_visuals/warnings` 与旁路审计。
+fallback/skipped 的输出保留原页，不表示新增图示成功。`--skip-native` 为开发模式，正式晋级仍需原生验收。
+
+也可直接从预留槽位 IR 构建：
+
+```bash
+python -m deck_compiler build --ir examples/explain-viz/reserved.deck_ir.json \
+  --explain-viz-request examples/explain-viz/request.json --out build/explain-viz --skip-native
+```
+
+查看 `build/explain-viz/explain_viz.json` 和 `qa_report.json` 的结果摘要。
+没有请求参数时默认自动评估；可用 --explain-viz-mode off 禁用。
+
+首版及上一轮构建接入未执行以上命令；本轮实际验证情况以[验证记录](../../../docs/explain-viz-auto-layout.md)为准。
+字段、门槛与限制见[协议](../../docs/explain-viz.md)。
+
+无预留槽位的自动布局样例：
+
+```bash
+python -m deck_compiler build --ir examples/explain-viz/automatic.deck_ir.json --out build/explain-viz-auto --skip-native
+```
+
+本轮自动空白检测与局部重排的实际验证情况见[记录](../../../docs/explain-viz-auto-layout.md)。
+
+已着色页面的[三页空白填充成品](whitespace-filled/README.md)另附源 IR、可编辑 PPTX、
+PowerPoint 原生 PDF、逐页预览与检测审计。该成品使用同一空白检测函数，按原文加入读图标注，
+不表示默认 ExplainViz 会对已增强页再次自动生成注释。

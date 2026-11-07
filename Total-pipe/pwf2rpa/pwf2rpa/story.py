@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 HIGH_REASONING_EFFORTS = frozenset({"high", "xhigh", "max", "ultra"})
-_ROOT_FIELDS = frozenset({"planner", "core_question", "main_message", "story", "ending"})
+_ROOT_FIELDS = frozenset({"planner", "core_question", "main_message", "story", "ending", "content_contract"})
 # Explanation forms the Story Planner may declare.  Each one names what the reader
 # needs to see, not which slide component to use: layout choice stays downstream.
 # Only forms whose layout pool is text-only are mapped to a category here --
@@ -704,6 +704,9 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
             "limitation": _text(ending_raw.get("limitation")),
         }
 
+    from .content_contract import validate_contract
+    for message in validate_contract(raw):
+        problems.append(Problem('STORY_CONTENT_CONTRACT_INVALID', 'story.content_contract', message))
     errors = [problem for problem in problems if problem.severity == "error"]
     if errors:
         raise StoryError(problems, summary="Unusable story plan")
@@ -715,6 +718,9 @@ def validate_story(raw: Any, workflow: Workflow) -> tuple[dict[str, Any], list[P
         "story": nodes,
         "ending": ending,
     }
+    if 'content_contract' in raw:
+        import copy
+        normalized['content_contract'] = copy.deepcopy(raw['content_contract'])
     return normalized, [problem for problem in problems if problem.severity == "warning"]
 
 
@@ -945,7 +951,7 @@ def build_story_prompt(
         "core_question": "string",
         "main_message": "string",
         "story": [
-            {"title": "string, optional", "question": "string", "answer": "string",
+            {"title": "string, required; declarative slide title, not a question", "question": "string", "answer": "string",
              "evidence": ["EV0001"], "next": "string, optional on the last node",
              "form": "sequence|compare|branch|relation|evidence, optional; derived from explain when omitted",
              "process_steps": ["one step per item, required when form=sequence"],
@@ -967,6 +973,12 @@ def build_story_prompt(
              }}
         ],
         "ending": {"takeaway": "string", "limitation": "string, optional"},
+        "content_contract": {"version": "2.0", "units": {
+            "C_cost": {"text": "One independently limitable scientific assertion.", "evidence": ["EV0001"], "kind": "claim", "visibility": "required", "epistemic": "author_claim"},
+            "C_accuracy": {"text": "A task-specific measured result.", "evidence": ["EV0002"], "kind": "claim", "visibility": "required", "epistemic": "author_claim"},
+            "Q_task": {"text": "The conditions for that result only.", "evidence": ["EV0002"], "kind": "condition", "visibility": "with_claim", "epistemic": "observation", "applies_to": ["C_accuracy"]}},
+            "narrative_map": {"S1.answer": ["C_cost"], "S2.answer": ["C_accuracy", "Q_task"],
+                              "ending.takeaway": ["C_cost"]}},
     }
     instructions = (
         "你不是在总结论文，也不是按 Figure 顺序写大纲。你要从 Evidence Store 中选择最重要的证据，"
@@ -976,9 +988,9 @@ def build_story_prompt(
         "节点数量由论证需要决定，不要为凑页数增加节点。\n"
         "2. 每个 node 有 question 和 answer。question 是你这一步要回答的科学问题，"
         "answer 是回答，只能由列出的 Evidence id 支撑；不得创造事实、因果关系或确定性。\n"
-        "3. title 可选，是这一页给听众看的话。它可以不是问句，可以比 question 长或短，"
-        "由你决定怎样说清楚；不写就退回 question。"
-        "不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
+        "3. title 必填，是这一页给听众看的陈述句或名词短语，不以 ?/？ 结尾；"
+        "question 只是内部推理问题，不要直接拿它当标题。标题可以比 question 短，"
+        "但必须保留科学含义。不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
         "4. 原文的 may/likely/suggest/possibly/可能/提示/推测必须保留其不确定性。\n"
         "5. next 说明当前证据留下的疑问或待验证机制，除最后一个 node 外必填；"
         "最后一个 node 不需要为了形式补一句“下一步看什么”。不得写成‘然后看 Fig.4’。\n"
@@ -1003,8 +1015,21 @@ def build_story_prompt(
         "注意：form=relation 是旧的“公式/可测关系”含义；explain.kind=relation 指节点与有向边，两者不同。\n"
         "陷阱：process-flow archetype 不是原生流程图，metric-comparison 不是原生表格，"
         "figure-parameters 不是 visual_plan。不要因为选了这些名字就以为结构已经存在。\n\n"
-        "当一句 answer 会抹掉必须保留的连续内容时，可在该 node 添加 key_points 字符串数组；"
-        "逐条保留证据支持的细节，不要求每个 node 都添加，也不限制条数。\n\n"
+        "科学事实以 content_contract.version=2.0 的 units 为唯一科学记录，不再把 answer 段落当投屏原子。"
+        "answer/key_points/ending 是组织论证的叙述；narrative_map 恰好覆盖所有存在的 S<n>.answer、"
+        "S<n>.key_points[i]、ending.* 路径，每个路径引用一个或多个 unit ID，所有unit至少出现一次。"
+        "同一unit可被叙事多次提到，实际科学分配由下游恰好拥有一次，重复展示另记，不能复制事实造新ID。\n"
+        "每个unit含 text、精确 evidence、kind、visibility、epistemic。epistemic明确为author_claim、observation、author_interpretation或agent_inference，不能混淆作者解释和你的推断。text只承载一项可以独立限定的断言或限定；"
+        "不同任务、指标、测量身份、机制解释、条件和边界分别成unit，不能把准确率、探测性能和效率估算塞进同一条。"
+        "每条unit的EV也必须由引用它的节点显式引用，不能默认继承整篇证据。"
+        "kind=claim/condition/uncertainty/control/negative_result/interpretation/scope/detail。"
+        "required必须实际可见；with_claim的applies_to只绑定具体required断言ID，禁止指向叙事段落或另一个限定，禁止级联。"
+        "notes_allowed只允许detail/scope并给科学相关性reason；重要条件、误差、对照、负面结果不可隐藏。\n"
+        "概括性结尾只引用它真正重述的科学断言；没有重述某个数值结果，不应激活该结果的整套实验条件。"
+        "数值结果再次出现时仍需引用原断言并带上对应条件，不得通过改写或改ID回避边界。"
+        "检查原文方法中的初始化/预置/前处理、样本和条件；核对正文、图、SI中的统计口径差异。"
+        "缺少证据就明确反馈检索缺口，不补造EV。来源矛盾保留为不确定性，不择取方便数字。"
+        "完整科学记录保留，不要求复制到屏幕；制作过程、文件是否取得和核查操作属于工作记录。\n\n"
         "自检：删掉任一 node 后，下一 node 是否仍只因为论文顺序而出现？如果是，重写链条。"
     )
     return {
@@ -1019,6 +1044,8 @@ def build_story_prompt(
         "instructions": instructions,
         "capability_card": CAPABILITY_CARD,
         "output_shape": output_shape,
+        "content_contract_version": "2.0",
+        "schema_path": str(Path(__file__).resolve().parents[1]/'schemas/story-plan.schema.json'),
         "paper": {"title": workflow.title, "source_fingerprint": workflow.fingerprint},
         "evidence_store": evidence,
     }

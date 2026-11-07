@@ -8,11 +8,12 @@ from .contracts import digest, issue
 from .explanation import coverage as explanation_coverage
 from .explanation import validate_explanation
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
+from .provenance import validate as validate_provenance
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
 
 
-SOURCE_FIGURE = re.compile(r"^[1-9][0-9]*[a-z]?$")
-CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*([1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
+SOURCE_FIGURE = re.compile(r"^S?[1-9][0-9]*[a-z]?$")
+CAPTION_FIGURE = re.compile(r"\bFig(?:ure)?\.?\s*(S?[1-9][0-9]*)\s*([a-z])?", re.IGNORECASE)
 ACCENT = re.compile(r"^#[0-9A-Fa-f]{6}$")
 # A schematic drawn by the pipeline is not a paper figure, so its caption has to say so.
 SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
@@ -20,7 +21,13 @@ SCHEMATIC_MARKERS = ("示意图", "schematic", "diagram")
 
 def caption_figure_ids(caption):
     """Return normalized paper figure/panel ids explicitly named by a caption."""
-    return {f"{number}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    result = {f"{number.upper()}{(panel or '').lower()}" for number, panel in CAPTION_FIGURE.findall(caption or "")}
+    from .scientific_numbers import REFERENCE
+    for match in REFERENCE.finditer(str(caption or '')):
+        if match['kind'] == '图':
+            value = match['id']
+            result.add(('S' if value.upper().startswith('S') else '')+value.lstrip('Ss').lower())
+    return result
 
 
 def coarse_characters(text, inline_math=False):
@@ -69,6 +76,26 @@ def validate(ir):
             check(isinstance(gap, (int, float)) and not isinstance(gap, bool)
                   and .1 <= float(gap) <= 1.5,
                   "presentation.list_gap must be between 0.1 and 1.5", rule="LIST_GAP_INVALID")
+        if 'visual_style' in deck_presentation:
+            from .style import validate_style
+            for message in validate_style(deck_presentation['visual_style']):
+                check(False, message, rule='VISUAL_STYLE_INVALID')
+        if 'page_numbers' in deck_presentation:
+            check(isinstance(deck_presentation['page_numbers'], bool),
+                  'presentation.page_numbers must be true or false', rule='PAGE_NUMBER_INVALID')
+        if 'footer' in deck_presentation:
+            value = deck_presentation['footer']
+            check(isinstance(value, str) and bool(value.strip()) and len(value) <= 120
+                  and '\n' not in value,
+                  'presentation.footer requires one line of at most 120 characters',
+                  rule='FOOTER_INVALID')
+        if 'agenda' in deck_presentation:
+            value = deck_presentation['agenda']
+            check(value is True or (isinstance(value, dict) and set(value) <= {'title'}
+                                    and (value.get('title') is None or (
+                                        isinstance(value['title'], str) and 0 < len(value['title']) <= 20))),
+                  'presentation.agenda requires true or {"title": "..."} (at most 20 characters)',
+                  rule='AGENDA_INVALID')
     theme = ir.get("theme", {})
     check(isinstance(theme, dict) and all(isinstance(theme.get(k), str) and theme[k]
           for k in ("font_family", "font_file", "bold_font_file")), "Explicit theme fonts required")
@@ -92,7 +119,7 @@ def validate(ir):
         if isinstance(asset, dict) and "source_figure" in asset:
             check(isinstance(asset.get("source_figure"), str) and
                   bool(SOURCE_FIGURE.fullmatch(asset["source_figure"])),
-                  f"asset {key}: source_figure must look like 3 or 3a", rule="FIGURE_PROVENANCE_INVALID")
+                  f"asset {key}: source_figure must look like 3, 3a or S14", rule="FIGURE_PROVENANCE_INVALID")
         if isinstance(asset, dict):
             origin = asset.get("origin", "paper")
             check(origin in ("paper", "generated", "reference"),
@@ -149,6 +176,12 @@ def validate(ir):
             continue
         check('academic_design' not in pres, 'academic_design belongs to the deck', n,
               'ACADEMIC_DESIGN_INVALID')
+        if 'section' in pres:
+            label = pres['section']
+            check(isinstance(label, str) and bool(label.strip()) and len(label) <= 24
+                  and '\n' not in label,
+                  'presentation.section requires one line of at most 24 characters', n,
+                  'SECTION_INVALID')
         if 'takeaway_marker' in pres:
             from .fonts import BULLET_STYLES
             marker = pres['takeaway_marker']
@@ -177,6 +210,10 @@ def validate(ir):
         for message in validate_tables(comp.get('tables', []), sem.get('evidence_refs', [])):
             check(False, message, n, 'TABLE_INVALID')
         check(not comp.get('tables') or has_tree, 'Native tables require a region tree', n, 'TABLE_INVALID')
+        from .chart_layout import validate_charts
+        for message in validate_charts(comp.get('charts', []), sem.get('evidence_refs', [])):
+            check(False, message, n, 'CHART_INVALID')
+        check(not comp.get('charts') or has_tree, 'Charts require a region tree', n, 'CHART_INVALID')
         check(archetype != 'composite-research' or has_tree,
               'composite-research requires composition.layout_tree', n, 'LAYOUT_TREE_INVALID')
         if has_tree:
@@ -215,6 +252,21 @@ def validate(ir):
             if isinstance(bid, str):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
+            caption = b.get('component') == 'caption'
+            if caption or 'caption_for' in b:
+                link = b.get('caption_for')
+                valid = (caption and isinstance(link, dict) and set(link) == {'kind', 'ref'}
+                         and isinstance(link.get('ref'), str) and bool(link['ref']))
+                check(valid, 'A native caption needs a caption_for visual identity', n, 'CAPTION_ANCHOR_INVALID')
+                if valid:
+                    kind, ref = link['kind'], link['ref']
+                    pool = comp.get({'graphic':'graphics', 'table':'tables', 'chart':'charts'}.get(kind, ''), [])
+                    found = any(obj.get('id') == ref for obj in pool if isinstance(obj, dict))
+                    if kind == 'figure': found = any(f.get('asset_id') == ref for f in figures)
+                    check(found, f'Caption {bid} must explain an existing visual on this page', n, 'CAPTION_ANCHOR_INVALID')
+                check(not any(key in b for key in ('label', 'anchor', 'bullet_style', 'bullet_color'))
+                      and not b.get('inline_math') and b.get('text_flow', 'plain') == 'plain',
+                      'Native captions use plain annotation text; body/list/formula treatments are not captions', n, 'CAPTION_INVALID')
             if 'bullet_style' in b:
                 from .fonts import BULLET_STYLES
                 check(isinstance(b['bullet_style'], str) and b['bullet_style'] in BULLET_STYLES,
@@ -306,6 +358,12 @@ def validate(ir):
                   isinstance(f.get("caption"), str), "Figure needs asset reference and caption", n)
             if not isinstance(f, dict) or f.get("asset_id") not in assets:
                 continue
+            if 'source_label' in f:
+                label = f['source_label']
+                check(isinstance(label, str) and bool(label.strip()) and len(label) <= 80
+                      and '\n' not in label,
+                      "figure_refs.source_label requires one line of at most 80 characters, "
+                      "e.g. 'Xie et al., Fig. 1g'", n, "FIGURE_SOURCE_LABEL_INVALID")
             asset = assets[f["asset_id"]]
             asset = asset if isinstance(asset, dict) else {}
             origin = asset.get("origin", "paper")
@@ -328,7 +386,7 @@ def validate(ir):
             expected = f.get("source_figure")
             actual = asset.get("source_figure")
             check(isinstance(expected, str) and bool(SOURCE_FIGURE.fullmatch(expected)),
-                  "Figure reference requires source_figure such as 3 or 3a", n,
+                  "Figure reference requires source_figure such as 3, 3a or S14", n,
                   "FIGURE_PROVENANCE_REQUIRED")
             check(isinstance(actual, str) and bool(SOURCE_FIGURE.fullmatch(actual)),
                   f"Asset {f['asset_id']} requires source_figure", n,
@@ -337,7 +395,9 @@ def validate(ir):
                 check(expected == actual,
                       f"Caption expects Fig.{expected}, but asset {f['asset_id']} is Fig.{actual}", n,
                       "FIGURE_SOURCE_MISMATCH")
-                check(expected in caption_figure_ids(f.get("caption", "")),
+                projection = sem.get('content_projection', {})
+                source = f.get('source_label', '') if projection.get('version') == '2.0' else ''
+                check(expected in caption_figure_ids(f.get("caption", "")+' '+source),
                       f"Caption must explicitly name Fig.{expected}", n,
                       "FIGURE_CAPTION_MISMATCH")
         if archetype in ARCHETYPES and not has_tree:
@@ -345,7 +405,9 @@ def validate(ir):
             context_count = sum(b.get('component') != 'formula' for b in blocks if isinstance(b, dict))
             check((len(blocks) if cap['blocks'] == 0 else context_count) <= cap["blocks"]
                   and len(figures) <= cap["figures"],
-                  "Archetype block/figure capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
+                  "Archetype block/figure capacity exceeded; use composite-research with layout_tree "
+                  "to hold the extra objects, or split the page if the measured tree still overflows",
+                  n, "CONTENT_CAPACITY_EXCEEDED")
             if archetype == "evidence-hypothesis":
                 check(all(b.get("component") in ("direct-evidence", "hypothesis") for b in blocks)
                       and all(sum(b.get("component") == role for b in blocks) <= 4
@@ -360,7 +422,9 @@ def validate(ir):
               "Block exceeds 600 characters; retain complete scientific terminology", n,
               "SCIENTIFIC_TEXT_CAPACITY_REVIEW" if preserve_scientific_terms(ir) else "CONTENT_CAPACITY_EXCEEDED",
               severity='REVIEW' if preserve_scientific_terms(ir) else 'FAIL')
-        check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 180 and
+        # A published figure caption runs three or four lines; the strip is measured for the lines
+        # it actually needs, so the character cap is only there to stop a paragraph being pasted in.
+        check(all(isinstance(f, dict) and len(f.get("caption", "")) <= 320 and
                   isinstance(f.get("panel_count", 1), int) and 1 <= f.get("panel_count", 1) <= 6 for f in figures),
               "Caption/panel capacity exceeded", n, "CONTENT_CAPACITY_EXCEEDED")
         # The page is read by an audience, not by the person auditing the build. Evidence ids,
@@ -391,6 +455,11 @@ def validate(ir):
                   n, "RUN_STATE_CAVEAT", severity="REVIEW")
         check(not pres.get("optional_overrides"), "Geometry overrides unsupported in v2.0; choose a variant", n)
         check(pres.get("variant", "default") in ("default", "spacious"), "Unknown component variant", n)
+        if 'content_projection' in sem:
+            from .content_projection import validate_ir as validate_projection
+            for rule, severity, message in validate_projection(s, assets):
+                check(False, message, n, rule, severity)
+    errors.extend(validate_provenance(ir))
     return errors
 
 
@@ -423,4 +492,18 @@ def derive(ir, layout):
     ledger = explanation_coverage(ir)
     if ledger["slides"]:
         result["explanation_coverage.json"] = ledger
+    rendered = {slide['id']: slide for slide in layout['slides']}
+    projected = []
+    for slide in ir['slides']:
+        projection = slide['semantic'].get('content_projection')
+        if projection:
+            from .content_projection import validate_ir as validate_projection
+            findings = validate_projection(slide, ir.get('assets', {}), rendered.get(slide['id']))
+            projected.append({'slide_id': slide['id'], 'record_refs': list(projection['items']),
+                              'visible_refs': [ref for ref, route in projection['content_map'].items() if route['destination'] == 'visible'],
+                              'notes_refs': [ref for ref, route in projection['content_map'].items() if route['destination'] == 'notes'],
+                              'review': projection['review'], 'findings': [dict(rule=r, severity=s, message=m) for r, s, m in findings]})
+    if projected:
+        result['content_projection_coverage.json'] = {**provenance, 'version': '1.0', 'slides': projected,
+                                                     'note': 'Structural/visible-object checks; semantic fidelity and audience comprehension require actual review.'}
     return result

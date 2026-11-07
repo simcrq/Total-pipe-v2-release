@@ -12,27 +12,42 @@ def ratios(preferred, low=.35, high=.75):
             yield value
 
 
-def block_height(block, width, fonts, archetype, *, list_gap_ratio=.45, bullet_style='large_square'):
+def block_height(block, width, fonts, archetype, *, list_gap_ratio=.45, bullet_style='large_square',
+                 design=None):
     from .layout import formula_fit, formula_label_width, text_floor_height, native_list_height
+    from .type_scale import body_size, display_floor
+    if block.get('component') == 'caption':
+        from .layout import caption_measure
+        return caption_measure({'caption': block['text']}, width, fonts['font_file'], design)[0]
     list_height = native_list_height(block, width, fonts['font_file'], list_gap_ratio,
                                      default_style=bullet_style)
     if list_height is not None:
         return list_height
     label = block.get('label', '')
+    display = display_floor(block, design)
+    if display:
+        # A promoted number is measured at its own floor: the display size is the promise, so a
+        # page that cannot carry it must fail or reflow instead of quietly shrinking to body copy.
+        return text_floor_height(block['text'], width, fonts['font_file'], floor=display,
+                                 max_lines=2, inline_math=block.get('inline_math', False)) or 10000
     if block.get('component') == 'formula':
         label_w = formula_label_width(label, fonts['bold_font_file'])
         metrics = formula_fit(block['text'], width-20-(label_w+12 if label_w else 0))
         return max(30 if label else 0, metrics.height+12) if metrics else 10000
     label_h = (40 if archetype == 'figure-parameters' else 44) if label else 0
-    return label_h + (text_floor_height(block['text'], width, fonts['font_file'], inline_math=block.get('inline_math', False)) or 10000)
+    # Body copy is measured at the size it is actually set at, so a slot is roomy enough for the
+    # page's one body size instead of being measured at the 18 pt emergency floor and then shrunk
+    # back to it whenever the fitter ran out of room.
+    return label_h + (text_floor_height(block['text'], width, fonts['font_file'], floor=body_size(design),
+                                        inline_math=block.get('inline_math', False)) or 10000)
 
 
-def text_regions(blocks, box, fonts, archetype, gap=24, band=False, *,
+def text_regions(blocks, box, fonts, archetype, gap=24, band=False, *, design=None,
                   list_gap_ratio=.45, bullet_style='large_square'):
     x, y, width, height = box
     if not blocks:
         return [], 0
-    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style, 'design': design}
     if band:
         w = (width-gap*(len(blocks)-1))/len(blocks)
         h = max(block_height(b, w, fonts, archetype, **list_options) for b in blocks)
@@ -60,7 +75,7 @@ def emphasis_region(plan, box, fonts):
 
 def candidates(slide, region, assets, fonts, design, *, list_gap_ratio=.45, bullet_style='large_square'):
     """Only allocate regions. No canonical text, figure, or relationship is rewritten."""
-    from .layout import graphic_page_regions, caption_height
+    from .layout import graphic_page_regions, caption_measure
     comp = slide['composition']
     plan = slide['presentation']['visual_plan']
     job, composition = plan['visual_job'], plan['composition']
@@ -68,7 +83,7 @@ def candidates(slide, region, assets, fonts, design, *, list_gap_ratio=.45, bull
     x, y, width, height = region
     gap = 24 if design['density'] == 'balanced' else 18
     archetype = comp['archetype']
-    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style, 'design': design}
     if job == 'mechanism-explanation':
         annotation, body = emphasis_region(plan, region, fonts)
         for candidate in graphic_page_regions(comp, body, assets, fonts, visual_plan=plan, **list_options):
@@ -116,8 +131,8 @@ def candidates(slide, region, assets, fonts, design, *, list_gap_ratio=.45, bull
                 boxes[index] = [cursor, figure_y, w, figure_h]
                 cursor += w+gap
             # Both captions start on the same baseline. Images keep their aspect and sit above it.
-            caption_h = max((f.get('caption_height') or caption_height(f['caption'], boxes[i][2],
-                fonts['font_file'], f.get('caption_font_size', 22))) if f['caption'] else 0
+            caption_h = max((f.get('caption_height') or caption_measure(f, boxes[i][2],
+                fonts['font_file'])[0]) if f['caption'] else 0
                 for i, f in enumerate(figures))
             caption_top = figure_y+figure_h-caption_h
         else:
@@ -130,11 +145,12 @@ def candidates(slide, region, assets, fonts, design, *, list_gap_ratio=.45, bull
                **({'figure_width_ratio': ratio} if composition == 'evidence-columns' else {})}
 
 
-def graphic_without_evidence(composition, region, fonts, plan, *, list_gap_ratio=.45, bullet_style='large_square'):
+def graphic_without_evidence(composition, region, fonts, plan, *, design=None, list_gap_ratio=.45,
+                             bullet_style='large_square'):
     """Add left/right/below context variants to the existing graphic candidate mechanism."""
     x, y, width, height = region
     blocks = composition['blocks']
-    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style}
+    list_options = {'list_gap_ratio': list_gap_ratio, 'bullet_style': bullet_style, 'design': design}
     preferred = plan.get('graphic_width_ratio', .68 if blocks else 1.0)
     for share in ratios(preferred, .4, 1.0):
         if plan['composition'] == 'graphic-top':

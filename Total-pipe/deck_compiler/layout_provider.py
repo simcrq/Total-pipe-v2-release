@@ -181,14 +181,16 @@ def _finite_number(value):
         return False
 
 
-def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
+def compile_with_provider(ir_path, provider=None, totalpipe_root=None, *, deck_ir=None):
     """Compile a deck, letting ``provider`` propose the body layout.
 
     Returns ``(layout, findings)`` exactly like ``compile_deck``. Provider provenance lands in
     ``layout['layout_provider']``; pages the provider lost or spoiled are recorded there too.
     """
     ir_path = Path(ir_path)
-    ir = json.loads(ir_path.read_text(encoding='utf-8'))
+    # Keep the source path as the resource/font base while compiling an immutable
+    # in-memory enhancement. Never write temporary input beside a user's source.
+    ir = copy.deepcopy(deck_ir) if deck_ir is not None else json.loads(ir_path.read_text(encoding='utf-8'))
     baseline, baseline_issues = compile_deck(ir, ir_path.parent)
     if baseline is None:
         return baseline, baseline_issues
@@ -196,7 +198,7 @@ def compile_with_provider(ir_path, provider=None, totalpipe_root=None):
         provider = load_provider(totalpipe_root=totalpipe_root)
     from totalpipe_layout.contracts import check, digest as request_digest, read_requests
     requests, meta = read_requests(ir_path, totalpipe_root or ROOT,
-                                   layout=baseline, compile_issues=baseline_issues)
+                                   layout=baseline, compile_issues=baseline_issues, deck_ir=ir)
     proposals: dict = {}
     records = []
     proposed, failed, warnings = _propose(provider, requests)

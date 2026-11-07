@@ -4,15 +4,26 @@ from dataclasses import dataclass
 import math
 import re
 
+from totalpipe_layout.inline_math import has_markup, strip_markup
+
 VERSION = '1.2'
 VERSIONS = ('1.0', '1.1', '1.2')
 MAX_DEPTH = 6
 MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
-LEAVES = ('block', 'figure', 'graphic', 'table')
+LEAVES = ('block', 'figure', 'graphic', 'table', 'chart')
 GAPS = {'compact': 12., 'standard': 24., 'spacious': 32.}
 STACK_ALIGNMENTS = ('start', 'center', 'distribute')
+# A column row may either fill the region (stretch, the historical behaviour) or stop at the
+# tallest child's natural height (hug). Panels of short text stretched to the full body height are
+# three empty boxes, not a composition; hug keeps equal heights without the dead air.
+COLUMN_FITS = ('stretch', 'hug')
 UNDERFILL_RATIO = .15
+SPARSE_BALANCE_MAX_PX = 32.
+# A gap is a rhythm, not a filler. Past this a distributed gap stops reading as spacing between
+# two things and starts reading as a missing object, so the stack is centred instead.
+DISTRIBUTED_GAP_MAX_PX = 48.
+STACK_CENTER_MAX_PX = 56.
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
@@ -26,10 +37,14 @@ def capabilities():
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
             'stack_alignment': {'values': list(STACK_ALIGNMENTS), 'default': 'start',
                                 'underfill_review_ratio': UNDERFILL_RATIO},
+            'column_fit': {'values': list(COLUMN_FITS), 'default': 'stretch'},
             'container_frames': {'panel': {'min_tree_version': '1.2', 'native_rectangle': True,
                                           'title_band': True}, 'takeaway': {'measured': True}},
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
+            'chart': {'types': ['line', 'bar', 'scatter'], 'bases': ['evidence', 'explain'],
+                      'min_size_px': [420, 260], 'max_series': 4, 'error_bars': True,
+                      'annotations': 6},
             'legacy_flat_ir': True}
 
 
@@ -78,6 +93,8 @@ def validate_tree(tree, composition):
             fields |= {'children', 'weights', 'gap'}
             if kind == 'stack':
                 fields.add('align')
+            else:
+                fields.add('fit')
         elif kind == 'image_grid':
             fields |= {'children', 'columns', 'gap'}
         elif kind == 'panel':
@@ -98,6 +115,8 @@ def validate_tree(tree, composition):
                 fail(path, 'stack.align must be start, center or distribute')
             if 'weights' in node and node.get('align', 'start') != 'start':
                 fail(path, 'explicit weights already fill the stack; align must be start or omitted')
+        if kind == 'columns' and node.get('fit', 'stretch') not in COLUMN_FITS:
+            fail(path, 'columns.fit must be stretch or hug')
         if kind == 'panel':
             if 'frame' in node:
                 from .container_frames import validate_frame
@@ -147,6 +166,9 @@ def validate_tree(tree, composition):
     tables = composition.get('tables', [])
     expected += [('table', t['id']) for t in (tables if isinstance(tables, list) else [])
                  if isinstance(t, dict) and isinstance(t.get('id'), str)]
+    charts = composition.get('charts', [])
+    expected += [('chart', c['id']) for c in (charts if isinstance(charts, list) else [])
+                 if isinstance(c, dict) and isinstance(c.get('id'), str)]
     actual = Counter(references)
     for key in expected:
         if actual[key] != 1:
@@ -187,8 +209,11 @@ class Need:
 
 class RegionCompiler:
     def __init__(self, composition, assets, fonts, theme, preserve_terms=False,
-                 list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square'):
+                 list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square', design=None,
+                 formula_sizes=None):
         self.comp, self.assets, self.fonts, self.theme = composition, assets, fonts, theme
+        self.design = design
+        self.formula_sizes = formula_sizes
         self.preserve = preserve_terms
         self.list_gap_ratio, self.list_padding = list_gap_ratio, list_padding
         self.bullet_style = bullet_style
@@ -202,13 +227,36 @@ class RegionCompiler:
         from .layout import break_lines
         from .fonts import load_font_file
         face = load_font_file(self.fonts['bold_font_file' if bold else 'font_file'], size)
-        return max(1, len(break_lines(content, face, max(1, width))))*size*1.25
+        return max(1, len(break_lines(strip_markup(content), face, max(1, width))))*size*1.25
+
+    def text_width(self, content, width, bold=False, size=24):
+        """Widest wrapped line of a label, so a chip can hug the text it will actually set."""
+        from .layout import break_lines
+        from .fonts import load_font_file
+        face = load_font_file(self.fonts['bold_font_file' if bold else 'font_file'], size)
+        return max((face.getlength(line) for line in
+                    break_lines(strip_markup(content), face, max(1, width))), default=0.)
+
+    def process_min_width(self, graphic):
+        """Width a chain needs so each label fits on one line, not a fixed 200 px per node."""
+        from .fonts import load_font_file
+        from .style import node_style
+        style = node_style(self.theme)
+        size = float(style.get('title_size', 30))
+        face = load_font_file(self.fonts['bold_font_file' if style.get('bold', True) else 'font_file'], size)
+        widest = max(face.getlength(node.get('title', '')) for node in graphic['nodes']) if graphic['nodes'] else 0
+        if graphic.get('direction') == 'vertical':
+            return max(240., min(560., widest/.94+8))
+        count = len(graphic['nodes'])
+        # A chain may wrap each label onto two lines, so a node needs about half its single-line
+        # width; widening every node to the longest label made a four-step flow demand 1376 px.
+        per_node = max(160., min(320., widest/2+24))
+        return per_node*count+(count-1)*32
 
     def graphic_min_width(self, graphic):
         kind = graphic['type']
         if kind == 'process':
-            count = len(graphic['nodes'])
-            return count*200+(count-1)*64
+            return self.process_min_width(graphic)
         if kind in ('dag', 'mechanism'):
             from .dag_layout import layered_order
             layers, _ = layered_order([n['id'] for n in graphic['nodes']], [
@@ -257,7 +305,11 @@ class RegionCompiler:
             raise LayoutTreeError(path, 'INSUFFICIENT_DRAWING_SPACE', 'No positive content width.', [1, 1], available)
         if kind == 'block':
             block = self.blocks[node['ref']]
-            if block['component'] == 'formula':
+            if block['component'] == 'caption':
+                from .layout import caption_measure
+                height, _ = caption_measure({'caption': block['text']}, width, self.fonts['font_file'], self.design)
+                need = Need(height, height)
+            elif block['component'] == 'formula':
                 from .layout import formula_label_width
                 from totalpipe_layout.formula import measure, parse
                 metrics = measure(parse(block['text']), 24)
@@ -270,7 +322,8 @@ class RegionCompiler:
                         ['widen_region', 'switch_to_two_columns', 'split_slide'])
                 height = max(30 if label_w else 0, metrics.height+12)
                 from .layout import formula_fit
-                preferred = formula_fit(block['text'], width-20-(label_w+12 if label_w else 0))
+                preferred = formula_fit(block['text'], width-20-(label_w+12 if label_w else 0),
+                                        self.formula_sizes)
                 need = Need(height, max(height, preferred.height+12 if preferred else height), required_w)
             else:
                 label = 44 if block.get('label') else 0
@@ -290,20 +343,29 @@ class RegionCompiler:
                         block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
                         default_style=self.bullet_style, wrap_items=False) if self.preserve else natural)
                     need = Need(hard_minimum, natural, 520)
-                elif block.get('inline_math'):
+                elif block.get('inline_math') or has_markup(block.get('text')):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     from .fonts import load_font_file
+                    from .type_scale import body_size, display_floor
+                    floor = display_floor(block, self.design) or body_size(self.design)
                     try:
-                        measured = measure_inline(block['text'], width, load_font_file(self.fonts['font_file'], 24), 24)
+                        # Measure the marked block the way it will be set: a bold phrase is wider
+                        # than the same phrase in regular ink, and the region has to own the line it
+                        # adds. Otherwise the block is allocated one line less and the emitter keeps
+                        # the body size by shrinking the type instead.
+                        measured = measure_inline(block['text'], width, load_font_file(self.fonts['font_file'], floor), floor,
+                                                  strong_font=load_font_file(self.fonts['bold_font_file'], floor))
                     except InlineWidthError as error:
                         raise LayoutTreeError(path, 'INLINE_FORMULA_SPACE', str(error), [error.required_width, 0], available,
                                               ['widen_region', 'use_display_formula', 'split_slide']) from error
                     natural = label+measured['height']
                     need = Need(label+30 if self.preserve else natural, natural, measured['min_width'])
                 else:
-                    natural = label+self.text_height(block['text'], width)
+                    from .type_scale import body_size, display_size
+                    size = display_size(block, self.design) or body_size(self.design)
+                    natural = label+self.text_height(block['text'], width, size=size)
                     need = Need(label+30 if self.preserve else natural,
-                                max(natural, label+self.text_height(block['text'], width, size=28)))
+                                max(natural, label+self.text_height(block['text'], width, size=size)))
         elif kind == 'figure':
             ref = self.comp['figure_refs'][node['ref']]
             asset = self.assets[ref['asset_id']]
@@ -311,9 +373,9 @@ class RegionCompiler:
             required_w = max(floor*panels, floor*asset['width']/asset['height'])
             caption = 0
             if ref['caption']:
-                from .layout import caption_height
-                caption = ref.get('caption_height') or caption_height(ref['caption'], width,
-                    self.fonts['font_file'], ref.get('caption_font_size', 22))
+                from .layout import caption_measure
+                caption = ref.get('caption_height') or caption_measure(ref, width,
+                    self.fonts['font_file'])[0]
             height = max(floor, floor*panels*asset['height']/asset['width'])+caption+12
             if required_w > width+.1:
                 raise LayoutTreeError(path, 'INSUFFICIENT_FIGURE_SPACE',
@@ -334,6 +396,15 @@ class RegionCompiler:
             height = self.graphic_height(graphic, width, path, available)
             preferred = width*graphic['view_box'][3]/graphic['view_box'][2]+8 if graphic['type'] == 'path' else height
             need = Need(height, max(height, preferred), self.graphic_min_width(graphic))
+        elif kind == 'chart':
+            from .chart_render import chart_need
+            chart = next((item for item in self.comp.get('charts') or []
+                          if isinstance(item, dict) and item.get('id') == node['ref']), None)
+            if chart is None:
+                raise LayoutTreeError(path, 'CHART_REF_UNKNOWN',
+                                      f'chart {node["ref"]!r} is not in composition.charts',
+                                      [1, 1], available)
+            need = chart_need(chart, width)
         elif kind == 'panel':
             from .container_frames import panel_metrics
             pad, stroke, overhead = panel_metrics(node)
@@ -378,7 +449,8 @@ class RegionCompiler:
                 code = ('INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
                         else 'INSUFFICIENT_TEXT_SPACE')
             else:
-                code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE'}.get(
+                code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE',
+                        'chart': 'INSUFFICIENT_CHART_SPACE'}.get(
                     kind, 'INSUFFICIENT_DRAWING_SPACE')
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
                                   [width, need.hard], [width, height])
@@ -401,8 +473,14 @@ class RegionCompiler:
             self.entries[-1]['title_bbox'] = [x+stroke+pad, y+stroke+pad, inner_w, title]
             self.entries[-1]['title'] = node['title']
             if node.get('frame'):
+                from .container_frames import title_chip
+                band = [x+stroke, y+stroke, width-2*stroke, title+2*pad]
+                chip = title_chip(node['frame'], band, title,
+                                  self.text_width(node['title'], inner_w, True))
                 self.entries[-1].update(frame=node['frame'], padding_px=pad,
-                    title_band_bbox=[x+stroke, y+stroke, width-2*stroke, title+2*pad])
+                    title_band_bbox=chip['chip'] if chip else band,
+                    **({'title_bbox': chip['text'], 'title_band_geometry': 'roundRect',
+                        'title_align': node['frame'].get('title_align', 'center')} if chip else {}))
             body_y = y+stroke+pad+title+gap+(pad if node.get('frame') else 0)
             self.allocate(node['body'], [x+stroke+pad, body_y, inner_w, height-title-gap-overhead], path+'.body')
             return
@@ -410,10 +488,18 @@ class RegionCompiler:
         if kind == 'columns':
             weights = node.get('weights', [1]*len(children))
             usable = width-gap*(len(children)-1)
+            row_height = height
+            if node.get('fit') == 'hug':
+                # Equal height, but only as tall as the tallest natural child: a row of panels
+                # with four lines each should be a band, not three boxes down to the footer.
+                needs = [self.measure(child, usable*weight/sum(weights), f'{path}.children[{i}]',
+                                      [usable*weight/sum(weights), height])
+                         for i, (child, weight) in enumerate(zip(children, weights))]
+                row_height = min(height, max(need.preferred for need in needs))
             cursor = x
             for i, (child, weight) in enumerate(zip(children, weights)):
                 w = usable*weight/sum(weights)
-                self.allocate(child, [cursor, y, w, height], f'{path}.children[{i}]')
+                self.allocate(child, [cursor, y, w, row_height], f'{path}.children[{i}]')
                 cursor += w+gap
             return
         columns = min(node['columns'], len(children)) if kind == 'image_grid' else 1
@@ -437,9 +523,17 @@ class RegionCompiler:
                 heights = [usable]
         remaining = max(0., usable-sum(heights))
         alignment = node.get('align', 'start')
-        if kind == 'stack' and not weights and alignment == 'distribute':
-            total = sum(heights)
-            heights = [h+remaining*h/total for h in heights]
+        if kind == 'stack' and not weights and alignment == 'distribute' and len(rows) > 1:
+            even_gap = gap+remaining/(len(rows)-1)
+            if even_gap <= DISTRIBUTED_GAP_MAX_PX:
+                # Distribute the *gaps*, not the children: stretching a one-line block to 129 px
+                # made a three-line page read as three lines floating a hand's width apart.
+                gap = even_gap
+                remaining = 0.
+            else:
+                # The even gap would be a hole. Centre the block instead: three lines that float a
+                # hand's width apart read as missing content, an evenly margined block reads as air.
+                alignment = 'center'
         elif kind == 'stack' and not weights and alignment == 'start' and remaining > height*UNDERFILL_RATIO:
             # Suggest legal relative weights, never pixel values. Check that rounding and the
             # schema's 100:1 ratio limit still leave every child above its measured hard floor.
@@ -451,7 +545,7 @@ class RegionCompiler:
                                       'set_stack_align_distribute', 'review_intentional_whitespace']}
             if all(usable*w/sum(suggested) >= m-.1 for w, m in zip(suggested, minimums)):
                 entry['underfill']['suggested_weights'] = suggested
-        cursor = y+(remaining/2 if kind == 'stack' and alignment == 'center' else 0)
+        cursor = y+(min(remaining/2, STACK_CENTER_MAX_PX) if kind == 'stack' and alignment == 'center' else 0)
         for row, row_h in enumerate(heights):
             for col in range(columns):
                 index = row*columns+col
@@ -461,10 +555,81 @@ class RegionCompiler:
             cursor += row_h+gap
 
 
+def balanced_region(root, compiler, region, theme):
+    """Inset the body region so a short composition sits in the optical middle of the page.
+
+    The inset happens before allocation, not after: every panel, figure and connector is then
+    measured against the region it will actually occupy, so nothing is pushed past the page edge.
+    """
+    style = (theme or {}).get('_visual_style') or {}
+    if (style.get('page') or {}).get('sparse_balance', 'center') != 'center':
+        return region
+    if root.get('type') == 'stack' and root.get('align', 'start') != 'start':
+        # The stack already centres itself inside the region; insetting as well would double the
+        # offset and push a short page towards the bottom edge.
+        return region
+    try:
+        need = compiler.measure(root, region[2], 'body', list(region[2:]))
+    except LayoutTreeError:
+        return region
+    natural = getattr(need, 'preferred', None)
+    if not natural or natural >= region[3]:
+        return region
+    slack = region[3]-natural
+    if slack <= region[3]*UNDERFILL_RATIO:
+        return region
+    # A short page is nudged towards the optical middle, not dropped halfway down: moving it the
+    # whole slack left a hole the height of a paragraph between the takeaway and the body, which
+    # reads as a broken page rather than as air.
+    shift = min(slack/2, SPARSE_BALANCE_MAX_PX)
+    return [region[0], region[1]+shift, region[2], region[3]-shift]
+
+
+def balance_plan(plan, region, theme):
+    """Centre a tree composition that is much shorter than its body region.
+
+    A page whose content ends 40% above the bottom edge reads as unfinished, not as restrained. The
+    style pack decides whether that whitespace is balanced (academic) or left at the top (commercial);
+    either way the composition is moved as one block, so panels, figures and graphics keep their
+    relative geometry.
+    """
+    style = (theme or {}).get('_visual_style') or {}
+    if (style.get('page') or {}).get('sparse_balance', 'center') != 'center':
+        return plan, 0.
+    nodes = [node for node in plan['nodes'] if isinstance(node.get('bbox'), list)]
+    # Allocated boxes stretch to fill a column, so they cannot say how tall the content really is.
+    # The root requirement measured before allocation can: it is the composition's natural height.
+    root = plan['nodes'][0] if plan.get('nodes') else None
+    need = ((root or {}).get('requirements') or {}).get('preferred_height_px')
+    if not need:
+        leaves = [node for node in nodes if node.get('type') in LEAVES]
+        if not leaves:
+            return plan, 0.
+        need = max(node['bbox'][1]+node['bbox'][3] for node in leaves)-region[1]
+    slack = region[3]-need
+    if slack <= region[3]*UNDERFILL_RATIO:
+        return plan, 0.
+    shift = slack/2
+    for node in nodes:
+        for key, value in node.items():
+            if key.endswith('bbox') and isinstance(value, list) and len(value) == 4:
+                value[1] += shift
+    return plan, shift
+
+
 def compile_regions(composition, region, assets, fonts, theme, preserve_terms=False,
-                    list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square'):
+                    list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square', design=None,
+                    formula_sizes=None):
     compiler = RegionCompiler(composition, assets, fonts, theme, preserve_terms, list_gap_ratio, list_padding,
-                              bullet_style)
-    compiler.allocate(composition['layout_tree']['regions']['body'], list(region), 'body')
-    return {'version': composition['layout_tree']['version'], 'regions': {'body': list(region)}, 'nodes': compiler.entries,
-            'reading_order': [e['node_id'] for e in compiler.entries if e['type'] in LEAVES]}
+                              bullet_style, design=design, formula_sizes=formula_sizes)
+    root = composition['layout_tree']['regions']['body']
+    original = list(region)
+    region = balanced_region(root, compiler, list(region), theme)
+    compiler.allocate(root, list(region), 'body')
+    result = {'version': composition['layout_tree']['version'], 'regions': {'body': list(region)},
+              'nodes': compiler.entries,
+              'reading_order': [e['node_id'] for e in compiler.entries if e['type'] in LEAVES]}
+    if abs(region[1]-original[1]) > .5:
+        result['balanced'] = {'policy': 'sparse_balance', 'shift_px': round(region[1]-original[1], 1),
+                              'reason': 'composition is much shorter than the body region'}
+    return result

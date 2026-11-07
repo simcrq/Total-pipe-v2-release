@@ -507,9 +507,33 @@ def to_omml(node, size_px=None, color=None, face='Cambria Math'):
             f'{_omml_row(node, props)}</m:oMath>')
 
 
-def to_omml_paragraph(node, size_px=None, color=None, face='Cambria Math'):
+def _fallback_props(node, size_px, color, face, fallback_font, box_width):
+    """Run properties for the plain fallback, shrunk when the linear text is wider than the equation.
+
+    A viewer without OMML draws one unwrapped line. Typesetting that line at the equation's size
+    makes it spill across the neighbouring column, so the fallback is scaled down to stay inside
+    the box the equation was measured into. PowerPoint never shows this run.
+    """
+    props = _run_props(size_px, color, face)
+    if not (fallback_font and size_px and box_width):
+        return props
+    try:
+        from PIL import ImageFont
+        plain = to_plain(node)
+        width = ImageFont.truetype(fallback_font, int(size_px)).getlength(plain)
+    except (OSError, ValueError):
+        return props
+    if width <= box_width:
+        return props
+    fitted = max(size_px*.5, size_px*box_width/width)
+    return _run_props(round(fitted, 2), color, face)
+
+
+def to_omml_paragraph(node, size_px=None, color=None, face='Cambria Math', fallback_font=None,
+                      box_width=None):
     """A display equation wrapped the way PowerPoint stores it, including the plain fallback."""
     props = _run_props(size_px, color, face)
+    fallback_props = _fallback_props(node, size_px, color, face, fallback_font, box_width)
     fallback = _xml(to_plain(node))
     return (
         '<a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
@@ -518,7 +542,7 @@ def to_omml_paragraph(node, size_px=None, color=None, face='Cambria Math'):
         '<mc:AlternateContent><mc:Choice Requires="a14"><a14:m>'
         f'<m:oMathPara xmlns:m="{MATH_NS}"><m:oMath>{_omml_row(node, props)}</m:oMath></m:oMathPara>'
         '</a14:m></mc:Choice>'
-        f'<mc:Fallback><a:r>{props}<a:t xml:space="preserve">{fallback}</a:t></a:r></mc:Fallback>'
+        f'<mc:Fallback><a:r>{fallback_props}<a:t xml:space="preserve">{fallback}</a:t></a:r></mc:Fallback>'
         '</mc:AlternateContent></a:p>')
 
 
@@ -534,7 +558,9 @@ def _plain(node):
     if isinstance(node, Row):
         return ''.join(_plain(child) for child in node.children)
     if isinstance(node, Frac):
-        return f'{_grouped_plain(node.numerator)}/{_grouped_plain(node.denominator)}'
+        # U+2044 FRACTION SLASH keeps the fallback recognisable as a fraction instead of reading
+        # like a division between two variables ("1/L" vs "1⁄L"). Viewers with OMML never see it.
+        return f'{_grouped_plain(node.numerator)}\u2044{_grouped_plain(node.denominator)}'
     if isinstance(node, Sqrt):
         body = _plain(node.body)
         radical = f'√{body}' if len(body) == 1 else f'√({body})'
@@ -549,7 +575,13 @@ def _plain(node):
         text = base
         if node.sub is not None:
             sub = _plain(node.sub)
-            text += sub.translate(SUBSCRIPT) if sub.isdigit() else f'_{_script_plain(sub)}'
+            # Decimal subscripts such as S_{0.5} are common in teaching notes and
+            # stay readable in the plain fallback used by viewers without OMML.
+            if sub and all(char.isdigit() or char == '.' for char in sub):
+                text += ''.join(chr(SUBSCRIPT[ord(char)]) if ord(char) in SUBSCRIPT else char
+                                for char in sub)
+            else:
+                text += f'_{_script_plain(sub)}'
         if node.sup is not None:
             sup = _plain(node.sup)
             can_lift = sup and all(ord(char) in SUPERSCRIPT for char in sup)

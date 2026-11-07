@@ -5,9 +5,17 @@ import re
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 COLOR = re.compile(r'^#[0-9A-Fa-f]{6}$')
 
+# A panel title can be a full-width strip or a chip that hugs its own text. The chip keeps the
+# title row's reserved height (measurement is untouched) and draws a rounded label inside it: a
+# group label the eye can find without turning the whole band into a colour block.
+CHIP_INSET = 8.        # from the panel's inner edge to the chip
+CHIP_PAD_X = 14.       # horizontal padding between the chip edge and its text
+CHIP_PAD_Y = 7.        # vertical padding between the chip edge and its text
+TITLE_BANDS = ('strip', 'chip')
+
 
 def validate_frame(value, panel=False):
-    allowed = {'border', 'fill'} | ({'title_fill', 'title_color', 'title_align'} if panel else {'padding'})
+    allowed = {'border', 'fill'} | ({'title_fill', 'title_color', 'title_align', 'title_band'} if panel else {'padding'})
     if not isinstance(value, dict):
         return ['frame must be an object']
     errors = []
@@ -30,6 +38,11 @@ def validate_frame(value, panel=False):
             errors.append(f'frame.{key} must be #RRGGBB'+(' or none' if key != 'title_color' else ''))
     if 'title_align' in value and value['title_align'] not in ('left', 'center'):
         errors.append('frame.title_align must be left or center')
+    if 'title_band' in value:
+        if value['title_band'] not in TITLE_BANDS:
+            errors.append(f'frame.title_band must be one of {list(TITLE_BANDS)}')
+        elif value['title_band'] == 'chip' and value.get('title_fill', 'none') == 'none':
+            errors.append('frame.title_band=chip requires title_fill: a chip with no fill is invisible')
     if 'padding' in value and (not isinstance(value['padding'], str) or value['padding'] not in PADDING):
         errors.append('frame.padding must be none, compact or standard')
     return errors
@@ -56,6 +69,25 @@ def panel_metrics(node):
     stroke = stroke_width(style) if style else 0.
     # A framed title band has padding above and below its title; body also has bottom padding.
     return pad, stroke, (3 if style else 2)*pad+2*stroke
+
+
+def title_chip(style, band, title_height, text_width):
+    """The chip and its text box inside a panel's title row, or ``None`` for a full-width strip.
+
+    The chip hugs the measured title and is vertically centred in the row the panel already
+    reserves, so nothing downstream (panel height, body offset, frame membership) moves. A title
+    too wide for a hugging label keeps the strip: a chip that has to wrap reads as a mistake.
+    """
+    if (style or {}).get('title_band') != 'chip' or (style or {}).get('title_fill', 'none') == 'none':
+        return None
+    x, y, width, height = band
+    if text_width+2*CHIP_PAD_X > width-2*CHIP_INSET:
+        return None
+    chip_w = text_width+2*CHIP_PAD_X
+    chip_h = min(max(0., height-2*CHIP_INSET), title_height+2*CHIP_PAD_Y)
+    chip = [x+CHIP_INSET, y+(height-chip_h)/2, chip_w, chip_h]
+    return {'chip': chip, 'text': [chip[0]+CHIP_PAD_X, chip[1]+CHIP_PAD_Y,
+                                   chip_w-2*CHIP_PAD_X, title_height]}
 
 
 def legacy_takeaway_box(slide, frame):

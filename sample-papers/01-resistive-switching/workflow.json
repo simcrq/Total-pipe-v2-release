@@ -1,0 +1,81 @@
+{
+  "schema_version": 4,
+  "workflow_id": "sample-resistive-switching",
+  "source": {
+    "input_path": "sample-papers/01-resistive-switching/paper.md",
+    "input_type": "markdown",
+    "source_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "source_fingerprint": "sample-resistive-switching"
+  },
+  "metadata": {
+    "title_guess": "Interfacial Control of Resistive Switching in Ti/Au–Si Memristive Junctions"
+  },
+  "evidence_registry": [
+    {
+      "evidence_id": "EV0001",
+      "text": "The Ti/Au–Si junctions switch from a high-resistance state of 1.2 × 10^5 Ω to a low-resistance state of 9.8 × 10^2 Ω after electroforming at 2.8 ± 0.2 V.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0002",
+      "text": "The ON/OFF ratio remained above 10^2 for 10^4 s at 85 °C under a 0.1 V read bias.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "measurement"
+    },
+    {
+      "evidence_id": "EV0003",
+      "text": "The current–voltage curves between 300 and 400 K are consistent with Poole–Frenkel emission from interfacial traps.",
+      "query_ids": ["discussion"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0004",
+      "text": "The extracted activation energy is 0.18 ± 0.02 eV, and the trap density is estimated as 2.4 × 10^18 cm^-3.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "measurement"
+    },
+    {
+      "evidence_id": "EV0005",
+      "text": "Devices endured 500 write–erase cycles without a decline larger than 12% in the ON/OFF ratio.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "measurement"
+    },
+    {
+      "evidence_id": "EV0006",
+      "text": "Cross-sectional TEM confirmed a continuous 3.5 nm TiOx layer between Si and the Ti/Au contact.",
+      "query_ids": ["methods"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0007",
+      "text": "The set voltage scales with the square root of the electric field, as expected for trap-assisted conduction.",
+      "query_ids": ["results"],
+      "modality": "body_text",
+      "support_type": "direct_observation"
+    },
+    {
+      "evidence_id": "EV0008",
+      "text": "The study is limited to n-type Si substrates and 100 µm junctions; CMOS integration and high-frequency operation were not tested.",
+      "query_ids": ["discussion"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    },
+    {
+      "evidence_id": "EV0009",
+      "text": "The conduction fit cannot uniquely separate Poole–Frenkel emission from Schottky emission, and the trap density is an order-of-magnitude estimate.",
+      "query_ids": ["discussion"],
+      "modality": "body_text",
+      "support_type": "author_inference"
+    }
+  ],
+  "synthesis_readiness": {
+    "readiness": "ready"
+  }
+}

@@ -10,7 +10,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 没有它时，旧平面表示继续使用原有布局与容量限制。已有 archetype 可采用区域树；新混排页可用
 `composite-research`，该 archetype 必须带树。标题、takeaway、caveat、脚注仍用现有 frame / academic_design。
 
-内容只在 canonical blocks、figure_refs、graphics、tables 中保存。下面的对象放进 `composition.layout_tree`：
+内容只在 canonical blocks、figure_refs、graphics、tables、charts 中保存。下面的对象放进 `composition.layout_tree`：
 
 ```json
 {
@@ -37,7 +37,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 
 | 类型 | 输入 | 分配方式 |
 |---|---|---|
-| columns | children，可选 weights | 扣除间距后按相对权重分宽 |
+| columns | children，可选 weights、fit | 扣除间距后按相对权重分宽；fit=hug 时行高取该行最高自然内容，不撑满区域 |
 | stack | children，可选 weights、align | 默认 start 贴合实测内容；center 居中，distribute 按实测高度比例分配余量；显式权重控制相对行高 |
 | panel | title、body，可选 padding、frame（1.2） | 测量完整标题、内边距及描边；声明 frame 才绘制背景 / 边框，可带标题色带 |
 | image_grid | columns、figure children | 按行测量图片及图注，原图等比 contain |
@@ -45,6 +45,7 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 | figure | ref 为 figure_refs 零基索引 | 原图、图注与来源检查一起复用 |
 | graphic | ref 为 graphic ID | 原有 process/DAG、机制、架构、漏斗、Path 或图形 composite |
 | table（1.1） | ref 为 table ID | 实测原生表格，含合并表头及 OMML 公式单元格 |
+| chart | ref 为 `composition.charts` 的 chart ID | 原生折线 / 柱状 / 散点图，按区域测量坐标轴、图例与出处 |
 
 节点 ID 全树唯一。间距 `compact/standard/spacious` 为 12/24/32 CSS px；panel 内边距
 `none/compact/standard` 为 0/12/20 CSS px。不能传页面 bbox/x/y/w/h。Path IR 原有局部坐标不变。
@@ -56,6 +57,8 @@ PWF、pwf2rpa 不做视觉排版。没有增加独立系统层或 HTML 渲染管
 
 `weights` 是相对值，各项须在 `[0.1,10]`，不能填写绝对像素。显式 weights 按比例铺满区域，
 此时 align 只能省略或设 start。align 仅用于 stack；默认 start 保持既有 hug 几何。
+fit 仅用于 columns：默认 `stretch` 让整行铺满区域，`hug` 让行高等于该行最高子节点的自然高度
+（等高等齐，但不再把短文字面板拉成空盒子）。
 未加权的 start stack 剩余高度超过该区域 15% 时产生 `PAGE_UNDERFILL` REVIEW；
 `layout_feedback.json` 给出 `underfill_px`、`underfill_ratio` 和可行时的 `suggested_weights`。
 调整权重或对齐后重新编译；留白测量与逐项复审见[复杂页 QA](complex-page-qa.md)。
@@ -105,6 +108,20 @@ plan_sublayout 输入相同。slide_id 必须是规范化规划中的实际 `SLI
 空间失败优先尝试整行 stack；rejected_sublayout_ids 排除已经失败的结构。反馈格式错误或过期
 明确拒绝，目录内无合法候选返回 needs_replan，不删除分组。自动选型不调用编译器；
 Skill/调用者控制最多三轮编译与修订，合入 patch 后重新生成哈希和反馈。
+
+## 容量失败时的回退顺序
+
+嵌套布局不是凭空扩容：页面正文区域不变，panel 内边距、标题带和 gap 还会占掉面积。它真正有用的
+情况是**区域被固定槽位卡住**，或**页内对象数超过 archetype 容量**：
+
+1. 先用 `composite-research` + `layout_tree` 给溢出对象独立区域（例如 graphic 与公式上下分栏，
+   或把多个块放进 columns/stack），保留完整正文与证据，不缩短术语。
+2. 如果树测量后仍超出，再拆页或改 Story；不要先删内容。
+3. `GRAPHIC_PAGE_CAPACITY` 与 `CONTENT_CAPACITY_EXCEEDED` 的提示都指向这条回退路径；
+   `PAGE_UNDERFILL` 只说明贴顶 stack 余量过大，和容量失败不是同一件事。
+
+嵌套本身不会让同一块文字变短；如果单个 block 的文本在整页宽度仍放不下，需要按段落/句子拆成
+多个 block（全文与顺序保留），而不是按字符硬切。
 
 ## 测量、反馈和容量
 

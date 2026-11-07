@@ -25,7 +25,14 @@
         "list_gap": {
           "type": "number", "minimum": 0.1, "maximum": 1.5,
           "description": "Space between list items as a fraction of the line height (default 0.45)."
-        }
+        },
+        "visual_style": {"$ref": "#/$defs/visual-style"},
+        "page_numbers": {"type": "boolean",
+          "description": "Set true or false: continuous page numbers in the footer of every designed page (default true)."},
+        "agenda": {"oneOf": [{"const": true}, {"type": "object", "additionalProperties": false,
+          "properties": {"title": {"type": "string", "maxLength": 20}}}]},
+        "footer": {"type": "string", "maxLength": 120,
+          "description": "One line of page furniture set at the left of the footer, e.g. the deck title or lab name."}
       }
     },
     "theme": {
@@ -52,7 +59,13 @@
         "required": ["path"],
         "properties": {
           "path": {"type": "string", "minLength": 1},
-          "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$"},
+          "crop": {"type": "object", "additionalProperties": false,
+            "required": ["source_path", "source_sha256", "box"], "properties": {
+              "source_path": {"type": "string", "minLength": 1},
+              "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "box": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer", "minimum": 0}}
+            }},
+          "source_figure": {"type": "string", "pattern": "^S?[1-9][0-9]*[a-z]?$"},
           "origin": {"enum": ["paper", "generated", "reference"],
                      "description": "paper (default) = cropped from a scientific paper; generated = drawn by the pipeline; reference = cropped from a user-provided slide or image."},
           "generator": {"type": "string", "minLength": 1,
@@ -84,6 +97,16 @@
     }}}}}
   }],
   "$defs": {
+    "visual-style": {
+      "type": "object", "additionalProperties": false,
+      "description": "Named shape/fill/rule language. academic: square nodes, hairline rules, no fill. commercial: tinted rounded cards (legacy default). print: black-only rules.",
+      "properties": {
+        "pack": {"enum": ["academic", "commercial", "print"]},
+        "overrides": {"type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean"]},
+          "description": "Dotted token overrides, e.g. graphic.node.fill or graphic.edge.width."}
+      }
+    },
     "frame-border": {
       "type": "object", "additionalProperties": false, "required": ["color"],
       "properties": {"color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
@@ -96,7 +119,9 @@
         "border": {"$ref": "#/$defs/frame-border"}, "fill": {"$ref": "#/$defs/frame-fill"},
         "title_fill": {"$ref": "#/$defs/frame-fill"},
         "title_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
-        "title_align": {"enum": ["left", "center"]}
+        "title_align": {"enum": ["left", "center"]},
+        "title_band": {"enum": ["strip", "chip"],
+          "description": "strip fills the whole title row; chip hugs the title text as a rounded label (requires title_fill)."}
       }
     },
     "takeaway-frame": {
@@ -138,10 +163,13 @@
            "weights": {"type": "array", "minItems": 1, "maxItems": 12,
                        "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
            "align": {"enum": ["start", "center", "distribute"]},
+           "fit": {"enum": ["stretch", "hug"]},
            "gap": {"enum": ["compact", "standard", "spacious"]}},
          "allOf": [{"if": {"properties": {"type": {"const": "columns"}}},
                     "then": {"properties": {"children": {"maxItems": 4}, "weights": {"maxItems": 4}},
                              "not": {"required": ["align"]}}},
+                   {"if": {"properties": {"type": {"const": "stack"}}, "required": ["type"]},
+                    "then": {"not": {"required": ["fit"]}}},
                    {"if": {"required": ["weights"]},
                     "then": {"properties": {"align": {"const": "start"}}}}]},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "title", "body"],
@@ -160,7 +188,7 @@
                         "items": {"$ref": "#/$defs/region-figure"}},
            "gap": {"enum": ["compact", "standard", "spacious"]}}},
         {"type": "object", "additionalProperties": false, "required": ["id", "type", "ref"],
-         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic", "table"]},
+         "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"enum": ["block", "graphic", "table", "chart"]},
                         "ref": {"type": "string", "minLength": 1}}},
         {"$ref": "#/$defs/region-figure"}
       ]
@@ -214,6 +242,72 @@
         }}
       }
     },
+    "chart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "basis", "x", "y", "series"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"enum": ["line", "bar", "scatter"]},
+        "basis": {"enum": ["evidence", "explain"]},
+        "illustrative": {"type": "boolean", "default": false},
+        "x": {
+          "type": "object", "additionalProperties": false, "required": ["label"],
+          "properties": {
+            "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+            "scale": {"enum": ["linear", "log"], "default": "linear"},
+            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}}
+          }
+        },
+        "y": {
+          "type": "object", "additionalProperties": false, "required": ["label"],
+          "properties": {
+            "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+            "scale": {"enum": ["linear", "log"], "default": "linear"},
+            "unit": {"type": "string", "maxLength": 24}
+          }
+        },
+        "series": {
+          "type": "array", "minItems": 1, "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["label", "values", "evidence_refs"],
+            "properties": {
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+              "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}},
+              "x_values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}},
+              "y_error": {"type": "array", "minItems": 2, "maxItems": 24,
+                          "items": {"type": "number", "minimum": 0}},
+              "evidence_refs": {"type": "array", "uniqueItems": true,
+                                "items": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+            }
+          }
+        },
+        "annotations": {
+          "type": "array", "maxItems": 6,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["text", "series", "point"],
+            "properties": {
+              "text": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+              "series": {"type": "integer", "minimum": 0, "maximum": 3},
+              "point": {"type": "integer", "minimum": 0, "maximum": 23},
+              "dx": {"type": "number", "minimum": -160, "maximum": 160, "default": 12},
+              "dy": {"type": "number", "minimum": -120, "maximum": 120, "default": -18}
+            }
+          }
+        },
+        "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
+        "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"enum": ["line", "bar"]}}},
+         "then": {"properties": {"x": {"required": ["values"]}}}},
+        {"if": {"properties": {"basis": {"const": "explain"}}},
+         "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
+        {"if": {"properties": {"basis": {"const": "evidence"}}},
+         "then": {"properties": {"illustrative": {"const": false}}}}
+      ]
+    },
     "academic-design": {
       "type": "object", "additionalProperties": false,
       "required": ["style", "title_treatment", "density", "figure_treatment", "decoration_policy"],
@@ -224,7 +318,8 @@
         "figure_treatment": {"enum": ["unframed", "ruled-caption"]},
         "decoration_policy": {"enum": ["minimal", "none"]},
         "header_variant": {"enum": ["standard", "compact"], "default": "compact"},
-        "type_scale": {"enum": ["standard", "compact"], "default": "standard"},
+        "type_scale": {"enum": ["standard", "compact", "statement"], "default": "standard",
+          "description": "statement promotes metric to the poster step (88 px) for a page that is only a number; body and captions keep deck sizes."},
         "accent_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
       },
       "allOf": [{
@@ -356,7 +451,7 @@
             "properties": {
               "from": {"$ref": "#/$defs/identifier"}, "to": {"$ref": "#/$defs/identifier"},
               "kind": {"enum": ["activate", "inhibit", "associate"]},
-              "basis": {"enum": ["evidence", "hypothesis"]}, "feedback": {"type": "boolean"},
+              "basis": {"enum": ["evidence", "hypothesis", "explain"]}, "feedback": {"type": "boolean"},
               "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1, "pattern": "\\S"}},
               "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"}
             },
@@ -463,16 +558,30 @@
         }
       }
     },
+    "supplement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["background", "analogy", "example", "derivation",
+                          "diagram", "comparison"]},
+        "source": {"type": "string"},
+        "constructed": {"type": "boolean"},
+        "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "explanation-obligation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "required", "content", "evidence_refs"],
+      "required": ["id", "kind", "required", "content"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "kind": {"enum": ["quantity", "parallel_items", "grouped_panels", "comparison",
                           "ordered_steps", "relation", "curve", "image_evidence"]},
         "required": {"type": "boolean"},
         "primary": {"type": "boolean"},
+        "basis": {"enum": ["paper", "supplement"], "default": "paper",
+                  "description": "paper obligations need evidence_refs; supplement obligations do not."},
         "carrier": {"enum": ["inline_math", "formula", "native_list", "table", "layout_tree",
                              "process", "dag", "mechanism", "path", "figure"]},
         "status": {"enum": ["bound", "waived", "unsupported"]},
@@ -481,7 +590,14 @@
                           "items": {"type": "string", "minLength": 1}},
         "source_quote": {"type": "string"},
         "note": {"type": "string"}
-      }
+      },
+      "allOf": [{
+        "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+        "then": {"not": {"required": ["evidence_refs"]}}
+      }, {
+        "if": {"not": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}},
+        "then": {"required": ["evidence_refs"]}
+      }]
     },
     "explanation": {
       "type": "object",
@@ -512,6 +628,7 @@
             "takeaway": {"type": "string", "minLength": 1},
             "inline_math": {"type": "array", "uniqueItems": true, "items": {"enum": ["title", "takeaway"]},
               "description": "Opt in selected semantic fields to measured $...$ or \\(...\\) native inline math. Other fields stay literal."},
+            "content_projection": {"type": "object", "additionalProperties": false, "required": ["version", "items", "display_copy", "content_map", "review"], "properties": {"version": {"enum": ["1.0", "2.0"]}, "items": {"type": "object"}, "display_copy": {"type": "array", "minItems": 2, "items": {"type": "object"}}, "content_map": {"type": "object"}, "review": {"type": "object"}, "figure_sources":{"type":"object"}}, "allOf":[{"if":{"properties":{"version":{"const":"2.0"}}},"then":{"required":["figure_sources"]}},{"if":{"properties":{"version":{"const":"1.0"}}},"then":{"not":{"required":["figure_sources"]}}}], "description": "Automatically bound approved science, audience copy, destinations and actual source reviews. Version2 also binds inspected figure identities. Notes never count as visible content."},
             "explanation": {"$ref": "#/$defs/explanation",
               "description": "Evidence-bound reader obligations copied from Story explain. The compiler measures coverage; this is not a layout request."},
             "evidence_refs": {"type": "array", "items": {"type": "string"}},
@@ -527,7 +644,7 @@
           "properties": {
             "archetype": {
               "enum": [
-                "composite-research", "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
+                "cover", "composite-research", "native-graphic", "cover-hero", "metric-comparison", "equation-derivation", "process-flow", "figure-parameters",
                 "hero-dual-evidence", "evidence-hypothesis", "dual-demonstration",
                 "three-limitations", "three-conclusions"
               ]
@@ -536,6 +653,11 @@
               "type": "array", "maxItems": 8,
               "items": {"$ref": "#/$defs/graphic"},
               "description": "One editable process/DAG, scientific component, Path IR scene or composite. Optional on process-flow and figure-parameters; required on native-graphic. Only Path IR uses local coordinates; page geometry is compiler-owned."
+            },
+            "charts": {
+              "type": "array", "maxItems": 4,
+              "items": {"$ref": "#/$defs/chart"},
+              "description": "Data plots (line/bar) referenced by a layout_tree chart leaf. Values are evidence-bound or explicitly illustrative; see docs/chart-ir.md."
             },
             "blocks": {
               "type": "array",
@@ -549,10 +671,13 @@
                     "enum": [
                       "body", "metric", "parameter", "process-step", "direct-evidence",
                       "hypothesis", "limitation", "conclusion", "callout", "comparison",
-                      "definition", "observation", "method", "result", "question", "source", "caveat", "formula"
+                      "definition", "observation", "method", "result", "question", "source", "caveat", "formula", "caption"
                     ]
                   },
                   "label": {"type": "string"},
+                  "caption_for": {"type":"object", "additionalProperties":false, "required":["kind","ref"], "properties": {
+                    "kind":{"enum":["figure","graphic","table","chart"]}, "ref":{"type":"string","pattern":"\\S"}
+                  }, "description":"Visual this native caption explains; must exist on this page."},
                   "text": {"type": "string", "minLength": 1},
                   "inline_math": {"type": "boolean", "default": false,
                     "description": "Prose only: explicitly enable measured native $...$ or \\(...\\) inline formulas; no auto-list conversion."},
@@ -562,9 +687,33 @@
                   "bullet_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
                     "description": "Override this list's marker color, independently of body text."},
                   "anchor": {"type": "string", "minLength": 1,
-                             "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."}
+                             "description": "Formula only: id of a preceding non-formula block this equation explains. Explicit anchored groups stay together; consecutive unanchored equations remain independent measured rows."},
+                  "basis": {"enum": ["paper", "supplement"], "default": "paper",
+                            "description": "paper (default) keeps the evidence gate; supplement marks explanatory content that is not a paper claim."},
+                  "supplement": {"$ref": "#/$defs/supplement"},
+                  "evidence_refs": {"type": "array", "uniqueItems": true,
+                                    "items": {"type": "string", "minLength": 1},
+                                    "description": "Paper block only: an optional subset of semantic.evidence_refs. A supplement block must not carry this field."}
                 },
                 "allOf": [{
+                  "if":{"required":["component"],"properties":{"component":{"const":"caption"}}},
+                  "then":{"required":["caption_for"],"properties":{"text_flow":{"const":"plain"},"inline_math":{"const":false}},
+                    "not":{"anyOf":[{"required":["label"]},{"required":["anchor"]},{"required":["bullet_style"]},{"required":["bullet_color"]}]}}
+                }, {
+                  "if":{"required":["caption_for"]}, "then":{"properties":{"component":{"const":"caption"}}}
+                }, {
+                  "if": {"required": ["supplement"]},
+                  "then": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+                  "then": {"required": ["supplement"]}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "paper"}}},
+                  "then": {"not": {"required": ["supplement"]}}
+                }, {
+                  "if": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}},
+                  "then": {"not": {"required": ["evidence_refs"]}}
+                }, {
                   "if": {"anyOf": [{"required": ["bullet_style"]}, {"required": ["bullet_color"]}]},
                   "then": {"properties": {"component": {"not": {"const": "formula"}},
                     "inline_math": {"const": false}, "text_flow": {"enum": ["auto", "distributed_arrow_list"]}}}
@@ -595,9 +744,11 @@
                 "properties": {
                   "asset_id": {"type": "string", "minLength": 1},
                   "caption": {"type": "string", "maxLength": 180},
+                  "source_label": {"type": "string", "maxLength": 80,
+                    "description": "Where the panel comes from, set as a weakened prefix: 'Xie et al., Fig. 1g'."},
                   "alt": {"type": "string"},
                   "panel_count": {"type": "integer", "minimum": 1, "maximum": 6},
-                  "source_figure": {"type": "string", "pattern": "^[1-9][0-9]*[a-z]?$",
+                  "source_figure": {"type": "string", "pattern": "^S?[1-9][0-9]*[a-z]?$",
                                     "description": "Paper figure id. Required for paper assets; forbidden for generated and reference assets."},
                   "min_panel_extent": {"type": "number", "minimum": 140, "maximum": 500},
                   "caption_height": {"type": "number", "minimum": 24, "maximum": 96},
@@ -641,6 +792,10 @@
             "takeaway_marker": {"$ref": "#/$defs/takeaway-marker"},
             "takeaway_frame": {"$ref": "#/$defs/takeaway-frame"},
             "variant": {"enum": ["default", "spacious"]},
+            "page_number": {"type": "boolean",
+              "description": "Per-page override of presentation.page_numbers; false hides the number only."},
+            "section": {"type": "string", "maxLength": 24,
+              "description": "Marks the first page of a section. The compiler numbers the section and, with presentation.agenda, lists it on the contents page."},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},
             "optional_overrides": {"type": "object", "maxProperties": 0}

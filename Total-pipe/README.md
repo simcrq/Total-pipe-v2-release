@@ -12,7 +12,7 @@
 
 | 入口 | 用途 |
 | --- | --- |
-| [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → Deck IR → Design → 编译 / 验收 |
+| [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → page_design → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
 | `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
 | `python -m agent.mcp_server` | 默认四工具入口 [.mcp.json](.mcp.json)，服务名 `total_pipe`；[用法](docs/agent-adapter.md) |
@@ -20,6 +20,14 @@
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
 编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
+默认 Agent 的 RPA 阶段仅规范化内容，页面方案由独立 page_design 决定；RPA 独立 CLI 仍可做模板规划。
+Story 2.0 将科学断言与叙事段落分开，scientific_review 后由页面设计1.3分别声明所有权和复用；
+页面源文案实际审读后绑定 content_projection，原生caption及论文图号按语义实现；
+编译器分别检查完整记录归档、批准文案和可见页面对象。旧协议保持原行为。见[内容契约](docs/content-projection.md)。
+已有 canonical IR 的局部布局/裁图补丁可先调用同一编译器预检，失败保留旧候选；通过后仍执行完整构建
+与 QA，详见[局部修补协议](docs/agent-adapter.md#局部修补与布局预检)。
+IR 草稿可用四工具的 `advance.preview` 选页渲染：实际查看 PNG 后再修改源 IR，未变页复用缓存；
+它不接受 IR、不改候选或正式 QA，也不替代 PowerPoint 原生验收。见[选页渲染](docs/agent-adapter.md#ir-选页渲染与看图修订)。
 `packer` 是默认布局建议提供方，也可选 `compiler` 或外部 `module:factory`。
 它只接管受支持的平面正文建议；递归区域、视觉计划、公式、显式列表与原生图形等页面由编译器布局，
 逐页记为 `COMPILER_OWNED`，不计作提供方回退。状态和 coverage 定义见[提供方协议](docs/layout-provider.md)。
@@ -82,6 +90,7 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | 文件 | 含义 |
 | --- | --- |
 | `deck_ir.json` | 本次构建冻结的科学内容输入 |
+| `explain_viz.source.deck_ir.json`、`explain_viz.json` | ExplainViz 原输入归档、原目录基准、逐页决策、对象位置变化与源/输出哈希；QA 内另有 explain_viz 摘要 |
 | `layout.json`、`layout_provider.json` | 最终几何、文本契约、提供方采用 / owned / 回退 / 拒绝记录及覆盖率 |
 | `derived/` | 从输入派生的规划、资源清单与 QA expectation |
 | `layout_feedback.json` | 绑定 IR 哈希的组件尺寸错误及上游修订建议 |
@@ -89,9 +98,12 @@ python -m deck_compiler build --ir examples/complex-mixed/complex-mixed.deck_ir.
 | `qa_report.json`、`officecli_issues.json` | 统一 QA 和保留的 OfficeCLI 原始问题 |
 | `qa_acknowledgements.json` | 候选逐项审核笔记，按未变化的页面证据保留；不替代正式 final 审核 |
 | `powerpoint_review.json`、`native.pdf`、`native.json` | 当前 staging 的直接 UI 检查与 PowerPoint 原生证据 |
+| `native_preview.json`、`native-preview/` | 绑定当前 PPTX/PDF 的逐页 PNG、contact sheet 和预览 HTML；不证明 UI 眼检 |
 | `final.pptx`、`state.json` | 完成验收 / REVIEW 审核 / promote 后的交付及状态 |
 
 修改页面从 canonical Deck IR 开始；派生文件由编译器重建。
+四工具候选可按 `native.schema_path` 用 `advance.native` 执行 render / review / ingest；复用现有 PPTX，
+同步原生 PDF、全页预览、实际 UI 复核与 QA checkpoint。字段及失败恢复见[原生验收协议](docs/agent-adapter.md#原生-powerpoint-验收接入)。
 候选可以交付并注明未解决项；正式 final 按 [使用说明第 6 节](docs/USAGE.zh-CN.md#6-正式-finalpowerpoint-验收与晋级)
 完成逐页 PowerPoint 检查、PDF 绑定及 REVIEW acknowledgement，再 promote。
 OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页面。
@@ -101,15 +113,18 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 ## 当前能力与协议
 
+- [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排与跟随主题的图示着色，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
 - [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
-- [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、15% 留白反馈、合法相对权重与增量候选签收。
+- [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、间隙上限 48 px / 居中 56 px、15% 留白反馈、合法相对权重与增量候选签收。
 - [边框容器](docs/framed-containers.md)：panel 原生描边、填充与标题色带；独立 takeaway 框选；内边距、描边与完整内容共同测量。
 - [原生科研表格](docs/native-tables.md)：layout tree 1.1、多级合并表头、跨行跨列与公式格。
-- [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线。
+- [原生数据图](docs/chart-ir.md)：`composition.charts` 与 layout tree `chart` 叶子；折线 / 柱状 / 散点、线性 / 对数轴、误差棒、图内标注；`basis` 区分证据图与示意说明。
+- [页面设计阶段](docs/agent-adapter.md#页面设计阶段page_design)：RPA 之后由独立子代理引用 Story，交代原图、自绘元素、排布与讲解走读；1.1 不再重写科学正文，设计说明可自由组织，IR 负责实现。
+- [流程与 DAG](docs/native-graphics.md)、[机制 / 架构 / 路径](docs/native-components.md)：原生对象、连接符和贝塞尔曲线；机制关系边可带 `basis`（evidence / hypothesis / explain）。
 - [整套视觉设计](docs/scientific-visual-planner.md)：保留完整科研术语，文字超容量按 preserve-terms 生成候选及 REVIEW。
 
 旧平面 IR、layout tree 1.0 和未启用行内公式的文字仍兼容。

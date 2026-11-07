@@ -45,9 +45,9 @@ class DAGLayoutTests(unittest.TestCase):
         ir = example(); ir['slides'] = ir['slides'][:1]
         layout = self.compile(ir)
         nodes = [e for e in layout['slides'][0]['elements'] if e.get('role')=='graphic-node']
-        for node, x in zip(nodes, (56, 466.6666666666667, 877.3333333333334)):
+        for node, x in zip(nodes, (128.0, 480.0, 832.0)):
             self.assertAlmostEqual(node['bbox'][0], x)
-            self.assertEqual(node['bbox'][1:], [314.0, 346.6666666666667, 272.0])
+            self.assertEqual(node['bbox'][1:], [360.0, 320.0, 180.0])
         edges = [c for c in commands(layout) if c.get('type')=='connector']
         self.assertEqual(len(edges), 2)
         self.assertTrue(all(c['props']['shape']=='straightConnector1' and c['props']['height']=='0px' for c in edges))

@@ -1,0 +1,152 @@
+{
+  "schema_version": "2.0",
+  "deck_id": "explain-viz-auto-layout-example",
+  "presentation": {
+    "academic_design": {
+      "style": "research-seminar",
+      "title_treatment": "plain",
+      "density": "balanced",
+      "figure_treatment": "unframed",
+      "decoration_policy": "none",
+      "header_variant": "compact",
+      "type_scale": "compact"
+    }
+  },
+  "theme": {
+    "font_family": "Arial",
+    "font_file": "arial.ttf",
+    "bold_font_file": "arialbd.ttf",
+    "foreground": "#142735",
+    "background": "#FFFFFF",
+    "accent": "#2563A6"
+  },
+  "assets": {},
+  "slides": [
+    {
+      "id": "peel-angle",
+      "semantic": {
+        "title": "剥离角 θ 的几何定义",
+        "purpose": "用原生示意图解释定义和关系",
+        "takeaway": "示意图只表达已声明的关系，不表示实测数值。",
+        "evidence_refs": [
+          "fixture:explain-viz"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件开发用的构造示例，不对应任何论文或实验结果。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "definition",
+            "component": "body",
+            "text": "薄膜左段贴附于衬底，自由段向上抬起；剥离角 θ 是薄膜自由段与衬底平面的夹角。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "body",
+              "type": "stack",
+              "children": [
+                {
+                  "id": "definition",
+                  "type": "block",
+                  "ref": "definition"
+                }
+              ],
+              "gap": "compact"
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "layer-stack",
+      "semantic": {
+        "title": "层叠结构的空间顺序",
+        "purpose": "用原生示意图解释定义和关系",
+        "takeaway": "示意图只表达已声明的关系，不表示实测数值。",
+        "evidence_refs": [
+          "fixture:explain-viz"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件开发用的构造示例，不对应任何论文或实验结果。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "definition",
+            "component": "body",
+            "text": "叠层从上到下依次为栅极、介电层、薄膜；图中的层厚不代表测量值。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "body",
+              "type": "stack",
+              "children": [
+                {
+                  "id": "definition",
+                  "type": "block",
+                  "ref": "definition"
+                }
+              ],
+              "gap": "compact"
+            }
+          }
+        }
+      },
+      "presentation": {}
+    },
+    {
+      "id": "process-steps",
+      "semantic": {
+        "title": "流程中的先后步骤",
+        "purpose": "用原生示意图解释定义和关系",
+        "takeaway": "示意图只表达已声明的关系，不表示实测数值。",
+        "evidence_refs": [
+          "fixture:explain-viz"
+        ],
+        "caveats": [],
+        "speaker_notes": "软件开发用的构造示例，不对应任何论文或实验结果。"
+      },
+      "composition": {
+        "archetype": "composite-research",
+        "blocks": [
+          {
+            "id": "definition",
+            "component": "body",
+            "text": "流程步骤依次为生长→键合→释放；箭头仅表示步骤顺序。"
+          }
+        ],
+        "figure_refs": [],
+        "layout_tree": {
+          "version": "1.2",
+          "regions": {
+            "body": {
+              "id": "body",
+              "type": "stack",
+              "children": [
+                {
+                  "id": "definition",
+                  "type": "block",
+                  "ref": "definition"
+                }
+              ],
+              "gap": "compact"
+            }
+          }
+        }
+      },
+      "presentation": {}
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "window",
+  "kind": "line",
+  "basis": "evidence",
+  "x": {
+    "label": "Channel length L (nm)",
+    "scale": "log",
+    "values": [40, 100, 300, 1000]
+  },
+  "y": {
+    "label": "Programming window",
+    "scale": "linear",
+    "unit": "V"
+  },
+  "series": [
+    {
+      "label": "t_cg = 40 nm",
+      "values": [10.5, 14.2, 15.1, 12.0],
+      "evidence_refs": ["EV0012"]
+    }
+  ],
+  "source": "Nature Electronics (2026) · Fig. 4c",
+  "note": "Values in this file are illustrative of the shape only; a real deck must cite the paper's numbers."
+}

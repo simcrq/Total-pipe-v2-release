@@ -91,6 +91,8 @@ def validate_job(job):
             not re.fullmatch(r'[a-f0-9]{32}', job['job_id'])):
         raise ValueError('Malformed job identity')
     inputs = job['inputs']
+    if job['request'].get('explain_viz_mode', 'auto') not in ('auto', 'off', 'prefer'):
+        raise ValueError('Malformed ExplainViz mode')
     if inputs and (set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
                    not isinstance(inputs.get('model'), str) or not inputs['model'].strip() or
                    inputs.get('reasoning_effort') not in ('high','xhigh','max','ultra') or inputs.get('selected_by_user') is not True):
@@ -162,6 +164,7 @@ def resources(path):
         value = read(path)
         if value.get('schema_version') == '2.0':
             refs = [a['path'] for a in value.get('assets', {}).values()]
+            refs += [a['crop']['source_path'] for a in value.get('assets', {}).values() if isinstance(a.get('crop'), dict) and a['crop'].get('source_path')]
             refs += [value.get('theme', {}).get(k) for k in ('font_file', 'bold_font_file', 'background_image')]
         else:
             artifacts = value.get('artifacts', {})
@@ -181,6 +184,7 @@ def resources(path):
 
 def code_hash():
     files = list(Path(__file__).parent.rglob('*.py'))+list(Path(__file__).parent.rglob('*.json'))
+    files.append(Path(__file__).resolve().parents[1]/'pwf2rpa/pwf2rpa/content_contract.py')
     revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True,
                               text=True, encoding='utf-8', errors='replace').stdout.strip() if (ROOT/'.git').exists() and shutil.which('git') else None
     return digest([revision, {str(p.relative_to(ROOT)): sha(p) for p in sorted(files)}])

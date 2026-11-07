@@ -12,6 +12,12 @@ ET.register_namespace('mc', 'http://schemas.openxmlformats.org/markup-compatibil
 ET.register_namespace('a14', 'http://schemas.microsoft.com/office/drawing/2010/main')
 
 
+def inline_runs(text):
+    """Whether a text cell is set as measured runs (formula or authored emphasis)."""
+    from totalpipe_layout.inline_math import has_markup
+    return has_markup(text)
+
+
 def validate_tables(tables, evidence_refs):
     if not isinstance(tables, list) or len(tables) > 4:
         return ['tables must be a list of at most four native tables']
@@ -114,19 +120,22 @@ def measure_table(table, width, fonts, size=24):
         rs, cs = cell.get('row_span', 1), cell.get('column_span', 1)
         cw = sum(widths[c:c+cs])-20
         bold = r < table.get('header_rows', 1)
+        runs = bool(cell.get('inline_math')) or inline_runs(cell['text'])
         if cell.get('kind') == 'formula':
             metrics = measure(parse(cell['text']), size)
             required = metrics.width+20
             minimum_width = max(minimum_width, required*sum(weights)/sum(weights[c:c+cs]))
             needed = metrics.height+16
             lines = None
-        elif cell.get('inline_math'):
+        elif runs:
             from totalpipe_layout.inline_math import measure_inline, InlineWidthError
             face = load_font_file(fonts['bold_font_file' if bold else 'font_file'], size)
             measured_width, required_width = max(1, cw), 0.
             for _ in range(256):
                 try:
-                    inline = measure_inline(cell['text'], measured_width, face, size)
+                    inline = measure_inline(cell['text'], measured_width, face, size,
+                                            strong_font=load_font_file(fonts['bold_font_file'], size)
+                                            if not bold else None)
                     break
                 except InlineWidthError as error:
                     # Only increasing atomic-width probes; the actual narrower region still fails.
@@ -144,9 +153,9 @@ def measure_table(table, width, fonts, size=24):
         missing = max(0, needed-sum(heights[r:r+rs]))
         for y in range(r, r+rs):
             heights[y] += missing/rs
-        cells.append({**cell, 'lines': lines, 'bold': bold,
+        cells.append({**cell, 'lines': lines, 'bold': bold, 'runs': runs,
                       **({'measured_exact': metrics.exact} if cell.get('kind') == 'formula' else {}),
-                      **({'inline_layout': inline, 'measured_exact': inline['measured_exact']} if cell.get('inline_math') else {})})
+                      **({'inline_layout': inline, 'measured_exact': inline['measured_exact']} if runs else {})})
     return {'column_widths': widths, 'row_heights': heights, 'height': sum(heights),
             'min_width': minimum_width, 'font_size_px': size, 'cells': cells}
 
@@ -200,11 +209,13 @@ def compile_table(table, box, fonts, theme, preserve_terms=False):
             body = _element(tc, 'txBody')
             _element(body, 'bodyPr', {'wrap': 'none', 'anchor': 'ctr'})
             _element(body, 'lstStyle')
-            if anchor and cell.get('inline_math'):
+            if anchor and cell.get('runs'):
                 from .inline_text import paragraphs
+                from .style import text_styles
                 from totalpipe_layout.inline_math import plain_text
                 body.extend(paragraphs(cell['inline_layout'], {'font_size': chosen['font_size_px'],
-                    'font_family': font, 'font_weight': 700 if cell['bold'] else 400}, '#'+color, cell.get('align', 'left')))
+                    'font_family': font, 'font_weight': 700 if cell['bold'] else 400}, '#'+color, cell.get('align', 'left'),
+                    styles=text_styles(theme)))
                 content = plain_text(cell['text'])
             elif anchor and cell.get('kind') == 'formula':
                 paragraph = ET.fromstring(to_omml_paragraph(parse(cell['text']), chosen['font_size_px'], '#'+color))

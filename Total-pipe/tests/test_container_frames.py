@@ -85,6 +85,51 @@ class ContainerFrameTests(unittest.TestCase):
         self.assertAlmostEqual(panel['bbox'][2]-leaf['bbox'][2], 2*(12+1.5))
         self.assertGreater(leaf['bbox'][1], panel['title_band_bbox'][1]+panel['title_band_bbox'][3])
 
+    def test_chip_requires_a_title_fill(self):
+        from deck_compiler.container_frames import validate_frame
+        self.assertIn('requires title_fill', ' '.join(validate_frame(
+            {'border': {'color': '#A7B5C5'}, 'title_band': 'chip'}, panel=True)))
+        self.assertIn('title_band must be one of', ' '.join(validate_frame(
+            {'border': {'color': '#A7B5C5'}, 'title_fill': '#0755A3', 'title_band': 'banner'},
+            panel=True)))
+        self.assertEqual(validate_frame(
+            {'border': {'color': '#A7B5C5'}, 'title_fill': '#0755A3', 'title_band': 'chip'},
+            panel=True), [])
+
+    def test_chip_title_hugs_its_text_inside_the_frame(self):
+        ir = fixture()
+        panel = ir['slides'][0]['composition']['layout_tree']['regions']['body']['children'][0]
+        panel['frame']['title_band'] = 'chip'
+        panel['title'] = '研究图像'
+        layout, _ = self.compile_ok(ir)
+        elements = layout['slides'][0]['elements']
+        frame = next(e for e in elements if e['id'] == 'region:evidence-panel:frame')
+        band = next(e for e in elements if e['id'] == 'region:evidence-panel:title-band')
+        title = next(e for e in elements if e['id'] == 'region:evidence-panel:title')
+        self.assertEqual(band['geometry'], 'roundRect')
+        self.assertEqual(band['fill'], panel['frame']['title_fill'])
+        self.assertLess(band['bbox'][2], frame['bbox'][2]-20)      # a label, not a strip
+        self.assertGreater(band['bbox'][0], frame['bbox'][0])
+        self.assertEqual(title['align'], 'center')
+        self.assertGreaterEqual(title['bbox'][0], band['bbox'][0])
+        self.assertLessEqual(title['bbox'][0]+title['bbox'][2], band['bbox'][0]+band['bbox'][2]+.1)
+        plan = next(a for a in layout['slides'][0]['adaptation_log'] if a['action'] == 'layout_tree')
+        leaf = next(n for n in plan['nodes'] if n['node_id'] == 'context-ref')
+        self.assertGreater(leaf['bbox'][1], band['bbox'][1]+band['bbox'][3])
+
+    def test_chip_falls_back_to_a_strip_for_a_title_it_cannot_hug(self):
+        ir = fixture()
+        panel = ir['slides'][0]['composition']['layout_tree']['regions']['body']['children'][0]
+        panel['frame']['title_band'] = 'chip'
+        panel['title'] = '很长的分组标题' * 12
+        layout, _ = self.compile_ok(ir)
+        elements = layout['slides'][0]['elements']
+        frame = next(e for e in elements if e['id'] == 'region:evidence-panel:frame')
+        band = next(e for e in elements if e['id'] == 'region:evidence-panel:title-band')
+        self.assertEqual(band['geometry'], 'rect')
+        self.assertGreater(band['bbox'][2], frame['bbox'][2]-4)   # the whole row, minus its stroke
+        self.assertFalse(containment_errors(elements))
+
     def test_takeaway_frame_is_independent_of_optional_marker_and_moves_body(self):
         ir = fixture()
         slide = ir['slides'][0]

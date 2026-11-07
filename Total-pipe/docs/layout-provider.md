@@ -62,6 +62,10 @@ class LayoutProvider(Protocol):
 * 请求构造复用本次 baseline；没有可接受提案时直接沿用 baseline，不为相同 IR 重复编译。
   独立调用 `read_requests(path, root)` 仍会自行编译；已有结果可传 `layout=` 和 `compile_issues=`，
   baseline 的 `ir_sha256` 必须匹配当前 IR。
+* `compile_with_provider(path, ..., deck_ir=value)` 和 `read_requests(path, ..., deck_ir=value)`
+  可使用同一份内存 IR 快照，`path.parent` 仍是图片和字体的原目录，不写临时输入文件。
+  ExplainViz 直接构建和溢出修复使用此方式；提供方不会重新读取原文件而丢失已接受的增量。
+  没传 `deck_ir` 时继续从 path 读取，外部 `propose(requests)` 契约不变。
 
 ## 逐页溯源
 

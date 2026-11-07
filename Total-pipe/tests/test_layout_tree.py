@@ -218,26 +218,75 @@ class LayoutTreeTests(unittest.TestCase):
         _, weighted_issues = self.compile_ok(ir)
         self.assertNotIn('PAGE_UNDERFILL', [i['rule'] for i in weighted_issues])
 
-    def test_stack_align_center_and_distribute_are_explicit_and_keep_content(self):
+    def test_stack_align_center_and_distribute_are_capped_instead_of_filling(self):
         ir = self.short_stack()
         baseline, _ = self.compile_ok(ir)
         def nodes(layout):
             return next(a['nodes'] for a in layout['slides'][0]['adaptation_log'] if a['action'] == 'layout_tree')
         start = nodes(baseline)
-        remaining = start[0]['bbox'][1]+start[0]['bbox'][3]-sum(start[-1]['bbox'][1::2])
-        for alignment in ('center', 'distribute'):
-            ir['slides'][0]['composition']['layout_tree']['regions']['body']['align'] = alignment
-            layout, issues = self.compile_ok(ir)
-            plan = nodes(layout)
-            self.assertNotIn('PAGE_UNDERFILL', [i['rule'] for i in issues])
-            if alignment == 'center':
-                self.assertAlmostEqual(plan[1]['bbox'][1]-start[1]['bbox'][1], remaining/2)
-                self.assertEqual(plan[1]['bbox'][3], start[1]['bbox'][3])
-            else:
-                self.assertAlmostEqual(sum(plan[-1]['bbox'][1::2]), sum(plan[0]['bbox'][1::2]))
-            for block in ir['slides'][0]['composition']['blocks']:
-                element = next(e for e in layout['slides'][0]['elements'] if e['id'] == block['id'])
-                self.assertEqual(element['source_text'], block['text'])
+        body = ir['slides'][0]['composition']['layout_tree']['regions']['body']
+        body['align'] = 'center'
+        layout, _ = self.compile_ok(ir)
+        plan = nodes(layout)
+        within = plan[1]['bbox'][1]-plan[0]['bbox'][1]
+        self.assertGreaterEqual(within, 0)      # at the top, or nudged down ...
+        self.assertLessEqual(within, 56.5)     # ... but never by the whole slack
+        self.assertEqual(plan[1]['bbox'][3], start[1]['bbox'][3])
+        body['align'] = 'distribute'
+        layout, issues = self.compile_ok(ir)
+        plan = nodes(layout)
+        # Sparse content is not spread to the page edges: the boxes keep their height and the page
+        # is reported so the composition changes instead of the spacing.
+        self.assertEqual(plan[1]['bbox'][3], start[1]['bbox'][3])
+        self.assertIn('SPARSE_TEXT_PAGE', [i['rule'] for i in issues])
+        for block in ir['slides'][0]['composition']['blocks']:
+            element = next(e for e in layout['slides'][0]['elements'] if e['id'] == block['id'])
+            self.assertEqual(element['source_text'], block['text'])
+
+    def test_columns_fit_hug_stops_at_the_tallest_panel(self):
+        ir = fixture()
+        ir['slides'] = ir['slides'][:1]
+
+        def composition(fit):
+            body = {'id': 'row', 'type': 'columns', 'gap': 'standard',
+                    'children': [{'id': f'p{i}', 'type': 'panel', 'title': title, 'padding': 'compact',
+                                  'body': {'id': f'p{i}-ref', 'type': 'block', 'ref': name}}
+                                 for i, (name, title) in enumerate([('a', '阶段一'), ('b', '阶段二')])]}
+            if fit:
+                body['fit'] = fit
+            return {'archetype': 'composite-research', 'figure_refs': [],
+                    'blocks': [{'id': 'a', 'component': 'body', 'text': 'First short finding.'},
+                               {'id': 'b', 'component': 'body', 'text': 'Second short finding.'}],
+                    'layout_tree': {'version': '1.2', 'regions': {'body': body}}}
+
+        def panels(ir):
+            layout, _ = self.compile_ok(ir)
+            plan = next(a['nodes'] for a in layout['slides'][0]['adaptation_log']
+                        if a['action'] == 'layout_tree')
+            return plan, [node for node in plan if node['type'] == 'panel']
+
+        ir['slides'][0]['composition'] = composition('hug')
+        plan, hugged = panels(ir)
+        # Equal heights, but only as tall as the tallest natural panel, not the whole region.
+        self.assertAlmostEqual(hugged[0]['bbox'][3], hugged[1]['bbox'][3], places=1)
+        self.assertLess(hugged[0]['bbox'][3], plan[0]['bbox'][3]-40)
+        ir['slides'][0]['composition'] = composition(None)
+        plan, stretched = panels(ir)
+        self.assertAlmostEqual(stretched[0]['bbox'][3], plan[0]['bbox'][3], places=1)
+
+    def test_sparse_text_warning_ignores_a_page_that_already_has_a_figure(self):
+        from deck_compiler.layout import sparse_text_page
+        entry = {'type': 'stack', 'component': 'body.children[1]', 'node_id': 'text',
+                 'bbox': [0, 0, 400, 400], 'requirements': {'preferred_height_px': 120}}
+        text = {'kind': 'text', 'layout_component': 'body.children[1].children[0]'}
+        # A bare text column under half fill is the page the rule exists for.
+        self.assertTrue(sparse_text_page(entry, [text]))
+        # Beside a figure the page already has a composition; the short text column is by design.
+        figure = {'kind': 'image', 'layout_component': 'body.children[0]'}
+        self.assertFalse(sparse_text_page(entry, [text, figure]))
+        # A rule or connector is not a composition.
+        rule = {'kind': 'connector', 'layout_component': 'body.children[0]'}
+        self.assertTrue(sparse_text_page(entry, [text, rule]))
 
     def test_stack_alignment_schema_matches_runtime(self):
         import jsonschema

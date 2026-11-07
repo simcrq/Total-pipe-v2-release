@@ -25,6 +25,8 @@ def probe(argv, cwd=ROOT, timeout=20):
 
 
 def doctor(deep=False, source_kind=None):
+    if source_kind not in (None, 'pdf', 'markdown', 'workflow', 'deck_ir'):
+        raise ValueError('Unsupported source_kind')
     checks = []
     def add(key, ok, detail, remedy, optional=False, skipped=False):
         checks.append({'id': key, 'status': 'SKIP' if skipped else 'PASS' if ok else 'WARNING' if optional else 'FAIL',
@@ -64,17 +66,53 @@ def doctor(deep=False, source_kind=None):
             add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.')
     else:
         add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.', 'Run deep diagnostics.', optional=True, skipped=True)
-    mineru = shutil.which('mineru-open-api')
-    auth = bool(mineru and os.environ.get('MINERU_TOKEN'))
-    add('mineru.auth', auth, 'CLI and token configured; cloud credentials are not verified.' if auth else
-        'OCR authentication not verified; cached CLI login may be available.' if mineru else 'MinerU CLI not found.',
-        'Install and authenticate the official mineru-open-api CLI; keep credentials outside job files.', optional=source_kind != 'pdf')
+    auth = verified = False
+    auth_skipped = source_kind in ('markdown', 'workflow', 'deck_ir') and not deep
+    auth_status = 'skipped'
+    if not auth_skipped:
+        ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'mineru_auth'])
+        try:
+            response = json.loads(detail)
+            result = response['result'] if ok and response.get('ok') else {}
+            auth, verified = result.get('ready') is True, result.get('verified') is True
+            auth_status = result.get('status', 'unavailable')
+        except (ValueError, KeyError, TypeError):
+            auth_status = 'unavailable'
+    descriptions = {'verified': 'Official MinerU CLI auth --verify succeeded (environment, PWF config or cached CLI login); no document uploaded.',
+                    'not_required': 'Configured flash extraction does not require authentication.',
+                    'missing_cli': 'Configured MinerU CLI not found.',
+                    'invalid': 'Official MinerU CLI rejected or could not find its credentials.',
+                    'unavailable': 'MinerU credential verification could not complete; check CLI/network or retry.',
+                    'skipped': 'OCR authentication not needed for this input; use source_kind=pdf or deep to verify.'}
+    add('mineru.auth', auth, descriptions.get(auth_status, descriptions['unavailable']),
+        'Run the configured mineru-open-api auth --verify; authenticate with mineru-open-api auth if needed. Keep credentials outside job files.',
+        optional=source_kind != 'pdf', skipped=auth_skipped)
     ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'version'])
     try:
         bridge = ok and json.loads(detail)['ok']
     except (ValueError, KeyError):
         bridge = False
-    add('paperworkflow.bridge', bridge, detail[:200], 'Restore PaperWorkflow beside Total-pipe and install its dependencies.')
+    required_evidence = source_kind in (None, 'markdown', 'pdf')
+    add('paperworkflow.bridge', bridge, detail[:200], 'Restore PaperWorkflow beside Total-pipe and install its dependencies.',
+        optional=not required_evidence)
+    kind = 'pdf' if source_kind == 'pdf' else 'markdown'
+    ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py',
+                        '--op', 'dependencies', '--source-kind', kind])
+    imports = {}
+    try:
+        response = json.loads(detail)
+        if ok and response.get('ok'):
+            imports = response['result']
+    except (ValueError, KeyError, TypeError):
+        pass
+    markdown_ready = imports.get('markdown_ready') is True
+    pdf_ready = imports.get('pdf_ready') is True
+    evidence_ready = pdf_ready if kind == 'pdf' else markdown_ready
+    missing = [check.get('error', check.get('module')) for check in imports.get('checks', []) if not check.get('ok')]
+    add('paperworkflow.runtime_imports', evidence_ready,
+        '; '.join(missing) if missing else f'{kind} evidence imports loaded; no OCR or upload was run.' if evidence_ready else detail[:200],
+        'Install PaperWorkflow dependencies into this same Python interpreter (including loguru, requests and pyyaml for PDF ingestion).',
+        optional=not required_evidence)
     try:
         from deck_compiler.fonts import resolve_theme_fonts, missing_glyphs
         font, _, _ = resolve_theme_fonts({'font_family': 'Noto Sans CJK SC', 'font_file': 'NotoSansCJK-Regular.ttc'}, ROOT, '中文科研')
@@ -96,13 +134,19 @@ def doctor(deep=False, source_kind=None):
             pass
     add('powerpoint.native', powerpoint, 'Application detected; UI/export acceptance still required.' if powerpoint else
         'Native PowerPoint not detected.', 'Use Windows/macOS with Microsoft PowerPoint for formal final validation.', optional=True)
-    needs = {'build'} if source_kind == 'deck_ir' else {'evidence', 'rpa', 'build'}
-    capabilities = {'can_evidence_markdown': py and bridge, 'can_evidence_pdf': py and bridge and auth,
+    preview = importlib.util.find_spec('pypdfium2') is not None
+    add('powerpoint.preview', pdf and preview, 'PowerPoint PDF page preview dependencies available.' if pdf and preview else
+        'PDF page preview dependency missing.', 'Install the declared pdfplumber dependencies, including pypdfium2.', optional=True)
+    needs = {'build'} if source_kind == 'deck_ir' else {'rpa', 'build'} if source_kind == 'workflow' else {'evidence', 'rpa', 'build'}
+    capabilities = {'can_evidence_markdown': py and bridge and markdown_ready,
+        'can_evidence_pdf': py and bridge and pdf_ready and auth,
         'can_rpa': py and node and rpa, 'can_build_editable': py and compiler and present and version and runtime,
         'can_native_final': py and compiler and powerpoint and pdf,
+        'can_native_preview': pdf and preview,
+        'native_acceptance_operations': ['render', 'review', 'ingest'],
         'runtime_verified': bool(deep and present and version and runtime),
-        'authentication_verified': False,
-        'blocked_stages': [name for name, ready in [('evidence', py and bridge and (source_kind != 'pdf' or auth)),
+        'authentication_verified': verified,
+        'blocked_stages': [name for name, ready in [('evidence', py and bridge and evidence_ready and (source_kind != 'pdf' or auth)),
                            ('rpa', py and node and rpa), ('build', py and compiler and present and version and runtime)] if name in needs and not ready]}
     return {'status': 'FAIL' if any(c['status'] == 'FAIL' for c in checks) else 'WARNING' if any(c['status'] == 'WARNING' for c in checks) else 'PASS',
             'checks': checks, **capabilities}

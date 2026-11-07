@@ -1,0 +1,24 @@
+{
+  "renderer": "Microsoft PowerPoint",
+  "version": "16.56",
+  "platform": "macOS",
+  "automation": "AppleScript save as PDF",
+  "slides": 3,
+  "candidate_sha256": "fc072d74fecef3cf2648bd305ba28cfb0d0b22909fce39f37a28db88a942ae1e",
+  "export_input_sha256": "fc072d74fecef3cf2648bd305ba28cfb0d0b22909fce39f37a28db88a942ae1e",
+  "pdf_sha256": "a7ec137d39ac80424ed634d622ffb0402cf7f68ff40edc0c24804376e8cbf588",
+  "pdf_text_findings": [],
+  "direct_powerpoint_ui_review": false,
+  "blank_fill_audit": "blank-fill.audit.json",
+  "export_input_artifact": "filled.pptx",
+  "files_sha256": {
+    "source.deck_ir.json": "f479e47fdc37634b3d5ea4d221a98cba1d6634262a5717ea4632fbc3bbdba7a7",
+    "filled.deck_ir.json": "6b1c8547230862265d4641b51228be5ca1dab6c0673a5ea78e9a8175cf2f3328",
+    "filled.pptx": "fc072d74fecef3cf2648bd305ba28cfb0d0b22909fce39f37a28db88a942ae1e",
+    "native.pdf": "a7ec137d39ac80424ed634d622ffb0402cf7f68ff40edc0c24804376e8cbf588",
+    "blank-fill.audit.json": "1d65507cd21d8f31f636e55d32c34929a892b3705c8ab303e4b456dad34c1a95",
+    "slide-1.png": "88d56f14c903a957c4cd61adbf556bbef825a6999c80e1c1438ad43be7f39158",
+    "slide-2.png": "63ddd581a7b638645363da0cc53a1ee80c9f87bd7c2f54889358bf03338daf60",
+    "slide-3.png": "acc80b0a02d7a0180877ddb4cd35254a3756b9aa2bc10b93204f6033321cea5a"
+  }
+}

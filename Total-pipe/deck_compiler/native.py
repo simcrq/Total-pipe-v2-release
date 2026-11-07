@@ -1,5 +1,6 @@
 """PowerPoint PDF evidence on Windows/macOS. No substitute renderer is called native."""
 import os
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -8,9 +9,12 @@ from .contracts import file_hash, issue
 SCRIPT = '''on run argv
 set inputPath to item 1 of argv
 set outputPath to item 2 of argv
-tell application "Microsoft PowerPoint"
+tell application "/Applications/Microsoft PowerPoint.app"
+    set previousPaths to full name of every presentation
+    if inputPath is in previousPaths then error "Use a fresh private input copy; the presentation is already open."
     open POSIX file inputPath
     set p to active presentation
+    if (full name of p) is not inputPath then error "PowerPoint active presentation does not match the requested input."
     try
         save p in POSIX file outputPath as save as PDF
     on error messageText number errorNumber
@@ -51,18 +55,28 @@ def render(pptx, pdf):
     if pdf.exists():
         pdf.unlink()
     try:
+        before = file_hash(pptx)
         if sys.platform == 'win32':
             command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT]
             environment = {**os.environ, 'TOTALPIPE_NATIVE_INPUT': str(pptx.resolve()),
                            'TOTALPIPE_NATIVE_PDF': str(pdf.resolve())}
         else:
-            command = ['osascript', '-e', SCRIPT, str(pptx.resolve()), str(pdf.resolve())]
+            # App-name/bundle-ID lookup can resolve an incomplete terminology
+            # dictionary on macOS. Compile against the installed app itself.
+            applications = [Path('/Applications/Microsoft PowerPoint.app'),
+                            Path.home()/'Applications/Microsoft PowerPoint.app']
+            application = next((p for p in applications if p.is_dir()), applications[0])
+            script = SCRIPT.replace('"/Applications/Microsoft PowerPoint.app"',
+                                    json.dumps(str(application), ensure_ascii=False))
+            command = ['osascript', '-e', script, str(pptx.resolve()), str(pdf.resolve())]
             environment = None
         subprocess.run(command, check=True, capture_output=True, text=True,
                        encoding='utf-8', errors='replace', timeout=55, env=environment)
         if not pdf.exists() or not pdf.read_bytes().startswith(b'%PDF'):
             raise ValueError('PowerPoint did not produce a PDF')
-        return {'renderer': 'powerpoint', 'artifact_sha256': file_hash(pptx),
+        if file_hash(pptx) != before:
+            raise ValueError('PowerPoint input changed during export')
+        return {'renderer': 'powerpoint', 'artifact_sha256': before,
                 'pdf_sha256': file_hash(pdf), 'pdf': str(pdf.resolve())}, []
     except (subprocess.SubprocessError, OSError, ValueError) as error:
         return None, [issue('NATIVE_RENDER_UNAVAILABLE', 'REVIEW', (getattr(error, 'stderr', None) or str(error)),
@@ -93,6 +107,11 @@ def inspect_pdf(pdf, layout):
                             add('NATIVE_TABLE_CELL_REVIEW', f"Native cell differs from {e['id']}.{cell['id']}", n, 'REVIEW', 'MEDIUM')
                     continue
                 if e['kind'] != 'text':
+                    continue
+                if (e.get('inline_layout') or {}).get('formula_count'):
+                    # A PDF text layer does not preserve an OMML superscript's order (10⁸ extracts
+                    # as "8…10"), so comparing characters here reports a defect that is not there.
+                    # The inline-math REVIEW already asks for a human look at the baseline.
                     continue
                 expected = normalize(e['text'])
                 x, y, width, height = e['bbox']

@@ -1,0 +1,279 @@
+{
+  "operation": "fill_detected_whitespace_with_source_annotations",
+  "detector": "deck_compiler.explain_viz.space.empty_rectangles",
+  "minimum_px": [
+    240,
+    160
+  ],
+  "margin_px": 12,
+  "source_ir_sha256": "5ae6999bf68ff64f868137048fb7112aa862c51bb55e4607b7ca3595efe7e553",
+  "source_pptx_sha256": "e62d05088b7891c95c29f6d6f5876b4a1ec01ece7f7eb38c9deb33faf54bf39d",
+  "preserve_existing_objects": true,
+  "slides": [
+    {
+      "slide_id": "peel-angle",
+      "free_regions_px": [
+        [
+          56.0,
+          234.5,
+          326.28333,
+          405.5
+        ],
+        [
+          897.71667,
+          234.5,
+          326.28333,
+          405.5
+        ],
+        [
+          56.0,
+          380.91667,
+          336.96667,
+          259.08333
+        ],
+        [
+          881.69167,
+          404.95417,
+          342.30833,
+          235.04583
+        ]
+      ],
+      "annotations": [
+        {
+          "side": "left",
+          "heading": "贴附段",
+          "text": "薄膜左段\n贴附于衬底",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            56.0,
+            234.5,
+            326.28333,
+            405.5
+          ],
+          "used_rect_px": [
+            76.0,
+            404.75,
+            290.28333,
+            142
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_4474ccb25d97:label:blank_fill_left_heading",
+            "graphic:explanation_visual_4474ccb25d97:label:blank_fill_left_body",
+            "graphic:explanation_visual_4474ccb25d97:path:blank_fill_left_rule"
+          ]
+        },
+        {
+          "side": "right",
+          "heading": "剥离角 θ",
+          "text": "薄膜自由段与\n衬底平面的夹角",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            897.71667,
+            234.5,
+            326.28333,
+            405.5
+          ],
+          "used_rect_px": [
+            913.71667,
+            404.75,
+            290.28333,
+            142
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_4474ccb25d97:label:blank_fill_right_heading",
+            "graphic:explanation_visual_4474ccb25d97:label:blank_fill_right_body",
+            "graphic:explanation_visual_4474ccb25d97:path:blank_fill_right_rule"
+          ]
+        }
+      ],
+      "source_facts": [
+        {
+          "id": "definition",
+          "component": "body",
+          "text": "薄膜左段贴附于衬底，自由段向上抬起；剥离角 θ 是薄膜自由段与衬底平面的夹角。"
+        }
+      ],
+      "existing_object_max_delta_px": 1.1368683772161603e-13,
+      "added_native_objects": 6
+    },
+    {
+      "slide_id": "layer-stack",
+      "free_regions_px": [
+        [
+          860.325,
+          234.5,
+          363.675,
+          405.5
+        ],
+        [
+          56.0,
+          234.5,
+          326.28333,
+          405.5
+        ],
+        [
+          56.0,
+          380.91667,
+          363.675,
+          259.08333
+        ]
+      ],
+      "annotations": [
+        {
+          "side": "left",
+          "heading": "从上到下",
+          "text": "1  栅极\n2  介电层\n3  薄膜",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            56.0,
+            234.5,
+            326.28333,
+            405.5
+          ],
+          "used_rect_px": [
+            76.0,
+            387.25,
+            290.28333,
+            177
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_3200c3baebe6:label:blank_fill_left_heading",
+            "graphic:explanation_visual_3200c3baebe6:label:blank_fill_left_body",
+            "graphic:explanation_visual_3200c3baebe6:path:blank_fill_left_rule"
+          ]
+        },
+        {
+          "side": "right",
+          "heading": "层厚说明",
+          "text": "图中的层厚\n不代表测量值",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            860.325,
+            234.5,
+            363.675,
+            405.5
+          ],
+          "used_rect_px": [
+            876.325,
+            404.75,
+            327.67499999999995,
+            142
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_3200c3baebe6:label:blank_fill_right_heading",
+            "graphic:explanation_visual_3200c3baebe6:label:blank_fill_right_body",
+            "graphic:explanation_visual_3200c3baebe6:path:blank_fill_right_rule"
+          ]
+        }
+      ],
+      "source_facts": [
+        {
+          "id": "definition",
+          "component": "body",
+          "text": "叠层从上到下依次为栅极、介电层、薄膜；图中的层厚不代表测量值。"
+        }
+      ],
+      "existing_object_max_delta_px": 5.684341886080802e-14,
+      "added_native_objects": 6
+    },
+    {
+      "slide_id": "process-steps",
+      "free_regions_px": [
+        [
+          887.03333,
+          234.5,
+          336.96667,
+          405.5
+        ],
+        [
+          56.0,
+          234.5,
+          326.28333,
+          405.5
+        ],
+        [
+          577.21667,
+          234.5,
+          646.78333,
+          183.84583
+        ],
+        [
+          56.0,
+          380.91667,
+          336.96667,
+          259.08333
+        ]
+      ],
+      "annotations": [
+        {
+          "side": "left",
+          "heading": "流程顺序",
+          "text": "先  生长\n再  键合\n后  释放",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            56.0,
+            234.5,
+            326.28333,
+            405.5
+          ],
+          "used_rect_px": [
+            76.0,
+            387.25,
+            290.28333,
+            177
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_d8a88b6f657c:label:blank_fill_left_heading",
+            "graphic:explanation_visual_d8a88b6f657c:label:blank_fill_left_body",
+            "graphic:explanation_visual_d8a88b6f657c:path:blank_fill_left_rule"
+          ]
+        },
+        {
+          "side": "right",
+          "heading": "箭头含义",
+          "text": "箭头仅表示\n步骤顺序",
+          "source_fact_ids": [
+            "block:definition"
+          ],
+          "detected_rect_px": [
+            887.03333,
+            234.5,
+            336.96667,
+            405.5
+          ],
+          "used_rect_px": [
+            903.03333,
+            404.75,
+            300.96667,
+            142
+          ],
+          "native_ids": [
+            "graphic:explanation_visual_d8a88b6f657c:label:blank_fill_right_heading",
+            "graphic:explanation_visual_d8a88b6f657c:label:blank_fill_right_body",
+            "graphic:explanation_visual_d8a88b6f657c:path:blank_fill_right_rule"
+          ]
+        }
+      ],
+      "source_facts": [
+        {
+          "id": "definition",
+          "component": "body",
+          "text": "流程步骤依次为生长→键合→释放；箭头仅表示步骤顺序。"
+        }
+      ],
+      "existing_object_max_delta_px": 1.1368683772161603e-13,
+      "added_native_objects": 6
+    }
+  ],
+  "output_ir_sha256": "e1ba055651271c0c074dc9f2ae99d859851b7546ddfc5ad2d99307c29dcf4d9b"
+}

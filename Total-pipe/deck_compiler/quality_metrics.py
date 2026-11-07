@@ -398,16 +398,32 @@ def analyze_completeness(qa_report: Dict, layout: Optional[Dict], deck_ir: Optio
     slides_with_evidence = 0
     slides_with_caveats = 0
     slides_with_speaker_notes = 0
+    supplement_slides = 0
+    supplement_blocks = 0
+    uncited_supplements = 0
 
     for i, slide in enumerate(slides, 1):
         semantic = slide.get('semantic', {})
+        composition = slide.get('composition') if isinstance(slide.get('composition'), dict) else {}
+        blocks = composition.get('blocks') if isinstance(composition.get('blocks'), list) else []
+        supplements = [block for block in blocks
+                       if isinstance(block, dict) and block.get('basis') == 'supplement']
+        supplement_blocks += len(supplements)
+        supplement_only = bool(blocks) and len(supplements) == len(blocks)
+        for block in supplements:
+            spec = block.get('supplement') if isinstance(block.get('supplement'), dict) else {}
+            if not isinstance(spec.get('source'), str) or not spec['source'].strip():
+                uncited_supplements += 1
+        if supplement_only:
+            supplement_slides += 1
 
-        # Check evidence refs
+        # Check evidence refs.  A supplement-only page makes no paper claim, so
+        # missing evidence citations are not a completeness defect there.
         evidence_refs = semantic.get('evidence_refs', [])
         total_evidence_refs += len(evidence_refs)
         if evidence_refs:
             slides_with_evidence += 1
-        else:
+        elif not supplement_only:
             issues.append(QualityIssue(
                 category='completeness',
                 severity='MEDIUM',
@@ -444,7 +460,12 @@ def analyze_completeness(qa_report: Dict, layout: Optional[Dict], deck_ir: Optio
     details['slides_with_evidence'] = slides_with_evidence
     details['slides_with_caveats'] = slides_with_caveats
     details['slides_with_speaker_notes'] = slides_with_speaker_notes
-    details['evidence_coverage'] = round(slides_with_evidence / len(slides) * 100, 1) if slides else 0
+    details['supplement_slides'] = supplement_slides
+    details['supplement_blocks'] = supplement_blocks
+    details['uncited_supplements'] = uncited_supplements
+    paper_slides = len(slides) - supplement_slides
+    details['evidence_coverage'] = (round(slides_with_evidence / paper_slides * 100, 1)
+                                    if paper_slides else 100.0)
 
     # Score based on evidence coverage
     score = 100

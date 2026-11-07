@@ -45,7 +45,7 @@ KIND_CARRIERS = {
     "curve": ("path",),
     "image_evidence": ("figure",),
 }
-_OBLIGATION_FIELDS = {"id", "kind", "required", "primary", "carrier", "status", "content",
+_OBLIGATION_FIELDS = {"id", "kind", "required", "primary", "basis", "carrier", "status", "content",
                       "evidence_refs", "source_quote", "note"}
 _EXPLANATION_FIELDS = {"reader_task", "must_not_lose", "obligations"}
 
@@ -234,18 +234,30 @@ def validate_explanation(value, semantic, composition, slide_number=None):
             problems.append(issue("EXPLANATION_INVALID", "FAIL",
                                   f"{shape}: content must be an object", slide_number, shape))
             content = {}
-        refs = obligation.get("evidence_refs")
-        if not isinstance(refs, list) or not refs or not all(isinstance(item, str) and item for item in refs):
-            problems.append(issue("EXPLANATION_INVALID", "FAIL",
-                                  f"{shape}: evidence_refs must be a non-empty list of ids",
-                                  slide_number, shape))
-            refs = []
-        else:
-            missing = [item for item in refs if item not in evidence_refs]
-            if missing:
-                problems.append(issue("EXPLANATION_EVIDENCE_INVALID", "FAIL",
-                                      f"{shape}: evidence_refs must bind to semantic.evidence_refs; "
-                                      f"missing {missing}", slide_number, shape))
+        basis = _text(obligation.get("basis")) or "paper"
+        if basis not in ("paper", "supplement"):
+            problems.append(issue(
+                "EXPLANATION_BASIS_INVALID", "FAIL",
+                f"{shape}: basis must be paper or supplement", slide_number, shape))
+            basis = "paper"
+        if basis == "paper":
+            refs = obligation.get("evidence_refs")
+            if not isinstance(refs, list) or not refs or not all(isinstance(item, str) and item for item in refs):
+                problems.append(issue("EXPLANATION_INVALID", "FAIL",
+                                      f"{shape}: evidence_refs must be a non-empty list of ids",
+                                      slide_number, shape))
+                refs = []
+            else:
+                missing = [item for item in refs if item not in evidence_refs]
+                if missing:
+                    problems.append(issue("EXPLANATION_EVIDENCE_INVALID", "FAIL",
+                                          f"{shape}: evidence_refs must bind to semantic.evidence_refs; "
+                                          f"missing {missing}", slide_number, shape))
+        elif obligation.get("evidence_refs"):
+            problems.append(issue(
+                "EXPLANATION_EVIDENCE_FORBIDDEN", "FAIL",
+                f"{shape}: a supplement obligation must not carry evidence_refs",
+                slide_number, shape))
         if status in ("waived", "unsupported") and not _text(obligation.get("note")):
             problems.append(issue("EXPLANATION_WAIVER_INVALID", "FAIL",
                                   f"{shape}: {status} requires a note explaining the decision",
@@ -315,6 +327,7 @@ def coverage(ir):
             entries.append({
                 "id": obligation.get("id"),
                 "kind": kind,
+                "basis": obligation.get("basis", "paper"),
                 "required": required,
                 "primary": obligation.get("primary", False),
                 "declared_carrier": obligation.get("carrier"),

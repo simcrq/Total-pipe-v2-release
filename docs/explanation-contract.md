@@ -89,6 +89,7 @@ mechanism / path / figure`。`status` 取 `bound / waived / unsupported`；后�
 每个义务记录：
 
 - 声明的 `carrier`；
+- `basis`（`paper` / `supplement`）；
 - IR 实际找到的 `found_carriers`；
 - `status`：`satisfied / waived / unsupported / missing`；
 - 汇总 `summary.total / satisfied / waived / unsupported / missing`。
@@ -118,3 +119,14 @@ required 义务没有载体、或声明内容不可见，是 **REVIEW**。这样
 
 Story 只判断“需不需要讲成这个结构”，不判断“画哪个组件”。组件由 Binder 和编译器按能力、
 容量与证据关系选择；这样换渲染器时 Story 不需要重写，容量不足时也有地方回退。
+
+## 补充内容（supplement）
+
+`basis=supplement` 的块是补充讲解，不是论文主张：它们不绑定 `EV####`。补充页也可以声明
+`semantic.explanation`，但每条义务要写 `"basis":"supplement"`，且不写 `evidence_refs`；
+paper 义务仍是默认 `basis=paper`，必须绑定 `EV####` 且属于本页 `semantic.evidence_refs`。
+
+两种义务共用 `kind / required / primary / carrier / status / content` 与覆盖账本规则：
+结构错误（未知 kind、重复 id、supplement 义务带 evidence、paper 义务缺 evidence）是 FAIL；
+required 义务没有原生载体、或声明内容不可见是 REVIEW。补充页的构造标注、来源和论文图误用
+由 `deck_compiler/provenance.py` 检查；补充义务不带来源审计，不因此被默认为论文事实。

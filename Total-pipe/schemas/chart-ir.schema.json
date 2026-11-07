@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://total-pipe.local/schemas/chart-ir.schema.json",
+  "title": "Total-pipe Chart IR v1",
+  "description": "One measured, editable data plot. Cross-array rules (series length, monotonic x, log-domain positivity, error-bar arithmetic, annotation indices, evidence binding) are enforced by deck_compiler.chart_layout.validate_charts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "basis", "x", "y", "series"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+    "kind": {"enum": ["line", "bar", "scatter"]},
+    "basis": {"enum": ["evidence", "explain"],
+              "description": "evidence: every plotted value must occur in the cited evidence. explain: a schematic the page adds; requires illustrative=true and renders a visible badge."},
+    "illustrative": {"type": "boolean", "default": false},
+    "x": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+        "scale": {"enum": ["linear", "log"], "default": "linear"},
+        "values": {"type": "array", "minItems": 2, "maxItems": 24,
+                   "items": {"type": "number"}}
+      }
+    },
+    "y": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+        "scale": {"enum": ["linear", "log"], "default": "linear"},
+        "unit": {"type": "string", "maxLength": 24}
+      }
+    },
+    "series": {
+      "type": "array", "minItems": 1, "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "values", "evidence_refs"],
+        "properties": {
+          "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+          "values": {"type": "array", "minItems": 2, "maxItems": 24,
+                     "items": {"type": "number"}},
+          "x_values": {"type": "array", "minItems": 2, "maxItems": 24,
+                       "items": {"type": "number"},
+                       "description": "Scatter only: one x per point; line/bar share chart.x.values."},
+          "y_error": {"type": "array", "minItems": 2, "maxItems": 24,
+                      "items": {"type": "number", "minimum": 0},
+                      "description": "Symmetric vertical error bar per point."},
+          "evidence_refs": {"type": "array", "uniqueItems": true,
+                            "items": {"type": "string", "minLength": 1, "pattern": "\\S"}}
+        }
+      }
+    },
+    "annotations": {
+      "type": "array", "maxItems": 6,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["text", "series", "point"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
+          "series": {"type": "integer", "minimum": 0, "maximum": 3},
+          "point": {"type": "integer", "minimum": 0, "maximum": 23},
+          "dx": {"type": "number", "minimum": -160, "maximum": 160, "default": 12},
+          "dy": {"type": "number", "minimum": -120, "maximum": 120, "default": -18}
+        }
+      }
+    },
+    "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
+    "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"enum": ["line", "bar"]}}},
+     "then": {"properties": {"x": {"required": ["values"]}}}},
+    {"if": {"properties": {"basis": {"const": "explain"}}},
+     "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
+    {"if": {"properties": {"basis": {"const": "evidence"}}},
+     "then": {"properties": {"illustrative": {"const": false}}}}
+  ]
+}

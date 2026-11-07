@@ -1,5 +1,8 @@
 # Total-pipe Agent 接入层实施设计 v2
 
+> 当前状态（2026-11-04）：本文的阶段表写于 `page_design` 页面设计阶段之前，现行阶段与契约以
+> [agent-adapter.md](agent-adapter.md) 为准；本文保留当时的实施设计，不作为当前流程依据。
+
 2026-10-25。依据当前 `b20b66c` 及用户提供的 v1 设计审阅后修订。
 本文件先规定修订后的实施契约；验证结果记录在配套使用说明，不把计划写成完成声明。
 
@@ -13,8 +16,8 @@ v1 有以下阻断实现的问题，实施以本修订为准：
 | 声称不改编译器，却新增 `deck_compiler ir-prompt` | 提示包属于接入层，入口改为 `python -m agent ir-prompt`；组件源码不改 |
 | start 没有已有 IR 的路由，无法执行首个 smoke | 显式 source_kind=auto/pdf/markdown/workflow/deck_ir；已有 IR 直接进入校验 / Design / build |
 | Story 提示包的模型字段位置错误 | 比较 `story.planner` 与提示包 `delegation`；reasoning 为 high 或更高，不能提供 medium |
-| RPA `--file` 加 CLI 业务参数会被忽略 | 生成包含 presentation_type、完整 slide_briefs 和原始 workflow 的 plan-input.json；使用 full 输出 |
-| 已有 briefs 时 slide_count 并不能覆盖页数 | 保留完整 briefs；数量不一致返回重规划，不截断 / 复制内容 |
+| RPA 先选模板、page_design 又重新设计 | 默认 Agent 只做 normalize-content，页面方案归独立 page_design；低层模板规划 CLI 仍保留 |
+| Story 节点、内容 briefs 与最终页数含义不同 | 保留完整 briefs；slide_count 只约束最终论文页（1–40），设计 / IR 核验目标，不截断或复制内容 |
 | 阶段仅检查单个 artifact，且跳过 input 阶段 | 阶段声明 requires / produces；依次校验输入门禁、多产物、实际依赖哈希和配置指纹 |
 | 上游文件变化仅比较旧 registry hash | 每次递归读取实际输入和先前阶段产物；接入层源码 / 阶段表及 Git 版本变化也使相关 checkpoint 失效 |
 | 相同提交立即短路会阻止崩溃后继续 | 不重复接受 / 计次；仍继续派生未完成组件；成功组件逐阶段持久化 |
@@ -32,7 +35,8 @@ v1 有以下阻断实现的问题，实施以本修订为准：
 - 接入层只准备提示包、验证、记录和调用组件；queries、Story、IR、视觉提案由 Agent 编写。
 - 模型选择来自当前或此前明确的用户选择，通过 model_selection 回填；不静默代填。
 - Story provenance 自洽校验不证明真实调用。真实独立子代理及用户选择仍由宿主执行并如实记录。
-- 不创建 final，不暴露 promote / validate-native / record-powerpoint-review；正式验收使用原 CLI。
+- 不创建 final，不暴露 promote。候选后 advance.native 接入 render / review / ingest，复用现有
+  原生验证与 UI 记录；只记录真实眼检，正式晋级仍使用 CLI。
 - 安装器按调用者选择注册配置；开发测试只操作临时目录，不改开发机的全局设置或密钥。
 
 ## 阶段与入口
@@ -51,6 +55,7 @@ start 收 source、out_dir、language、presentation_type，可选 requirements�
 source_kind、supplementary_paths；不接受模型字段。PDF 的鉴权失败返回解决依赖动作。
 advance 收 job_id，可提交 artifact_kind / artifact_path，回填 inputs，或明确 replan_from。
 candidate acknowledgement 必须含 reviewer、note、review_ids；FAIL 无法签收。
+候选后的原生操作使用独立 native 参数，绑定 artifact/layout 哈希；详见现行接入层协议。
 
 next_action 保留七类 author_artifact / invoke_subagent / provide_input / replan /
 resolve_dependency / review_required / none。每类附可执行的路径、字段或 remedy。
@@ -77,17 +82,20 @@ stage_index 从 1 开始；status 为 running / waiting_agent / blocked / candid
 | evidence | bridge 在独立进程导入 PWF tool_literature_workflow；stdout 只返回 JSON，日志转 stderr；包目录不重排 |
 | story_prompt | 在 Total-pipe/pwf2rpa cwd 执行 `python -m pwf2rpa ... --make-story-prompt` |
 | story | 原有 story_to_specs 校验，加 delegation 的 model / reasoning 绑定；缺失 / 不一致分别报告 |
-| rpa | 严格 convert → normalize full → plan full → validate-deck full；validation_input 携原始完整 content_model |
-| deck_ir | 复用 canonical 语义校验；核对原始 briefs 的 body / key_points 在 IR 页面文字或讲稿中完整保留 |
+| rpa | convert → normalize-content full；保留完整标准化内容与引用，不重复做模板规划；页面方案归独立 page_design |
+| deck_ir | 复用 canonical 语义校验；无设计时逐条完整 body/key_points，有设计时核对唯一覆盖与逐页实现/EV/数字 |
+| deck_ir_patch | 既有 IR 的布局树/图片路径小修；双哈希、内容/分组不变、原编译器预检；失败保留旧候选，接受后完整 build/QA |
 | design | 既有 visual-prompt；提案只合入 presentation，相对资源路径保持语义 |
 | build | apply-visual-plan（如需要）→ build --skip-native；检查当前 candidate / staging / QA 的哈希与 FAIL |
+| native（候选后按需） | PowerPoint 导出/手动接入 → PDF 检查与全页预览；显式 UI review；QA checkpoint 同步，PPTX/上游不重跑 |
 
 未知非零退出、坏 JSON、超时和依赖缺失均保留诊断日志路径，并给出下一步。
 日志先屏蔽当前环境中的 token / key 等敏感值；不把密钥写入 job 或报告。
 容量 / 契约失败回到正确产物阶段，不重复跑相同内容，也不自动缩写或删图。
 
-IR 提示包含完整 workflow、原始 RPA 输入 / normalized content / plan、真实 catalog 与 schema、
-素材根和完整保留检查表。提示包是输入，接受产物时由状态依赖及语义 / 内容校验绑定。
+默认 IR 提示先保存编译契约与内容路径，page_design 通过后附完整设计、Story、证据、图片、真实 catalog
+与 schema；原始输入仍在工作文件中，不重复内联多份。显式外部 RPA 计划的 ir-prompt CLI 保留旧输入接口。
+提示包是输入，接受产物时由状态依赖及语义 / 内容校验绑定。
 不从 catalog 伪造 figure_refs / graphics 固定容量；用 catalog 的 blocks / figures 字段，
 图形、表格与树限制取当前能力声明。
 
@@ -101,8 +109,10 @@ Codex TOML 使用受管块 + 备份 + 解析前后语义检查；Claude JSON 合
 仓库 .mcp.json 保持相对路径；用户配置使用绝对解释器、cwd、Node 路径及 UTF-8 环境。
 安装前先握手目标 profile，再注册；默认准确检查四个工具，advanced 数量动态统计。
 
-doctor 的 12 类检查保留 Python / import / Node / RPA / OfficeCLI present-version-runtime /
-MinerU / bridge / 字体 / pdfplumber / PowerPoint。默认不写探针；deep 模式在临时目录实际写 PPTX。
+doctor 检查 Python / import / Node / RPA / OfficeCLI present-version-runtime /
+MinerU / bridge / 字体 / pdfplumber / PowerPoint；另通过 bridge 实际导入 evidence 运行模块，
+PDF 路径包含 pdf_handler / yaml，避免版本握手通过却在 OCR 阶段才发现依赖缺失。
+默认不写 PPTX 或运行 OCR；deep 模式在临时目录实际写 PPTX。
 OCR 支持官方 CLI 已登录或环境 token，配置 / CLI 状态不确定时不宣称已认证。
 字体使用现有字体解析能力，不将字体白名单等同于中文覆盖。
 原生 final 能力只表示依赖就绪，实际晋级仍需真实 UI / PDF / review 证据。

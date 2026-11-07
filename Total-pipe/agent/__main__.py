@@ -23,14 +23,20 @@ def main():
     p.add_argument('--slide-count', type=int)
     p.add_argument('--supplementary-paths', nargs='*')
     p.add_argument('--supplementary-content-included', action='store_true')
+    p.add_argument('--supplement', default='off', choices=('off', 'inline', 'pages', 'both'))
+    p.add_argument('--explain-viz-mode', default='auto', choices=('auto', 'off', 'prefer'))
     p = commands.add_parser('status')
     p.add_argument('--job-id', required=True)
+    p.add_argument('--detail', choices=('summary', 'full'), default='summary')
     p = commands.add_parser('advance')
     p.add_argument('--job-id', required=True)
     p.add_argument('--artifact-kind')
     p.add_argument('--artifact-path')
+    p.add_argument('--preflight', action='store_true', help='Check Deck IR without accepting it or consuming a revision')
     p.add_argument('--inputs', type=Path)
     p.add_argument('--acknowledge', type=Path)
+    p.add_argument('--native', type=Path, help='Artifact-bound PowerPoint render/review/ingest operation JSON')
+    p.add_argument('--preview', type=Path, help='Isolated IR preview request JSON: artifact_path and optional slide_ids')
     p.add_argument('--replan-from')
     commands.add_parser('serve')
     commands.add_parser('setup', help='Print the repository installer location')
@@ -54,12 +60,13 @@ def main():
             result = {'status': 'PASS', 'output': str(args['out'].resolve())}
         else:
             args.pop('json', None)
-            for key in ('queries', 'inputs', 'acknowledge'):
+            for key in ('queries', 'inputs', 'acknowledge', 'native', 'preview'):
                 if args.get(key) is not None:
                     args[key] = read(args[key])
             result = {'doctor': doctor, 'start': start, 'advance': advance, 'status': status}[command](**args)
         print(json.dumps(result, ensure_ascii=True))
-        return 1 if result.get('status') in ('FAIL', 'blocked', 'failed') else 0
+        state = result.get('preview_result', result.get('page_result', result.get('preflight_result', {}))).get('status', result.get('status'))
+        return 1 if state in ('FAIL', 'blocked', 'failed', 'revision_limit') else 0
     except (ValueError, OSError) as error:
         parser.exit(2, str(error)+'\n')
 

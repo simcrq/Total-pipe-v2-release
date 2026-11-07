@@ -65,7 +65,10 @@ class EntryTests(AgentCase):
 
     @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI required')
     def test_actual_imported_ir_to_candidate_restart_and_idempotent_advance(self):
-        result = runner.start(str(self.fixture_ir()), str(self.out), 'zh', 'group_meeting')
+        # Exercise orchestration with a measured, designed fixture. The separate complex-mixed
+        # tests keep its dense-page capacity contract; it already overflows on baseline 8ee70f7.
+        source = COMPONENT/'examples/native-bullets.deck_ir.json'
+        result = runner.start(str(source), str(self.out), 'zh', 'group_meeting')
         self.assertEqual(result['status'], 'candidate_ready', result)
         self.assertEqual(result['qa']['counts']['FAIL'], 0)
         self.assertFalse(result['next_action']['promotion']['available'])
@@ -136,7 +139,7 @@ class EntryTests(AgentCase):
         self.assertNotEqual(runner.status(result['job_id'])['next_action']['reason'], 'JOB_NOT_FOUND')
 
     @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI required')
-    def test_actual_markdown_evidence_rpa_ir_design_and_build_with_explicit_test_story(self):
+    def test_legacy_markdown_evidence_rpa_ir_design_and_build_with_explicit_test_story(self):
         # This synthetic fixture tests orchestration, not a real model call or scientific acceptance.
         self.source.write_text('# Field response study\n\n# Abstract\n'
             'We measure the response under applied field and independent controls.\n\n# Methods\n'
@@ -149,12 +152,51 @@ class EntryTests(AgentCase):
             {'id': 'response', 'query': 'measured response applied field control'},
             {'id': 'probe', 'query': 'sample measured calibrated probe 300 K'}])
         self.assertEqual(result['stage'], 'model_selection', result)
-        result = runner.advance(result['job_id'], inputs={'model': 'test-model', 'reasoning_effort': 'high', 'selected_by_user': True})
+        # Restore the old prompt contract explicitly to exercise 1.0 task recovery. The new
+        # contract's required review and complete candidate path have their own integration test.
+        execute = runner.a.execute
+        def legacy_prompt(stage, job):
+            paths = execute(stage, job)
+            if stage == 'story_prompt':
+                prompt_path = self.out/'work/story_prompt.json'
+                prompt = read(prompt_path)
+                prompt.pop('content_contract_version', None)
+                write(prompt_path, prompt)
+            return paths
+        with patch('agent.runner.a.execute', side_effect=legacy_prompt):
+            result = runner.advance(result['job_id'], inputs={'model': 'test-model', 'reasoning_effort': 'high', 'selected_by_user': True})
         self.assertEqual(result['stage'], 'story', result)
         write(self.out/'work/story_plan.json', story())
         result = runner.advance(result['job_id'], artifact_kind='story_plan', artifact_path=str(self.out/'work/story_plan.json'))
-        self.assertEqual(result['stage'], 'deck_ir', result)
+        self.assertEqual(result['stage'], 'page_design', result)
+        self.assertEqual(result['next_action']['type'], 'invoke_subagent')
         model = read(self.out/'work/normalized_content.json')
+        # The synthetic integration still traverses the required page-design gate. It does not
+        # pretend that the fixture is model-generated scientific acceptance evidence.
+        pages = []
+        for index, brief in enumerate(model['slide_briefs']):
+            refs = brief.get('evidence_ids') or []
+            if index == 0:
+                items = []
+                role = 'context'
+            elif index <= len(story()['story']):
+                items = [{'id': 'observation', 'text': 'The measured response is supported by the cited evidence.',
+                          'source': f'S{index}.answer', 'evidence': refs}]
+                role = 'result'
+            else:
+                items = [{'id': field, 'text': text, 'source': f'ending.{field}', 'evidence': refs}
+                         for field, text in story()['ending'].items()]
+                role = 'closing'
+            pages.append({'id': f'P{index+1}', 'role': role,
+                          'claim': 'The measured response is supported by the cited evidence.',
+                          'items': items, 'anchor': {'kind': 'none', 'why': 'One scientific statement.'},
+                          'shape': 'A complete scientific statement with its supporting detail.',
+                          'rationale': 'Exercise source binding through the required design stage.'})
+        write(self.out/'work/page_design.json', {'schema_version': '1.0', 'deck_id': 'synthetic-integration',
+              'setting': {'audience': 'Scientific peers', 'occasion': 'group-meeting', 'reading': 'spoken'},
+              'pages': pages})
+        result = runner.advance(result['job_id'], artifact_kind='page_design', artifact_path=str(self.out/'work/page_design.json'))
+        self.assertEqual(result['stage'], 'deck_ir', result)
         template = read(self.fixture_ir())
         design = template['presentation'].pop('academic_design')
         template['assets'] = {}

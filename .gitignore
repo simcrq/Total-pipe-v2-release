@@ -3,6 +3,7 @@ Test1/
 temp_markdowns/
 .v3-integration-backup/
 builds/
+/build/
 artifacts/
 codex-local-marketplace/
 .DS_Store
@@ -12,3 +13,6 @@ __pycache__/
 install-report.json
 .totalpipe/
 commitmsg.txt
+codex-test/
+.pydeps/
+.tmp/

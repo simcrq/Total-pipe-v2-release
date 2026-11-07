@@ -35,6 +35,15 @@ Version 1.2 adds optional [native panel frames and title bands](framed-container
 participate in child measurement; slide presentation.takeaway_frame reserves a measured independent box,
 with optional markers and inline math. The compiler checks containment, external collisions and native layer order.
 
+Charts are a layout-tree leaf: `composition.charts` plus a `type: "chart"` leaf, contracted by
+[chart-ir.md](chart-ir.md) and `schemas/chart-ir.schema.json`. Line, bar and scatter share native axes,
+error bars and in-plot annotations; `basis: evidence` charts bind evidence refs and a source, while
+`basis: explain` charts are illustrative and carry the 示意 mark. Re-plotting a paper figure is not the
+default: use `figure-reading` when the paper already has the panel.
+
+`presentation.academic_design.type_scale: "statement"` promotes `metric` to 88 px for a page whose whole
+argument is that one number; body, takeaway and captions keep their deck sizes.
+
 - `schemas/deck-ir.schema.json` separates semantic, composition and presentation data.
   Blocks and figures use component names and asset references. Final bounding boxes are
   compiler output and are rejected in Deck IR.
@@ -133,6 +142,16 @@ forbids paper figure numbers and requires a schematic caption. `reference` is cr
 or image; it requires `reference_source`, forbids `source_figure`, and does not require a visible schematic caption.
 Reference crops are visual source material, not independently verified scientific evidence. The compiled image element
 retains `reference_source` for traceability.
+Paper IDs preserve supplementary prefixes: `14`, `3a`, `S14`, and `S14a` are supported. The asset and
+reference must match exactly, and the visible caption must name the same ID (for example `Supplementary Fig. S14a`).
+An `S14` figure cannot be relabelled `14` to satisfy validation; main and supplementary figures remain distinct.
+
+Lossless rectangular paper crops may declare assets.<id>.crop with source_path, source_sha256, and
+box=[left, top, right, bottom] in source pixels. The compiler checks the source hash, bounds, output dimensions,
+and every pixel. Save crops losslessly (for example PNG); rescaling, masking, redraw and lossy re-encoding cannot
+be certified as that rectangle. The agent accepts a selected original via verified lineage, rather than renaming
+its crop. Original source bytes participate in cache validity. Labels, axes and scientific meaning still need
+actual visual review; a verified rectangle never automatically acknowledges REVIEW.
 
 For example, `assets.facility = {"path":"assets/facility-crop.png", "origin":"reference",
 "reference_source":"User-provided feasibility.pptx, slide 8, left panel"}` pairs with
@@ -163,6 +182,52 @@ caption sits under it. A bbox provider cannot express that arrangement, so schem
 
 The spec file and the script are committed next to the PNG, which is what makes the picture
 reproducible. `examples/schematic.deck_ir.json` is the reference page.
+
+### Supplement content (`basis: "supplement"`)
+
+A block may carry content that is not a claim from the paper: a prerequisite definition,
+an analogy, a constructed example, a derivation step, an illustrative diagram, or a
+comparison. Such a block declares `"basis": "supplement"` and a small `supplement`
+object:
+
+```json
+{"id": "b3", "component": "definition", "text": "梯度下降是一阶迭代优化方法。",
+ "basis": "supplement",
+ "supplement": {"kind": "background", "source": "Sutton & Barto, ch. 3"}}
+```
+
+- `basis` defaults to `paper`; a paper block keeps `semantic.evidence_refs` and never
+  carries a `supplement` object. A supplement block must not carry `evidence_refs`;
+  split mixed content into separate blocks.
+- `kind` is one of `background`, `analogy`, `example`, `derivation`, `diagram`,
+  `comparison`. `source` is an optional one-line citation. `constructed: true` requires
+  a visible 示意/构造/简化/示例 (or schematic/constructed) label.
+- A supplement-only page has `semantic.evidence_refs: []` and at least one supplement
+  block. It must not use a paper figure; a mixed page may use a paper figure when it
+  also keeps the paper block and its evidence. On a mixed page `semantic.evidence_refs`
+  must stay non-empty; an optional `block.evidence_refs` is only a subset of it.
+  `PROVENANCE_PAPER_EVIDENCE_MISSING` / `PROVENANCE_PAPER_EVIDENCE_INVALID` block a
+  mixed page that leaves paper content ungated.
+- The number of supplement pages is not capped. `SUPPLEMENT_RATIO_HIGH` is an INFO
+  when supplement pages outnumber paper pages; it never blocks.
+- The agent-level `supplement` flag is `off` by default. `inline` allows blocks on
+  existing pages only; `pages`/`both` also allow standalone supplement pages. With
+  `off`, supplement blocks are rejected before compilation.
+- A supplement page may declare `semantic.explanation`; each obligation carries
+  `basis: "supplement"` and no `evidence_refs`. Paper obligations remain
+  `basis: "paper"` with non-empty `evidence_refs` bound to the slide. A supplement
+  obligation with evidence is `EXPLANATION_EVIDENCE_FORBIDDEN`; a paper obligation
+  without evidence is `EXPLANATION_INVALID`.
+- QA codes: `SUPPLEMENT_SPEC_MISSING`, `SUPPLEMENT_KIND_INVALID`,
+  `SUPPLEMENT_BASIS_INVALID`, `SUPPLEMENT_EVIDENCE_FORBIDDEN`,
+  `SUPPLEMENT_ON_PAPER_BLOCK`, `SUPPLEMENT_PAPER_FIGURE` (FAIL);
+  `SUPPLEMENT_CONSTRUCTED_UNLABELED`, `SUPPLEMENT_EVIDENCE_CONFLICT` (REVIEW);
+  `SUPPLEMENT_UNCITED`, `SUPPLEMENT_ASSUMPTION_MISSING`, `SUPPLEMENT_RATIO_HIGH` (INFO).
+  The agent additionally reports `SUPPLEMENT_PAPER_LEAK` when a supplement block reuses
+  a paper number, unit or long verbatim passage from the normalized evidence.
+
+`examples/supplement.deck_ir.json` is the reference page. It is a supplement-only
+page: paper pages keep their existing evidence contract.
 
 ### Formulas (`component: "formula"`)
 

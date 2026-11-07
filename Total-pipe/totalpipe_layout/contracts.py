@@ -305,11 +305,11 @@ def tighten(request, boxes, factor=HUG_FACTOR, pad=HUG_PAD, gap=GRID_GAP):
     return result
 
 
-def read_requests(path, root=None, *, layout=None, compile_issues=None):
+def read_requests(path, root=None, *, layout=None, compile_issues=None, deck_ir=None):
     """Construct requests, optionally reusing a matching compiler baseline and findings."""
     module = compiler(root)
     path = Path(path).resolve()
-    ir = json.loads(path.read_text(encoding='utf-8'))
+    ir = copy.deepcopy(deck_ir) if deck_ir is not None else json.loads(path.read_text(encoding='utf-8'))
     from deck_compiler.ir import validate
     issues = validate(ir)
     if any(i['severity'] == 'FAIL' for i in issues):

@@ -1,0 +1,23 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"Actual source/copy review of page design 1.2",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","method","reviewer","story_sha256","design_sha256","pages"],
+  "properties":{
+    "schema_version":{"const":"1.0"},"method":{"const":"agent-source-review"},
+    "reviewer":{"type":"string","pattern":"\\S"},
+    "story_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "design_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "pages":{"type":"array","minItems":1,"maxItems":40,"items":{
+      "type":"object","additionalProperties":false,"required":["id","checks"],
+      "properties":{"id":{"type":"string","pattern":"\\S"},"checks":{
+        "type":"object","additionalProperties":false,
+        "required":["scientific_fidelity","qualifier_scope","audience_copy"],
+        "properties":{"scientific_fidelity":{"$ref":"#/$defs/check"},
+                      "qualifier_scope":{"$ref":"#/$defs/check"},"audience_copy":{"$ref":"#/$defs/check"}}
+      }}
+    }}
+  },
+  "$defs":{"check":{"type":"object","additionalProperties":false,"required":["status","note"],
+    "properties":{"status":{"enum":["pass","fail"]},"note":{"type":"string","pattern":"\\S"}}}}
+}

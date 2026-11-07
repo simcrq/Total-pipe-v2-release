@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 from PIL import ImageFont
 
+from totalpipe_layout.inline_math import strip_markup
 from .graphic_layout import CONNECTION_SITES, SHAPES, GraphicLayoutError, node_elements
 
 EPS = .05
@@ -140,6 +141,11 @@ def _connector(graphic_id, source, target, bend_x, bus_y=None, last_x=None):
     sx, sy, sw, sh = source['bbox']
     tx, ty, _, th = target['bbox']
     start, end = [sx+sw, sy+sh/2], [tx, ty+th/2]
+    # Rounding a layer to whole pixels can leave a 1-8 px center offset. A
+    # bent connector then renders as a tiny double elbow; snap it to a straight
+    # arrow because the endpoint is still on the target's left edge.
+    if bus_y is None and abs(end[1]-start[1]) <= 8:
+        end[1] = start[1]
     width, height = end[0]-start[0], abs(end[1]-start[1])
     flip = start[1] > end[1]
     geometry = 'straightConnector1' if height < EPS and bus_y is None else 'bentConnector3'
@@ -165,7 +171,7 @@ def _connector(graphic_id, source, target, bend_x, bus_y=None, last_x=None):
     return edge
 
 
-def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None, column_gap=72.0):
+def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None, column_gap=32.0):
     from .layout import break_lines
     if font_paths is None:
         from .fonts import resolve_theme_fonts
@@ -190,30 +196,40 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
     long_edges = [(s, t) for s, t in pairs if ranks[t]-ranks[s] > 1]
     pad = 32 if long_edges else 12
     available = height-2*pad-4*(columns-1)
-    faces = {key: ImageFont.truetype(str(font_paths[key]), 24) for key in ('font_file', 'bold_font_file')}
+    # Node type is the style pack's, and the box is measured at the size the text is set in: a
+    # 32 px title kept in a box sized for 30 px lines overflowed its own node.
+    from .style import node_style
+    style = node_style(theme)
+    title_size = float(style.get('title_size', 24))
+    body_size = float(style.get('body_size', 20))
+    faces = {'title': ImageFont.truetype(str(font_paths['bold_font_file' if style.get('bold', True)
+                                                                 else 'font_file']), int(title_size)),
+             'body': ImageFont.truetype(str(font_paths['font_file']), int(body_size))}
     heights, text_heights = {}, {}
     for nid in ids:
         node = by_id[nid]
         sx, sy = INSETS.get(SHAPES[node.get('shape', 'rounded-rect')], (.84, .78))
-        title_lines = break_lines(node['title'], faces['bold_font_file'], node_width*sx)
-        body_lines = break_lines(node.get('body', ''), faces['font_file'], node_width*sx) if node.get('body', '').strip() else []
+        title_lines = break_lines(strip_markup(node['title']), faces['title'], node_width*sx)
+        body_lines = (break_lines(strip_markup(node.get('body', '')), faces['body'], node_width*sx)
+                      if str(node.get('body') or '').strip() else [])
         if len(title_lines) > 2 or len(body_lines) > 4:
             raise GraphicLayoutError('GRAPHIC_TEXT_OVERFLOW',
                 f'{nid}: text needs {len(title_lines)} title / {len(body_lines)} body lines at 18 pt; widen or split the diagram')
-        th, bh = len(title_lines)*30.0, len(body_lines)*30.0
+        th, bh = len(title_lines)*title_size*1.25, len(body_lines)*body_size*1.25
         text_heights[nid] = th, bh
-        heights[nid] = max(96.0, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
+        minimum = 96.0 if bh else 72.0
+        heights[nid] = max(minimum, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
     boxes = {}
     left = x+(width-(node_width*columns+gap*(columns-1)))/2
     for rank, layer in enumerate(layers):
-        need = sum(heights[n] for n in layer)+24*(len(layer)-1)
+        need = sum(heights[n] for n in layer)+12*(len(layer)-1)
         if need > available+EPS:
             raise GraphicLayoutError('GRAPHIC_CAPACITY',
                 f'DAG layer {rank+1} needs {need:.0f} px, only {available:.0f} px available at 18 pt; split the diagram')
         cursor = y+pad+(available-need)/2+4*rank
         for nid in layer:
             boxes[nid] = [left+rank*(node_width+gap), cursor, node_width, heights[nid]]
-            cursor += heights[nid]+24
+            cursor += heights[nid]+12
     # Avoid the zero-height degeneracy of native five-segment presets for long detours.
     for source, target in sorted(long_edges, key=lambda p: (ranks[p[1]], ids.index(p[1]), ids.index(p[0]))):
         if abs(boxes[source][1]+boxes[source][3]/2-boxes[target][1]-boxes[target][3]/2) < 1:
@@ -221,7 +237,9 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
                 boxes[nid][1] += 4
     elements = []
     for node in graphic['nodes']:
-        elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme, text_heights[node['id']]))
+        elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme,
+                                      text_heights[node['id']], title_size=title_size,
+                                      body_size=body_size))
     nodes = [e for e in elements if e['kind'] == 'shape']
     native_nodes = {n['node_id']: n for n in nodes}
     routes = []

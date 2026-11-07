@@ -1,13 +1,14 @@
 ---
 name: total-pipe-deck
-description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX；保留 PaperWorkflow 证据、Story 与 RPA 规划，执行整套视觉设计，再由 Deck Compiler 和 OfficeCLI 编译、验收。
+description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX；保留 PaperWorkflow 证据、Story 与标准化内容，先做能力无关的页面设计，再执行整套视觉设计，最后由 Deck Compiler 和 OfficeCLI 编译、验收。
 ---
 
 # Total-pipe 研究汇报流水线
 
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → RPA
-    → canonical Deck IR → Scientific Visual Planner（design 阶段，默认必做）
+    → page_design（Story 引用 / 绘图 / 排布 / 走读）→ canonical Deck IR
+    → Scientific Visual Planner（design 阶段，默认必做）
     → 合入设计的 Deck IR → packer / compiler → OfficeCLI → candidate.pptx + QA
     → 用户要求正式 final 时：PowerPoint 原生验收 → 审核 → promote
 ```
@@ -29,14 +30,20 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
 | 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
+| 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |
+| 页脚家具 `page_numbers` / `footer` | 长报告要能按页码引用、要有署名 | 仅设计页生效；一行 ≤120 字符；evidence id 仍留在备注 |
+| panel chip 标题 `frame.title_band` | 一页分 2–3 组时，让组标签自己说话 | `chip` 必须配 `title_fill`；标题过宽自动退回整行色带 |
+| 图注出处 `figure_refs.source_label` | 论文图注要能看出处 | ≤80 字符；弱化前缀，参与图注测量 |
+| 目录页 `presentation.agenda` + `slide.presentation.section` | 长报告要目录和章节 | 需要 ≥2 个章节与 `academic_design`；目录页由编译器插入并重算页码 |
+| 设计层设备（IR 阶段选用） | 强调、标签组、图注出处、结论框、目录 | 每项都有退化路径；设计阶段写视觉意图与可选 `marks`，由 IR 翻译成 `**…**`、panel、`source_label` 等；旧的 `page_design.devices` 仍兼容 |
 | 独立公式 `formula` | 展示式推导 | 过高会挤压正文 |
 | 原生表格 | 多材料/多条件对照 | ≤4 表/页、≤32 行 × 12 列、字号 ≥18 pt |
-| `process` | 3–4 步线性流程；`compact` 可放 3–8 步 | 节点数硬限制；支持 `direction=vertical`、横向 `layout=staggered` 和全方形 `layout=compact`，节点可 `tone=emphasis`；纵向 4 步需短标题，compact 字号 24 css px 且 `body` 尽量省略 |
+| `process` | 3–4 步线性流程；`compact` 可放 3–8 步 | 节点数硬限制；支持 `direction=vertical`、横向 `layout=staggered` 和全方形 `layout=compact`，节点可 `tone=emphasis`；纵向 4 步需短标题，compact 字号 24 css px 且 `body` 尽量省略；`body` 可选，只有流程名时更紧凑 |
 | `dag` | 分支、并行、汇合 | 同层节点高度必须塞进图形区，正文压到一两行才过 |
 | `path`（含 `C`/`Q` 贝塞尔） | 示意曲线、能带/势垒示意、自定义几何 | label 必须落在 `view_box` 内且够大；须标“示意图” |
 | `mechanism`/`architecture`/`funnel`/`composite` | 机制关系、层叠结构、筛选漏斗 | 关系必须显式声明，不推断 |
 | `takeaway_frame` / `takeaway_marker` | 结论强调 | 只有 4 种组合：底色框 / 空心描边 / 符号引导 / 纯文本；形状不可选 |
-| 设计开关：`density`/`figure_treatment`/`decoration_policy`/`header_variant`/`type_scale`/`variant`/`list_gap` | 整套基调 | 只有这些开关，没有更多版式流派 |
+| 设计开关：`density`/`figure_treatment`/`decoration_policy`/`header_variant`/`type_scale`/`variant`/`list_gap` | 整套基调 | 只有这些开关，没有更多版式流派；`type_scale="statement"` 把 `metric` 提到 88 px，用于整页只有一个数字的页 |
 
 ### 0.1 三条设计决策
 
@@ -106,13 +113,19 @@ python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
 提示包生成器不调用模型。按论证需要安排 4–10 个节点，不凑页数：
 
 ```json
-{"title":"可选展示标题","question":"...","answer":"...","evidence":["EV0001"],"next":"..."}
+{"title":"实验条件","question":"实验条件是什么？","answer":"...","evidence":["EV0001"],"next":"..."}
 ```
 
-`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 可独立于 question，
-省略时取 question；不要为了标题形式硬拼“主题：结论”。摘要不足以保留科学细节时加
+`question/answer/evidence` 必填，`next` 仅最后节点可省略。`title` 必填，是给听众看的
+陈述句或名词短语，不以 `?` / `？` 结尾；`question` 只用于内部推理，不能直接当标题。
+**RPA 槽位不是 Story 的写作上限**：默认四工具只调用 RPA 内容规范化，完整 brief 由独立页面设计安排，
+IR 按批准的观众表达实现；科学记录完整归档，关键证据和限定不能藏入 notes；不靠缩写术语或删科学含义通过。
+标题不要为了形式硬拼“主题：结论”。摘要不足以保留科学细节时加
 `key_points` 字符串数组，条数由内容决定。`ending.limitation` 仅记录论文边界，
 输入是否取得、SI 是否审阅等放工作记录。
+新提示要求content_contract.version=2.0：units记录独立可限定断言、精确EV与epistemic身份；narrative_map组织叙事。
+required主张可见，with_claim只绑定直接required单元，禁止条件级联。Story后先由主Agent实际scientific_review审读原文/SI及遗漏，再进入RPA/页面设计。
+完整字段、分类边界、审读与迁移规则见[科学记录与观众表达契约](../../docs/content-projection.md)。
 
 节点可带 `form` 声明这一步的讲解形态，并写出对应结构：
 
@@ -188,8 +201,15 @@ python -m pwf2rpa <workflow.json> --story <story_plan.json> \
 ```bash
 node research-ppt-assistant/server/cli.mjs normalize-content \
   --file <rpa_input.json> --detail-level full > <normalized_content.json>
-node research-ppt-assistant/server/cli.mjs plan --file <rpa_input.json> \
-  --presentation-type group_meeting --slide-count <N> --detail-level standard > <deck_plan.json>
+```
+
+默认四工具只执行上面的内容规范化，接着要求独立 page_design；不先运行模板计划再重新设计。
+normalize 要求 `status=valid`。最终 IR 继续做内容、证据与已通过设计的实现检查。
+以下仅为显式使用低层 RPA 模板规划的路径；plan_input 必须含完整输入及 presentation_type 等业务字段：
+
+```bash
+node research-ppt-assistant/server/cli.mjs plan --file <plan_input.json> \
+  --detail-level full > <deck_plan.json>
 node research-ppt-assistant/server/cli.mjs validate-deck \
   --file <validation_input.json> --detail-level compact
 ```
@@ -200,18 +220,63 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 `normalized_content.json` 作为 `content_model`；`KEY_POINTS_LOST/SOURCE_TEXT_NOT_BOUND`
 要恢复原文，不能删改 content_model 消除错误。MCP 摘要、slot 短文本和设计消息不能替代源 Brief。
 
-RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox。
+该低层模板路径中 RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox。
 硬流程组须保留四条原文、顺序及 Slot Binding，`VISUAL_INTENT_NOT_BOUND/GROUP_SPLIT`
 需要重规划，不能自动拆散。总结页保留 summary 类别；不要为通过容量改成错误类别。
 `max_chars` 只是粗筛，`SLOT_WRAP_RISK` 也不能代替实际渲染。
 
+### 3.1 页面设计阶段（page_design）
+
+RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
+Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
+
+新任务`schema_version=1.3`使用display_copy/content_map；content_refs保持科学单元唯一所有权，reuse_refs明确再次展示，figure_sources记录真实图号。
+required 内容保持可见，with_claim 条件在主张出现的每页可见。主 Agent 随后实际执行 page_review，
+绑定当前 Story/设计哈希逐页检查忠实性、限定范围与观众文案；不能自动签收或复用设计者自评。
+IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 content_projection。文案或去向需改时回退设计并重审。
+数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
+
+恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
+设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
+不强制 claim/items/anchor 理由/rationale，也不限制所有页用同一字段或构图。
+`figures` 列出实际看过的精确资产 id；`title`、`marks` 可选。保留原图比例、来源及示意标记，不猜数据。
+
+正文与证据自动继承 Story；每个 answer/key_point/ending 仍恰好分配一页，空引用仅用于开场等组织页。
+setting 简述请求中的 audience/occasion/reading；论文页数按显式目标（1–40）检查。
+IR 完整接收自定设计说明，从能力中选择实现方式，保留页序、内容分配、选图、可见讲解义务与视觉关系。
+放不下回报容量并回退设计，不删科学内容或缩字号。
+旧1.0/1.1设计与段落契约1.0/页面设计1.2继续兼容；不把旧任务自动改写为新语义。有 content_contract 的 Story 不能降级绕过新检查。
+
+#### 设计层设备（由 IR 阶段落地）
+
+设计阶段不再点名设备；`page_design.devices` 是旧字段，仍可写，也仍会被校验。IR 阶段可用的设备是：
+`emphasis`（`**…**`）、`highlight`（`==…==`）、`panel-group`（2–3 个标签）、`caption-source`（图注出处）、
+`takeaway-frame`（结论框）；篇级 `sections`、`agenda`、`footer`、`page-numbers`。每项都有退化路径，
+不会把构建打红；完整清单与退化表见 [设计层设备清单](../../docs/art-direction.md)。
+- **谁写**：机械类设备由编译器写进 IR（标记、出处、结论框、章节、目录、页脚、页码），作者漏写也不会丢；
+  结构设备 `panel-group` 由 IR 自己搭 panel 并加 `frame.title_fill` + `title_band:"chip"`，缺了报
+  `DESIGN_REALIZATION_FAILED`。
+- **校验边界**：设备校验只看形状，不看它会占多少版面；内容不变式（Story 一次、数字来自 evidence）
+  照旧。
+- 视觉语言用 `presentation.visual_style` 选包：`academic`（默认，直角细线无填充）、`commercial`
+  （浅色圆角卡片）、`print`（纯黑细线）。见 [视觉风格包](../../docs/visual-style.md)。
+
 ## 4. Canonical Deck IR：正文、图片、图形和公式
 
 按 §0 的四问逐页选能力：命中才读下面小节对应的协议；都不命中就保持平面页，并写明为什么不用。
+写 IR 前先决定页面结构：**`composite-research` + `layout_tree` 从一开始就是一等选项**，不要等
+容量失败才想起它。页面有 3 个以上内容对象、原生图与文字同页、或需要 panels/columns 时，直接写树；
+树测量后仍溢出再拆页，不先删内容。
+通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
+验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
+若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
+IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿选页渲染，实际打开返回 PNG 后再修改 IR。
+未变页按内容/资源指纹复用；预览不接受产物、不占修订、不改 candidate/正式 QA。它使用 officecli-html，
+不能证明 PowerPoint 原生显示，不能签收 REVIEW；完整 Design、构建及原生验收仍必做。完整协议见接入层用法的“IR 选页渲染与看图修订”。
 
 按 `Total-pipe/schemas/deck-ir.schema.json` 与 `deck_compiler/catalog.py` 映射：
 
-- `semantic`：完整展示标题、purpose、takeaway、证据、论文边界、讲稿。
+- `semantic`：标题、purpose、takeaway、证据、边界与讲稿；1.2 另由程序绑定 content_projection，区分科学归档与投屏表达。
 - `semantic.explanation`：把 brief 的 `metadata.story_explain` 原样带过来，逐个义务写
   `id / kind / required / content / evidence_refs`，并把 `carrier` 设为实际使用的原生对象。
   不能静默丢 required 义务；确实不做时写 `status=waived` 或 `unsupported` 和 `note`。
@@ -224,9 +289,11 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 映射时可先显式设顶层 `presentation.text_capacity_policy="preserve-terms"`，
 让完整长标题和正文在进入设计提示包前也能保留，不等到样式合入后再处理字符预算。
 
-标题优先取 `metadata.story_title` 中的完整 Story 标题，不使用 RPA 临时压缩的短标题。
-逐条核对源 `key_points` 和正文：按原顺序进入 block、图形节点完整 title/body 或讲稿；
-必要的展示内容仍须可见，不能全部藏到 notes。段落边界保持换行，按需复制
+1.2 的标题来自批准的 display_copy；旧协议标题优先取 `metadata.story_title`，不使用 RPA 临时压缩的短标题。
+`semantic.title` 用陈述句或名词短语，保留科学含义，不以 `?` / `？` 结尾；不要把 Story 的
+`question` 直接复制成标题。
+逐条核对源 `key_points` 和正文的科学记录归档，以及本页要求可见的载体；1.2 不要求照抄原句。
+必要的展示内容仍须可见，不能全部藏到 notes。旧协议段落边界保持换行，按需复制
 `design_ir.text_flow.mode` 到 block 的 `text_flow`；不要为了触发列表样式改写科研内容。
 证据编号和运行记录进入备注，不放到面向听众的标题、结论或 caveat。
 
@@ -239,6 +306,27 @@ RPA 负责 Layout/Slot/容量与 `layout_contract`，不输出最终页面 bbox�
 
 该对象放 `composition.visual_intent`；只支持四个无独立 label 的 block，有一张原图用
 `figure-parameters`、无图用 `process-flow`。不得与 graphics 或视觉重排混用。
+
+### 补充内容（`supplement`，默认关闭）
+
+`totalpipe_start` 的 `supplement` 取 `off|inline|pages|both`，默认 `off`。只有显式开启时，
+才可以在论文内容之外加“为了讲好”的补充材料；它永远不是论文事实。
+
+- 页内补充：block 加 `"basis":"supplement"` 和
+  `"supplement":{"kind":"background|analogy|example|derivation|diagram|comparison","source":"可选一行来源","constructed":false}`；
+  不写 `evidence_refs`。论文块保持 `basis=paper` + EV，同页按块分开。
+- 独立补充页：`semantic.evidence_refs: []`，全部 block 为 supplement；页数不限。
+  补充页数超过论文页数只产生 `SUPPLEMENT_RATIO_HIGH` INFO，不阻塞。
+- 构造示例必须有可见“示意/构造/简化/示例”标注；只有 supplement 块的页面不能使用论文图。
+- 补充内容可以是原生图：`composition.graphics` 的 process/DAG/mechanism/architecture/funnel/path/composite。
+  Agent 还接受 `composition.diagram` 的 3–8 节点链式简写，自动展开为一个原生 process 图；
+  复杂关系仍写完整 graphics。图不是论文图，不冒充 Evidence。
+- 补充块不能写入论文数值/单位、论文图或 EV 长原文；Agent 会报 `SUPPLEMENT_PAPER_LEAK`。
+- `supplement=inline` 只允许页内块；`pages/both` 才允许独立页。补充页可声明
+  `semantic.explanation`，但义务写 `"basis":"supplement"`、不写 `evidence_refs`；paper 义务仍是
+  `basis=paper` + EV。补充义务的载体/可见性仍按讲解契约检查。
+- 结构检查在 `deck_compiler/provenance.py`，Agent 开关与泄漏检查在 `agent/adapters.py` /
+  `agent/supplement.py`。字段与 QA 码见 `Total-pipe/docs/deck-compiler-v2.md` 的 Supplement content。
 
 ### 原生列表与单段标记
 
@@ -295,6 +383,11 @@ suggested_weights；调整结构后重编，或真实审核后接受有意留白
 并传 rejected_sublayout_ids 排除已失败结构。未知/重复 slide_id、过期反馈、无合法候选均需重规划。
 最多自主修订三次；同一问题仍存在则保留失败并向用户说明所缺空间，不继续无界循环或删改科学内容。
 
+容量失败时先试 `composite-research` + `layout_tree`：给溢出 block 更大区域，或把 graphic 与文字
+分到 stack/columns 的不同区域；再考虑拆页。嵌套不会增加页面总面积，panel 内边距、标题带和 gap
+还会占面积，所以不能替代真正的拆页或删减。单块文字仍过长时，按段落/句子拆成多个 block 并保留
+全文与顺序，不能按字符硬切。
+
 原生科研表格读 `Total-pipe/docs/native-tables.md`。composition.tables 保存完整 cells，支持多级表头、
 row_span/column_span 及 formula/矩阵格；每个逻辑位置必须恰好覆盖一次，不自动补零或推断数据。
 paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最多 32 行/12 列；字体下限 18 pt。
@@ -318,6 +411,45 @@ table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字�
 ```json
 {"id":"equation","component":"formula","text":"\\sqrt{\\frac{1+e^{-t}}{1+x^{2}}}","anchor":"explanation"}
 ```
+
+Agent 接入层还接受更短的 `{"id":"equation","latex":"..."}`，校验前补成
+`component:"formula"` + `text`；正文、标题或 takeaway 中的 `$…$` / `\(…\)` 自动开启行内模式。
+
+### 句内强调与页脚家具
+
+正文均质是机器写的最大观感差。强调写在文本里，不另加文本框：
+`**词**` 渲染成主题色加粗，`==符号==` 渲染成高亮底色，均为 run 级属性，PowerPoint 里可直接改。
+
+- 一处即可：一句话最多一个标记词；整段都红等于没有强调。
+- 不跨公式：`$…$` 里的内容不参与强调解析；要强调就强调公式前后的词。
+- 不放进原生列表：列表一项只有一种 run 样式，带标记的块会保留原文、去掉标记并报
+  `EMPHASIS_IN_LIST`；要保留强调就写 `text_flow:"plain"`。
+- 加粗按真实粗体字面测宽，因此强调可能让该块换行或缩一号；若同页出现两个正文号，
+  先删多余的强调，不要整页缩号（`BODY_SIZE_VARIANCE`）。
+- 未闭合标记按字面输出并报 `EMPHASIS_UNCLOSED`，不会吞掉后文；字面星号写 `\*\*`。
+
+设计页默认带页脚家具：一条 1 px 细线、左下角一行弱化文字、右下角页码。整篇声明：
+
+```json
+{"presentation": {"page_numbers": true, "footer": "NbS2/MoS2 非对称接触 · 组会报告"}}
+```
+
+`page_numbers:false` 关掉页码；单页 `slides[i].presentation.page_number=false` 只藏这一页；
+页脚文字一行 ≤120 字符。evidence id 不进页脚，它们留在 speaker notes。细节读
+`Total-pipe/docs/visual-style.md`。
+
+### 分组标签、图注出处与目录
+
+- **分组标签**：`panel.frame` 加 `"title_band": "chip"` 并把 `title_fill` 设成实色，标题就从整行色带
+  变成按文字收拢的圆角标签（白字默认居中）。chip 只在原有标题行内绘制，不改面板高度与正文起点；
+  标题宽到收不住时自动退回整行色带。没有 `title_fill` 的 chip 校验直接报错。
+- **图注出处**：`figure_refs.source_label` 写作者/文献/图号（≤80 字符），编译器以弱化墨色把它接在
+  图注前，整体仍是一个可编辑图注；前缀计入图注测量，不会盖到图上。
+- **目录页**：`presentation.agenda` 打开后，编译器在第 1 页之后插入一页目录；章节来自
+  `slides[i].presentation.section`（一行 ≤24 字符，标记章节起点），页码按最终页序计算。
+  少于两个章节不生成并报 `AGENDA_EMPTY`，超过 8 个章节列前 8 个并报 `AGENDA_TRUNCATED`。
+  目录页与内容页共用页眉、细线与页脚；它不占 Story 条目、不引入新内容。
+展开结果会写回 `work/deck_ir.json`，直接调用编译器时仍写 canonical 字段。
 
 `anchor` 可省略；存在时指向本页前方的非公式 block。无标签公式默认贴在前一说明块下方，
 有 label 时标签与公式并排。支持 `\frac`、`\sqrt{…}`、`\sqrt[3]{…}`、`^/_`、
@@ -386,6 +518,17 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 先增行高、调整区域，溢出越界/碰撞保留 REVIEW；原图尺寸、公式/图形容量与科学关系仍是硬门禁。
 `VISUAL_PLAN_UNSATISFIABLE` 修改设计，不能删科研内容、降低原图下限或静默忽略失败。
 
+### ExplainViz：默认自动讲解图与正文区有限重排
+
+默认 auto，不替代本节 Design。正式 compile/build/generate 和四工具候选构建会从当前页明确事实
+识别图示机会，优先预留区域，其次自动空白检测，再有限尝试当前页正文区排布。
+不得从讲稿或新生成事实补写材料、数值、机制或方向。正文源文字、证据、标题、takeaway、原字号与字体保持；
+重排只调整当前页正文对象框和换行。失败保留原页，审计保存 slot_source 与 before/after 框。
+`--explain-viz-mode off` 或 start 的 explain_viz_mode=off 禁用；可选请求配置只用预留区域、禁用重排或保护指定页。
+IR 草稿预览、逐页测量、修补预检关闭自动增强，正式候选才运行。
+检查 explain_viz.json、QA 的实际新增数、fallback 和科学人审 REVIEW，不自动签收生成图。
+当前字段、配置、提案与样例见 `Total-pipe/docs/explain-viz.md`。
+
 ## 6. 编译、候选与正式验收
 
 ```bash
@@ -412,6 +555,11 @@ OfficeCLI 的 `Text overflow` 警告估计记为 INFO，保留原 issue，检查
 （CLI ack-review）提交明确 review_ids、reviewer 和 note。候选签收按未变页面证据保留，变化后失效；
 报告给出 REVIEW 总数及 unacked_count，不自动接受审核项，不能用候选笔记代替正式 final 的产物绑定签收。
 操作与图形维护限制见 `Total-pipe/docs/complex-page-qa.md`。
+
+四工具任务的候选后原生验收使用 `advance.native` 的 render / review / ingest：完整读回复中的
+native.schema_path，按 `Total-pipe/docs/agent-adapter.md` 的原生验收节操作。render 只导出当前候选的
+原生 PDF 与逐页预览并更新 QA；review 需实际在 PowerPoint 逐页查看后，显式提交当前哈希、全部页 ID、
+检查项和说明。预览/导出不自动证明 UI 眼检；失败按返回诊断恢复，不重跑已通过的上游。
 
 只有用户要求正式 final 才执行 `Total-pipe/docs/deck-compiler-v2.md` 的完整验收与 promote：
 直接在 PowerPoint 逐页检查当前 staging，记录绑定实际文件哈希的 UI review，再用该文件导出的

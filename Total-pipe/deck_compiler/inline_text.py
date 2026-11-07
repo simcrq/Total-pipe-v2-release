@@ -15,13 +15,15 @@ for prefix, namespace in (('a', A), ('p', P), ('mc', MC), ('a14', A14), ('m', M)
     ET.register_namespace(prefix, namespace)
 
 
-def fit_inline(source, bbox, contract, preserve_terms=False, marker=None):
+def fit_inline(source, bbox, contract, preserve_terms=False, marker=None, strong_font_file=None):
     width = bbox[2]-contract.inset['left']-contract.inset['right']
     available = bbox[3]-contract.inset['top']-contract.inset['bottom']
     width_error = None
     for size in range(int(contract.font_size), int(contract.font_floor)-1, -1):
         try:
-            plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height, marker)
+            plan = measure_inline(source, width, load_font_file(contract.font_file, size), size,
+                                  contract.line_height, marker,
+                                  strong_font_file and load_font_file(strong_font_file, size))
         except InlineWidthError as error:
             width_error = error
             continue
@@ -29,7 +31,9 @@ def fit_inline(source, bbox, contract, preserve_terms=False, marker=None):
             return plan, replace(contract, font_size=size), False
     if width_error and size == int(contract.font_floor):
         # Re-measure the floor: a wider formula at an earlier size must not mask a height issue.
-        plan = measure_inline(source, width, load_font_file(contract.font_file, size), size, contract.line_height, marker)
+        plan = measure_inline(source, width, load_font_file(contract.font_file, size), size,
+                              contract.line_height, marker,
+                              strong_font_file and load_font_file(strong_font_file, size))
     if preserve_terms:
         return plan, replace(contract, font_size=size, max_lines=max(contract.max_lines, len(plan['lines'])),
                              overflow_policy='preserve_terms_review'), True
@@ -40,16 +44,27 @@ def _sub(parent, tag, attrs=None):
     return ET.SubElement(parent, '{'+A+'}'+tag, {k: str(v) for k, v in (attrs or {}).items()})
 
 
-def _props(parent, tag, contract, color):
+def _props(parent, tag, contract, color, mark='', styles=None):
+    """One run's character properties; ``mark`` is the emphasis this run was authored in."""
+    styles = styles or {}
+    strong = mark == 'emphasis'
     props = _sub(parent, tag, {'lang': 'zh-CN', 'sz': round(contract['font_size']*75),
-                              'b': '1' if contract['font_weight'] >= 700 else '0'})
-    _sub(_sub(props, 'solidFill'), 'srgbClr', {'val': color.lstrip('#')})
+                              'b': '1' if contract['font_weight'] >= 700 or strong else '0'})
+    ink = color
+    if strong:
+        ink = styles.get('emphasis') or color
+    elif mark == 'citation':
+        ink = styles.get('citation') or color
+    _sub(_sub(props, 'solidFill'), 'srgbClr', {'val': ink.lstrip('#')})
+    # CT_TextCharacterProperties orders highlight after the fill and before the typefaces.
+    if mark == 'highlight' and styles.get('highlight'):
+        _sub(_sub(props, 'highlight'), 'srgbClr', {'val': styles['highlight'].lstrip('#')})
     for name in ('latin', 'ea', 'cs'):
         _sub(props, name, {'typeface': contract['font_family']})
     return props
 
 
-def paragraphs(plan, contract, color, align='left', marker=None):
+def paragraphs(plan, contract, color, align='left', marker=None, styles=None):
     result = []
     for index, line in enumerate(plan['lines']):
         p = ET.Element('{'+A+'}p')
@@ -68,10 +83,10 @@ def paragraphs(plan, contract, color, align='left', marker=None):
             _sub(ppr, 'buChar', {'char': marker['char']})
         else:
             _sub(ppr, 'buNone')
-        _props(ppr, 'defRPr', contract, color)
+        _props(ppr, 'defRPr', contract, color, styles=styles)
         for fragment in line['fragments']:
             if fragment['kind'] == 'text':
-                run = _sub(p, 'r'); _props(run, 'rPr', contract, color)
+                run = _sub(p, 'r'); _props(run, 'rPr', contract, color, fragment.get('mark', ''), styles)
                 _sub(run, 't', {'{http://www.w3.org/XML/1998/namespace}space': 'preserve'}).text = fragment['text']
             else:
                 alternate = ET.SubElement(p, '{'+MC+'}AlternateContent')
@@ -79,19 +94,19 @@ def paragraphs(plan, contract, color, align='left', marker=None):
                 math = ET.SubElement(choice, '{'+A14+'}m')
                 math.append(ET.fromstring(to_omml(parse(fragment['text']), contract['font_size'], color)))
                 fallback = ET.SubElement(alternate, '{'+MC+'}Fallback')
-                run = _sub(fallback, 'r'); _props(run, 'rPr', contract, color)
+                run = _sub(fallback, 'r'); _props(run, 'rPr', contract, color, styles=styles)
                 _sub(run, 't').text = to_plain(parse(fragment['text']))
-        _props(p, 'endParaRPr', contract, color)
+        _props(p, 'endParaRPr', contract, color, styles=styles)
         result.append(p)
     return result
 
 
-def text_body(plan, contract, color, align='left', marker=None):
+def text_body(plan, contract, color, align='left', marker=None, styles=None):
     root = ET.Element('{'+P+'}txBody')
     attrs = {'wrap': 'none', 'anchor': {'top': 't', 'middle': 'ctr', 'bottom': 'b'}[contract['vertical_anchor']]}
     attrs.update({key: round(contract['inset'][name]*9525) for key, name in
                   (('lIns', 'left'), ('rIns', 'right'), ('tIns', 'top'), ('bIns', 'bottom'))})
     _sub(_sub(root, 'bodyPr', attrs), 'noAutofit')
     _sub(root, 'lstStyle')
-    root.extend(paragraphs(plan, contract, color, align, marker))
+    root.extend(paragraphs(plan, contract, color, align, marker, styles))
     return ET.tostring(root, encoding='unicode')
