@@ -1078,7 +1078,7 @@
             "auto",
             "prefer"
           ],
-          "default": "off"
+          "default": "auto"
         },
         "max_visuals_per_deck": {
           "type": "integer",
@@ -1097,6 +1097,31 @@
           "minimum": 0,
           "maximum": 1,
           "default": 0.6
+        },
+        "slot_policy": {
+          "enum": [
+            "reserved_only",
+            "detect_free_space"
+          ],
+          "default": "detect_free_space"
+        },
+        "allow_local_reflow": {
+          "type": "boolean",
+          "default": true
+        },
+        "max_layout_attempts_per_slide": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 8
+        },
+        "protected_slide_ids": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -1120,34 +1145,7 @@
         "proposal": {
           "$ref": "#/$defs/proposal"
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "options": {
-                "required": [
-                  "mode"
-                ],
-                "properties": {
-                  "mode": {
-                    "enum": [
-                      "auto",
-                      "prefer"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "slots",
-              "proposal"
-            ]
-          }
-        }
-      ]
+      }
     }
   }
 }

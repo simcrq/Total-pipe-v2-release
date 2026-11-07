@@ -5,7 +5,7 @@ import time
 
 from ..contracts import digest
 from .adapter import DeckIRAdapter
-from .decision import candidates
+from .decision import auto_decision, candidates
 from .specs import Options, decision_score, read_proposal, read_slots, validate_spec
 
 
@@ -36,7 +36,8 @@ class ExplainVizPlugin:
         try:
             config = Options.read(options)
             result.diagnostics = {'plugin_version': self.version, 'mode': config.mode,
-                                  'model_calls': 0, 'compile_calls': 0}
+                                  'model_calls': 0, 'compile_calls': 0, 'layout_attempts': 0,
+                                  'slot_policy': config.slot_policy, 'local_reflow': config.allow_local_reflow}
             if config.mode == 'off':
                 result.status = 'disabled'
                 return result
@@ -46,7 +47,11 @@ class ExplainVizPlugin:
             context = context or {}
             adapter = adapter or DeckIRAdapter(context.get('base', '.'))
             slides = adapter.list_slides(deck_ir)
-            slots_value = context.get('slots', {'version': '1.0', 'slots': []})
+            if set(config.protected_slide_ids) - {slide['id'] for slide in slides}:
+                raise ValueError('invalid_protected_slides')
+            slots_value = context.get('slots')
+            if slots_value is None:
+                slots_value = adapter.discover_slots(deck_ir, config)
             slots = read_slots(slots_value, {s['id'] for s in slides})
             result.diagnostics.update(input_ir_sha256=digest(deck_ir), slots_sha256=digest(slots_value))
             pending = []
@@ -54,11 +59,17 @@ class ExplainVizPlugin:
             for slide in slides:
                 sid = slide['id']
                 reason = None
-                if sid not in slots:
+                if sid in config.protected_slide_ids:
+                    reason = 'protected_slide'
+                elif slide['composition'].get('visual_intent'):
+                    reason = 'hard_visual_intent'
+                elif sid not in slots:
                     reason = 'no_slot'
                 elif adapter.already_processed(slide):
                     reason = 'already_enhanced'
-                elif adapter.find_visual_slot(slide, slots[sid]) is None:
+                elif adapter.find_visual_slot(slide, slots[sid]) is None and (
+                        config.slot_policy == 'reserved_only' or any(
+                            g['id'] == slots[sid]['graphic_id'] for g in slide['composition'].get('graphics', []))):
                     reason = 'invalid_slot'
                 else:
                     semantics = adapter.read_slide_semantics(slide, slots[sid])
@@ -69,16 +80,14 @@ class ExplainVizPlugin:
                 result.decisions.append({'slide_id': sid, 'decision': 'skip', 'reason': reason})
             if not pending:
                 return result
-            if context.get('proposal') is None:
-                result.warnings.append('proposal_required')
-                for sid, _, _ in pending:
-                    result.decisions.append({'slide_id': sid, 'decision': 'skip', 'reason': 'proposal_required'})
-                return result
-            proposal = read_proposal(context['proposal'], digest(deck_ir), digest(slots_value), set(slots))
+            automatic = context.get('proposal') is None
+            proposal = ({sid: auto_decision(sid, semantics, templates) for sid, semantics, templates in pending}
+                        if automatic else read_proposal(context['proposal'], digest(deck_ir), digest(slots_value), set(slots)))
             working, baseline = copy.deepcopy(deck_ir), None
             for sid, semantics, templates in pending:
                 entry = proposal.get(sid)
-                record = {'slide_id': sid, 'decision': 'skip', 'reason': 'no_decision'}
+                record = {'slide_id': sid, 'decision': 'skip', 'reason': 'no_decision',
+                          'decision_origin': 'source_rules' if automatic else 'agent_proposal'}
                 result.decisions.append(record)
                 if existing+len(result.manifest) >= config.max_visuals_per_deck:
                     record['reason'] = 'deck_budget'
@@ -86,7 +95,7 @@ class ExplainVizPlugin:
                 if entry is None:
                     continue
                 if entry['decision'] == 'skip':
-                    record['reason'] = 'agent_skip'
+                    record['reason'] = entry['reason'] if automatic else 'agent_skip'
                     continue
                 try:
                     score = decision_score(entry)
@@ -112,24 +121,45 @@ class ExplainVizPlugin:
                             self._revert(result, 'baseline_compile_failed', deck_ir)
                             return result
                     slot = slots[sid]
-                    adapter.find_slot_box(baseline, sid, slot['graphic_id'])
-                    # Isolate all adapter mutations, including unexpected exceptions.
-                    candidate = copy.deepcopy(working)
-                    slide = next(s for s in adapter.list_slides(candidate) if s['id'] == sid)
-                    anchor = adapter.find_visual_slot(slide, slot)
-                    group = adapter.build_native_group(spec, anchor, candidate['theme'])
-                    ids = adapter.append_group(candidate, sid, slot['graphic_id'], group)
-                    manifest = {'slide_id': sid, 'graphic_id': slot['graphic_id'],
+                    accepted, last_reason = False, 'insufficient_space'
+                    for attempt, (candidate, placement) in enumerate(
+                            adapter.slot_candidates(working, sid, slot, baseline, config)):
+                        if (attempt >= config.max_layout_attempts_per_slide or
+                                result.diagnostics['layout_attempts'] >= config.max_visuals_per_deck*config.max_layout_attempts_per_slide):
+                            last_reason = 'layout_budget'
+                            break
+                        result.diagnostics['layout_attempts'] += 1
+                        try:
+                            slide = next(s for s in adapter.list_slides(candidate) if s['id'] == sid)
+                            anchor = adapter.find_visual_slot(slide, slot)
+                            group = adapter.build_native_group(spec, anchor, candidate['theme'])
+                            ids = adapter.append_group(candidate, sid, slot['graphic_id'], group)
+                            original_slide = next(s for s in slides if s['id'] == sid)
+                            if not any(g['id'] == slot['graphic_id'] for g in
+                                       original_slide['composition'].get('graphics', [])):
+                                # The synthetic background path is a new native object too.
+                                ids.insert(0, f"graphic:{slot['graphic_id']}:path:reserved_area")
+                            manifest = {'slide_id': sid, 'graphic_id': slot['graphic_id'],
                                 'template': spec['template'], 'spec_sha256': digest(spec),
                                 'source_hash': digest({ref: semantics['facts'][ref] for ref in spec['source_fact_ids']}),
                                 'source_fact_ids': list(spec['source_fact_ids']),
-                                'shape_ids': ids, 'semantic_review_required': True}
-                    result.diagnostics['compile_calls'] += 1
-                    adapter.validate_ir(deck_ir, candidate, baseline, result.manifest+[manifest])
-                    working = candidate
-                    result.manifest.append(manifest)
-                    record.update(decision='draw', reason='accepted', template=spec['template'],
-                                  object_count=len(ids), qa='passed')
+                                'shape_ids': ids, 'semantic_review_required': True,
+                                'slot_source': placement['source'], 'layout_variant': placement['variant'],
+                                'free_regions': placement.get('free_regions', [])}
+                            result.diagnostics['compile_calls'] += 1
+                            checked = adapter.validate_ir(deck_ir, candidate, baseline, result.manifest+[manifest])
+                            manifest['slot_box_px'] = adapter.find_slot_box(checked, sid, slot['graphic_id'])
+                            manifest['layout_changes'] = layout_changes(baseline, checked, sid)
+                            working = candidate
+                            result.manifest.append(manifest)
+                            record.update(decision='draw', reason='accepted', template=spec['template'],
+                                          slot_source=placement['source'], object_count=len(ids), qa='passed')
+                            accepted = True
+                            break
+                        except Exception as error:
+                            last_reason = str(error) if type(error) is ValueError and str(error) in REASONS else 'page_failed'
+                    if not accepted:
+                        raise ValueError(last_reason)
                 except Exception as error:
                     # Log known bounded error codes only, never page text or raw exceptions.
                     reason = str(error) if type(error) is ValueError and str(error) in REASONS else 'page_failed'
@@ -178,4 +208,15 @@ REASONS = frozenset(('invalid_fields', 'invalid_text', 'invalid_score', 'invalid
     'template_not_candidate', 'invalid_ir', 'compile_failed', 'insufficient_space',
     'invalid_native_group', 'page_set_changed', 'existing_object_order_changed',
     'existing_object_changed', 'unexpected_object', 'out_of_slot', 'layout_conflict', 'illegible_label',
-    'label_overlap', 'missing_native_object', 'unauthorized_ir_change'))
+    'label_overlap', 'missing_native_object', 'unauthorized_ir_change', 'no_free_region',
+    'reflow_font_changed', 'reflow_text_overflow', 'layout_budget', 'page_failed',
+    'invalid_slot_policy', 'invalid_reflow_policy', 'invalid_layout_budget', 'invalid_protected_slides'))
+
+
+def layout_changes(before, after, slide_id):
+    old_page = next((p for p in before['slides'] if p['id'] == slide_id), {'elements': []})
+    new_page = next((p for p in after['slides'] if p['id'] == slide_id), {'elements': []})
+    current = {e['id']: e for e in new_page['elements']}
+    return [{'object_id': e['id'], 'before': e['bbox'], 'after': current[e['id']]['bbox']}
+            for e in old_page['elements'] if e['id'] in current and any(
+                abs(a-b) > .1 for a, b in zip(e['bbox'], current[e['id']]['bbox']))]

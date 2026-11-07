@@ -3,7 +3,7 @@
 日期：2026-11-07。评估基线：`d7f9cd05e600cb48f21db0552040f986d3d46217`，
 分支 `codex/audience-preview-loop`。输入是用户提供的《Deck IR 可插拔讲解可视化模块：设计与接入说明（RFC v1.0）》。
 RFC 为待评估设计资料，其中示意接口不直接作为现有项目契约。
-本文记录首版评估；后续已加入显式构建请求，当前范围见[构建接入说明](explain-viz-build-integration.md)。
+本文记录首版评估；后续构建接入见[记录](explain-viz-build-integration.md)，当前默认启用与自动布局见[后续实现](explain-viz-auto-layout.md)。
 
 ## 结论
 

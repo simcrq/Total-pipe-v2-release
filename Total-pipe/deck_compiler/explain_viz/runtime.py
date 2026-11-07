@@ -50,7 +50,7 @@ class PreparedEnhancement:
     def findings(self):
         status = self.result.status
         items = [issue('EXPLAIN_VIZ_'+status.upper(), 'WARNING' if status == 'fallback' else 'INFO',
-                       f'ExplainViz {status}; accepted {len(self.result.manifest)} reserved-slot diagrams.',
+                       f'ExplainViz {status}; accepted {len(self.result.manifest)} diagrams.',
                        detector='explain-viz', warnings=list(self.result.warnings))]
         if status == 'enhanced':
             items.append(issue('EXPLAIN_VIZ_SEMANTIC_REVIEW', 'REVIEW',
@@ -60,19 +60,21 @@ class PreparedEnhancement:
         return items
 
 
-def prepare(deck_ir, request, base, compile_fn):
+def prepare(deck_ir, request, base, compile_fn, mode=None):
     """Load a bounded self-contained request, failing open on all plugin/config errors."""
     request_hash = None
     try:
-        value = (json.loads(Path(request).read_text(encoding='utf-8'))
+        if mode not in (None, 'auto', 'off', 'prefer'):
+            raise ValueError('invalid_mode')
+        value = ({'version': '1.0', 'options': {'mode': 'off'}} if mode == 'off' else
+                 {'version': '1.0', 'options': {}} if request is None else
+                 json.loads(Path(request).read_text(encoding='utf-8'))
                  if isinstance(request, (str, Path)) else copy.deepcopy(request))
         object_fields(value, ('version', 'options'), ('slots', 'proposal'))
         if value['version'] != '1.0':
             raise ValueError('unsupported_request')
-        options = Options.read(value['options'])
         request_hash = digest(value)
-        if options.mode != 'off' and not {'slots', 'proposal'} <= set(value):
-            raise ValueError('incomplete_request')
+        options = Options.read({**value['options'], **({'mode': mode} if mode else {})})
         adapter = CompilationAdapter(base, compile_fn)
         result = enhance(deck_ir, {key: value[key] for key in ('slots', 'proposal') if key in value},
                          options, adapter)

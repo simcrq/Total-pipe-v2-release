@@ -243,7 +243,8 @@ def error_envelope(error, job_id=None):
 
 
 def start(source, out_dir, language, presentation_type, source_kind='auto', requirements='', queries=None,
-          slide_count=None, supplementary_paths=None, supplementary_content_included=False, supplement='off'):
+          slide_count=None, supplementary_paths=None, supplementary_content_included=False, supplement='off',
+          explain_viz_mode='auto'):
     source, out = Path(source).expanduser().resolve(), Path(out_dir).expanduser().resolve()
     if not source.is_file():
         return error_envelope(JobError('SOURCE_NOT_FOUND', 'Source must be an existing file.', 'Provide its absolute path.'))
@@ -266,11 +267,13 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
     validate_slide_count(slide_count)
     if supplement not in ('off', 'inline', 'pages', 'both'):
         raise ValueError('supplement must be off, inline, pages or both')
+    if explain_viz_mode not in ('auto', 'off', 'prefer'):
+        raise ValueError('explain_viz_mode must be auto, off or prefer')
     request = {'source': str(source), 'out_dir': str(out), 'language': language,
         'presentation_type': presentation_type, 'source_kind': source_kind, 'requirements': requirements,
         'supplementary_content_included': supplementary_content_included,
         'slide_count': slide_count, 'supplementary_paths': [str(Path(p).expanduser().resolve()) for p in supplementary_paths or []],
-        'supplement': supplement}
+        'supplement': supplement, 'explain_viz_mode': explain_viz_mode}
     if original_type != presentation_type:
         request['presentation_context'] = original_type
     try:
@@ -632,9 +635,13 @@ def _preflight_ir(job, stage, artifact_path):
             a.persist_ir(value, path, folder/'input.json')
             before.update({p: hashed for p, hashed in a.resources(folder/'input.json').items() if p != str(folder/'input.json')})
             _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
-                                     enable_overflow_repair=False, require_visual_design=False)
+                                     enable_overflow_repair=False, require_visual_design=False, explain_viz_mode='off')
             seen = {(i.get('code', i.get('rule')), i['message'], i.get('slide')) for i in issues}
             for item in qa['items']:
+                # The measurement-only compiler explicitly disables enhancement;
+                # this internal setting is not a finding about the submitted IR.
+                if item.get('rule') == 'EXPLAIN_VIZ_DISABLED':
+                    continue
                 key = (item.get('rule', item.get('code')), item['message'], item.get('slide'))
                 if key not in seen:
                     issues.append(item)

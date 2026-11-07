@@ -216,7 +216,7 @@ def submit(job, upstream, path, dry=False):
                 value = a.normalize_authoring_ir(value)
                 before = _stamp(folder/'input.json')
                 _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
-                                         enable_overflow_repair=False, require_visual_design=False)
+                                         enable_overflow_repair=False, require_visual_design=False, explain_viz_mode='off')
                 issues.extend(qa['items'])
                 geometry = qa['checks'].get('geometric', False)
                 if before != _stamp(folder/'input.json') or sha(path) != authored_sha:

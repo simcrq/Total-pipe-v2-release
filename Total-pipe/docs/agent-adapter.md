@@ -44,7 +44,7 @@ python3.12 install.py --client codex --profile advanced
 | 工具 | 输入与行为 |
 | --- | --- |
 | totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
-| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement |
+| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode |
 | totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
@@ -144,6 +144,11 @@ PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","q
 `supplement` 取 `off`（默认）/ `inline` / `pages` / `both`，只影响 Deck IR 阶段：允许模型
 添加论文之外的背景、类比、构造示例、推导说明、示意图或对照。补充块标
 `basis=supplement`，不写 EV；`inline` 只允许页内块，`pages/both` 才允许独立补充页（页数不限）。
+`explain_viz_mode` 取 `auto`（默认）/ `off` / `prefer`，控制最终候选的原生讲解图增强。
+auto 使用当前页明确事实，依次尝试预留区域、自动空白检测和正文区有限重排；
+不改科学文字、证据、字体/字号或标题/takeaway，失败保留原页。草稿预览/测量和修补预检关闭增强，
+正式 build 才执行。审计及原输入快照进入 build checkpoint；科学人审 REVIEW 仍须实际复核。
+旧 job 缺字段时按 auto 恢复，已有显式模式保持不变。完整策略与保护配置见 [ExplainViz](explain-viz.md)。
 补充页可写 `semantic.explanation`，义务写 `basis=supplement`、不写 `evidence_refs`；paper 义务不变。
 论文页/Story/RPA 不变；Agent 检查论文数值、图、长引用泄漏，补充页数超过论文页只给 INFO。
 `slide_count` 表示最终论文页的精确目标（1–40），不是 Story 节点数或 RPA brief 数；未指定时由设计者

@@ -91,6 +91,8 @@ def validate_job(job):
             not re.fullmatch(r'[a-f0-9]{32}', job['job_id'])):
         raise ValueError('Malformed job identity')
     inputs = job['inputs']
+    if job['request'].get('explain_viz_mode', 'auto') not in ('auto', 'off', 'prefer'):
+        raise ValueError('Malformed ExplainViz mode')
     if inputs and (set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
                    not isinstance(inputs.get('model'), str) or not inputs['model'].strip() or
                    inputs.get('reasoning_effort') not in ('high','xhigh','max','ultra') or inputs.get('selected_by_user') is not True):

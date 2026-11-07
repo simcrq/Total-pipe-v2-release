@@ -24,6 +24,7 @@ def main():
     p.add_argument('--supplementary-paths', nargs='*')
     p.add_argument('--supplementary-content-included', action='store_true')
     p.add_argument('--supplement', default='off', choices=('off', 'inline', 'pages', 'both'))
+    p.add_argument('--explain-viz-mode', default='auto', choices=('auto', 'off', 'prefer'))
     p = commands.add_parser('status')
     p.add_argument('--job-id', required=True)
     p.add_argument('--detail', choices=('summary', 'full'), default='summary')

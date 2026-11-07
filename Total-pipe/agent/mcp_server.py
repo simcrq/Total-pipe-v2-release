@@ -28,6 +28,8 @@ DEFINITIONS = {
         'queries': {'type': 'array'}, 'supplementary_paths': {'type': 'array', 'items': STRING},
         'supplementary_content_included': {'type': 'boolean'},
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
+        'explain_viz_mode': {'enum': ['auto', 'off', 'prefer'], 'default': 'auto',
+                             'description': 'Automatic native teaching diagrams and bounded body reflow; off disables.'},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
                         'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
     'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','scientific_review','page_design','page_design_review','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},

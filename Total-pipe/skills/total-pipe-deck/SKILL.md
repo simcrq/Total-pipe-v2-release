@@ -518,22 +518,16 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 先增行高、调整区域，溢出越界/碰撞保留 REVIEW；原图尺寸、公式/图形容量与科学关系仍是硬门禁。
 `VISUAL_PLAN_UNSATISFIABLE` 修改设计，不能删科研内容、降低原图下限或静默忽略失败。
 
-### 可选 ExplainViz：只填明确预留区域
+### ExplainViz：默认自动讲解图与正文区有限重排
 
-默认关闭，不替代本节的整套 Design。确有讲解需要且源 IR 已预留 Path IR 背景矩形槽位时，
-可用 `explain-viz-prompt`（高级 MCP：`totalpipe_explain_viz_prompt`）准备候选与严格 Schema，
-当前 Agent 根据当前页可见事实编写提案，再用 `apply-explain-viz --mode auto|prefer`
-（高级 MCP：`totalpipe_apply_explain_viz`）生成新的源 IR 与审计文件。
-也可将 options、slots、proposal 合并为自包含请求，以
-`compile/build/generate --explain-viz-request <request.json>` 直接构建；高级 MCP
-`totalpipe_compile/totalpipe_build` 对应绝对路径 `explain_viz_request`。
-请求绑定已完成 Design 的当前源 IR，构建时在内存中增强，不改原文件，
-产出原输入快照与 `explain_viz.json`，QA 中保留实际新增数量及科学人审项。
-标签与关系必须有原文绑定，不从讲稿补写材料、数值、机制或方向；没有槽位则跳过，
-不得为了插图调整正文。不要直接修改已绑定验收哈希的 job 文件。
-检查 `status/applied_visuals/warnings`；fallback/skipped 不表示新增成功，成功仍须科学人审。
-未提供请求的 compile/build 和默认四工具不会隐式运行该步骤。字段与完整命令见
-`Total-pipe/docs/explain-viz.md`；本轮新增用例和样例按用户要求尚未运行验证。
+默认 auto，不替代本节 Design。正式 compile/build/generate 和四工具候选构建会从当前页明确事实
+识别图示机会，优先预留区域，其次自动空白检测，再有限尝试当前页正文区排布。
+不得从讲稿或新生成事实补写材料、数值、机制或方向。正文源文字、证据、标题、takeaway、原字号与字体保持；
+重排只调整当前页正文对象框和换行。失败保留原页，审计保存 slot_source 与 before/after 框。
+`--explain-viz-mode off` 或 start 的 explain_viz_mode=off 禁用；可选请求配置只用预留区域、禁用重排或保护指定页。
+IR 草稿预览、逐页测量、修补预检关闭自动增强，正式候选才运行。
+检查 explain_viz.json、QA 的实际新增数、fallback 和科学人审 REVIEW，不自动签收生成图。
+当前字段、配置、提案与样例见 `Total-pipe/docs/explain-viz.md`。
 
 ## 6. 编译、候选与正式验收
 

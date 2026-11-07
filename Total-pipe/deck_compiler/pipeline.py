@@ -85,7 +85,7 @@ def _explain_outputs(ir_path, out, request):
     inputs = {ir_path.resolve()}
     if isinstance(request, (str, Path)):
         inputs.add(Path(request).resolve())
-    if request is not None and any(path.resolve() in inputs for path in paths):
+    if any(path.resolve() in inputs for path in paths):
         raise ValueError('ExplainViz audit outputs must not overwrite its source IR or request')
     for path in paths:
         if path.resolve() not in inputs:
@@ -100,7 +100,7 @@ def _write_explain(out, ir_path, source, output_ir, prepared):
 
 
 def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True,
-                  require_visual_design=True, explain_viz_request=None):
+                  require_visual_design=True, explain_viz_request=None, explain_viz_mode=None):
     ir_path, out = Path(ir_path), Path(out)
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
     source_ir = ir
@@ -128,18 +128,15 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             qa['next_action'] = {'action': 'author_visual_proposal', 'apply_tool': 'totalpipe_apply_visual_plan',
                                  'prompt': str(prompt_path.resolve()),
                                  'ir': str(ir_path.resolve()), **pending}
-            if explain_viz_request is not None:
-                from .explain_viz.runtime import blocked
-                qa['explain_viz'] = _write_explain(out, ir_path, source_ir, ir, blocked(source_ir))
+            from .explain_viz.runtime import blocked
+            qa['explain_viz'] = _write_explain(out, ir_path, source_ir, ir, blocked(source_ir))
             write_qa(out, qa, ir, None)
             write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
-    prepared = None
-    if explain_viz_request is not None:
-        from .explain_viz.runtime import prepare
-        prepared = prepare(ir, explain_viz_request, ir_path.parent,
-            lambda value: _projection_findings(value, *_compile_ir(value, ir_path, layout_options)))
-        ir = prepared.result.deck_ir
+    from .explain_viz.runtime import prepare
+    prepared = prepare(ir, explain_viz_request, ir_path.parent,
+        lambda value: _projection_findings(value, *_compile_ir(value, ir_path, layout_options)), mode=explain_viz_mode)
+    ir = prepared.result.deck_ir
     layout, issues = (prepared.compiled if prepared and prepared.compiled is not None
                       else _compile_ir(ir, ir_path, layout_options))
 
@@ -207,7 +204,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
 
 
 def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
-          require_visual_design=True, explain_viz_request=None):
+          require_visual_design=True, explain_viz_request=None, explain_viz_mode=None):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -219,7 +216,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
             (out/name).unlink(missing_ok=True)
         ir, layout, qa = compile_input(ir_path, out, layout_options,
                                        require_visual_design=require_visual_design,
-                                       explain_viz_request=explain_viz_request)
+                                       explain_viz_request=explain_viz_request, explain_viz_mode=explain_viz_mode)
         explain_summary = qa.get('explain_viz')
         items = qa['items']
         if qa['counts']['FAIL']:

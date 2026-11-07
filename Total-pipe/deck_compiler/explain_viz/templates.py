@@ -1,5 +1,6 @@
 """Versioned deterministic templates lowered only to existing Path IR and text."""
 import math
+import re
 
 from ..contracts import digest
 from .specs import PREFIX, TEMPLATES
@@ -32,8 +33,9 @@ def build(spec):
 
     # This marker is the only non-source label. Geometry and spacing are illustrative,
     # never inferred numerical measurements, layer thicknesses or process durations.
-    label('illustrative', '示意', [40, 20, 200, 80])
     values = spec['labels']
+    marker = '示意' if any(re.search(r'[\u4e00-\u9fff]', value) for value in values.values()) else 'Schematic'
+    label('illustrative', marker, [40, 20, 320, 80])
     if spec['template'] == TEMPLATES[0]:
         rect('substrate', 60, 414, 870, 65)
         line('attached_film', [(90, 408), (420, 408)], 'accent', 4)

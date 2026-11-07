@@ -51,6 +51,7 @@ def request_identity(request):
     use RPA's custom blueprint. All other request fields must remain identical.
     """
     value = dict(request)
+    value.setdefault('explain_viz_mode', 'auto')
     canonical = presentation_type(value['presentation_type'])
     context = value.pop('presentation_context', value['presentation_type'])
     label, details = _parts(context)

@@ -34,7 +34,15 @@ python -m deck_compiler build --ir examples/explain-viz/reserved.deck_ir.json \
 ```
 
 查看 `build/explain-viz/explain_viz.json` 和 `qa_report.json` 的结果摘要。
-没有请求参数时不会启用插件。
+没有请求参数时默认自动评估；可用 --explain-viz-mode off 禁用。
 
-本轮按用户要求未执行以上命令，未附生成截图或 PPTX，也不声明样例编译通过。
+首版及上一轮构建接入未执行以上命令；本轮实际验证情况以[验证记录](../../../docs/explain-viz-auto-layout.md)为准。
 字段、门槛与限制见[协议](../../docs/explain-viz.md)。
+
+无预留槽位的自动布局样例：
+
+```bash
+python -m deck_compiler build --ir examples/explain-viz/automatic.deck_ir.json --out build/explain-viz-auto --skip-native
+```
+
+本轮自动空白检测与局部重排的实际验证情况见[记录](../../../docs/explain-viz-auto-layout.md)。

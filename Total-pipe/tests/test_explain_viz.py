@@ -51,15 +51,15 @@ class ExplainVizPolicyTests(unittest.TestCase):
         self.proposal['ir_sha256'] = digest(self.ir)
         self.proposal['slots_sha256'] = digest(self.slots)
 
-    def test_default_off_returns_same_object_without_compilation(self):
+    def test_explicit_off_returns_same_object_without_compilation(self):
         with patch.object(DeckIRAdapter, 'compile', side_effect=AssertionError('must not compile')):
-            result = enhance(self.ir)
+            result = enhance(self.ir, options={'mode': 'off'})
         self.assertIs(result.deck_ir, self.ir)
         self.assertEqual(result.status, 'disabled')
         self.assertEqual(result.diagnostics['compile_calls'], 0)
 
     def test_no_slot_is_a_noop_without_a_proposal_or_compilation(self):
-        result = enhance(self.ir, options={'mode': 'prefer'})
+        result = enhance(self.ir, {'slots': {'version': '1.0', 'slots': []}}, options={'mode': 'prefer'})
         self.assertIs(result.deck_ir, self.ir)
         self.assertEqual({d['reason'] for d in result.decisions}, {'no_slot'})
         self.assertEqual(result.diagnostics['compile_calls'], 0)

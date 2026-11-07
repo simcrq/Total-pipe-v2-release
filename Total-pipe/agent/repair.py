@@ -217,7 +217,7 @@ def _preflight(job, patch, path):
     folder = work/'repairs'/uuid.uuid4().hex
     persist_ir(value, base_path, folder/'input.json')
     _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
-                             enable_overflow_repair=False, require_visual_design=True)
+                             enable_overflow_repair=False, require_visual_design=True, explain_viz_mode='off')
     if resource_snapshot(base_path) != before or any(sha(path) != expected for path, expected in replacement_bytes.items()):
         raise Failure('PATCH_STALE', 'Base or replacement bytes changed during preflight; nothing was applied.',
                       'author_artifact', 'deck_ir')

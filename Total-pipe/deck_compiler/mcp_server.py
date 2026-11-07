@@ -69,8 +69,8 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Use totalpipe_ack_review only after actual review, with explicit ids, reviewer and note; '
     'notes survive unchanged page evidence and never replace artifact-bound final approval.')
 transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
-    'ExplainViz is optional and default off: explicitly pass explain_viz_request to compile/build '
-    'only with a source-bound proposal and pre-reserved Path IR scenes. Never bypass Design or scientific review. '
+    'ExplainViz defaults to auto: source-bound templates use reserved or detected empty regions, '
+    'then bounded local body reflow. Set explain_viz_mode=off to disable. Never bypass Design or scientific review. '
     'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
     'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
     'native table references to composition.tables, including merged headers and formula/matrix cells. '
@@ -109,6 +109,8 @@ def invoke(command, arguments):
             argv += ['--skip-visual-design']
         if arguments.get('explain_viz_request'):
             argv += ['--explain-viz-request', arguments['explain_viz_request']]
+        if arguments.get('explain_viz_mode'):
+            argv += ['--explain-viz-mode', arguments['explain_viz_mode']]
     if command == 'build':
         argv += ['--skip-native']
     if command in ('build', 'review-officecli'):
@@ -145,7 +147,9 @@ for name, command, description in (
                            'skip_visual_design':{'type':'boolean','default':False,
                                'description':'Explicit legacy mode only; bypass the default visual design stage.'},
                            'explain_viz_request': {'type': 'string',
-                               'description': 'Optional absolute path to self-contained ExplainViz request JSON. Omitted means disabled; input IR stays unchanged.'}})
+                               'description': 'Optional absolute path to ExplainViz configuration/proposal; omitted uses auto.'},
+                           'explain_viz_mode': {'enum': ['auto', 'off', 'prefer'],
+                               'description': 'Optional mode override; off explicitly disables automatic diagrams.'}})
         required.append('ir')
     if command in ('build', 'review-officecli'):
         properties['officecli'] = {'type':'string','description':'OfficeCLI executable path or PATH command.','default':'officecli'}
@@ -226,10 +230,9 @@ for name, command, description in (
 
 def explain_viz_invoke(command, arguments):
     allowed = {'ir', 'slots', 'out'}
-    required = set(allowed)
+    required = {'ir', 'out'}
     if command == 'apply-explain-viz':
         allowed |= {'proposal', 'mode', 'max_visuals_per_deck'}
-        required.add('proposal')
     if not isinstance(arguments, dict) or set(arguments)-allowed or not required <= set(arguments):
         raise ValueError('Missing or unknown ExplainViz arguments')
     for key, value in arguments.items():
@@ -242,9 +245,13 @@ def explain_viz_invoke(command, arguments):
         elif not isinstance(value, str) or not Path(value).is_absolute():
             raise ValueError(f'{key} must be an absolute path')
     argv = [sys.executable, '-m', 'deck_compiler', command,
-            '--ir', arguments['ir'], '--slots', arguments['slots'], '--out', arguments['out']]
+            '--ir', arguments['ir'], '--out', arguments['out']]
+    if arguments.get('slots'):
+        argv += ['--slots', arguments['slots']]
     if command == 'apply-explain-viz':
-        argv += ['--proposal', arguments['proposal'], '--mode', arguments.get('mode', 'off'),
+        if arguments.get('proposal'):
+            argv += ['--proposal', arguments['proposal']]
+        argv += ['--mode', arguments.get('mode', 'auto'),
                  '--max-visuals-per-deck', str(arguments.get('max_visuals_per_deck', 4))]
     result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
                             encoding='utf-8', errors='replace', timeout=560)
@@ -257,16 +264,15 @@ for name, command, description in (
     ('totalpipe_explain_viz_prompt', 'explain-viz-prompt',
      'Optional ExplainViz: filter explicitly reserved Path IR scenes and prepare source facts and a strict proposal schema. No model call; out is a JSON file.'),
     ('totalpipe_apply_explain_viz', 'apply-explain-viz',
-     'Optional ExplainViz: append source-bound editable paths and labels inside reserved scenes, with compiler rollback and an audit sidecar. Default mode off; use auto/prefer explicitly. Keep output alongside source IR. Fallback preserves input and is reported explicitly.'),
+     'ExplainViz: append source-bound native diagrams, detect free regions and try bounded local body reflow. Default auto; off disables it. Keep output alongside source IR. Fallback preserves input.'),
 ):
     properties = {key: {'type': 'string'} for key in ('ir', 'slots', 'out')}
-    required = ['ir', 'slots', 'out']
+    required = ['ir', 'out']
     if command == 'apply-explain-viz':
         properties.update({'proposal': {'type': 'string'},
-                           'mode': {'enum': ['off', 'auto', 'prefer'], 'default': 'off'},
+                           'mode': {'enum': ['off', 'auto', 'prefer'], 'default': 'auto'},
                            'max_visuals_per_deck': {'type': 'integer', 'minimum': 0,
                                                     'maximum': 32, 'default': 4}})
-        required.append('proposal')
     transport.TOOLS[name] = {'description': description,
         'inputSchema': {'type': 'object', 'properties': properties, 'required': required,
                         'additionalProperties': False},

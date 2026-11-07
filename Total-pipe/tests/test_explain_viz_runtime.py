@@ -27,7 +27,7 @@ class ExplainVizRuntimeTests(unittest.TestCase):
     def test_off_never_calls_the_selected_compiler(self):
         ir, _, _ = inputs()
         compiler = Mock(side_effect=AssertionError('disabled'))
-        prepared = prepare(ir, {'version': '1.0', 'options': {}}, EXAMPLE, compiler)
+        prepared = prepare(ir, {'version': '1.0', 'options': {'mode': 'off'}}, EXAMPLE, compiler)
         self.assertIs(prepared.result.deck_ir, ir)
         self.assertEqual(prepared.result.status, 'disabled')
         compiler.assert_not_called()
@@ -35,8 +35,8 @@ class ExplainVizRuntimeTests(unittest.TestCase):
     def test_malformed_and_unreadable_requests_fail_open_without_leaking_text(self):
         ir, slots, proposal = inputs()
         compiler = Mock(side_effect=AssertionError('invalid requests must not compile'))
-        bad = [None, [], {'version': '9', 'options': {}},
-               {'version': '1.0', 'options': {'mode': 'auto'}},
+        bad = [[], {'version': '9', 'options': {}},
+               {'version': '1.0', 'options': {'mode': 'unknown'}},
                {**request_for(slots, proposal), 'execute': 'sensitive document text'},
                {'version': '1.0', 'options': {'mode': 'unknown'}}]
         for request in bad:
@@ -94,9 +94,8 @@ class ExplainVizRuntimeTests(unittest.TestCase):
         request = json.loads((EXAMPLE/'request.json').read_text())
         jsonschema.validate(request, {**schema, '$ref': '#/$defs/request'})
         jsonschema.validate({'version': '1.0', 'options': {}}, {**schema, '$ref': '#/$defs/request'})
-        with self.assertRaises(jsonschema.ValidationError):
-            jsonschema.validate({'version': '1.0', 'options': {'mode': 'auto'}},
-                                {**schema, '$ref': '#/$defs/request'})
+        jsonschema.validate({'version': '1.0', 'options': {'mode': 'auto'}},
+                            {**schema, '$ref': '#/$defs/request'})
 
 
 class ExplainVizPipelineTests(unittest.TestCase):
@@ -119,16 +118,16 @@ class ExplainVizPipelineTests(unittest.TestCase):
                                    require_visual_design=False, explain_viz_request=request)
         return result, compiler
 
-    def test_absent_request_removes_old_audit_and_never_runs_plugin(self):
+    def test_absent_request_uses_default_auto_and_replaces_old_audit(self):
         write_json(self.out/'explain_viz.json', {'status': 'enhanced'})
         write_json(self.out/'explain_viz.source.deck_ir.json', {'stale': True})
-        with patch('deck_compiler.explain_viz.runtime.prepare') as prepare_mock:
+        original_prepare = prepare
+        with patch('deck_compiler.explain_viz.runtime.prepare', wraps=original_prepare) as prepare_mock:
             (_, _, qa), compiler = self.compile()
-        prepare_mock.assert_not_called()
-        compiler.assert_called_once()
-        self.assertNotIn('explain_viz', qa)
-        self.assertFalse((self.out/'explain_viz.json').exists())
-        self.assertFalse((self.out/'explain_viz.source.deck_ir.json').exists())
+        prepare_mock.assert_called_once()
+        self.assertIn('explain_viz', qa)
+        self.assertTrue((self.out/'explain_viz.json').exists())
+        self.assertEqual(json.loads((self.out/'explain_viz.source.deck_ir.json').read_text()), self.ir)
 
     def test_off_request_freezes_source_without_changing_its_resource_base(self):
         before = self.source.read_bytes()
@@ -142,7 +141,7 @@ class ExplainVizPipelineTests(unittest.TestCase):
         self.assertEqual(json.loads((self.out/'explain_viz.source.deck_ir.json').read_text()), self.ir)
 
     def test_invalid_optional_request_cannot_turn_a_good_compile_into_failure(self):
-        (_, _, qa), compiler = self.compile({'version': '1.0', 'options': {'mode': 'auto'}})
+        (_, _, qa), compiler = self.compile({'version': '1.0', 'options': {'mode': 'unknown'}})
         self.assertEqual(qa['counts']['FAIL'], 0)
         self.assertEqual(qa['explain_viz']['status'], 'fallback')
         self.assertTrue(any(item['rule'] == 'EXPLAIN_VIZ_FALLBACK' for item in qa['items']))

@@ -71,6 +71,21 @@ class DeckIRAdapter:
     def supported_primitives(self):
         return ['path', 'polyline', 'text']
 
+    def discover_slots(self, deck_ir, options):
+        result = []
+        for slide in self.list_slides(deck_ir):
+            sid = slide['id']
+            reserved = next((g['id'] for g in slide['composition'].get('graphics', [])
+                             if self.find_visual_slot(slide, {'graphic_id': g['id']}) is not None), None)
+            if reserved or options.slot_policy == 'detect_free_space':
+                result.append({'slide_id': sid,
+                               'graphic_id': reserved or 'explanation_visual_'+digest(sid)[:12]})
+        return {'version': '1.0', 'slots': result}
+
+    def slot_candidates(self, deck_ir, slide_id, slot, baseline, options):
+        from .space import slot_candidates
+        return slot_candidates(deck_ir, slide_id, slot, baseline, options, self)
+
     def compile(self, deck_ir):
         from ..ir import validate
         from ..layout import compile_deck
@@ -136,6 +151,8 @@ class DeckIRAdapter:
         found = set()
         for sid, before_page in before_pages.items():
             after = after_pages[sid]['elements']
+            record = next((item for item in additions if item['slide_id'] == sid), {})
+            reflow = record.get('slot_source') == 'local_reflow'
             old_ids = [element['id'] for element in before_page['elements']]
             old_set = set(old_ids)
             if [e['id'] for e in after if e['id'] in old_set] != old_ids:
@@ -147,6 +164,21 @@ class DeckIRAdapter:
                 # style, existing members and relative z order remain identical.
                 old_fields = {k: v for k, v in old.items() if k != 'frame_members'}
                 new_fields = {k: v for k, v in current.items() if k != 'frame_members'}
+                if reflow and self._body_object(old, original, sid, record.get('graphic_id')):
+                    self._check_reflow_object(old, current)
+                    excluded = {'bbox', 'layout_region', 'layout_component', 'text', 'scientific_text_overflow',
+                                'frame_growth_inset', 'contract'}
+                    if old.get('graphic_id') == record.get('graphic_id'):
+                        # Resizing an existing blank slot changes its measured region.
+                        excluded.add('graphic_region')
+                    old_fields = {k: v for k, v in old_fields.items() if k not in excluded}
+                    new_fields = {k: v for k, v in new_fields.items() if k not in excluded}
+                else:
+                    # A new wrapper may change tree-path metadata, never old native geometry.
+                    if any(abs(a-b) > .1 for a, b in zip(old['bbox'], current['bbox'])):
+                        raise ValueError('existing_object_changed')
+                    old_fields = {k: v for k, v in old_fields.items() if k not in ('bbox', 'layout_component', 'layout_region')}
+                    new_fields = {k: v for k, v in new_fields.items() if k not in ('bbox', 'layout_component', 'layout_region')}
                 if old_fields != new_fields or [eid for eid in current.get('frame_members', [])
                                                if eid in old_set] != old.get('frame_members', []):
                     raise ValueError('existing_object_changed')
@@ -159,11 +191,14 @@ class DeckIRAdapter:
                     raise ValueError('unexpected_object')
                 found.add(key)
                 record = next(item for item in additions if item['slide_id'] == sid)
-                box = self.find_slot_box(baseline, sid, record['graphic_id'])
+                box = self.find_slot_box(layout, sid, record['graphic_id'])
                 if not inside(element['bbox'], box):
                     raise ValueError('out_of_slot')
+                if record.get('slot_source') == 'detected' and not any(
+                        inside(box, free) for free in record.get('free_regions', [])):
+                    raise ValueError('no_free_region')
                 if any(overlaps(element['bbox'], occupied) for occupied in
-                       self.list_occupied_boxes(baseline, sid, record['graphic_id'])):
+                       self.list_occupied_boxes(layout if reflow else baseline, sid, record['graphic_id'])):
                     raise ValueError('layout_conflict')
                 if element['kind'] == 'text':
                     from ..fonts import load_font_file
@@ -187,8 +222,51 @@ class DeckIRAdapter:
             slide = next(s for s in restored['slides'] if s['id'] == item['slide_id'])
             graphics = slide['composition']['graphics']
             index = next(i for i, g in enumerate(graphics) if g['id'] == item['graphic_id'])
-            graphics[index] = copy.deepcopy(next(g for g in source[item['slide_id']]['composition']['graphics']
-                                                if g['id'] == item['graphic_id']))
+            original_comp = source[item['slide_id']]['composition']
+            old_graphic = next((g for g in original_comp.get('graphics', []) if g['id'] == item['graphic_id']), None)
+            if old_graphic is None:
+                graphics.pop(index)
+                if 'graphics' not in original_comp:
+                    slide['composition'].pop('graphics', None)
+            else:
+                graphics[index] = copy.deepcopy(old_graphic)
+            if item.get('slot_source') in ('detected', 'local_reflow'):
+                slide['composition']['archetype'] = original_comp['archetype']
+                if 'layout_tree' in original_comp:
+                    slide['composition']['layout_tree'] = copy.deepcopy(original_comp['layout_tree'])
+                else:
+                    slide['composition'].pop('layout_tree', None)
         if digest(restored) != digest(original):
             raise ValueError('unauthorized_ir_change')
         return layout
+
+    @staticmethod
+    def _body_object(element, original, slide_id, graphic_id):
+        if element.get('layout_component') or element.get('graphic_id') == graphic_id:
+            return True
+        slide = next(s for s in original['slides'] if s['id'] == slide_id)
+        ids = [block['id'] for block in slide['composition']['blocks']]
+        return any(element['id'] == bid or element['id'].startswith(bid+':') for bid in ids)
+
+    @staticmethod
+    def _check_reflow_object(old, current):
+        if old['kind'] != current['kind']:
+            raise ValueError('existing_object_changed')
+        if old.get('kind') == 'text':
+            if old.get('source_text', ''.join(old.get('text', '').split())) != current.get(
+                    'source_text', ''.join(current.get('text', '').split())):
+                raise ValueError('existing_object_changed')
+            before, after = old['contract'], current['contract']
+            if after['font_size'] < before['font_size'] or any(
+                    before.get(key) != after.get(key) for key in
+                    ('font_family', 'font_file', 'font_weight', 'line_height')):
+                raise ValueError('reflow_font_changed')
+            from ..fonts import load_font_file
+            from ..layout import break_lines
+            size = after['font_size']
+            face = load_font_file(after['font_file'], size)
+            lines = break_lines(current['text'], face, current['bbox'][2])
+            if (len(lines)*size*after['line_height'] > current['bbox'][3]+.1
+                    or any(face.getlength(line) > current['bbox'][2]+.1 for line in lines)
+                    or current.get('scientific_text_overflow')):
+                raise ValueError('reflow_text_overflow')

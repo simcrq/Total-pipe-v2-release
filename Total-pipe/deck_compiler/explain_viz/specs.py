@@ -11,8 +11,9 @@ SCORE_KEYS = ('explanation_gain', 'relationship_clarity', 'source_confidence',
 
 
 def capabilities():
-    return {'version': VERSION, 'default_mode': 'off', 'modes': ['off', 'auto', 'prefer'],
-            'slot_policy': 'reserved_only', 'templates': list(TEMPLATES), 'model_service': False,
+    return {'version': VERSION, 'default_mode': 'auto', 'modes': ['off', 'auto', 'prefer'],
+            'slot_policy': 'detect_free_space', 'local_reflow': True,
+            'templates': list(TEMPLATES), 'model_service': False,
             'prompt_command': 'explain-viz-prompt', 'apply_command': 'apply-explain-viz',
             'build_request_flag': '--explain-viz-request',
             'request_schema': 'schemas/explain-viz.schema.json#/$defs/request'}
@@ -37,10 +38,14 @@ def unit(value):
 
 @dataclass(frozen=True)
 class Options:
-    mode: str = 'off'
+    mode: str = 'auto'
     max_visuals_per_deck: int = 4
     min_auto_score: float = .75
     min_prefer_score: float = .60
+    slot_policy: str = 'detect_free_space'
+    allow_local_reflow: bool = True
+    max_layout_attempts_per_slide: int = 8
+    protected_slide_ids: tuple = ()
 
     @classmethod
     def read(cls, value):
@@ -56,6 +61,15 @@ class Options:
             raise ValueError('invalid_budget')
         unit(result.min_auto_score)
         unit(result.min_prefer_score)
+        if result.slot_policy not in ('reserved_only', 'detect_free_space'):
+            raise ValueError('invalid_slot_policy')
+        if type(result.allow_local_reflow) is not bool:
+            raise ValueError('invalid_reflow_policy')
+        if type(result.max_layout_attempts_per_slide) is not int or not 1 <= result.max_layout_attempts_per_slide <= 16:
+            raise ValueError('invalid_layout_budget')
+        if (not isinstance(result.protected_slide_ids, (list, tuple)) or len(result.protected_slide_ids) > 128
+                or any(not isinstance(sid, str) or not sid for sid in result.protected_slide_ids)):
+            raise ValueError('invalid_protected_slides')
         return result
 
 

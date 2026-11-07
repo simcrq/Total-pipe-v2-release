@@ -513,31 +513,17 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 先调整区域与行高；文字越界和碰撞保留 REVIEW。公式/图形容量、原图最小尺寸和科学关系仍是硬门禁。
 `VISUAL_PLAN_UNSATISFIABLE` 要调整设计，不能删改科学内容或静默忽略失败。
 
-### 4.3 可选 ExplainViz 讲解图
+### 4.3 ExplainViz 自动讲解图
 
-已有 IR 明确预留 `layout_tree` 图形区域时，可在正式编译前执行
-`explain-viz-prompt`，由当前 Agent 根据候选页事实和严格 Schema 编写提案，再用
-`apply-explain-viz --mode auto|prefer` 生成新 IR 与审计文件。默认模式为 `off`，
-普通 compile/build/generate 和四工具不会自动启用；没有槽位时保留原页，不自动移动正文。
-高级 MCP 对应 `totalpipe_explain_viz_prompt / totalpipe_apply_explain_viz`。
+默认 auto：常规 compile/build/generate 及四工具候选构建都评估机会，无需额外请求文件。
+从当前页明确关系生成三个原生模板，先复用预留区域，再检测空白，最后有限尝试当前页正文区重排。
+来源、完整文字、原字号、原字体、标题与 takeaway 保持门槛不降低；失败保留原页。
+`--explain-viz-mode off` 显式禁用；高级 MCP 和四工具 start 对应 `explain_viz_mode`。
 
-也可把 options、slots 和 proposal 嵌入一个请求文件，直接交给正式构建入口，省去另写增强 IR：
-
-```bash
-python -m deck_compiler build --ir <designed.deck_ir.json> \
-  --explain-viz-request <request.json> --out <build-dir> --skip-native
-```
-
-compile 和统一 generate 同样支持该参数；高级 MCP `totalpipe_compile/totalpipe_build`
-对应绝对路径 `explain_viz_request`。不提供请求时不运行，源 IR 始终不写回；
-请求无效时记录 fallback 并编译原 IR，已有编译 FAIL 仍保留。构建目录保存
-`explain_viz.source.deck_ir.json`、`explain_viz.json`，QA 增加绑定本次输出的摘要与科学人审项。
-请求必须绑定已完成 Design 的当前 IR；Design 门槛不会被可选插件绕过。
-
-首版支持剥离角、2–4 层叠层与 2–4 步过程，标签及关系绑定当前页可见原文，
-只追加原生路径与独立文字。原有对象发生变化、标签不可读或布局编译失败时回退，
-成功仍需科学人审和原有候选/原生 QA。本轮按要求未运行验证；完整字段、命令及三模板样例见
-[ExplainViz 协议](explain-viz.md)，实现范围见[评估](../../docs/explain-viz-evaluation.md)。
+可选 `--explain-viz-request` 配置 allow_local_reflow、reserved_only、protected_slide_ids，或提供绑定源哈希的 Agent 提案。
+输出原输入快照、实际 IR、explain_viz.json 和 QA 摘要；审计记录空白区域及对象 before/after 框。
+草稿预览/预检不运行自动增强，正式候选默认执行。生成图仍须科学人审与原生验收。
+字段与样例见 [ExplainViz 协议](explain-viz.md)，本轮验证见[记录](../../docs/explain-viz-auto-layout.md)。
 
 ## 5. 编译与候选
 

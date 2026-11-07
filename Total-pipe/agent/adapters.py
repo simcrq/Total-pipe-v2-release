@@ -1187,7 +1187,8 @@ def execute(stage, job):
         if pending['academic_design_required'] or pending['slide_ids']:
             compiler('apply-visual-plan', out, '--ir', ir, '--proposal', work/'visual_proposal.json', '--out', work/'designed.deck_ir.json')
             ir = work/'designed.deck_ir.json'
-        compiler('build', out, '--ir', ir, '--out', out/'build', '--skip-native', timeout=540)
+        compiler('build', out, '--ir', ir, '--out', out/'build', '--skip-native',
+                 '--explain-viz-mode', request.get('explain_viz_mode', 'auto'), timeout=540)
         qa = read(out/'build/qa_report.json')
         if qa['counts']['FAIL']:
             first = next(i for i in qa['items'] if i['severity'] == 'FAIL')
@@ -1197,5 +1198,7 @@ def execute(stage, job):
         layout = read(out/'build/layout.json')
         extra = [Path(asset['path']) for asset in layout['assets'].values()]
         extra += [Path(e['contract']['font_file']) for slide in layout['slides'] for e in slide['elements'] if e.get('contract')]
-        return [*[out/'build'/name for name in ('candidate.pptx', 'staging.pptx', 'qa_report.json', 'layout_feedback.json', 'layout.json')], *extra]
+        return [*[out/'build'/name for name in ('candidate.pptx', 'staging.pptx', 'qa_report.json', 'layout_feedback.json', 'layout.json')],
+                *[out/'build'/name for name in ('explain_viz.json', 'explain_viz.source.deck_ir.json')
+                  if (out/'build'/name).is_file()], *extra]
     raise Failure('STAGE_UNSUPPORTED', f'Unknown adapter {stage}')

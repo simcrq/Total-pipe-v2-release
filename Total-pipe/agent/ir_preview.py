@@ -113,7 +113,7 @@ def execute(job, request):
         a.persist_ir(prepared, path, folder/'input.json')
         issues = a.ir_issues(prepared, normalized, job['request'].get('supplement', 'off'), partial, 1)
         _, layout, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
-                                     enable_overflow_repair=False, require_visual_design=False)
+                                     enable_overflow_repair=False, require_visual_design=False, explain_viz_mode='off')
         seen = {(i.get('rule', i.get('code')), i.get('message'), i.get('slide')) for i in issues}
         for item in qa['items']:
             marker = (item.get('rule', item.get('code')), item.get('message'), item.get('slide'))

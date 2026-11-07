@@ -27,11 +27,11 @@ def main():
     for name in ('explain-viz-prompt', 'apply-explain-viz'):
         p = commands.add_parser(name, help='Optional reserved-slot native teaching diagrams')
         p.add_argument('--ir', required=True, type=Path)
-        p.add_argument('--slots', required=True, type=Path, help='Explicit reserved-slot sidecar JSON')
+        p.add_argument('--slots', type=Path, help='Optional explicit slot allowlist; otherwise discover opportunities')
         p.add_argument('--out', required=True, type=Path, help='Output JSON file')
         if name == 'apply-explain-viz':
-            p.add_argument('--proposal', required=True, type=Path)
-            p.add_argument('--mode', choices=('off', 'auto', 'prefer'), default='off')
+            p.add_argument('--proposal', type=Path, help='Optional agent proposal; otherwise use conservative source rules')
+            p.add_argument('--mode', choices=('off', 'auto', 'prefer'), default='auto')
             p.add_argument('--max-visuals-per-deck', type=int, default=4)
     for name in ('visual-prompt', 'apply-visual-plan'):
         p = commands.add_parser(name)
@@ -51,7 +51,9 @@ def main():
         p.add_argument('--skip-visual-design', action='store_true',
                        help='Explicit legacy mode: compile without the agent visual design pass')
         p.add_argument('--explain-viz-request', type=Path,
-                       help='Optional self-contained ExplainViz request JSON; omitted means disabled')
+                       help='Optional ExplainViz configuration/proposal; omitted uses automatic defaults')
+        p.add_argument('--explain-viz-mode', choices=('auto', 'off', 'prefer'),
+                       help='Override request mode; default auto, off explicitly disables enhancement')
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
@@ -95,15 +97,17 @@ def main():
             from .explain_viz import DeckIRAdapter, enhance, make_prompt
             from .pipeline import write_json
             source = args.ir.resolve()
-            inputs = {source, args.slots.resolve()}
-            if args.command == 'apply-explain-viz':
+            inputs = {source}
+            if args.slots:
+                inputs.add(args.slots.resolve())
+            if args.command == 'apply-explain-viz' and args.proposal:
                 inputs.add(args.proposal.resolve())
             manifest_path = out.with_suffix('.explain-viz.json')
             if out in inputs or (args.command == 'apply-explain-viz' and
                                  (manifest_path in inputs or manifest_path == out)):
                 raise ValueError('ExplainViz outputs must not overwrite source IR, slots or proposal')
             ir = json.loads(source.read_text(encoding='utf-8'))
-            slots = json.loads(args.slots.read_text(encoding='utf-8'))
+            slots = json.loads(args.slots.read_text(encoding='utf-8')) if args.slots else None
             if args.command == 'explain-viz-prompt':
                 value = make_prompt(ir, slots, source.parent)
                 write_json(out, value)
@@ -112,7 +116,7 @@ def main():
             else:
                 if out.parent != source.parent:
                     raise ValueError('Write enhanced Deck IR alongside its source to preserve resource and font paths')
-                proposal = json.loads(args.proposal.read_text(encoding='utf-8'))
+                proposal = json.loads(args.proposal.read_text(encoding='utf-8')) if args.proposal else None
                 result = enhance(ir, {'slots': slots, 'proposal': proposal},
                                  {'mode': args.mode, 'max_visuals_per_deck': args.max_visuals_per_deck},
                                  DeckIRAdapter(source.parent))
@@ -176,11 +180,13 @@ def main():
             with locked(out):
                 _, _, qa = compile_input(args.ir.resolve(), out, options,
                                          require_visual_design=not args.skip_visual_design,
-                                         explain_viz_request=args.explain_viz_request)
+                                         explain_viz_request=args.explain_viz_request,
+                                         explain_viz_mode=args.explain_viz_mode)
         else:
             qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
                        require_visual_design=not args.skip_visual_design,
-                       explain_viz_request=args.explain_viz_request)
+                       explain_viz_request=args.explain_viz_request,
+                       explain_viz_mode=args.explain_viz_mode)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

@@ -32,7 +32,8 @@ def generate_presentation(
     skip_native: bool = True,
     enable_overflow_repair: bool = True,
     skip_visual_design: bool = False,
-    explain_viz_request=None
+    explain_viz_request=None,
+    explain_viz_mode=None
 ) -> Tuple[bool, Optional[Path], Dict[str, Any]]:
     """
     One-function pipeline: Deck IR → PPTX
@@ -76,7 +77,8 @@ def generate_presentation(
             officecli,
             layout_options,
             require_visual_design=not skip_visual_design,
-            explain_viz_request=explain_viz_request
+            explain_viz_request=explain_viz_request,
+            explain_viz_mode=explain_viz_mode
         )
 
         # Check results
@@ -362,7 +364,9 @@ Examples:
     gen.add_argument('--skip-visual-design', action='store_true',
                      help='Explicit legacy mode without the agent visual design stage')
     gen.add_argument('--explain-viz-request', type=Path,
-                     help='Optional self-contained ExplainViz request JSON; omitted means disabled')
+                     help='Optional ExplainViz configuration/proposal; omitted uses automatic defaults')
+    gen.add_argument('--explain-viz-mode', choices=('auto', 'off', 'prefer'),
+                     help='Override request mode; off explicitly disables enhancement')
 
     # Validate command
     val = subparsers.add_parser('validate', help='Validate inputs (dry-run)')
@@ -419,7 +423,8 @@ Examples:
                 skip_native=not args.native,
                 enable_overflow_repair=not args.no_overflow_repair,
                 skip_visual_design=args.skip_visual_design,
-                explain_viz_request=args.explain_viz_request
+                explain_viz_request=args.explain_viz_request,
+                explain_viz_mode=args.explain_viz_mode
             )
 
             status_icon = "[OK]" if success else "[FAIL]"
