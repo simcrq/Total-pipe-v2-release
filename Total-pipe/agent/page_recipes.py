@@ -18,6 +18,8 @@ RECIPES = {
     'contrast': ('left', 'right', 'key', 'title', 'take'),
     'figure_readout': ('figure', 'items', 'title', 'take'),
     'metrics': ('figures', 'items', 'condition', 'title', 'take'),
+    'mechanism': ('items', 'formula', 'title', 'take'),
+    'panel_grid': ('figures', 'items', 'caption', 'title', 'take'),
     'table_compare': ('table', 'big', 'items', 'title', 'take'),
     'closing': ('big', 'items', 'stats', 'fixed', 'title', 'take'),
     'eviz_chain': ('eviz', 'box', 'title', 'take'),
@@ -41,6 +43,14 @@ EXAMPLES = {
                 'figures': [{'path': '/abs/fig2b.jpg'}, {'path': '/abs/fig2c.jpg'}],
                 'caption': 'Fig. 2b/2c', 'items': [{'copy_ref': 'P8.c_b2'}],
                 'condition': {'copy_ref': 'P8.c_b1'}},
+    'mechanism': {'title': {'copy_ref': 'P4.title'}, 'take': {'copy_ref': 'P4.take'},
+                  'items': [{'copy_ref': 'P4.c_b1'}, {'copy_ref': 'P4.c_b2'},
+                            {'copy_ref': 'P4.c_b3'}],
+                  'formula': '$V_{ds}\\;\\cdot\\;V_{bg}\\;\\cdot\\;V_{tg}$'},
+    'panel_grid': {'title': {'copy_ref': 'P6.title'}, 'take': {'copy_ref': 'P6.take'},
+                   'figures': [{'path': '/abs/f1.jpg'}, {'path': '/abs/f2.jpg'},
+                               {'path': '/abs/f3.jpg'}],
+                   'caption': 'Fig. 2a (v)–(viii)', 'items': [{'copy_ref': 'P6.c_b1'}]},
     'table_compare': {'title': {'copy_ref': 'P15.title'}, 'take': {'copy_ref': 'P15.take'},
                       'table': {'rows': [['维度', '本工作'], ['数字', '七种']]},
                       'big': '13', 'big_label': '种功能',
@@ -223,6 +233,37 @@ def metrics(spec):
     return _page(spec, objects)
 
 
+def mechanism(spec):
+    """A no-figure mechanism page: short native list plus optional formula."""
+    objects = [
+        _list('mechanism_list', [0.72, 2.34, 11.9, 2.55], spec.get('items') or [],
+              20, spec.get('bullet_style', 'arrow'), 14),
+    ]
+    if spec.get('formula'):
+        objects.append(_text('formula', [0.72, 5.2, 11.9, .65], spec['formula'], 24,
+                             'label', '#0B6E99', True))
+    return _page(spec, objects)
+
+
+def panel_grid(spec):
+    """Two/three-panel figure page with a native readout list, no cards."""
+    figures = spec.get('figures') or []
+    objects = []
+    if len(figures) >= 3:
+        boxes = ([0.72, 2.2, 3.55, 2.7], [4.45, 2.2, 3.55, 2.7],
+                 [8.18, 2.2, 3.55, 2.7])
+    else:
+        boxes = ([0.72, 2.2, 4.0, 3.0], [4.85, 2.2, 4.0, 3.0])
+    for index, figure in enumerate(figures[:3]):
+        if index < len(boxes):
+            objects.append(_image('panel_%d' % index, boxes[index], figure['path']))
+    objects.append(_text('caption', [0.72, 5.28 if len(figures) <= 2 else 5.02, 8.1, .25],
+                         spec.get('caption', ''), 9.5, 'caption', '#5E7084'))
+    objects.append(_list('readout', [0.72, 5.65 if len(figures) <= 2 else 5.55, 11.9, 1.2],
+                         spec.get('items') or [], 18, 'arrow', 5))
+    return _page(spec, objects)
+
+
 def table_compare(spec):
     table = spec['table']
     objects = [
@@ -319,6 +360,8 @@ BUILDERS = {
     'contrast': contrast,
     'figure_readout': figure_readout,
     'metrics': metrics,
+    'mechanism': mechanism,
+    'panel_grid': panel_grid,
     'table_compare': table_compare,
     'closing': closing,
     'eviz_chain': eviz_chain,

@@ -111,6 +111,12 @@ def build(work, out, request=None):
     # geometry, so use the package-level checks above and native PDF inspection
     # later instead of translating scene boxes into a fake Deck IR layout.
     from deck_compiler.contracts import issue
+    expression = expression_report(scene, source)
+    gate = expression_gate(expression['summary'])
+    if len(scene['pages']) >= 6 and gate['status'] != 'PASS':
+        items.append(issue('PAGE_SCENE_EXPRESSION_GATE', 'FAIL',
+                           '; '.join(gate['failures']),
+                           detector='page-scene-expression', renderer='python-pptx'))
     items.append(issue('PAGE_SCENE_BUILT', 'INFO',
                        f'PageScene rendered {len(scene["pages"])} native slides from explicit boxes.',
                        detector='page-scene-build', renderer='python-pptx'))

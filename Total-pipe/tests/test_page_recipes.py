@@ -132,9 +132,20 @@ class RecipePilotTests(unittest.TestCase):
         self.assertNotIn('image', kinds)
         self.assertTrue(any(obj.get('text') == '示意文本' for obj in page['objects']))
 
+    def test_mechanism_recipe_emits_list_and_formula_without_cards(self):
+        page = compose_deck([{'id': 'R9', 'recipe': 'mechanism', 'section': '09 · MECH',
+                              'title': '机制页', 'take': '用列表说明关系。',
+                              'items': [{'text': '第一条'}, {'text': '第二条'}],
+                              'formula': '$V_{ds}$'}])['pages'][0]
+        self.assertTrue(any(obj.get('type') == 'list' for obj in page['objects']))
+        self.assertTrue(any(obj.get('type') == 'text' and '$V_{ds}$' in obj.get('text', '')
+                            for obj in page['objects']))
+        self.assertFalse(any(obj.get('type') == 'shape' for obj in page['objects']))
+
     def test_all_recipe_names_are_exposed(self):
         self.assertEqual(set(RECIPES), {'cover', 'contrast', 'figure_readout',
-                                        'metrics', 'table_compare', 'closing',
+                                        'metrics', 'mechanism', 'panel_grid',
+                                        'table_compare', 'closing',
                                         'eviz_chain', 'svg_diagram'})
 
 

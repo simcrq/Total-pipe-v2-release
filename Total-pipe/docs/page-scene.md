@@ -159,8 +159,9 @@ native PDF + 人工检查。
 `card_area`、`inline_math`、`list_styles`、`native_move_pages`；`expression_gate()`
 把它们收成 PASS/REVIEW。它用于 recipe pilot 和后续正门禁，不替代 scientific/content
 review；大面积填充形状会被计入 `card_area`，所以“卡片化”不是靠提示词，而是可测量的。
-build 的 `qa_report.json` 写入 `expression` 与 `expression_gate`，但当前仍是报告而非
-硬失败，避免把旧的合法 PageScene 一键打回。
+build 的 `qa_report.json` 写入 `expression` 与 `expression_gate`。6 页及以上的 PageScene
+现在把 gate REVIEW 转成 `PAGE_SCENE_EXPRESSION_GATE` FAIL；1–5 页短 deck 只报告不阻断，
+避免把最小测试页误杀。
 
 ## 18 页回归
 

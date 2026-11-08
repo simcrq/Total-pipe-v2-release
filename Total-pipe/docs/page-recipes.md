@@ -18,6 +18,8 @@
 | `contrast` | left/right lists, key | square/dash 两套原生无序列表 + 原生路径波形 |
 | `figure_readout` | figure, items | 原图 + 箭头读图列表 |
 | `metrics` | figures, items, condition | 两张原图 + 原生列表 + 行内公式 |
+| `mechanism` | items, formula | 无图机制页：原生列表 + 可选公式 |
+| `panel_grid` | figures, items, caption | 2–3 面板原图 + 读图列表 |
 | `table_compare` | table, big, items | 原生表格 + 大号数字 + 原生列表 |
 | `closing` | big, items, stats | 大号数字 + 两级原生列表 + 行内公式 |
 | `eviz_chain` | eviz.spec, eviz.facts | 复用 EViz `validate_spec` + `templates.build`；进程链降为原生 path/label，不再画卡片 |
@@ -38,7 +40,7 @@
 - `native_move_pages=8/8`
 - PageScene QA PASS，native PDF 6 页，`native_items=0`
 - `officecli validate` PASS
-- 31 个回归测试 PASS
+- 32 个回归测试 PASS
 
 pilot 证明：**不用卡片、用原生列表和行内公式，可以由 recipe 默认路径生成**。
 
