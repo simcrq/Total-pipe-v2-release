@@ -103,7 +103,10 @@ IR新增原生图注块：
 ## 页面源文案审读与IR绑定
 
 接受设计后按原page_review检查scientific_fidelity、qualifier_scope、audience_copy。主Agent只读投屏文案，核对观众能否理解对象、做法、
-证据和论点，避免制作指令/核查过程泄漏。提交[page review Schema](../agent/schemas/page-design-review.schema.json)要求的当前哈希与20页具体记录，
+证据和论点，避免制作指令/核查过程泄漏。`audience_copy` 还要判断它是否像组会讲解：结果页以发现开头，
+不以“作者主张/未验证/仅/不能”等审查句占据主文案；真实局限只放在会改变本页结论的位置，或集中到一页边界/讲稿。
+有论文图的页面必须有可见读图说明（面板、轴/条件、要看的变化和含义），只重复标题或只提醒证据不足不通过。
+提交[page review Schema](../agent/schemas/page-design-review.schema.json)要求的当前哈希与20页具体记录，
 不能自动填pass或复用设计者自评。改文案/内容去向须重审。
 
 IR可用`{"copy_ref":"id"}`实现批准文字。程序绑定科学单元、直接限定、复用主张、来源清单和两次实际审读的哈希，

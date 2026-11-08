@@ -436,14 +436,23 @@ PAGE_SCENE_INSTRUCTIONS = (
     'copy_bindings for approved sentences; a literal title/take/body is accepted only when it is '
     'exactly the approved text. Do not paraphrase, add claims, invent numbers, delete conditions, '
     'or move a claim to another page. One idea per page: a main visual plus at most three short '
-    'conclusions. Every object needs an explicit box in inches [x,y,w,h]; no auto-layout. Prefer '
+    'conclusions. Every object needs an explicit box in inches [x,y,w,h]; no auto-layout. The renderer '
+    'draws the section chip, title and highlighted takeaway band automatically; set section as '
+    '"NN · LABEL" and use title_ref/take_ref plus optional title_emphasis/take_emphasis. In the body, '
+    'build two to four labelled zones rather than one full-width bullet stack: a visual, a short '
+    'readout, and an implication. Use chips/shapes for subheads and large numbers for key metrics. '
+    'On a figure page, name the panels, axes/conditions and feature to look at in the caption or a '
+    'nearby label; do not leave the figure as an unlabelled assertion. Prefer light cards, thin accent '
+    'rules and small labels; avoid large dark fill blocks such as full-width banners or near-black '
+    'cards (dark fill is for small tags/chips only). Prefer '
     'native text/list/group/image/shape/line/table/path/formula/chart. Use path with view_box and '
     'absolute M/L/C/Q/Z commands for editable curves; formula with latex for OMML; chart with a '
     'native editable chart data object. Group children are relative to the group origin. Put '
-    'speaker notes in page.notes. Do not put production notes, review text or deck metadata on the '
-    'slide. Check density before submitting: <=14 objects, <=4 body blocks, <=260 body characters, '
-    '<=3 images/tables/charts, body >=18 pt, label >=11 pt, caption >=8.5 pt. Preview individual '
-    'pages through scene_preview and inspect the PowerPoint PNG before acceptance.'
+    'speaker notes in page.notes. Do not put production notes, review text, audit caveats or deck '
+    'metadata on the slide; limitations belong on one boundary page or in notes. Check density before '
+    'submitting: <=14 objects, <=4 body blocks, <=260 body characters, <=3 images/tables/charts, '
+    'body >=18 pt, label >=11 pt, caption >=8.5 pt. Preview individual pages through scene_preview '
+    'and inspect the PowerPoint PNG before acceptance.'
 )
 
 
@@ -461,6 +470,13 @@ def scene_task(prompt):
   不要让对象重叠，不要把说明文字塞进装饰框。
 - 一页只讲一个判断：一个主视觉 + 至多三条短结论。保留原图比例、图号/面板字母和来源；
   论文图不能重画成示意，示意必须标 schematic。
+- 页眉由渲染器统一画：section 写 `NN · LABEL`，标题/结论用 `title_ref`/`take_ref`，可用
+  `title_emphasis`/`take_emphasis` 强调关键术语。正文组织成 2–4 个带小标题的区，不要整页
+  一排等权重的项目符号；用形状小标题、关键数字卡、图旁标注建立层级。
+- 有图的页面必须有可见读图说明：点名面板、轴/条件、要看的变化和含义；不能只放图加结论。
+  不把“作者主张/未验证/仅/不能”等审查口吻写进正文；局限集中到一页边界或 notes。
+- 用浅色卡片、细强调线和少量小标签分组；不要整条深色横幅或大面积近黑卡片。
+  深色只用于小标签/小徽章，不用于承载大段正文。
 - 原生对象：text / list（0–3 级）/ group（子对象相对组原点）/ image / shape / line /
   table / path（贝塞尔）/ formula（OMML）/ chart（原生数据图）。notes 写讲稿。
 - 提交前运行 `pagespec-check` 或让 totalpipe_advance 校验；用 `scene_preview` 选页，

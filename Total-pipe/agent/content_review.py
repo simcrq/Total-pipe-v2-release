@@ -68,13 +68,24 @@ def prepare(work):
                               'Check causal strength, observation vs interpretation, numerical/condition scope, important '
                               'controls and negative findings. Read only the audience copy to check objects, referents, '
                               'reasoning steps and production-note leakage. Fail and replan page_design on any mismatch. '
-                              'Use explicit per-page notes; do not generate automatic pass records. This is source/copy '
-                              'review before implementation; rendered-page readability and PowerPoint review remain separate.'}
+                              'For audience_copy, also judge communication, not only truth: a result page must lead with a finding, '
+                              'not a disclaimer. Fail visible copy that stacks audit boilerplate ("authors claim", "not verified", '
+                              '"only", "cannot", "not a ranking") or repeats a scope caveat on page after page; a genuine limitation '
+                              'belongs once on a dedicated boundary page or in speaker notes, unless omitting it would make that '
+                              'page claim false. For every page with a paper figure, fail if no visible caption/label tells the '
+                              'viewer which panels, axes/conditions and feature to read; a caption that merely repeats the title '
+                              'or warns about evidence does not pass. Use explicit per-page notes; do not generate automatic pass '
+                              'records. This is source/copy review before implementation; rendered-page readability and PowerPoint '
+                              'review remain separate.'}
     write(work/'page_design_review_prompt.json', prompt)
     task = ('# 页面源文案审读\n\n由主 Agent 实际审读，不调用设计者自动签收。完整读取 '
             '`work/page_design_review_prompt.json` 与 schema_path。对照科学记录和证据逐页检查 scientific_fidelity、'
             'qualifier_scope、audience_copy，尤其检查观察/解释、适用条件、对照和负面结果。只读投屏文案再判断'
             '观众是否能理解对象、方法、证据和论点。给出每页具体检查说明，不生成模板化 pass。\n\n'
+            'audience_copy 同时判断“像不像组会讲解”，不只判断真假：结果页要以发现开头，不能以“作者主张/未验证/仅/'
+            '不能/并非排名”等防御句占据主文案；真实局限放在一页边界或讲稿，除非删掉就会让本页主张失真。'
+            '有论文图的页面必须有一句可见的读图说明：看哪几个面板、什么轴/条件、哪个特征、说明什么；只重复标题'
+            '或只提醒证据不足不算通过。\n\n'
             '写 `work/page_design_review.json`，绑定当前 story/design 哈希。发现问题填 fail，工具将退回页面设计；'
             '不改科学内容来迁就文案。这个记录不代表已看渲染图或已完成 PowerPoint 验收。\n')
     (work/'page_design_review_task.md').write_text(task, encoding='utf-8')

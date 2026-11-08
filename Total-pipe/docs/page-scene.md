@@ -61,14 +61,20 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 
 ## 原生对象
 
+页眉是统一的视觉系统：`section` 画成小标签，`title_ref`/`take_ref` 画标题与浅色结论带；
+可选 `title_emphasis`/`take_emphasis` 给关键词加粗/强调色。正文对象不要重复画页眉。
+`text` 支持 `emphasis`/`emphasis_color`，用于在批准文案内标出关键词，不改变文字内容。
+视觉风格以浅色卡片、细强调线和小标签为主；深色只用于小标签/徽章，不用大面积深色横幅
+或近黑卡片承载正文。
+
 PageScene 0.1 当前支持：
 
-- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`；
+- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`、`emphasis`；
 - `list`：**多级无序列表**，0–3 级、不同 bullet、逐项字号/粗细/颜色、原生段落；
 - `group`：**嵌套容器**，子对象 box 相对 group，递归渲染；
 - `image`：论文图/参考图，保持比例，支持 contain/cover；
 - `shape` / `line`：矩形、圆角、椭圆、箭头、连接线；
-- `table`：原生表格，表头、强调行、列宽；
+- `table`：原生表格，表头（`header_fill` 可改表头色）、强调行、列宽；
 - `path`：**原生 DrawingML 贝塞尔路径**，`view_box` + 绝对 `M/L/C/Q/Z` 命令；
 - `formula`：**原生 OMML 公式**，`latex` 经现有 `totalpipe_layout.formula` 解析；
 - `chart`：**原生可编辑数据图**，line/bar/column/scatter，带轴标题、图例和图内数据；

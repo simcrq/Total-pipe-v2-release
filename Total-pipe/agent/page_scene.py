@@ -13,6 +13,7 @@ Usage:
 import argparse
 import copy
 import json
+import re
 from pathlib import Path
 
 from lxml import etree
@@ -35,6 +36,8 @@ FOOTER = {'rule_y': 7.08, 'text_y': 7.14}
 
 
 def rgb(value, default='#142735'):
+    if isinstance(value, RGBColor):
+        return value
     value = (value or default).lstrip('#')
     return RGBColor.from_string(value.upper())
 
@@ -45,6 +48,21 @@ def align_from(value):
 
 def anchor_from(value):
     return {'top': MSO_ANCHOR.TOP, 'middle': MSO_ANCHOR.MIDDLE, 'bottom': MSO_ANCHOR.BOTTOM}.get(value, MSO_ANCHOR.TOP)
+
+
+def emphasis_parts(text, terms):
+    """Split visible text into (piece, emphasized) without changing its content."""
+    terms = sorted({term for term in (terms or []) if isinstance(term, str) and term},
+                   key=len, reverse=True)
+    if not terms:
+        return [(text, False)]
+    pattern = re.compile('(' + '|'.join(re.escape(term) for term in terms) + ')')
+    marked = set(terms)
+    return [(piece, piece in marked) for piece in pattern.split(text) if piece]
+
+
+def section_width(text):
+    return min(2.45, max(1.35, 0.115 * len(text) + 0.42))
 
 
 class Renderer:
@@ -118,16 +136,21 @@ class Renderer:
             buFont.set('typeface', 'Arial')
             buChar = etree.SubElement(pPr, qn('a:buChar'))
             buChar.set('char', ['•', '–', '·', '◦'][level])
-            run = p.add_run()
-            run.text = ' ' + (self.resolve_text(item) if item.get('copy_ref') else item.get('text', ''))
-            run.font.name = self.font
-            run.font.size = Pt(size)
-            run.font.bold = item.get('bold', obj.get('bold', False))
-            run.font.color.rgb = color
+            item_text = self.resolve_text(item) if item.get('copy_ref') else item.get('text', '')
+            for piece, hit in emphasis_parts(item_text,
+                                             item.get('emphasis') or obj.get('emphasis')):
+                run = p.add_run()
+                run.text = piece
+                run.font.name = self.font
+                run.font.size = Pt(size)
+                run.font.bold = bool(hit or item.get('bold', obj.get('bold', False)))
+                run.font.color.rgb = rgb(item.get('emphasis_color')) if hit and item.get('emphasis_color') else (
+                    self.accent if hit else color)
         return tb
 
     def add_text(self, slide, x, y, w, h, text, size=18, color=None, bold=False, italic=False,
-                 align=PP_ALIGN.LEFT, valign=MSO_ANCHOR.TOP, spacing=1.12, bullet=False):
+                 align=PP_ALIGN.LEFT, valign=MSO_ANCHOR.TOP, spacing=1.12, bullet=False,
+                 emphasis=None, emphasis_color=None):
         tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
         tf = tb.text_frame
         tf.word_wrap = True
@@ -141,20 +164,75 @@ class Renderer:
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
             p.alignment = align
             p.line_spacing = spacing
-            r = p.add_run()
-            r.text = ('•  ' + line) if bullet and line else line
-            r.font.name = self.font
-            r.font.size = Pt(size)
-            r.font.bold = bold
-            r.font.italic = italic
-            r.font.color.rgb = color or self.ink
+            value = ('•  ' + line) if bullet and line else line
+            for piece, hit in emphasis_parts(value, emphasis):
+                r = p.add_run()
+                r.text = piece
+                r.font.name = self.font
+                r.font.size = Pt(size)
+                r.font.bold = bool(bold or hit)
+                r.font.italic = italic
+                r.font.color.rgb = (rgb(emphasis_color) if hit and emphasis_color
+                                    else self.accent if hit else color or self.ink)
         return tb
+
+    def flat(self, shape):
+        """Remove inherited theme effects so cards and rules stay truly flat."""
+        shape.shadow.inherit = False
+        for style in shape._element.findall(qn('p:style')):
+            shape._element.remove(style)
+        return shape
+
+    def add_section_chip(self, slide, text):
+        if not text:
+            return None
+        width = section_width(text)
+        sh = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(MARGIN), Inches(0.38),
+                                    Inches(width), Inches(0.29))
+        sh.fill.solid()
+        sh.fill.fore_color.rgb = self.navy
+        sh.line.fill.background()
+        self.flat(sh)
+        tf = sh.text_frame
+        tf.word_wrap = False
+        tf.margin_left = Inches(0.10)
+        tf.margin_right = Inches(0.08)
+        tf.margin_top = 0
+        tf.margin_bottom = 0
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.LEFT
+        r = p.add_run()
+        r.text = text
+        r.font.name = self.font
+        r.font.size = Pt(9.2)
+        r.font.bold = True
+        r.font.color.rgb = self.white
+        return sh
+
+    def add_take_band(self, slide, take, y, height, emphasis=None):
+        panel = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(MARGIN), Inches(y),
+                                       Inches(PAGE_W - 2 * MARGIN), Inches(height))
+        panel.fill.solid()
+        panel.fill.fore_color.rgb = self.light
+        panel.line.fill.background()
+        self.flat(panel)
+        bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(MARGIN), Inches(y),
+                                     Inches(0.055), Inches(height))
+        bar.fill.solid()
+        bar.fill.fore_color.rgb = self.accent
+        bar.line.fill.background()
+        self.flat(bar)
+        self.add_text(slide, MARGIN + 0.20, y + 0.075, PAGE_W - 2 * MARGIN - 0.36, height - 0.13,
+                      take, 14.6, self.ink, False, spacing=1.05, valign=MSO_ANCHOR.MIDDLE,
+                      emphasis=emphasis, emphasis_color=self.accent)
 
     def add_rule(self, slide, x, y, w, color=None, height=0.02, dash=False):
         sh = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(height))
         sh.fill.solid()
         sh.fill.fore_color.rgb = color or self.accent
         sh.line.fill.background()
+        self.flat(sh)
         if dash:
             sh.line.color.rgb = color or self.accent
             sh.line.width = Pt(1)
@@ -187,6 +265,7 @@ class Renderer:
             sh.line.width = Pt(obj.get('stroke_width', 1.2))
             if obj.get('dash'):
                 sh.line.dash_style = 4
+        self.flat(sh)
         if obj.get('text') or obj.get('copy_ref'):
             tf = sh.text_frame
             tf.word_wrap = True
@@ -255,6 +334,7 @@ class Renderer:
             for i, cw in enumerate(widths):
                 table.columns[i].width = Inches(w * cw / total)
         header = obj.get('header', True)
+        header_fill = rgb(obj.get('header_fill'), '#102A43')
         accent_rows = set(obj.get('accent_rows', []))
         for r in range(nrows):
             table.rows[r].height = Inches(row_h)
@@ -276,7 +356,7 @@ class Renderer:
                 run.font.color.rgb = self.white if (header and r == 0) else self.ink
                 cell.fill.solid()
                 if header and r == 0:
-                    cell.fill.fore_color.rgb = self.navy
+                    cell.fill.fore_color.rgb = header_fill
                 elif r in accent_rows:
                     cell.fill.fore_color.rgb = rgb('#E8F3F8')
                 else:
@@ -422,6 +502,7 @@ class Renderer:
                 obj.get('bold', False), obj.get('italic', False),
                 align_from(obj.get('align', 'left')), anchor_from(obj.get('valign', 'top')),
                 obj.get('line_spacing', 1.12), obj.get('bullet', False),
+                obj.get('emphasis'), obj.get('emphasis_color'),
             )
         elif kind == 'list':
             self.add_list(slide, obj)
@@ -446,19 +527,19 @@ class Renderer:
         slide = self.prs.slides.add_slide(self.prs.slide_layouts[6])
         slide.background.fill.solid()
         slide.background.fill.fore_color.rgb = self.white
-        title_y = page.get('title_y', HEADER['title_y'])
-        title_h = page.get('title_h', 0.64)
-        title_size = page.get('title_size', 28)
-        rule_y = page.get('rule_y', HEADER['rule_y'])
-        take_y = page.get('take_y', HEADER['take_y'])
+        title_y = page.get('title_y', 0.75)
+        title_h = page.get('title_h', 0.60)
+        title_size = page.get('title_size', 27.5)
+        take_y = page.get('take_y', 1.53)
         take_h = page.get('take_h', 0.58)
         if page.get('section'):
-            self.add_text(slide, MARGIN, HEADER['section_y'], 9.0, 0.28, page['section'], 10.5, self.accent, True)
+            self.add_section_chip(slide, page['section'])
         self.add_text(slide, MARGIN, title_y, PAGE_W - 2 * MARGIN, title_h,
-                      self.page_text(page, 'title'), title_size, self.navy, True, spacing=1.0)
-        self.add_rule(slide, MARGIN, rule_y, PAGE_W - 2 * MARGIN, self.gray, 0.015)
-        self.add_text(slide, MARGIN, take_y, PAGE_W - 2 * MARGIN, take_h,
-                      self.page_text(page, 'take'), 16.5, self.gray, False, spacing=1.08)
+                      self.page_text(page, 'title'), title_size, self.navy, True, spacing=1.0,
+                      emphasis=page.get('title_emphasis'), emphasis_color=self.accent)
+        self.add_take_band(slide, self.page_text(page, 'take'), take_y, take_h,
+                           page.get('take_emphasis'))
+        self.add_rule(slide, MARGIN, 2.165, PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.008)
         for obj in page['objects']:
             self.render_object(slide, obj)
         # Always materialize a notes part; package-level QA otherwise cannot
