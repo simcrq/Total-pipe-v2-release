@@ -418,9 +418,14 @@ def prepare(work, request):
             flow = read(workflow_path)
             evidence = {entry['evidence_id']: entry.get('text', '')
                         for entry in flow.get('evidence_registry') or []}
-            figures = [{'asset_id': item.get('asset_id'), 'path': item.get('path'),
-                        'width': item.get('source_width_px'), 'height': item.get('source_height_px')}
-                       for item in (flow.get('artifacts') or {}).get('figure_assets_metadata') or []]
+            figures = []
+            for item in (flow.get('artifacts') or {}).get('figure_assets_metadata') or []:
+                path = Path(item.get('path') or '')
+                if not path.is_absolute():
+                    path = Path(workflow_root) / path
+                figures.append({'asset_id': item.get('asset_id'), 'path': str(path.resolve()),
+                                'width': item.get('source_width_px'),
+                                'height': item.get('source_height_px')})
         except (OSError, ValueError, KeyError, TypeError):
             pass
     catalog = page_copy_catalog(design)

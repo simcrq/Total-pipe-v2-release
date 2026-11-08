@@ -119,9 +119,18 @@ def _text(oid, box, text, size=18, role='body', color=None, bold=False,
 
 
 def _list(oid, box, items, size=18, style='dot', space_after=7, color=None):
+    # ``expand_page`` resolves ``{"copy_ref": ...}`` slots to strings before a
+    # builder runs, so list items arrive either as dicts (literal/emphasis) or
+    # as already-resolved approved copy strings.
+    normalised = []
+    for item in items:
+        if isinstance(item, dict):
+            normalised.append(dict(item, level=item.get('level', 0)))
+        else:
+            normalised.append({'text': str(item), 'level': 0})
     return {'id': oid, 'type': 'list', 'box': list(box), 'role': 'body',
             'size': size, 'bullet_style': style, 'space_after': space_after,
-            'items': [dict(item, level=item.get('level', 0)) for item in items],
+            'items': normalised,
             **({'color': color} if color else {})}
 
 
