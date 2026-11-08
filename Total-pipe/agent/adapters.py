@@ -888,6 +888,7 @@ DESIGN_INSTRUCTIONS = (
     'Put a limitation in visible copy only when omitting it would make that page claim false or misleading; otherwise keep it in '
     'speaker notes or on one dedicated boundary page. Do not spread stock caveats (author claim, not verified, only, cannot, '
     'not a ranking) across result pages. A group-meeting audience needs calibrated claims, not defensive boilerplate. '
+    'Never make a result title or takeaway announce what is unverified; state the finding, then one boundary page may carry scope. '
     'Every page with a paper figure needs a concrete readout in a caption or label: which panels, what axes/conditions, which '
     'feature to look at, and what it means. That is audience explanation, not a source disclaimer. '
     'Do not leave a figure page as an image plus unlabelled assertions; name the visual evidence in the projected text. '
