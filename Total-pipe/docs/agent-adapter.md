@@ -43,9 +43,9 @@ python3.12 install.py --client codex --profile advanced
 
 | 工具 | 输入与行为 |
 | --- | --- |
-| totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
-| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode |
-| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
+| totalpipe_doctor | 可选 deep / source_kind / page_mode；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR；page_scene 不要求 OfficeCLI |
+| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode、page_mode（deck_ir 默认 / page_scene） |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、page_scene、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染或 scene_preview 选页原生预览；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -76,6 +76,36 @@ figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径
 全部页就绪后按批准页序组装，复验整套 Story、证据和页数，再继续篇级 Design 和完整构建。
 最终候选 PPTX 仍整套生成，草稿选页可按下一节单独渲染，不能充当原生验收。改变公共头部须显式 replan_from="deck_ir"，
 这会重置全部页缓存；只改局部内容时继续提交对应页即可。
+
+### PageScene 页面模式（page_scene）
+
+`page_mode=page_scene` 是默认 `deck_ir` 之外的显式页面几何路径：page_design 通过
+page_review 后进入 `page_scene`，作者按 Schema 写每页对象 `box`（英寸），接受后由
+python-pptx 直接渲染 candidate，跳过 `deck_ir`、`design`、`visual_design`。
+原 `deck_ir` 路径完整保留，仍是 Bezier/Path IR、OMML、Chart IR、EViz、完整
+mechanism/funnel/architecture 编译器和 OfficeCLI 对象模型的入口。
+
+```json
+{"job_id":"<job_id>","scene_preview":{
+  "artifact_path":"/absolute/job/work/page_scene.json","page_ids":["P5","P6"]}}
+```
+
+`scene_preview` 只在 `page_scene` 阶段有效；它渲染选中页 PowerPoint PDF/PNG，不接受
+草稿、不推进阶段、不消耗修订额度、不改候选。CLI 对应
+`python -m agent advance --job-id <job_id> --scene-preview request.json`。
+
+接受时 `page_scene_binding` 强制：页序与 page_design 一致；`title_ref`/`take_ref`/
+`copy_ref` 必须解析批准 `display_copy`；可见 carrier 必须出现；`evidence_refs` 不得
+越权；未登记数字被拒绝；图片路径固化为绝对路径并进入 checkpoint。字面标题/结论只有
+逐字等于批准文案才通过。
+
+PageScene 支持原生 text/list/group/image/shape/line/table/path/formula/chart 和
+`page.notes`；其中 path 是 DrawingML 贝塞尔，formula 是 OMML，chart 是原生可编辑
+数据图。EViz 和完整图形组件仍走 `deck_ir`。
+
+候选后仍用 `advance.native` render/review/ingest。PageScene 分支按显式 box 检查
+PowerPoint PDF 的文字越界、正文/列表文字和字体替换，并生成逐页 PNG；UI review 的
+人工边界不变。完整协议、门禁和限制见 [PageScene](page-scene.md)。
 
 ### IR 选页渲染与看图修订
 

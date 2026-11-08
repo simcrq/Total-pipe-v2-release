@@ -1171,6 +1171,9 @@ def execute(stage, job):
     if stage == 'page_review':
         from .content_review import prepare
         return prepare(work)
+    if stage == 'page_scene':
+        from .page_scene_binding import prepare
+        return prepare(work, request)
     if stage == 'scientific_review':
         from .science_review import prepare
         return prepare(work, request)
@@ -1179,6 +1182,14 @@ def execute(stage, job):
                  '--requirements', request.get('requirements', ''))
         return [work/'visual_prompt.json']
     if stage == 'build':
+        if request.get('page_mode', 'deck_ir') == 'page_scene':
+            from .page_scene_build import build as build_scene, SceneBuildError
+            try:
+                return build_scene(work, out, request)
+            except SceneBuildError as error:
+                failure = Failure(error.code, str(error), 'replan', 'page_scene')
+                failure.issues = error.issues
+                raise failure from error
         if not shutil.which('officecli'):
             raise Failure('OFFICECLI_MISSING', 'Install OfficeCLI >=1.0.152 and add it to PATH.')
         ir = work/'deck_ir.json'

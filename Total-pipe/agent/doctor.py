@@ -24,9 +24,11 @@ def probe(argv, cwd=ROOT, timeout=20):
         return False, str(error)
 
 
-def doctor(deep=False, source_kind=None):
+def doctor(deep=False, source_kind=None, page_mode='deck_ir'):
     if source_kind not in (None, 'pdf', 'markdown', 'workflow', 'deck_ir'):
         raise ValueError('Unsupported source_kind')
+    if page_mode not in ('deck_ir', 'page_scene'):
+        raise ValueError('Unsupported page_mode')
     checks = []
     def add(key, ok, detail, remedy, optional=False, skipped=False):
         checks.append({'id': key, 'status': 'SKIP' if skipped else 'PASS' if ok else 'WARNING' if optional else 'FAIL',
@@ -35,17 +37,22 @@ def doctor(deep=False, source_kind=None):
     py = add('python.version', sys.version_info >= (3, 12), sys.version.split()[0], 'Use Python 3.12 or newer.')
     ok, detail = probe([sys.executable, '-c', 'import deck_compiler; from PIL import Image; import lxml, pdfplumber'], COMPONENT)
     compiler = add('python.import.deck_compiler', ok, detail or str(COMPONENT), 'Install Total-pipe requirements with this Python and use the Total-pipe cwd.')
+    scene = page_mode == 'page_scene'
+    ok, detail = probe([sys.executable, '-c', 'import pptx; print(pptx.__version__)'], COMPONENT)
+    scene_pptx = add('python.import.python_pptx', ok, detail or 'Not installed', 'Install python-pptx>=1.0 from Total-pipe/requirements.txt.',
+                     optional=not scene)
     ok, detail = probe(['node', '--version'])
     match = re.search(r'v?(\d+)\.', detail)
     node = add('node.version', ok and bool(match) and int(match.group(1)) >= 22, detail, 'Install Node.js >=22 and add it to PATH.')
     ok, detail = probe(['node', ROOT/'research-ppt-assistant/server/cli.mjs', '--help'])
     rpa = add('node.rpa_cli', ok, detail[:120], 'Restore the RPA CLI and use a supported Node.js runtime.')
     office = shutil.which('officecli')
-    present = add('officecli.present', bool(office), office or 'Not found', 'Install OfficeCLI >=1.0.152 and add it to PATH.')
+    present = add('officecli.present', bool(office), office or 'Not found',
+                  'Install OfficeCLI >=1.0.152 and add it to PATH.', optional=scene)
     ok, detail = probe([office or 'officecli', '--version'])
     match = re.search(r'(\d+)\.(\d+)\.(\d+)', detail)
     version = add('officecli.version', ok and bool(match) and tuple(map(int, match.groups())) >= (1, 0, 152), detail,
-                  'Install OfficeCLI >=1.0.152.')
+                  'Install OfficeCLI >=1.0.152.', optional=scene)
     runtime = True
     if deep and present and version:
         with tempfile.TemporaryDirectory(prefix='totalpipe-doctor-') as temporary:
@@ -63,7 +70,7 @@ def doctor(deep=False, source_kind=None):
                         runtime = runtime and 'ppt/presentation.xml' in package.namelist()
                 except (ValueError, zipfile.BadZipFile):
                     runtime = False
-            add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.')
+            add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.', optional=scene)
     else:
         add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.', 'Run deep diagnostics.', optional=True, skipped=True)
     auth = verified = False
@@ -138,15 +145,17 @@ def doctor(deep=False, source_kind=None):
     add('powerpoint.preview', pdf and preview, 'PowerPoint PDF page preview dependencies available.' if pdf and preview else
         'PDF page preview dependency missing.', 'Install the declared pdfplumber dependencies, including pypdfium2.', optional=True)
     needs = {'build'} if source_kind == 'deck_ir' else {'rpa', 'build'} if source_kind == 'workflow' else {'evidence', 'rpa', 'build'}
+    build_ready = py and compiler and (scene_pptx if scene else (present and version and runtime))
     capabilities = {'can_evidence_markdown': py and bridge and markdown_ready,
         'can_evidence_pdf': py and bridge and pdf_ready and auth,
-        'can_rpa': py and node and rpa, 'can_build_editable': py and compiler and present and version and runtime,
+        'can_rpa': py and node and rpa, 'can_build_editable': build_ready,
         'can_native_final': py and compiler and powerpoint and pdf,
         'can_native_preview': pdf and preview,
         'native_acceptance_operations': ['render', 'review', 'ingest'],
         'runtime_verified': bool(deep and present and version and runtime),
         'authentication_verified': verified,
+        'page_mode': page_mode,
         'blocked_stages': [name for name, ready in [('evidence', py and bridge and evidence_ready and (source_kind != 'pdf' or auth)),
-                           ('rpa', py and node and rpa), ('build', py and compiler and present and version and runtime)] if name in needs and not ready]}
+                           ('rpa', py and node and rpa), ('build', build_ready)] if name in needs and not ready]}
     return {'status': 'FAIL' if any(c['status'] == 'FAIL' for c in checks) else 'WARNING' if any(c['status'] == 'WARNING' for c in checks) else 'PASS',
             'checks': checks, **capabilities}

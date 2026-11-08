@@ -39,10 +39,15 @@ def design_complete(job):
 
 def current(job):
     previous = []
+    mode = job['request'].get('page_mode', 'deck_ir')
     for stage in STAGES:
         if job['request']['source_kind'] not in stage.get('sources', [job['request']['source_kind']]):
             continue
-        if stage.get('skip_if') == 'design_complete' and design_complete(job):
+        if stage.get('skip_if') == 'deck_ir_mode' and mode != 'page_scene':
+            continue
+        if stage.get('skip_if') == 'page_scene_mode' and mode == 'page_scene':
+            continue
+        if stage.get('skip_if') == 'design_complete' and (mode == 'page_scene' or design_complete(job)):
             continue
         if stage.get('skip_if') == 'legacy_story':
             path = Path(job['request']['out_dir'])/'work/story_plan.json'
@@ -104,6 +109,7 @@ def envelope(job, stage, failure=None, detail='summary'):
         prompt = {'story': work/'story_prompt.json', 'page_design': work/'page_design_prompt.json',
                   'scientific_review': work/'scientific_review_prompt.json',
                   'page_review': work/'page_design_review_prompt.json',
+                  'page_scene': work/'page_scene_prompt.json',
                   'deck_ir': work/'ir_prompt.json',
                   'visual_design': work/'visual_prompt.json'}.get(sid)
         if sid == 'deck_ir' and (work/'page_design.json').is_file():
@@ -119,6 +125,13 @@ def envelope(job, stage, failure=None, detail='summary'):
             **({'input_path': str(prompt)} if prompt else {}),
             **({'schema_path': str(Path(__file__).parent/'schemas/queries.schema.json')} if sid == 'queries' else {}),
             **({'required_capability': 'independent_subagent', 'delegation': job['inputs']} if sid == 'story' else {})}
+        if sid == 'page_scene':
+            action.update({'reason': 'PAGE_SCENE_REQUIRED',
+                           'schema_path': str(Path(__file__).parent/'schemas/page-scene.schema.json'),
+                           'instructions_path': str(work/'page_scene_task.md'),
+                           'input_path': str(work/'page_scene_prompt.json'),
+                           'note': 'Implement the approved page design as explicit native boxes. '
+                                   'Preview selected pages natively before acceptance; never paraphrase approved copy.'})
         if sid == 'page_design':
             # The design is a judgement call, not a form to fill in: hand it to a subagent with the
             # capability brief, the same way Story is delegated, instead of having the main agent
@@ -244,7 +257,7 @@ def error_envelope(error, job_id=None):
 
 def start(source, out_dir, language, presentation_type, source_kind='auto', requirements='', queries=None,
           slide_count=None, supplementary_paths=None, supplementary_content_included=False, supplement='off',
-          explain_viz_mode='auto'):
+          explain_viz_mode='auto', page_mode='deck_ir'):
     source, out = Path(source).expanduser().resolve(), Path(out_dir).expanduser().resolve()
     if not source.is_file():
         return error_envelope(JobError('SOURCE_NOT_FOUND', 'Source must be an existing file.', 'Provide its absolute path.'))
@@ -269,11 +282,17 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
         raise ValueError('supplement must be off, inline, pages or both')
     if explain_viz_mode not in ('auto', 'off', 'prefer'):
         raise ValueError('explain_viz_mode must be auto, off or prefer')
+    if page_mode not in ('deck_ir', 'page_scene'):
+        raise ValueError('page_mode must be deck_ir or page_scene')
     request = {'source': str(source), 'out_dir': str(out), 'language': language,
         'presentation_type': presentation_type, 'source_kind': source_kind, 'requirements': requirements,
         'supplementary_content_included': supplementary_content_included,
         'slide_count': slide_count, 'supplementary_paths': [str(Path(p).expanduser().resolve()) for p in supplementary_paths or []],
-        'supplement': supplement, 'explain_viz_mode': explain_viz_mode}
+        'supplement': supplement, 'explain_viz_mode': explain_viz_mode, 'page_mode': page_mode}
+    if page_mode == 'page_scene' and source_kind == 'deck_ir':
+        return error_envelope(JobError('PAGE_MODE_SOURCE_MISMATCH',
+            'page_mode=page_scene starts from a paper source, not an imported Deck IR.',
+            'Use page_mode=deck_ir for imported IR or start from the paper PDF/Markdown.'))
     if original_type != presentation_type:
         request['presentation_context'] = original_type
     try:
@@ -408,6 +427,23 @@ def _accept(job, stage, upstream, kind, path):
                 apply_proposal(read(work/'deck_ir.json'), value)
             except ValueError as error:
                 raise a.Failure('VISUAL_PLAN_INCOMPLETE', str(error), 'replan', 'visual_design') from error
+        elif kind == 'page_scene':
+            from .page_scene_binding import bind as bind_scene, SceneBindingError
+            try:
+                value, binding = bind_scene(value, work, job['request'], source_dir=path.parent)
+            except SceneBindingError as error:
+                failure = a.Failure(error.code, str(error), 'author_artifact', 'page_scene')
+                failure.issues = [{'code': error.code, 'severity': 'FAIL', 'message': message}
+                                  for message in (error.issues or [str(error)])]
+                raise failure from error
+            from .page_scene_qa import validate_spec as validate_scene
+            errors, _ = validate_scene(value, work/'page_scene.json')
+            if errors:
+                failure = a.Failure('PAGE_SCENE_INVALID', ' '.join(errors[:8]), 'author_artifact', 'page_scene')
+                failure.issues = [{'code': 'PAGE_SCENE_INVALID', 'severity': 'FAIL', 'message': message}
+                                  for message in errors]
+                raise failure
+            write(work/'page_scene_binding.json', binding)
     except a.Failure:
         hashed = sha(path)
         if hashed not in attempts['rejected']:
@@ -427,7 +463,13 @@ def _accept(job, stage, upstream, kind, path):
         a.finalize_design(work, value)
     if kind == 'page_design_review':
         a.finalize_design(work, a.load_design(work))
-    paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None] if kind == 'deck_ir' else [destination]
+    if kind == 'deck_ir':
+        paths = [Path(p) for p, hashed in a.resources(destination).items() if hashed is not None]
+    elif kind == 'page_scene':
+        from .page_scene_binding import image_paths
+        paths = [destination, *image_paths(value)]
+    else:
+        paths = [destination]
     checkpoint(job, stage['id'], paths, upstream)
     job.pop('last_error', None)
 
@@ -679,12 +721,48 @@ def _preview_ir(job, stage, request):
     return response
 
 
-def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None, native=None, preflight=False, preview=None):
+def _scene_preview(job, stage, request):
+    """Render selected PageScene pages natively without accepting or advancing."""
+    from .page_scene_qa import preview_pages
+    out = Path(job['request']['out_dir'])
+    work = out/'work'
+    if not isinstance(request, dict) or set(request) - {'artifact_path', 'page_ids'} or not request.get('artifact_path'):
+        raise ValueError('scene_preview requires artifact_path and optional page_ids.')
+    if not Path(request['artifact_path']).is_absolute():
+        raise ValueError('scene_preview.artifact_path must be absolute.')
+    if request.get('page_ids') is not None and (
+            not isinstance(request['page_ids'], list) or not request['page_ids'] or
+            any(not isinstance(page_id, str) or not page_id.strip() for page_id in request['page_ids'])):
+        raise ValueError('scene_preview.page_ids must be a non-empty list of page ids.')
+    path = confined(request['artifact_path'], work)
+    old = job.get('last_error')
+    failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+    response = envelope(job, stage, failure)
+    folder = work/'previews'/'scene'/(sha(path) or 'scene')[:12]
+    try:
+        result = preview_pages(path, request.get('page_ids'), folder)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        result = {'status': 'FAIL', 'message': a.redact(str(error)), 'pages': [],
+                  'job_unchanged': True, 'candidate_unchanged': True,
+                  'powerpoint_ui_review': False}
+    response['scene_preview_result'] = result
+    return response
+
+
+def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None,
+            native=None, preflight=False, preview=None, scene_preview=None):
     try:
         out, _ = locate(job_id)
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
+            if scene_preview is not None:
+                if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from,
+                                                            acknowledge, native, preview)):
+                    raise ValueError('Submit scene_preview alone; it renders selected pages without accepting the scene.')
+                if stage['id'] != 'page_scene':
+                    raise ValueError('scene_preview is available at the page_scene stage.')
+                return _scene_preview(job, stage, scene_preview)
             if preview is not None:
                 if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from, acknowledge, native)):
                     raise ValueError('Submit preview alone; it renders a draft without accepting or advancing it.')

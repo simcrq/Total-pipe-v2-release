@@ -8,6 +8,9 @@ IR 阶段可用 `advance(preflight=true)` 在提交前汇总全部验收问题�
 区分唯一所有权与明确复用，再经页面源文案审读进入 IR。条件只跟随其直接限定的可见断言，旧协议可恢复。
 逐页交 deck_ir_page 可自动绑定来源、测量容量并缓存通过页；齐全后整套复验。见[内容契约](Total-pipe/docs/content-projection.md)。
 IR 编写中可用 `advance.preview` 选页生成 HTML 渲染 PNG，实际看图后改源 IR；未变页复用缓存。
+需要显式页面几何时可启动 `page_mode=page_scene`：绑定 page_design 文案与证据，
+用 `scene_preview` 逐页导出 PowerPoint PNG，接受后直接生成 PageScene candidate；
+默认 `deck_ir` 路径及 Bezier、OMML、Chart IR、EViz 等能力保持不变。见[PageScene](Total-pipe/docs/page-scene.md)。
 这是编辑预览，最终候选仍整套构建，PowerPoint 原生验收仍须完成。见[选页渲染接口](Total-pipe/docs/agent-adapter.md#ir-选页渲染与看图修订)。
 
 **默认入口：** [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md) 与四工具接入层。

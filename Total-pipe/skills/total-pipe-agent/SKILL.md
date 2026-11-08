@@ -10,7 +10,7 @@ description: 从论文 PDF、Markdown、已有证据包或 Deck IR 生成可编�
 
 将用户提供的 source、out_dir、language、presentation_type 传给 totalpipe_start。
 slide_count 是最终论文页目标（1–40），不等于 Story 节点或 brief 数；独立补充文字页额外计。
-source_kind 支持 auto/pdf/markdown/workflow/deck_ir；从已有产物继续，保留用户已有要求。
+source_kind 支持 auto/pdf/markdown/workflow/deck_ir；从已有产物继续，保留用户已有要求。page_mode=page_scene 时 page_review 后写显式 box 的 work/page_scene.json，跳过 deck_ir/design；默认 deck_ir 保留全部高级对象。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对；只有内容已进入分析输入时，才传 supplementary_content_included=true。
 ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/空白区域，必要时有限重排正文；草稿预览/预检不增强。用户关闭时 start 传 explain_viz_mode=off，保留已有模式。explain_viz.json 记录位置变化；科学原文、字号、来源门槛不降低，生成图须实际人审。
 
@@ -43,7 +43,7 @@ display_copy 是实际投屏文案，content_map 指定可见载体或允许入�
 IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
 原生图示/表格/数据图图注使用component=caption和caption_for视觉引用，按既有图注字号测量；正文不能伪装图注缩小。论文图的可见来源标签自动绑定。
 提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
-deck_ir 或之后可单独调用 advance.preview={artifact_path,slide_ids}，渲染 work/ 中的草稿页；完整协议见回复 ir_preview.schema_path。
+deck_ir 或之后可单独调用 advance.preview={artifact_path,slide_ids}，渲染 work/ 中的草稿页；page_scene 阶段用 advance.scene_preview={artifact_path,page_ids} 导出选中页 PowerPoint PNG；完整协议见回复 schema_path。
 实际打开 preview_result.pages 的 PNG，再修改源 IR 并重新 preview；未变页复用渲染缓存。预览不接受 IR、不计修订、不改候选或正式 QA。
 officecli-html 预览可能与 PowerPoint 的字体/公式不同，不能代替篇级 Design、完整构建或原生验收；FAIL 原样保留，不能凭生成图片签收。
 有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页，齐全后整套复验。

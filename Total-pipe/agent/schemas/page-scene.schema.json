@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Total-pipe PageScene 0.1",
+  "type": "object",
+  "required": ["schema_version", "deck_id", "theme", "pages"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "deck_id": {"type": "string", "minLength": 1},
+    "theme": {
+      "type": "object",
+      "required": ["font"],
+      "properties": {
+        "font": {"type": "string"},
+        "ink": {"type": "string"},
+        "navy": {"type": "string"},
+        "accent": {"type": "string"},
+        "orange": {"type": "string"},
+        "gray": {"type": "string"},
+        "light": {"type": "string"}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "description": "copy_ref -> approved audience copy. In a job this map is generated from page_design and cannot be overridden by the author."
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Tool-written binding hashes; authors do not fill this."
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": ["id", "objects"],
+        "allOf": [
+          {"anyOf": [{"required": ["title"]}, {"required": ["title_ref"]}]},
+          {"anyOf": [{"required": ["take"]}, {"required": ["take_ref"]}]}
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "\\S"},
+          "section": {"type": "string"},
+          "title": {"type": "string"},
+          "title_ref": {"type": "string"},
+          "take": {"type": "string"},
+          "take_ref": {"type": "string"},
+          "notes": {"type": "string"},
+          "evidence_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "footer": {"type": "boolean", "default": true},
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "box"],
+              "properties": {
+                "id": {"type": "string"},
+                "type": {"enum": ["text", "list", "image", "shape", "line", "table", "group", "formula", "path", "chart"]},
+                "box": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+                "role": {"enum": ["body", "label", "caption", "note"]},
+                "text": {"type": "string"},
+                "copy_ref": {"type": "string"},
+                "size": {"type": "number"},
+                "bold": {"type": "boolean"},
+                "italic": {"type": "boolean"},
+                "color": {"type": "string"},
+                "align": {"enum": ["left", "center", "right"]},
+                "valign": {"enum": ["top", "middle", "bottom"]},
+                "line_spacing": {"type": "number"},
+                "bullet": {"type": "boolean"},
+                "items": {"type": "array", "items": {"type": "object"}},
+                "children": {"type": "array", "items": {"type": "object"}},
+                "path": {"type": "string"},
+                "fit": {"enum": ["contain", "cover"]},
+                "shape": {"enum": ["rect", "rounded", "oval", "arrow", "chevron"]},
+                "fill": {"type": "string"},
+                "stroke": {"type": "string"},
+                "stroke_width": {"type": "number"},
+                "dash": {"type": "boolean"},
+                "rows": {"type": "array"},
+                "col_widths": {"type": "array"},
+                "row_height": {"type": "number"},
+                "header": {"type": "boolean"},
+                "font_size": {"type": "number"},
+                "accent_rows": {"type": "array"},
+                "latex": {"type": "string"},
+                "commands": {"type": "array"},
+                "d": {"type": "string"},
+                "view_box": {"type": "array", "minItems": 4, "maxItems": 4},
+                "chart_type": {"enum": ["line", "bar", "column", "scatter"]},
+                "categories": {"type": "array"},
+                "series": {"type": "array"},
+                "x_label": {"type": "string"},
+                "y_label": {"type": "string"},
+                "legend": {"type": "boolean"},
+                "title": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

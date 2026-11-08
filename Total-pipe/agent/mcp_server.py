@@ -22,7 +22,8 @@ transport.INSTRUCTIONS = ('Drive the evidence-to-candidate workflow using next_a
 
 STRING = {'type': 'string', 'minLength': 1}
 DEFINITIONS = {
-    'totalpipe_doctor': (doctor, {'deep': {'type': 'boolean'}, 'source_kind': {'type': 'string', 'enum': ['pdf','markdown','workflow','deck_ir']}}, []),
+    'totalpipe_doctor': (doctor, {'deep': {'type': 'boolean'}, 'source_kind': {'type': 'string', 'enum': ['pdf','markdown','workflow','deck_ir']},
+        'page_mode': {'type': 'string', 'enum': ['deck_ir','page_scene'], 'default': 'deck_ir'}}, []),
     'totalpipe_start': (start, {'source': STRING, 'out_dir': STRING, 'language': STRING, 'presentation_type': STRING,
         'source_kind': {'type': 'string', 'enum': ['auto','pdf','markdown','workflow','deck_ir']}, 'requirements': {'type': 'string'},
         'queries': {'type': 'array'}, 'supplementary_paths': {'type': 'array', 'items': STRING},
@@ -30,9 +31,11 @@ DEFINITIONS = {
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
         'explain_viz_mode': {'enum': ['auto', 'off', 'prefer'], 'default': 'auto',
                              'description': 'Automatic native teaching diagrams and bounded body reflow; off disables.'},
+        'page_mode': {'type': 'string', 'enum': ['deck_ir', 'page_scene'], 'default': 'deck_ir',
+                      'description': 'deck_ir preserves the full compiler/OfficeCLI object model; page_scene builds explicit native page boxes with PageScene path/formula/chart support.'},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
                         'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
-    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','scientific_review','page_design','page_design_review','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},
+    'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','scientific_review','page_design','page_design_review','page_scene','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},
         'artifact_path': STRING, 'preflight': {'type': 'boolean', 'description': 'Validate Deck IR and geometry without acceptance, writes to the job or revision accounting.'}, 'inputs': {'type': 'object', 'properties': {'model': STRING,
             'reasoning_effort': {'type': 'string', 'enum': ['high','xhigh','max','ultra']}, 'selected_by_user': {'const': True}},
             'required': ['model','reasoning_effort','selected_by_user'], 'additionalProperties': False},
@@ -41,6 +44,7 @@ DEFINITIONS = {
             'required': ['reviewer','note','review_ids'], 'additionalProperties': False},
         'preview': {**json.loads((Path(__file__).parent/'schemas/ir-preview.schema.json').read_text(encoding='utf-8')),
                     'description': 'Render selected draft IR pages to cached HTML PNGs without acceptance, revision use or candidate changes. Open PNGs, edit IR, repeat.'},
+        'scene_preview': json.loads((Path(__file__).parent/'schemas/page-scene-preview.schema.json').read_text(encoding='utf-8')),
         'native': json.loads((Path(__file__).parent/'schemas/native-acceptance.schema.json').read_text(encoding='utf-8'))}, ['job_id']),
     'totalpipe_status': (status, {'job_id': STRING,
         'detail': {'type': 'string', 'enum': ['summary', 'full'], 'default': 'summary'}}, ['job_id']),
@@ -88,7 +92,7 @@ for name, (function, properties, required) in DEFINITIONS.items():
         return function(**arguments)
     transport.TOOLS[name] = {'description': {'totalpipe_doctor': 'Check prerequisites and candidate/native capabilities.',
         'totalpipe_start': 'Start or resume a job from PDF, Markdown, workflow or Deck IR; never supplies a model implicitly.',
-        'totalpipe_advance': 'Accept an explicit artifact or user input, then advance until the next decision or candidate.',
+        'totalpipe_advance': 'Accept an explicit artifact or user input, then advance until the next decision or candidate. scene_preview renders selected PageScene pages natively without acceptance.',
         'totalpipe_status': 'Read state and QA without writes or running components. Defaults to a compact summary; detail=full adds request and artifact inventory.'}[name],
         'handler': handler, 'inputSchema': schema, 'timeout': 1800}
 
