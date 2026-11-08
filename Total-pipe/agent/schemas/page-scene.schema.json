@@ -74,6 +74,8 @@
                 "line_spacing": {"type": "number"},
                 "bullet": {"type": "boolean"},
                 "items": {"type": "array", "items": {"type": "object"}},
+                "bullet_style": {"enum": ["dot", "dash", "square", "arrow", "none"]},
+                "space_after": {"type": "number"},
                 "children": {"type": "array", "items": {"type": "object"}},
                 "path": {"type": "string"},
                 "fit": {"enum": ["contain", "cover"]},

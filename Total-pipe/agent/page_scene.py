@@ -27,6 +27,14 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+MC_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
+A14_NS = 'http://schemas.microsoft.com/office/drawing/2010/main'
+M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+XML_SPACE = '{http://www.w3.org/XML/1998/namespace}space'
+etree.register_namespace('mc', MC_NS)
+etree.register_namespace('a14', A14_NS)
+etree.register_namespace('m', M_NS)
+
 PAGE_W, PAGE_H = 13.333, 7.5
 MARGIN = 0.72
 HEADER = {
@@ -115,13 +123,20 @@ class Renderer:
         tf.vertical_anchor = MSO_ANCHOR.TOP
         base_size = obj.get('size', 18)
         base_color = rgb(obj.get('color'), '#1B2A3A')
+        bullets = {
+            'dot': ['•', '–', '·', '◦'],
+            'dash': ['–', '·', '◦', '•'],
+            'square': ['▪', '–', '·', '◦'],
+            'arrow': ['➢', '–', '·', '◦'],
+            'none': ['', '', '', ''],
+        }.get(obj.get('bullet_style', 'dot'), ['•', '–', '·', '◦'])
         for i, item in enumerate(obj.get('items', [])):
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
             level = max(0, min(3, int(item.get('level', 0))))
             size = item.get('size', base_size)
             p.level = level
-            p.line_spacing = item.get('line_spacing', obj.get('line_spacing', 1.2))
-            p.space_after = Pt(item.get('space_after', 4))
+            p.line_spacing = item.get('line_spacing', obj.get('line_spacing', 1.15))
+            p.space_after = Pt(item.get('space_after', obj.get('space_after', 7)))
             pPr = p._p.get_or_add_pPr()
             pPr.set('marL', str(int(Inches(0.22 + 0.28 * level))))
             pPr.set('indent', str(int(-Inches(0.18))))
@@ -129,24 +144,73 @@ class Renderer:
                 for old in pPr.findall(qn(tag)):
                     pPr.remove(old)
             color = rgb(item.get('color'), obj.get('color', '#1B2A3A'))
-            buClr = etree.SubElement(pPr, qn('a:buClr'))
-            srgb = etree.SubElement(buClr, qn('a:srgbClr'))
-            srgb.set('val', str(color))
-            buFont = etree.SubElement(pPr, qn('a:buFont'))
-            buFont.set('typeface', 'Arial')
-            buChar = etree.SubElement(pPr, qn('a:buChar'))
-            buChar.set('char', ['•', '–', '·', '◦'][level])
+            marker = bullets[level]
+            if marker:
+                buClr = etree.SubElement(pPr, qn('a:buClr'))
+                srgb = etree.SubElement(buClr, qn('a:srgbClr'))
+                srgb.set('val', str(color))
+                buFont = etree.SubElement(pPr, qn('a:buFont'))
+                buFont.set('typeface', 'Arial')
+                buChar = etree.SubElement(pPr, qn('a:buChar'))
+                buChar.set('char', marker)
+            else:
+                etree.SubElement(pPr, qn('a:buNone'))
             item_text = self.resolve_text(item) if item.get('copy_ref') else item.get('text', '')
-            for piece, hit in emphasis_parts(item_text,
-                                             item.get('emphasis') or obj.get('emphasis')):
-                run = p.add_run()
+            self.add_rich_runs(p, item_text, size, color,
+                               bool(item.get('bold', obj.get('bold', False))), False,
+                               item.get('emphasis') or obj.get('emphasis'),
+                               item.get('emphasis_color'))
+        return tb
+
+    def add_math_run(self, paragraph, expression, size, color):
+        """Append one native OMML inline-math run with a plain fallback."""
+        from totalpipe_layout.formula import parse, to_omml, to_plain
+        ast = parse(expression)
+        alternate = etree.SubElement(paragraph, '{%s}AlternateContent' % MC_NS,
+                                     nsmap={'mc': MC_NS, 'a14': A14_NS})
+        choice = etree.SubElement(alternate, '{%s}Choice' % MC_NS,
+                                  nsmap={'a14': A14_NS})
+        choice.set('Requires', 'a14')
+        a14 = etree.SubElement(choice, '{%s}m' % A14_NS)
+        a14.append(etree.fromstring(to_omml(ast, size * 96.0 / 72.0, str(color), 'Cambria Math')))
+        fallback = etree.SubElement(alternate, '{%s}Fallback' % MC_NS)
+        run = etree.SubElement(fallback, qn('a:r'))
+        rPr = etree.SubElement(run, qn('a:rPr'))
+        rPr.set('lang', 'en-US')
+        rPr.set('sz', str(int(round(size * 100))))
+        fill = etree.SubElement(rPr, qn('a:solidFill'))
+        etree.SubElement(fill, qn('a:srgbClr')).set('val', str(color))
+        etree.SubElement(rPr, qn('a:latin')).set('typeface', 'Cambria Math')
+        t = etree.SubElement(run, qn('a:t'))
+        t.set(XML_SPACE, 'preserve')
+        t.text = to_plain(ast)
+
+    def add_rich_runs(self, paragraph, text, size, color, bold=False, italic=False,
+                      emphasis=None, emphasis_color=None):
+        """Render opt-in ``$...$`` math inside ordinary prose/list runs."""
+        if '$' not in text and '\\(' not in text:
+            spans = [(text, 'text')]
+        else:
+            from totalpipe_layout.inline_math import parse_inline
+            try:
+                spans = [(span.text, span.kind) for span in parse_inline(text)]
+            except ValueError as error:
+                raise ValueError('inline math: %s' % error) from error
+        for value, kind in spans:
+            if not value:
+                continue
+            if kind == 'formula':
+                self.add_math_run(paragraph._p, value, size, color)
+                continue
+            for piece, hit in emphasis_parts(value, emphasis):
+                run = paragraph.add_run()
                 run.text = piece
                 run.font.name = self.font
                 run.font.size = Pt(size)
-                run.font.bold = bool(hit or item.get('bold', obj.get('bold', False)))
-                run.font.color.rgb = rgb(item.get('emphasis_color')) if hit and item.get('emphasis_color') else (
-                    self.accent if hit else color)
-        return tb
+                run.font.bold = bool(bold or hit)
+                run.font.italic = italic
+                run.font.color.rgb = (rgb(emphasis_color) if hit and emphasis_color
+                                      else self.accent if hit else color)
 
     def add_text(self, slide, x, y, w, h, text, size=18, color=None, bold=False, italic=False,
                  align=PP_ALIGN.LEFT, valign=MSO_ANCHOR.TOP, spacing=1.12, bullet=False,
@@ -165,15 +229,8 @@ class Renderer:
             p.alignment = align
             p.line_spacing = spacing
             value = ('•  ' + line) if bullet and line else line
-            for piece, hit in emphasis_parts(value, emphasis):
-                r = p.add_run()
-                r.text = piece
-                r.font.name = self.font
-                r.font.size = Pt(size)
-                r.font.bold = bool(bold or hit)
-                r.font.italic = italic
-                r.font.color.rgb = (rgb(emphasis_color) if hit and emphasis_color
-                                    else self.accent if hit else color or self.ink)
+            self.add_rich_runs(p, value, size, color or self.ink, bold, italic,
+                               emphasis, emphasis_color)
         return tb
 
     def flat(self, shape):
@@ -184,47 +241,24 @@ class Renderer:
         return shape
 
     def add_section_chip(self, slide, text):
+        """A small typographic section marker, not a filled card."""
         if not text:
             return None
-        width = section_width(text)
-        sh = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(MARGIN), Inches(0.38),
-                                    Inches(width), Inches(0.29))
-        sh.fill.solid()
-        sh.fill.fore_color.rgb = self.navy
-        sh.line.fill.background()
-        self.flat(sh)
-        tf = sh.text_frame
-        tf.word_wrap = False
-        tf.margin_left = Inches(0.10)
-        tf.margin_right = Inches(0.08)
-        tf.margin_top = 0
-        tf.margin_bottom = 0
-        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.LEFT
-        r = p.add_run()
-        r.text = text
-        r.font.name = self.font
-        r.font.size = Pt(9.2)
-        r.font.bold = True
-        r.font.color.rgb = self.white
-        return sh
+        self.add_rule(slide, MARGIN, 0.40, 0.045, self.accent, 0.25)
+        self.add_text(slide, MARGIN + 0.13, 0.40, 5.6, 0.26, text, 9.6, self.accent, True,
+                      spacing=1.0, valign=MSO_ANCHOR.MIDDLE)
+        return None
 
     def add_take_band(self, slide, take, y, height, emphasis=None):
-        panel = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(MARGIN), Inches(y),
-                                       Inches(PAGE_W - 2 * MARGIN), Inches(height))
-        panel.fill.solid()
-        panel.fill.fore_color.rgb = self.light
-        panel.line.fill.background()
-        self.flat(panel)
+        """Lead sentence with one accent rule; no background panel."""
         bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(MARGIN), Inches(y),
                                      Inches(0.055), Inches(height))
         bar.fill.solid()
         bar.fill.fore_color.rgb = self.accent
         bar.line.fill.background()
         self.flat(bar)
-        self.add_text(slide, MARGIN + 0.20, y + 0.075, PAGE_W - 2 * MARGIN - 0.36, height - 0.13,
-                      take, 14.6, self.ink, False, spacing=1.05, valign=MSO_ANCHOR.MIDDLE,
+        self.add_text(slide, MARGIN + 0.20, y + 0.04, PAGE_W - 2 * MARGIN - 0.24, height - 0.06,
+                      take, 15.4, self.ink, False, spacing=1.05, valign=MSO_ANCHOR.MIDDLE,
                       emphasis=emphasis, emphasis_color=self.accent)
 
     def add_rule(self, slide, x, y, w, color=None, height=0.02, dash=False):

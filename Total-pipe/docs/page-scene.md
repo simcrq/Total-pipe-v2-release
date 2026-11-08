@@ -69,8 +69,10 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 
 PageScene 0.1 当前支持：
 
-- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`、`emphasis`；
-- `list`：**多级无序列表**，0–3 级、不同 bullet、逐项字号/粗细/颜色、原生段落；
+- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`、`emphasis`；正文中 `$...$` /
+  `\(...\)` 会转成原生 OMML 行内公式（带 plain fallback），见 `inline-math.md`；
+- `list`：**多级无序列表**，0–3 级、`bullet_style=dot|dash|square|arrow|none`、
+  逐项字号/粗细/颜色、行内公式、原生段落；
 - `group`：**嵌套容器**，子对象 box 相对 group，递归渲染；
 - `image`：论文图/参考图，保持比例，支持 contain/cover；
 - `shape` / `line`：矩形、圆角、椭圆、箭头、连接线；
@@ -147,6 +149,11 @@ contact sheet。`review` / `ingest` 仍要求实际 PowerPoint UI 审阅和显�
 它不做文字高度测量。真正的截断、重叠、字体替换和图片裁切由 `scene_preview` /
 native PDF + 人工检查。
 
+`page_scene_qa.expression_report()` 另外给出正向表达指标：`text_only_pages`、
+`card_area`、`inline_math`、`list_styles`、`native_move_pages`。它用于 recipe pilot
+和后续正门禁，不替代 scientific/content review；大面积填充形状会被计入 `card_area`，
+所以“卡片化”不是靠提示词，而是可测量的。
+
 ## 18 页回归
 
 `prototype/p0_scene/deck18.json` 仍是页面层回归样例：
@@ -158,6 +165,13 @@ native PDF + 人工检查。
 - P17 使用 native 多级无序列表 + nested group。
 
 该样例是手写 PageScene，不冒充 job 的 page_design 绑定、科学审读或 PowerPoint UI 验收。
+
+## Recipe pilot
+
+`agent/page_recipes.py` 提供 6 个受约束 recipe（cover / contrast / figure_readout /
+metrics / table_compare / closing）。设计方只填 slots，recipe 负责几何、原生列表、
+行内公式、表格和无卡片布局。它是最小闭环，尚未接入 job 状态机；验收和指标见
+`page-recipes.md` 与 `E:\ppt_x\AVDG_recipe_pilot\PILOT_QA.md`。
 
 ## 文件
 

@@ -222,12 +222,77 @@ def validate_spec(spec, spec_path):
     return errors, metrics
 
 
+def expression_report(spec, spec_path):
+    """Positive report: native moves, inline math, card area and list-style mix.
+
+    This is intentionally advisory for the pilot. It measures whether a deck uses the
+    renderer's native vocabulary instead of turning every page into a text block.
+    """
+    import re
+    spec_path = Path(spec_path)
+    bindings = spec.get('bindings') or {}
+    rows, styles = [], set()
+    for page in spec.get('pages') or []:
+        title, _ = _resolve_field(page, 'title', bindings)
+        take, _ = _resolve_field(page, 'take', bindings)
+        text = [title or '', take or '']
+        formulas = len(re.findall(r'\$[^$]+\$', (title or '') + ' ' + (take or '')))
+        objects = list(_flatten_objects(page.get('objects') or []))
+        native, card_area = 0, 0.0
+        lists = 0
+        for obj in objects:
+            kind = obj.get('type')
+            if kind == 'text':
+                value = _resolve_item(obj, bindings) or ''
+                text.append(value)
+                formulas += len(re.findall(r'\$[^$]+\$', value))
+            elif kind == 'list':
+                items = obj.get('items') or []
+                lists += 1
+                styles.add(obj.get('bullet_style', 'dot'))
+                if len(items) >= 2:
+                    native += 1
+                for item in items:
+                    value = _resolve_item(item, bindings) or ''
+                    text.append(value)
+                    formulas += len(re.findall(r'\$[^$]+\$', value))
+            elif kind in ('image', 'table', 'chart', 'path', 'formula'):
+                native += 1
+            elif kind == 'shape':
+                area = float(obj['box'][2]) * float(obj['box'][3])
+                fill = str(obj.get('fill', 'none')).upper()
+                if area > 0.5 and fill not in ('NONE', '#FFFFFF', 'FFFFFF'):
+                    card_area += area
+        plain = ''.join(text)
+        text_only = native == 0
+        rows.append({'page_id': page.get('id'), 'native_moves': native, 'lists': lists,
+                     'inline_math': formulas, 'card_area': round(card_area, 2),
+                     'text_only': text_only, 'chars': len(plain)})
+    total = len(rows) or 1
+    summary = {
+        'pages': len(rows),
+        'text_only_pages': sum(row['text_only'] for row in rows),
+        'card_area': round(sum(row['card_area'] for row in rows), 2),
+        'inline_math': sum(row['inline_math'] for row in rows),
+        'list_styles': sorted(styles),
+        'native_move_pages': sum(row['native_moves'] > 0 for row in rows),
+    }
+    summary['status'] = ('PASS' if summary['text_only_pages'] == 0
+                         and summary['card_area'] <= 0.01
+                         and summary['inline_math'] > 0
+                         and len(summary['list_styles']) >= 2 else 'REVIEW')
+    return {'spec': str(spec_path), 'pages': rows, 'summary': summary}
+
+
 def check_file(path):
     path = Path(path)
     spec = json.loads(path.read_text(encoding='utf-8'))
     errors, metrics = validate_spec(spec, path)
-    return {'status': 'FAIL' if errors else 'PASS', 'pages': len(spec.get('pages', [])),
-            'metrics': metrics, 'errors': errors, 'schema': str(SCHEMA)}
+    report = {'status': 'FAIL' if errors else 'PASS', 'pages': len(spec.get('pages', [])),
+              'metrics': metrics, 'errors': errors, 'schema': str(SCHEMA)}
+    if not errors:
+        report['expression'] = expression_report(spec, path)
+    return report
 
 
 def render_spec(spec, spec_path, out):

@@ -1,0 +1,48 @@
+# Page recipes pilot
+
+状态：**最小闭环验证通过，尚未接入 job 状态机**。
+
+## 问题
+
+设计方在开放 PageScene 上自由发挥，同时审查会退回任何偏差；它的最优策略是
+纯文字/卡片，而不是原生列表、行内公式、路径或表格。继续增加能力说明不会改变
+这个策略。
+
+## 做法
+
+`agent/page_recipes.py` 把“设计”收成 recipe + slots：
+
+| recipe | slots | 默认原生动作 |
+|---|---|---|
+| `cover` | figure, title, take, stats | 原图 + 行内公式 + 无卡片数字行 |
+| `contrast` | left/right lists, key | square/dash 两套原生无序列表 + 原生路径波形 |
+| `figure_readout` | figure, items | 原图 + 箭头读图列表 |
+| `metrics` | figures, items, condition | 两张原图 + 原生列表 + 行内公式 |
+| `table_compare` | table, big, items | 原生表格 + 大号数字 + 原生列表 |
+| `closing` | big, items, stats | 大号数字 + 两级原生列表 + 行内公式 |
+
+设计方不写坐标、不选形状、不写 OMML。几何和原生能力由 recipe 兑现。
+
+## 验证
+
+6 页 pilot 在 `E:\ppt_x\AVDG_recipe_pilot`：
+
+- `text_only_pages=0`
+- `card_area=0.0`
+- `inline_math=10`
+- `list_styles=[arrow,dash,dot,square]`
+- `native_move_pages=6/6`
+- PageScene QA PASS，native PDF 6 页，`native_items=0`
+- `officecli validate` PASS
+- 28 个回归测试 PASS
+
+pilot 证明：**不用卡片、用原生列表和行内公式，可以由 recipe 默认路径生成**。
+
+## 尚未接入
+
+- recipe 尚未成为 `page_design` 的 schema 字段；
+- slots 仍直接写字符串，还没走 approved copy / `content_map`；
+- 只覆盖 6 类页面，还需要 mechanism、panel_grid、roadmap；
+- style 审查尚未从 hard fail 降为 advisory。
+
+接入顺序见 `PILOT_QA.md` 的“下一步”。

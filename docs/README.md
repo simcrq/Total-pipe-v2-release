@@ -32,6 +32,7 @@
 | --- | --- |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
 | PageScene：显式页面场景、job 接入、绑定门禁与页级原生预览 | [PageScene 集成](../Total-pipe/docs/page-scene.md) |
+| 页面 recipe 最小闭环：无卡片、原生列表、行内公式 | [Page recipes pilot](../Total-pipe/docs/page-recipes.md) |
 | 页面设计 1.1：Story 引用、绘图、排布与讲解走读 | [接入层：页面设计阶段](../Total-pipe/docs/agent-adapter.md#页面设计阶段page_design) |
 | 页面设计 1.1 实际子代理样例与回归 | [验证记录](agent-page-design-validation.md) |
 | 四工具候选后的 PowerPoint 导出、预览与真实 UI 复核 | [原生验收接入](../Total-pipe/docs/agent-adapter.md#原生-powerpoint-验收接入) |

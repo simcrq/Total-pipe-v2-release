@@ -317,7 +317,9 @@ def native_items(pdf, scene):
                         for item in obj.get('items') or []:
                             text = (scene.get('bindings', {}).get(item.get('copy_ref'), '')
                                     if item.get('copy_ref') else item.get('text', ''))
-                            if text:
+                            # PDF extraction of inline OMML does not preserve the
+                            # prose/math run order; page bounds are still checked.
+                            if text and '$' not in text and '\\(' not in text:
                                 expected_parts.append(_normal(text))
                         missing = [text for text in expected_parts if text and text not in actual]
                         if missing:
