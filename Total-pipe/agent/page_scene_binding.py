@@ -82,6 +82,8 @@ def page_copy_catalog(design):
             'content_refs': list(page.get('content_refs') or []),
             'reuse_refs': list(page.get('reuse_refs') or []),
             'title': page.get('title'),
+            'recipe': page.get('recipe'),
+            'slots': page.get('slots'),
             'display_copy': copies,
             'evidence_refs': sorted(set(evidence)),
             'figures': list(page.get('figures') or []),

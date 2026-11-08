@@ -929,6 +929,8 @@ ATOMIC_DESIGN_INSTRUCTIONS = (
     'A concluding conceptual claim can omit a numerical result already explained; if the number is restated, '
     'its source and applicable conditions must remain visible. Keep the whole scientific ledger in the deck, but '
     'keep the visibility ledger separate: scoped limitations can live in notes or one boundary page, not in every result. '
+    'When a page fits a recipe in prompt.recipes, write recipe and slots instead of free-form geometry prose; '
+    'reference display_copy ids as {"copy_ref": "<id>"}. The PageScene builder owns the native layout. '
     'For every selected figure, figure_sources maps its exact asset ID to {source_figure: inspected figure/panel ID}. '
     'These are source identities, not measurements. The tool renders their visible provenance separately from '
     'approved caption wording; never delete source labels to satisfy a numeric check. '
@@ -1127,6 +1129,7 @@ def execute(stage, job):
                    'evidence': brief.get('evidence_ids') or []}
                   for brief in content.get('slide_briefs') or []]
         capabilities = design_capabilities()
+        from .page_recipes import capabilities as recipe_capabilities
         story = read(work/'story_plan.json')
         projection = bool(story.get('content_contract'))
         atomic = (story.get('content_contract') or {}).get('version') == '2.0'
@@ -1145,6 +1148,7 @@ def execute(stage, job):
             'briefs': briefs,
             'evidence': evidence,
             'figures': figures,
+            'recipes': recipe_capabilities(),
             'schema_path': str(COMPONENT/'schemas'/(f'page-design-v{design_version}.schema.json' if projection else 'page-design.schema.json')),
             'workflow_root': str(Path(workflow).parent),
             'content_catalog': {source: {key: binding[key] for key in ('evidence', 'policy') if key in binding}
@@ -1155,6 +1159,9 @@ def execute(stage, job):
                             'occasion': '<room.default_occasion or another occasion key>',
                             'reading': 'spoken|read|mixed'},
                 'pages': [{'id': 'P1', 'content_refs': ['S1.answer'],
+                           'recipe': '<optional: one of prompt.recipes; then slots>',
+                           'slots': {'title': {'copy_ref': 'P1.heading'},
+                                     'take': {'copy_ref': 'P1.message'}},
                            'design': '<free prose or your own object: visual elements, drawing '
                                      'instructions, arrangement and presenter pointing order>',
                            'figures': ['<optional: exact asset_id actually inspected>']}]},

@@ -24,6 +24,8 @@
 | `svg_diagram` | svg / svg_path, box | 模型 SVG → 原生 text / rect / circle / path（弧展平）/ marker 箭头 |
 
 设计方不写坐标、不选形状、不写 OMML。几何和原生能力由 recipe 兑现。
+`page_design` prompt 现在也带 `recipes`，页面可选填 `recipe` + `slots`；`page_catalog`
+会把它们传给 PageScene。当前 pilot 仍是 PageScene 层选 recipe，design 层直出 recipe 尚待全链路回归。
 
 ## 验证
 

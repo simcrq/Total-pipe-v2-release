@@ -13,7 +13,8 @@ import shutil
 from pathlib import Path
 
 from .page_scene import Renderer
-from .page_scene_qa import _flatten_objects, _overlap, expression_report, validate_spec
+from .page_scene_qa import (_flatten_objects, _overlap, expression_gate,
+                            expression_report, validate_spec)
 from .state import digest, sha, write
 
 PAGE_W, PAGE_H = 13.333, 7.5
@@ -235,6 +236,8 @@ def _write_qa(build_dir, scene, items, *, structural, native, metrics=None,
     qa['page_scene_sha256'] = digest(scene)
     qa['page_scene_metrics'] = metrics or []
     qa['expression'] = expression_report(scene, build_dir / 'page_scene.json')
+    qa['expression_gate'] = expression_gate(qa['expression']['summary'])
+    qa['checks']['expression_gate'] = qa['expression_gate']['status']
     if native_evidence:
         qa['native'] = {key: native_evidence.get(key) for key in
                         ('renderer', 'artifact_sha256', 'pdf_sha256', 'export_method')
@@ -261,6 +264,7 @@ def _write_qa(build_dir, scene, items, *, structural, native, metrics=None,
         'native_validated': bool(native),
         'powerpoint_visual_reviewed': review is not None,
         'expression': qa['expression']['summary'],
+        'expression_gate': qa['expression_gate'],
         'qa_counts': qa['counts'],
     })
     return qa

@@ -288,6 +288,20 @@ def expression_report(spec, spec_path):
     return {'spec': str(spec_path), 'pages': rows, 'summary': summary}
 
 
+def expression_gate(summary):
+    """Positive guard for the recipe pilot; separate from scientific review."""
+    failures = []
+    if summary.get('card_area', 0) > .01:
+        failures.append('large filled card area: %.2f' % summary['card_area'])
+    if summary.get('text_only_pages', 0):
+        failures.append('%d text-only page(s)' % summary['text_only_pages'])
+    if summary.get('pages', 0) >= 6 and summary.get('inline_math', 0) == 0:
+        failures.append('no inline math on a multi-page scientific deck')
+    if summary.get('pages', 0) >= 6 and len(summary.get('list_styles') or []) < 2:
+        failures.append('fewer than two native unordered-list styles')
+    return {'status': 'PASS' if not failures else 'REVIEW', 'failures': failures}
+
+
 def check_file(path):
     path = Path(path)
     spec = json.loads(path.read_text(encoding='utf-8'))
@@ -295,7 +309,9 @@ def check_file(path):
     report = {'status': 'FAIL' if errors else 'PASS', 'pages': len(spec.get('pages', [])),
               'metrics': metrics, 'errors': errors, 'schema': str(SCHEMA)}
     if not errors:
-        report['expression'] = expression_report(spec, path)
+        expression = expression_report(spec, path)
+        report['expression'] = expression
+        report['expression_gate'] = expression_gate(expression['summary'])
     return report
 
 
