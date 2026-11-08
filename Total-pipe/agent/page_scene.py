@@ -463,6 +463,8 @@ class Renderer:
         else:
             shape.line.color.rgb = rgb(stroke, '#0B6E99')
             shape.line.width = Pt(obj.get('stroke_width', 2.0))
+            if obj.get('dash'):
+                shape.line.dash_style = 4
         shape.shadow.inherit = False
         return shape
 

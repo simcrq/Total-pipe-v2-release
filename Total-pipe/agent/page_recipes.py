@@ -14,14 +14,60 @@ MARGIN = 0.72
 PAGE_W = 13.333
 
 RECIPES = {
-    'cover': ('figure', 'stats'),
-    'contrast': ('two_lists', 'waveforms', 'key_line'),
-    'figure_readout': ('figure', 'readout_list'),
-    'metrics': ('two_figures', 'metric_list', 'condition'),
-    'table_compare': ('table', 'big_stat', 'readout_list'),
-    'closing': ('big_stat', 'path_list', 'stats'),
-    'eviz_chain': ('eviz_paths', 'eviz_labels'),
+    'cover': ('figure', 'stats', 'title', 'take'),
+    'contrast': ('left', 'right', 'key', 'title', 'take'),
+    'figure_readout': ('figure', 'items', 'title', 'take'),
+    'metrics': ('figures', 'items', 'condition', 'title', 'take'),
+    'table_compare': ('table', 'big', 'items', 'title', 'take'),
+    'closing': ('big', 'items', 'stats', 'fixed', 'title', 'take'),
+    'eviz_chain': ('eviz', 'box', 'title', 'take'),
+    'svg_diagram': ('svg', 'svg_path', 'box', 'title', 'take'),
 }
+
+
+def capabilities():
+    return {'version': '1.0',
+            'recipes': {name: {'slots': list(slots)} for name, slots in RECIPES.items()},
+            'mode': 'recipe_or_raw',
+            'native_defaults': ['native unordered lists', 'inline OMML $...$',
+                                'native tables/paths', 'no large filled cards',
+                                'ExplainViz paths/labels for eviz_chain']}
+
+
+def _resolve(value, bindings):
+    if isinstance(value, dict):
+        if set(value) == {'copy_ref'}:
+            ref = value['copy_ref']
+            if ref not in bindings:
+                raise ValueError('unresolved copy_ref %s' % ref)
+            return bindings[ref]
+        return {key: _resolve(item, bindings) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve(item, bindings) for item in value]
+    return value
+
+
+def expand_page(page, bindings):
+    """Expand a recipe page into a normal PageScene page.
+
+    Text slots may be ``{"copy_ref": "P1.take"}``; they are resolved against
+    the approved copy bindings before native composition.
+    """
+    recipe = page.get('recipe')
+    if recipe not in BUILDERS:
+        raise ValueError('unknown recipe %r' % recipe)
+    spec = {key: value for key, value in page.items() if key not in ('recipe', 'slots')}
+    spec.update(_resolve(page.get('slots') or {}, bindings))
+    for field in ('title', 'take'):
+        if not spec.get(field) and page.get(field + '_ref'):
+            spec[field] = bindings.get(page[field + '_ref'])
+        if not spec.get(field):
+            raise ValueError('%s recipe requires slot %s or %s_ref' % (recipe, field, field))
+    built = BUILDERS[recipe](spec)
+    built['id'] = page.get('id', built.get('id'))
+    built['section'] = page.get('section', built.get('section', ''))
+    built['notes'] = page.get('notes', '')
+    return built
 
 
 def _text(oid, box, text, size=18, role='body', color=None, bold=False,
@@ -209,6 +255,21 @@ def eviz_chain(spec):
     return _page(spec, objects, spec.get('notes', 'ExplainViz process chain; schematic geometry.'))
 
 
+def svg_diagram(spec):
+    """Import a model-authored SVG as editable native text/rect/path objects."""
+    from .svg_scene import svg_to_objects
+    source = spec.get('svg')
+    if not source and spec.get('svg_path'):
+        source = Path(spec['svg_path']).read_text(encoding='utf-8')
+    if not source:
+        raise ValueError('svg_diagram needs svg or svg_path')
+    box = spec.get('box') or [0.9, 2.22, 9.35, 4.72]
+    objects = svg_to_objects(source, box, prefix=spec.get('id', 'svg').lower())
+    page = _page(spec, objects, spec.get('notes', 'SVG imported as editable native shapes and text.'))
+    page['svg_import'] = True
+    return page
+
+
 BUILDERS = {
     'cover': cover,
     'contrast': contrast,
@@ -217,6 +278,7 @@ BUILDERS = {
     'table_compare': table_compare,
     'closing': closing,
     'eviz_chain': eviz_chain,
+    'svg_diagram': svg_diagram,
 }
 
 

@@ -114,8 +114,9 @@ def validate_spec(spec, spec_path):
         unknown = sorted({str(obj.get('type')) for obj in objects if obj.get('type') not in allowed})
         if unknown:
             errors.append('%s: unknown object type(s): %s' % (pid, ', '.join(unknown)))
-        if len(objects) > 14:
-            errors.append('%s: %d objects (max 14)' % (pid, len(objects)))
+        object_limit = 80 if page.get('svg_import') else 14
+        if len(objects) > object_limit:
+            errors.append('%s: %d objects (max %d)' % (pid, len(objects), object_limit))
         body_texts = [o for o in objects if o.get('type') in ('text', 'list') and o.get('role', 'body') == 'body']
         if len(body_texts) > 4:
             errors.append('%s: %d body text blocks (max 4)' % (pid, len(body_texts)))
@@ -211,6 +212,8 @@ def validate_spec(spec, spec_path):
                 if obj.get('chart_type') not in ('line', 'bar', 'column', 'scatter'):
                     errors.append('%s/%s: chart_type must be line, bar, column or scatter' % (pid, obj.get('id', oi)))
         for i in range(len(text_boxes)):
+            if page.get('svg_import'):
+                break
             for j in range(i + 1, len(text_boxes)):
                 _, a_id, a, a_role = text_boxes[i]
                 _, b_id, b, b_role = text_boxes[j]
@@ -261,7 +264,8 @@ def expression_report(spec, spec_path):
             elif kind == 'shape':
                 area = float(obj['box'][2]) * float(obj['box'][3])
                 fill = str(obj.get('fill', 'none')).upper()
-                if area > 0.5 and fill not in ('NONE', '#FFFFFF', 'FFFFFF'):
+                if (area > 0.5 and not page.get('svg_import') and
+                        fill not in ('NONE', '#FFFFFF', 'FFFFFF')):
                     card_area += area
         plain = ''.join(text)
         text_only = native == 0

@@ -21,28 +21,30 @@
 | `table_compare` | table, big, items | 原生表格 + 大号数字 + 原生列表 |
 | `closing` | big, items, stats | 大号数字 + 两级原生列表 + 行内公式 |
 | `eviz_chain` | eviz.spec, eviz.facts | 复用 EViz `validate_spec` + `templates.build`；进程链降为原生 path/label，不再画卡片 |
+| `svg_diagram` | svg / svg_path, box | 模型 SVG → 原生 text / rect / circle / path（弧展平）/ marker 箭头 |
 
 设计方不写坐标、不选形状、不写 OMML。几何和原生能力由 recipe 兑现。
 
 ## 验证
 
-7 页 pilot 在 `E:\ppt_x\AVDG_recipe_pilot`：
+8 页 pilot 在 `E:\ppt_x\AVDG_recipe_pilot`：
 
 - `text_only_pages=0`
 - `card_area=0.0`
 - `inline_math=10`
 - `list_styles=[arrow,dash,dot,square]`
-- `native_move_pages=7/7`
+- `native_move_pages=8/8`
 - PageScene QA PASS，native PDF 6 页，`native_items=0`
 - `officecli validate` PASS
-- 28 个回归测试 PASS
+- 31 个回归测试 PASS
 
 pilot 证明：**不用卡片、用原生列表和行内公式，可以由 recipe 默认路径生成**。
 
 ## 尚未接入
 
 - EViz 只接了 `process_steps@1`，尚未接 `layer_stack@1` / `peel_angle@1`；
-- recipe 尚未成为 `page_design` 的 schema 字段；
+- SVG 导入只覆盖 text/rect/circle/line/path/polygon 和简单 marker；渐变、filter、transform、clipPath 尚未覆盖；
+- recipe 页已可由 `page_scene_binding.bind` 先展开再走原有科学/数字/可见文案门禁；但 `page_design` 还没有 recipe 字段；
 - slots 仍直接写字符串，还没走 approved copy / `content_map`；
 - 只覆盖 6 类页面，还需要 mechanism、panel_grid、roadmap；
 - style 审查尚未从 hard fail 降为 advisory。

@@ -281,6 +281,21 @@ def bind(value, work, request=None, source_dir=None):
     pages = value.get('pages')
     if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
         raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene pages must be a list of objects.')
+    from .page_recipes import expand_page
+    expanded = []
+    for page in pages:
+        if not page.get('recipe'):
+            expanded.append(page)
+            continue
+        try:
+            expanded.append(expand_page(page, bindings))
+        except (KeyError, TypeError, ValueError) as error:
+            raise SceneBindingError(
+                'PAGE_SCENE_RECIPE_INVALID',
+                f'{page.get("id", "?")}: recipe {page.get("recipe")!r} cannot expand: {error}') from error
+    pages = expanded
+    value = copy.deepcopy(value)
+    value['pages'] = pages
     if len(pages) != len(design_pages):
         raise SceneBindingError(
             'PAGE_SCENE_PAGE_COUNT',
@@ -387,6 +402,7 @@ def bind(value, work, request=None, source_dir=None):
 def prepare(work, request):
     """Write the PageScene authoring prompt and task; no scientific content."""
     from .adapters import load_design
+    from .page_recipes import capabilities
     work = Path(work)
     design = load_design(work)
     if not isinstance(design, dict) or not design.get('pages'):
@@ -412,6 +428,7 @@ def prepare(work, request):
     prompt = {
         'schema_path': str(SCHEMA),
         'request': prompt_request(request or {}),
+        'recipes': capabilities(),
         'page_design': design,
         'page_catalog': catalog,
         'copy_bindings': bindings,
@@ -436,15 +453,17 @@ PAGE_SCENE_INSTRUCTIONS = (
     'copy_bindings for approved sentences; a literal title/take/body is accepted only when it is '
     'exactly the approved text. Do not paraphrase, add claims, invent numbers, delete conditions, '
     'or move a claim to another page. One idea per page: a main visual plus at most three short '
-    'conclusions. Every object needs an explicit box in inches [x,y,w,h]; no auto-layout. The renderer '
+    'conclusions. Prefer a recipe page when one fits: {"id":"P1","recipe":"cover","slots":{...}}. '
+    'A slot value may be {"copy_ref":"P1.take"} so approved copy is bound by the tool. Available '
+    'recipes and slots are in prompt.recipes; recipe mode owns geometry and native affordances. '
+    'Every raw object needs an explicit box in inches [x,y,w,h]; no auto-layout. The renderer '
     'draws the section chip, title and highlighted takeaway band automatically; set section as '
     '"NN · LABEL" and use title_ref/take_ref plus optional title_emphasis/take_emphasis. In the body, '
     'build two to four labelled zones rather than one full-width bullet stack: a visual, a short '
     'readout, and an implication. Use chips/shapes for subheads and large numbers for key metrics. '
     'On a figure page, name the panels, axes/conditions and feature to look at in the caption or a '
-    'nearby label; do not leave the figure as an unlabelled assertion. Prefer light cards, thin accent '
-    'rules and small labels; avoid large dark fill blocks such as full-width banners or near-black '
-    'cards (dark fill is for small tags/chips only). Prefer '
+    'nearby label; do not leave the figure as an unlabelled assertion. Use white space, thin accent '
+    'rules and small labels; avoid card-like filled containers and large dark fill blocks. Prefer '
     'native text/list/group/image/shape/line/table/path/formula/chart. Use path with view_box and '
     'absolute M/L/C/Q/Z commands for editable curves; formula with latex for OMML; chart with a '
     'native editable chart data object. Group children are relative to the group origin. Put '
@@ -466,16 +485,19 @@ def scene_task(prompt):
 
 - 页面文案以 `copy_bindings` 为唯一来源。标题/结论用 `title_ref`/`take_ref`；正文、
   标签和图注用对象 `copy_ref`。只有与批准文本逐字相同才允许写字面量。
+- 优先用 prompt 里的 `recipes`：提交 `{{"id":"P1","recipe":"cover","slots":{{...}}}}`，
+  slots 文案用 `{{"copy_ref":"P1.take"}}`，几何和原生列表/公式由 recipe 负责。没有合适
+  recipe 时才手写 objects；不要把 recipe 页再包一层手写坐标。
 - 每页给每个对象显式 `box`（英寸）。不要写“左边两张图、右边三条结论”让程序猜几何；
   不要让对象重叠，不要把说明文字塞进装饰框。
 - 一页只讲一个判断：一个主视觉 + 至多三条短结论。保留原图比例、图号/面板字母和来源；
   论文图不能重画成示意，示意必须标 schematic。
 - 页眉由渲染器统一画：section 写 `NN · LABEL`，标题/结论用 `title_ref`/`take_ref`，可用
   `title_emphasis`/`take_emphasis` 强调关键术语。正文组织成 2–4 个带小标题的区，不要整页
-  一排等权重的项目符号；用形状小标题、关键数字卡、图旁标注建立层级。
+  一排等权重的项目符号；用编号小标题、关键数字、图旁标注建立层级。
 - 有图的页面必须有可见读图说明：点名面板、轴/条件、要看的变化和含义；不能只放图加结论。
   不把“作者主张/未验证/仅/不能”等审查口吻写进正文；局限集中到一页边界或 notes。
-- 用浅色卡片、细强调线和少量小标签分组；不要整条深色横幅或大面积近黑卡片。
+- 用留白、细强调线和少量小标签分组；不要整张卡片/整条深色横幅/大面积近黑块。
   深色只用于小标签/小徽章，不用于承载大段正文。
 - 原生对象：text / list（0–3 级）/ group（子对象相对组原点）/ image / shape / line /
   table / path（贝塞尔）/ formula（OMML）/ chart（原生数据图）。notes 写讲稿。

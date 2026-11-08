@@ -115,9 +115,27 @@ class RecipePilotTests(unittest.TestCase):
         self.assertTrue(any(obj.get('text', '').startswith('结构非对称')
                             for obj in page['objects']))
 
+    def test_svg_recipe_imports_editable_shapes_text_and_arcs(self):
+        svg = '''<svg viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg">
+        <style>.l{font-size:11px}</style>
+        <rect x="5" y="5" width="40" height="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+        <path d="M10 30 A10 6 0 0 1 30 30 Z" fill="#CECBF6" stroke="#534AB7" stroke-width="0.5"/>
+        <path d="M40 20 L60 20" fill="none" stroke="#A32D2D" stroke-width="1" marker-end="url(#arrow)"/>
+        <text class="l" x="5" y="48" fill="#5F5E5A">示意文本</text></svg>'''
+        page = compose_deck([{'id': 'R8', 'recipe': 'svg_diagram', 'section': '08 · SVG',
+                              'title': 'SVG 原生导入', 'take': '图形和文字均为可编辑对象。',
+                              'svg': svg}])['pages'][0]
+        kinds = [obj['type'] for obj in page['objects']]
+        self.assertIn('shape', kinds)
+        self.assertIn('path', kinds)
+        self.assertIn('text', kinds)
+        self.assertNotIn('image', kinds)
+        self.assertTrue(any(obj.get('text') == '示意文本' for obj in page['objects']))
+
     def test_all_recipe_names_are_exposed(self):
         self.assertEqual(set(RECIPES), {'cover', 'contrast', 'figure_readout',
-                                        'metrics', 'table_compare', 'closing', 'eviz_chain'})
+                                        'metrics', 'table_compare', 'closing',
+                                        'eviz_chain', 'svg_diagram'})
 
 
 if __name__ == '__main__':

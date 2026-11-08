@@ -59,6 +59,10 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 `work/page_scene_binding.json` 保存设计哈希、每页 required/used copy 与 evidence 绑定，
 供后续审计；讲稿只写 `page.notes`，不进入投屏对象。
 
+`page_scene` 也接受 recipe 页：`{id, recipe, slots}`。binder 在原有校验之前用
+`agent/page_recipes.expand_page()` 展开；slots 中的 `{"copy_ref":"P1.take"}` 先解析成
+批准文案。展开后仍走同一套标题/结论、可见 carrier、数字和几何门禁。
+
 ## 原生对象
 
 页眉是统一的视觉系统：`section` 画成小标签，`title_ref`/`take_ref` 画标题与浅色结论带；
@@ -145,6 +149,8 @@ contact sheet。`review` / `ingest` 仍要求实际 PowerPoint UI 审阅和显�
 - body ≥18 pt，label ≥11 pt，caption ≥8.5 pt，formula ≥14 pt；
 - 所有 box 在页面内，正文文本不重叠；
 - 图片存在，表格至少 2×2，图表 series/categories 一致。
+- `svg_diagram` 导入页标记 `svg_import=true`：对象上限放宽到 80，且不做文本碰撞门禁
+  （复杂示意图的文字/标注位置由预览实际检查）；普通页仍是 14 对象。
 
 它不做文字高度测量。真正的截断、重叠、字体替换和图片裁切由 `scene_preview` /
 native PDF + 人工检查。
@@ -168,9 +174,10 @@ native PDF + 人工检查。
 
 ## Recipe pilot
 
-`agent/page_recipes.py` 提供 6 个受约束 recipe（cover / contrast / figure_readout /
-metrics / table_compare / closing）。设计方只填 slots，recipe 负责几何、原生列表、
-行内公式、表格和无卡片布局。它是最小闭环，尚未接入 job 状态机；验收和指标见
+`agent/page_recipes.py` 提供 8 个受约束 recipe（cover / contrast / figure_readout /
+metrics / table_compare / closing / eviz_chain / svg_diagram）。设计方只填 slots，
+recipe 负责几何、原生列表、行内公式、表格、EViz 和 SVG 无卡片布局。recipe 页已能在
+`page_scene` 绑定时展开；`page_design` 尚未直接产出 recipe 字段。验收和指标见
 `page-recipes.md` 与 `E:\ppt_x\AVDG_recipe_pilot\PILOT_QA.md`。
 
 ## 文件

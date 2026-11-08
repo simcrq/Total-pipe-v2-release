@@ -34,13 +34,19 @@
       "maxItems": 40,
       "items": {
         "type": "object",
-        "required": ["id", "objects"],
+        "required": ["id"],
         "allOf": [
-          {"anyOf": [{"required": ["title"]}, {"required": ["title_ref"]}]},
-          {"anyOf": [{"required": ["take"]}, {"required": ["take_ref"]}]}
+          {"anyOf": [{"required": ["objects"]}, {"required": ["recipe"]}]},
+          {"anyOf": [{"required": ["title"]}, {"required": ["title_ref"]},
+                     {"required": ["recipe"]}]},
+          {"anyOf": [{"required": ["take"]}, {"required": ["take_ref"]},
+                     {"required": ["recipe"]}]}
         ],
         "properties": {
           "id": {"type": "string", "pattern": "\\S"},
+          "recipe": {"type": "string"},
+          "slots": {"type": "object"},
+          "svg_import": {"type": "boolean"},
           "section": {"type": "string"},
           "title": {"type": "string"},
           "title_ref": {"type": "string"},

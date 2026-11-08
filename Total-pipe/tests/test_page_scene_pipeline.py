@@ -83,6 +83,30 @@ class PageScenePipelineTests(AgentCase):
         self.assertEqual(canonical['P1.title'], '一个器件完成两类功能')
         self.assertEqual(canonical['P1.take'], '同一固定拓扑同时承载数字与模拟功能。')
 
+    def test_recipe_page_expands_before_binding(self):
+        work = self.prepare_design()
+        value = {
+            'schema_version': '0.1', 'deck_id': 'scene-integration',
+            'theme': {'font': 'Microsoft YaHei'},
+            'pages': [{
+                'id': 'P1', 'recipe': 'contrast', 'section': '01 · TEST',
+                'title_ref': 'P1.title', 'take_ref': 'P1.take',
+                'slots': {
+                    'left': {'head': 'DIGITAL',
+                             'items': [{'text': '固定拓扑'}, {'text': '两种偏置'}]},
+                    'right': {'head': 'ANALOG',
+                              'items': [{'text': '保持功能'}, {'text': '可逆'}]},
+                    'key': '关键：同一电路承载两类功能',
+                },
+            }],
+        }
+        canonical, report = bind(value, work, source_dir=work)
+        page = canonical['pages'][0]
+        self.assertEqual(page['title'], '一个器件完成两类功能')
+        self.assertEqual(page['take'], '同一固定拓扑同时承载数字与模拟功能。')
+        self.assertTrue(any(obj.get('type') == 'list' for obj in page['objects']))
+        self.assertEqual(report['pages'][0]['title'], '一个器件完成两类功能')
+
     def test_atomic_display_copy_carriers_must_be_bound(self):
         design = {
             'schema_version': '1.3', 'deck_id': 'atomic',
