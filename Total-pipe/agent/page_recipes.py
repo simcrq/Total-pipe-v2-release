@@ -25,9 +25,44 @@ RECIPES = {
 }
 
 
+EXAMPLES = {
+    'cover': {'title': {'copy_ref': 'P1.title'}, 'take': {'copy_ref': 'P1.take'},
+              'meta': 'WSe₂ / 双栅', 'stats': [['13', '种功能'], ['7', '数字逻辑']],
+              'figure': {'path': '/abs/fig1a.jpg', 'caption': 'Fig. 1a'}},
+    'contrast': {'title': {'copy_ref': 'P2.title'}, 'take': {'copy_ref': 'P2.take'},
+                 'left': {'head': 'DIGITAL', 'items': [{'copy_ref': 'P2.c_b1'}]},
+                 'right': {'head': 'ANALOG', 'items': [{'copy_ref': 'P2.c_b2'}]},
+                 'key': {'copy_ref': 'P2.c_b3'}},
+    'figure_readout': {'title': {'copy_ref': 'P3.title'}, 'take': {'copy_ref': 'P3.take'},
+                       'figure': {'path': '/abs/fig1a.jpg', 'caption': 'Fig. 1a'},
+                       'read_label': '读图', 'items': [{'copy_ref': 'P3.c_b1'},
+                                                       {'copy_ref': 'P3.c_b2'}]},
+    'metrics': {'title': {'copy_ref': 'P8.title'}, 'take': {'copy_ref': 'P8.take'},
+                'figures': [{'path': '/abs/fig2b.jpg'}, {'path': '/abs/fig2c.jpg'}],
+                'caption': 'Fig. 2b/2c', 'items': [{'copy_ref': 'P8.c_b2'}],
+                'condition': {'copy_ref': 'P8.c_b1'}},
+    'table_compare': {'title': {'copy_ref': 'P15.title'}, 'take': {'copy_ref': 'P15.take'},
+                      'table': {'rows': [['维度', '本工作'], ['数字', '七种']]},
+                      'big': '13', 'big_label': '种功能',
+                      'items': [{'copy_ref': 'P15.c_b1'}], 'source': 'SI'},
+    'closing': {'title': {'copy_ref': 'P18.title'}, 'take': {'copy_ref': 'P18.take'},
+                'big': '13', 'big_label': '种功能',
+                'items': [{'copy_ref': 'P18.c_path'}], 'stats': '七数字 / 六模拟',
+                'fixed': {'copy_ref': 'P18.c_fixed'}},
+    'eviz_chain': {'title': {'copy_ref': 'P17.title'}, 'take': {'copy_ref': 'P17.take'},
+                   'eviz': {'facts': {'take': '<visible approved sentence>'},
+                            'spec': {'version': '1.0', 'template': 'process_steps@1',
+                                     'source_fact_ids': ['take'],
+                                     'labels': {'step_0': '<text>', 'step_1': '<text>'}}}},
+    'svg_diagram': {'title': '<approved title>', 'take': '<approved take>',
+                    'svg_path': '/abs/diagram.svg', 'box': [0.9, 2.2, 9.35, 4.72]},
+}
+
+
 def capabilities():
     return {'version': '1.0',
-            'recipes': {name: {'slots': list(slots)} for name, slots in RECIPES.items()},
+            'recipes': {name: {'slots': list(slots), 'example': EXAMPLES.get(name, {})}
+                        for name, slots in RECIPES.items()},
             'mode': 'recipe_or_raw',
             'native_defaults': ['native unordered lists', 'inline OMML $...$',
                                 'native tables/paths', 'no large filled cards',
