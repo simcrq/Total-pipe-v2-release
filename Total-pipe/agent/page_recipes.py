@@ -7,6 +7,7 @@ tables and paths are the default path, not optional decorations.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 MARGIN = 0.72
@@ -19,6 +20,7 @@ RECIPES = {
     'metrics': ('two_figures', 'metric_list', 'condition'),
     'table_compare': ('table', 'big_stat', 'readout_list'),
     'closing': ('big_stat', 'path_list', 'stats'),
+    'eviz_chain': ('eviz_paths', 'eviz_labels'),
 }
 
 
@@ -158,6 +160,55 @@ def closing(spec):
     return _page(spec, objects)
 
 
+def eviz_chain(spec):
+    """Render a validated ExplainViz spec as native PageScene paths and labels.
+
+    EViz owns the bounded visual spec and its source-fact validation.  This
+    adapter only lowers its path/label JSON into the same native vocabulary as
+    the rest of PageScene; it does not re-derive scientific relations.
+    """
+    from deck_compiler.explain_viz.specs import validate_spec
+    from deck_compiler.explain_viz.templates import build as build_viz
+
+    eviz = spec.get('eviz') or {}
+    facts = eviz.get('facts') or {}
+    visual = eviz.get('spec') or {}
+    validate_spec(visual, facts)
+    theme = spec.get('theme') or {'accent': '#0B6E99', 'background': '#FFFFFF',
+                                  'foreground': '#1B2A3A'}
+    viz = build_viz(visual, theme)
+    box = spec.get('box') or [0.72, 2.35, 11.9, 4.1]
+    vx, vy, vw, vh = viz['view_box']
+    sx, sy = box[2] / vw, box[3] / vh
+    tokens = {'background': '#FFFFFF', 'foreground': '#1B2A3A', 'accent': '#0B6E99',
+              'none': 'none'}
+    objects = []
+    process = visual.get('template') == 'process_steps@1'
+    for index, item in enumerate(viz.get('paths') or []):
+        # A process chain reads as text + arrows, not a row of filled cards.
+        if process and re.search(r'_step_\d+$', str(item.get('id'))):
+            continue
+        fill = tokens.get(str(item.get('fill')), item.get('fill', 'none'))
+        stroke = tokens.get(str(item.get('stroke')), item.get('stroke', '#1B2A3A'))
+        objects.append({
+            'id': 'eviz_path_%d' % index, 'type': 'path', 'box': list(box),
+            'view_box': [vx, vy, vw, vh], 'commands': item['commands'],
+            'fill': fill, 'stroke': stroke,
+            'stroke_width': item.get('line_width', 2),
+        })
+    for index, item in enumerate(viz.get('labels') or []):
+        lx, ly, lw, lh = item['box']
+        objects.append(_text(
+            'eviz_label_%d' % index,
+            [box[0] + (lx - vx) * sx, box[1] + (ly - vy) * sy, lw * sx, lh * sy],
+            item['text'], 9.2 if item['text'] in ('示意', 'Schematic') else 12.5,
+            'caption' if item['text'] in ('示意', 'Schematic') else 'label',
+            '#5E7084' if item['text'] in ('示意', 'Schematic') else '#102A43',
+            True if item['text'] not in ('示意', 'Schematic') else False,
+            align='center', valign='middle'))
+    return _page(spec, objects, spec.get('notes', 'ExplainViz process chain; schematic geometry.'))
+
+
 BUILDERS = {
     'cover': cover,
     'contrast': contrast,
@@ -165,6 +216,7 @@ BUILDERS = {
     'metrics': metrics,
     'table_compare': table_compare,
     'closing': closing,
+    'eviz_chain': eviz_chain,
 }
 
 

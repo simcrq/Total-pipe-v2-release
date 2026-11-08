@@ -20,18 +20,19 @@
 | `metrics` | figures, items, condition | 两张原图 + 原生列表 + 行内公式 |
 | `table_compare` | table, big, items | 原生表格 + 大号数字 + 原生列表 |
 | `closing` | big, items, stats | 大号数字 + 两级原生列表 + 行内公式 |
+| `eviz_chain` | eviz.spec, eviz.facts | 复用 EViz `validate_spec` + `templates.build`；进程链降为原生 path/label，不再画卡片 |
 
 设计方不写坐标、不选形状、不写 OMML。几何和原生能力由 recipe 兑现。
 
 ## 验证
 
-6 页 pilot 在 `E:\ppt_x\AVDG_recipe_pilot`：
+7 页 pilot 在 `E:\ppt_x\AVDG_recipe_pilot`：
 
 - `text_only_pages=0`
 - `card_area=0.0`
 - `inline_math=10`
 - `list_styles=[arrow,dash,dot,square]`
-- `native_move_pages=6/6`
+- `native_move_pages=7/7`
 - PageScene QA PASS，native PDF 6 页，`native_items=0`
 - `officecli validate` PASS
 - 28 个回归测试 PASS
@@ -40,6 +41,7 @@ pilot 证明：**不用卡片、用原生列表和行内公式，可以由 recip
 
 ## 尚未接入
 
+- EViz 只接了 `process_steps@1`，尚未接 `layer_stack@1` / `peel_angle@1`；
 - recipe 尚未成为 `page_design` 的 schema 字段；
 - slots 仍直接写字符串，还没走 approved copy / `content_map`；
 - 只覆盖 6 类页面，还需要 mechanism、panel_grid、roadmap；

@@ -93,9 +93,31 @@ class RecipePilotTests(unittest.TestCase):
             self.assertGreater(summary['card_area'], 0)
             self.assertEqual(summary['status'], 'REVIEW')
 
+    def test_eviz_recipe_lowers_validated_spec_to_native_paths(self):
+        take = '结构非对称 → Vds 第三控制端 → 两管固定拓扑'
+        spec = {'id': 'R7', 'recipe': 'eviz_chain', 'section': '07 · EXPLAINVIZ',
+                'title': '从结构到功能', 'take': take,
+                'eviz': {'facts': {'take': take},
+                         'spec': {'version': '1.0', 'template': 'process_steps@1',
+                                  'source_fact_ids': ['take'],
+                                  'labels': {'step_0': '结构非对称',
+                                             'step_1': 'Vds 第三控制端',
+                                             'step_2': '两管固定拓扑'},
+                                  'relations': [
+                                      {'type': 'precedes', 'from': 'step_0', 'to': 'step_1',
+                                       'source_fact_ids': ['take']},
+                                      {'type': 'precedes', 'from': 'step_1', 'to': 'step_2',
+                                       'source_fact_ids': ['take']}]}}}
+        page = compose_deck([spec])['pages'][0]
+        kinds = [obj['type'] for obj in page['objects']]
+        self.assertIn('path', kinds)
+        self.assertIn('text', kinds)
+        self.assertTrue(any(obj.get('text', '').startswith('结构非对称')
+                            for obj in page['objects']))
+
     def test_all_recipe_names_are_exposed(self):
         self.assertEqual(set(RECIPES), {'cover', 'contrast', 'figure_readout',
-                                        'metrics', 'table_compare', 'closing'})
+                                        'metrics', 'table_compare', 'closing', 'eviz_chain'})
 
 
 if __name__ == '__main__':
