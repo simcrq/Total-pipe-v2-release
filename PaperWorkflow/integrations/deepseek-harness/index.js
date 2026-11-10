@@ -1,11 +1,27 @@
 import { spawn } from 'node:child_process'
-import { isAbsolute, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const DSH_TOOLS_ENTRY = process.env.DSH_TOOLS_ENTRY
-  || (process.env.DSH_SOURCE
-    ? resolve(process.env.DSH_SOURCE, 'packages/core/tools/lib/index.js')
-    : '')
+function defaultToolsEntry() {
+  if (process.env.DSH_TOOLS_ENTRY) return process.env.DSH_TOOLS_ENTRY
+  if (process.env.DSH_SOURCE) {
+    return resolve(process.env.DSH_SOURCE, 'packages/core/tools/lib/index.js')
+  }
+  // The desktop app ships the harness packages inside app.asar.  Resolve them
+  // from the running executable so an installed bundle works without a source
+  // checkout or a hand-set DSH_SOURCE.
+  if (process.platform === 'win32') {
+    const candidate = resolve(
+      dirname(process.execPath),
+      'resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js',
+    )
+    if (existsSync(candidate)) return candidate
+  }
+  return ''
+}
+
+const DSH_TOOLS_ENTRY = defaultToolsEntry()
 if (!DSH_TOOLS_ENTRY) {
   throw new Error('Set DSH_TOOLS_ENTRY or DSH_SOURCE so the plugin can load Harness tools')
 }
@@ -22,7 +38,7 @@ export const inject = ['tools']
 // PAPERWORKFLOW_ROOT when the plugin is installed from a different checkout.
 const PROJECT_ROOT = process.env.PAPERWORKFLOW_ROOT || fileURLToPath(new URL('../..', import.meta.url))
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.py', import.meta.url))
-const PYTHON = process.env.PAPERWORKFLOW_PYTHON || 'python3'
+const PYTHON = process.env.PAPERWORKFLOW_PYTHON || (process.platform === 'win32' ? 'python' : 'python3')
 
 function runBridge(payload) {
   return new Promise((resolve, reject) => {
