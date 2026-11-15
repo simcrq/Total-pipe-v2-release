@@ -394,7 +394,28 @@ class RegionCompiler:
         elif kind == 'graphic':
             graphic = self.graphics[node['ref']]
             height = self.graphic_height(graphic, width, path, available)
-            preferred = width*graphic['view_box'][3]/graphic['view_box'][2]+8 if graphic['type'] == 'path' else height
+            if graphic['type'] == 'path':
+                fill = max(height, width*graphic['view_box'][3]/graphic['view_box'][2]+8.)
+            elif graphic['type'] in ('dag', 'mechanism', 'architecture'):
+                # Boxes grow only up to a landscape aspect (dag_layout.MAX_NODE_ASPECT). Asking the
+                # stack for the whole band instead produced 320x330 cards holding one line of text.
+                from .dag_layout import MAX_NODE_ASPECT, layered_order
+                try:
+                    layers, _ = layered_order(
+                        [n['id'] for n in graphic.get('nodes', [])],
+                        [(e['from'], e['to']) for e in graphic.get('edges', []) if not e.get('feedback')])
+                    columns = max(1, len(layers))
+                except (KeyError, TypeError, ValueError):
+                    columns = max(1, len(graphic.get('nodes') or [1]))
+                node_w = min(320.0, max(120.0, (width-32.0*(columns-1))/columns))
+                fill = MAX_NODE_ASPECT*node_w+24.
+            else:
+                # Funnel levels scale with the band, so they may take the whole of it.
+                fill = available[1]
+            # `height` is a readability floor; `fill` is what the drawing can use without turning
+            # into empty frames. The surplus above `fill` belongs to the parent, which centres the
+            # diagram instead of inflating it.
+            preferred = min(max(height, available[1]), max(height, fill))
             need = Need(height, max(height, preferred), self.graphic_min_width(graphic))
         elif kind == 'chart':
             from .chart_render import chart_need

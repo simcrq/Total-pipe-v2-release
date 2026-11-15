@@ -1535,6 +1535,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         element.update(layout_component=entry['component'], layout_region=entry['bbox'])
                         ex, ey, ew, eh = element['bbox']
                         rx, ry, rw, rh = entry['bbox']
+                        # Sub-pixel rounding is not a layout decision: a preserve-terms block whose
+                        # region came out of a ratio split can be 0.7 px shorter than the line grid.
+                        # Clamp that residue so "an element never leaves its assigned region" stays
+                        # true; anything larger is still reported as a real overflow below.
+                        if eh > rh and eh-rh < 1.0:
+                            element['bbox'][3] = rh
+                            eh = rh
+                        if ew > rw and ew-rw < 1.0:
+                            element['bbox'][2] = rw
+                            ew = rw
                         if (not element.get('scientific_text_overflow') and
                             (ex < rx-.1 or ey < ry-.1 or ex+ew > rx+rw+.1 or ey+eh > ry+rh+.1)):
                             issues.append(issue('REGION_CONTENT_OUT_OF_BOUNDS', 'FAIL',

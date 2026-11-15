@@ -281,6 +281,16 @@ def render_funnel(data, theme, bounds, font_paths=None):
     total = sum(heights)+gap*(count-1)
     if total > h:
         raise GraphicLayoutError('GRAPHIC_CAPACITY', f'Funnel levels need {total:.0f} px at 18 pt, only {h:.0f} px available')
+    if total > 0 and h > total:
+        # Same rule as the DAG: a funnel in a tall band grows into it instead of floating in it.
+        # Scale the level heights only - the gaps are fixed, so folding them into the factor would
+        # push the last level past the region by exactly the gap total.
+        from .dag_layout import MAX_NODE_STRETCH
+        room = h-gap*(count-1)
+        stretch = min(room/sum(heights), MAX_NODE_STRETCH) if sum(heights) > 0 else 1.0
+        if stretch > 1.0:
+            heights = [height*stretch for height in heights]
+            total = sum(heights)+gap*(count-1)
     cursor, elements = y+(h-total)/2, []
     for level, height, (top_w, bottom_w, th, bh, apex) in zip(data['levels'], heights, widths):
         outer_w, inner_w = max(top_w, bottom_w), min(top_w, bottom_w)
