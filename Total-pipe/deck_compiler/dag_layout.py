@@ -13,6 +13,12 @@ EPS = .05
 # keeps a one-line box landscape and leaves the rest of the surplus to the parent's centring.
 MAX_NODE_STRETCH = 3.0
 MAX_NODE_ASPECT = 0.34
+# The label box node_elements draws into is 94 % of the node width; this module measures line
+# counts at the narrower INSETS ratio below, so a widow has to be detected at the drawn width or
+# it is predicted away. Keep TEXT_INSET in step with graphic_layout.node_elements.
+TEXT_INSET = .94
+# Narrowest arrow channel worth keeping: below this the connectors read as dashes between cards.
+MIN_COLUMN_GAP = 64.
 INSETS = {'diamond': (.5, .5), 'ellipse': (.66, .66), 'hexagon': (.66, .76)}
 
 
@@ -268,6 +274,23 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
                         th, bh = text_heights[nid]
                         text_heights[nid] = line_count*title_size*1.25, bh
             heights = {nid: uniform for nid in heights}
+    # A label whose last line is one or two characters is a widow: the node is a few pixels too
+    # narrow, not the type too large. Take the width back from the arrow gap (never below
+    # MIN_COLUMN_GAP) rather than shrinking the type or dropping a word from the explanation.
+    # This runs after the type has been scaled up for a tall band, because that scaling is what
+    # creates most widows: measured at the 18 pt face a label fits, at the grown face it does not.
+    if columns > 1:
+        wanted = 0.
+        for nid in ids:
+            face, inset = faces['title'], TEXT_INSET
+            lines = break_lines(strip_markup(by_id[nid]['title']), face, node_width*inset)
+            if len(lines) > 1 and len(lines[-1].strip()) <= 2:
+                wanted = max(wanted, face.getlength(strip_markup(by_id[nid]['title']))/inset+4)
+        if node_width < wanted <= 320.:
+            room = (width-wanted*columns)/(columns-1)
+            if room >= MIN_COLUMN_GAP:
+                node_width, gap = wanted, min(gap, room)
+                left = x+(width-(node_width*columns+gap*(columns-1)))/2
     for rank, layer in enumerate(layers):
         need = sum(heights[n] for n in layer)+12*(len(layer)-1)
         if need > available+EPS:
