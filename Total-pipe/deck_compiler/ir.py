@@ -41,6 +41,31 @@ def coarse_characters(text, inline_math=False):
         return len(text)  # Syntax is reported separately; validation must return structured errors.
 
 
+def visual_carriers(composition):
+    """Visual objects a page can be built around: figures, native diagrams, charts, real tables.
+
+    A table counts only as a matrix - two rows by two columns or more - so a one-cell table cannot
+    stand in for an explanation.
+    """
+    composition = composition if isinstance(composition, dict) else {}
+    tables = [table for table in composition.get('tables') or []
+              if isinstance(table, dict)
+              and isinstance(table.get('row_count'), int) and table['row_count'] >= 2
+              and isinstance(table.get('column_count'), int) and table['column_count'] >= 2]
+    return (len(composition.get('figure_refs') or []) + len(composition.get('graphics') or [])
+            + len(composition.get('charts') or []) + len(tables))
+
+
+def text_only_pages(ir):
+    """[(slide number, slide id, copy block count)] for pages that are prose only."""
+    found = []
+    for number, slide in enumerate(ir.get('slides', []), 1):
+        composition = slide.get('composition') or {}
+        if not visual_carriers(composition):
+            found.append((number, slide.get('id'), len(composition.get('blocks') or [])))
+    return found
+
+
 def validate(ir):
     errors = []
     def check(ok, message, slide=None, rule="IR_INVALID", severity="FAIL"):

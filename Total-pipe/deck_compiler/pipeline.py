@@ -100,7 +100,8 @@ def _write_explain(out, ir_path, source, output_ir, prepared):
 
 
 def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True,
-                  require_visual_design=True, explain_viz_request=None, explain_viz_mode=None):
+                  require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
+                  require_visuals=False):
     ir_path, out = Path(ir_path), Path(out)
     ir = json.loads(ir_path.read_text(encoding='utf-8'))
     source_ir = ir
@@ -133,6 +134,30 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             write_qa(out, qa, ir, None)
             write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
+    # A page of prose does not show anything: the reader is told about a relationship but cannot
+    # see it. Every page has to carry a paper figure, a native diagram, a chart or a native table,
+    # so design must draw what the copy claims. Hard gate in the production entry: the deck is not
+    # compiled and no layout is left behind until those pages are drawn.
+    from .ir import text_only_pages
+    blocked_pages = text_only_pages(ir) if require_visuals else []
+    if blocked_pages:
+        items = [issue('TEXT_ONLY_PAGE', 'FAIL',
+                       f'{slide_id} carries {count} copy blocks and no visual: add a figure, a native '
+                       'diagram, a chart or a native table that shows the relationship the copy '
+                       'explains, or drop the page',
+                       number, detector='design-preflight')
+                 for number, slide_id, count in blocked_pages]
+        for name in ('layout.json', 'layout_provider.json'):
+            (out/name).unlink(missing_ok=True)
+        shutil.rmtree(out/'derived', ignore_errors=True)
+        write_json(out/'deck_ir.json', ir)
+        qa = report(items, ir_sha256=digest(ir), checks={'semantic': False, 'geometric': False})
+        qa['next_action'] = {'action': 'draw_a_visual_for_each_page',
+                             'pages': [slide_id for _, slide_id, _ in blocked_pages],
+                             'ir': str(ir_path.resolve())}
+        write_qa(out, qa, ir, None)
+        write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
+        return ir, None, qa
     from .explain_viz.runtime import prepare
     prepared = prepare(ir, explain_viz_request, ir_path.parent,
         lambda value: _projection_findings(value, *_compile_ir(value, ir_path, layout_options)), mode=explain_viz_mode)
@@ -204,7 +229,8 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
 
 
 def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
-          require_visual_design=True, explain_viz_request=None, explain_viz_mode=None):
+          require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
+          require_visuals=True):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -216,7 +242,8 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
             (out/name).unlink(missing_ok=True)
         ir, layout, qa = compile_input(ir_path, out, layout_options,
                                        require_visual_design=require_visual_design,
-                                       explain_viz_request=explain_viz_request, explain_viz_mode=explain_viz_mode)
+                                       explain_viz_request=explain_viz_request, explain_viz_mode=explain_viz_mode,
+                                       require_visuals=require_visuals)
         explain_summary = qa.get('explain_viz')
         items = qa['items']
         if qa['counts']['FAIL']:
