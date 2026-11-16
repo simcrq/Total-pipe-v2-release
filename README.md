@@ -98,6 +98,9 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 
 在完整仓库根目录执行 `python3.12 install.py --client codex`（Claude 使用 `--client claude`），
 默认注册 `total_pipe`，只暴露 doctor / start / advance / status 四工具。
+同一命令把 `Total-pipe/skills/` 下的四个技能拷进该客户端的技能目录（`$CODEX_HOME/skills`
+或 `~/.claude/skills`），首次安装不需要手工复制；目标已有不同副本时跳过并列入 `skipped`，
+加 `--force` 覆盖，`--dry-run` 只列计划，`--skills-root` 改写目标目录。
 使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提供 Agent 产物与用户选择。
 已有 IR / workflow 可从对应阶段继续；安装、状态与恢复详见[接入层说明](Total-pipe/docs/agent-adapter.md)。例如：
 

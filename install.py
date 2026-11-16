@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--python', default=sys.executable)
     parser.add_argument('--venv', type=Path, default=ROOT/'.venv')
     parser.add_argument('--config', type=Path)
+    parser.add_argument('--skills-root', type=Path,
+                        help='Override the client skills directory that receives the bundled skills')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--force', action='store_true')
     parser.add_argument('--skip-deps', action='store_true', help='Use an already provisioned venv')
@@ -34,6 +36,7 @@ def main():
         parser.error('Python >=3.12 required; rerun with --python /path/to/python3.12')
     sys.path.insert(0, str(ROOT/'Total-pipe'))
     from agent.installation import profile_servers, configure, handshake
+    from agent.skills import install as install_skills, plan as plan_skills
     from agent.state import write
     import tomllib
     dependencies = tomllib.loads((ROOT/'PaperWorkflow/pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']
@@ -46,11 +49,14 @@ def main():
             servers = profile_servers(args.profile, python)
             result = {'status': 'DRY_RUN', 'venv': str(venv), 'dependencies': dependencies,
                 'requirements': str(ROOT/'Total-pipe/requirements.txt'), 'servers': servers,
+                'skills': plan_skills(args.client, args.skills_root) if args.client != 'none' else None,
                 'configuration': configure(config, args.client, servers, args.force, True) if args.client != 'none' else None}
             print(json.dumps(result, ensure_ascii=True))
             return 0
+        skills = None
         if args.client != 'none':
             configure(config, args.client, profile_servers(args.profile, python), args.force, True)
+            skills = install_skills(args.client, args.skills_root, force=args.force)
         if not python.is_file():
             subprocess.run([args.python, '-m', 'venv', str(venv)], check=True)
         if not args.skip_deps:
@@ -68,7 +74,7 @@ def main():
         if args.profile == 'agent' and set(handshakes['total_pipe']['tools']) != \
                 {'totalpipe_doctor', 'totalpipe_start', 'totalpipe_advance', 'totalpipe_status'}:
             raise ValueError('Agent profile must expose exactly the four entry tools')
-        result = {'status': 'PASS', 'profile': args.profile, 'doctor': doctor,
+        result = {'status': 'PASS', 'profile': args.profile, 'doctor': doctor, 'skills': skills,
             'handshakes': handshakes, 'tool_count': sum(len(h['tools']) for h in handshakes.values()),
             'configuration': configure(config, args.client, servers, args.force) if args.client != 'none' else None}
         write(ROOT/'install-report.json', result)
