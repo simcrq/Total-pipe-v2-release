@@ -536,6 +536,11 @@ python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
   --layout-provider packer --officecli <officecli-path> --skip-native
 ```
 
+遇到 FAIL/WARNING 或 QA 里的 `rule`，先跑
+`python -m deck_compiler explain <CODE>`：给出该码的抛出点、成因与按代价排序的修法，
+`--list` 列全部码，`--search <词>` 反查，`--unauthored` 只看还没有处置建议的码。
+码表由源码扫描得出，新增门禁不会漏条目；据此改 IR，不要凭猜测压缩或改写科学内容。
+
 MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选与 QA；
 `totalpipe_review` 按需检查现有构建并截图。提供方只建议几何，编译器执行真实字体、容量、
 碰撞、原图下限与科学关系门禁，OfficeCLI 写 PPTX。`layout_provider.json` 的 `COMPILER_OWNED`

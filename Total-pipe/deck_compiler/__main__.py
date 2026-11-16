@@ -50,6 +50,12 @@ def main():
     p.add_argument('--out', required=True, type=Path, help='pages.json, assembled IR, or the report')
     p.add_argument('--spec', type=Path, help='pages.json for build')
     p.add_argument('--verify', action='store_true', help='Compile both IRs and compare every bbox')
+    p = commands.add_parser('explain', help='Explain a compiler or QA code: what raised it, why, what to change')
+    p.add_argument('codes', nargs='*', help='Codes to explain')
+    p.add_argument('--list', action='store_true', help='List every code this package can raise')
+    p.add_argument('--unauthored', action='store_true', help='Only codes without authored guidance')
+    p.add_argument('--search', help='Rank codes against free text')
+    p.add_argument('--json', action='store_true', help='Machine-readable output')
     for name in ('explain-viz-prompt', 'apply-explain-viz'):
         p = commands.add_parser(name, help='Optional reserved-slot native teaching diagrams')
         p.add_argument('--ir', required=True, type=Path)
@@ -110,6 +116,53 @@ def main():
                    help='Every reviewed slide id, or all')
     args = parser.parse_args()
     try:
+        if args.command == 'explain':
+            from . import diagnostics as diag
+            found = diag.discover()
+            if args.search:
+                picks = diag.search(args.search)
+                for code in picks:
+                    sites = found[code]
+                    first = (diag.CATALOG.get(code) or {}).get('summary') or next(
+                        (site['message'] for site in sites if site['message']), '')
+                    print(f"{diag.severity_of(sites) or 'raises':8} {code:34} {first}")
+                if not picks:
+                    print(f'no code matches {args.search!r}; try explain --list')
+                    return 1
+                return 0
+            if args.list or args.unauthored:
+                rows = [row for row in diag.inventory()
+                        if not args.unauthored or not row['authored']]
+                if args.json:
+                    print(json.dumps(rows, ensure_ascii=False))
+                    return 0
+                for row in rows:
+                    mark = 'authored' if row['authored'] else '-'
+                    print(f"{row['severity'] or 'raises':8} {row['code']:34} "
+                          f"{row['sites']:3} {mark}")
+                owned = sum(row['authored'] for row in rows)
+                print(f'\n{len(rows)} codes, {owned} with authored guidance')
+                return 0
+            if not args.codes:
+                raise ValueError('explain needs a code, --list, --search, or --unauthored')
+            rows, missing = [], []
+            for code in args.codes:
+                try:
+                    rows.append(diag.explain(code))
+                except KeyError:
+                    missing.append(code)
+            if missing:
+                import difflib
+                for code in missing:
+                    close = difflib.get_close_matches(code, list(found), 3)
+                    hint = f"; closest are {', '.join(close)}" if close else ''
+                    print(f'unknown code {code}{hint}')
+                return 1
+            if args.json:
+                print(json.dumps(rows, ensure_ascii=False))
+            else:
+                print('\n\n'.join(diag.render(row) for row in rows))
+            return 0
         if args.command == 'skeleton':
             from .workshop import skeleton
             return skeleton.build(args.ir, args.out, args.layout)
