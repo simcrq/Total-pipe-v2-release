@@ -30,10 +30,16 @@ class DiscoveryTests(unittest.TestCase):
             self.assertTrue(row['sites'], code)
 
     def test_catalog_has_no_dead_entries(self):
-        found = diag.discover()
-        stray = sorted(code for code in diag.CATALOG
-                       if code not in found and not diag.mentions(code))
-        self.assertEqual(stray, [], 'authored guidance for codes nothing in the package names')
+        found, composed = diag.discover(), diag.families()
+        stray = []
+        for code in diag.CATALOG:
+            if code.endswith('_'):
+                if not composed.get(code) and not any(key.startswith(code) for key in found):
+                    stray.append(code)
+            elif code not in found and not diag.mentions(code):
+                stray.append(code)
+        self.assertEqual(sorted(stray), [],
+                         'authored guidance for codes nothing in the package names')
 
     def test_core_codes_stay_authored(self):
         for code in MUST_BE_AUTHORED:
@@ -88,6 +94,20 @@ class ScanTests(unittest.TestCase):
         for code in ('COMPUTED_FIGURE_GATE', 'COMPUTED_OTHER_GATE'):
             self.assertIn(code, found)
             self.assertEqual(found[code][0]['function'], 'raises_a_computed_gate')
+
+    def test_a_composed_code_resolves_through_its_prefix(self):
+        self.assertNotIn('COMPOSED_SLOW', diag.discover(FIXTURES))
+        self.assertIn('COMPOSED_', diag.families(FIXTURES))
+        row = diag.explain('COMPOSED_SLOW', FIXTURES)
+        self.assertEqual(row['family'], 'COMPOSED_')
+        self.assertEqual(row['severity'], 'WARNING', 'the worst arm of the conditional')
+        self.assertIn('composed at runtime', diag.render(row))
+
+    def test_a_dict_finding_is_discovered(self):
+        row = diag.explain('DICT_GATE', FIXTURES)
+        self.assertEqual(row['severity'], 'REVIEW')
+        self.assertEqual(row['summary'], 'a dict notice')
+        self.assertEqual(row['sites'][0]['function'], 'reports_a_dict_gate')
 
     def test_unknown_code_is_a_key_error(self):
         with self.assertRaises(KeyError):

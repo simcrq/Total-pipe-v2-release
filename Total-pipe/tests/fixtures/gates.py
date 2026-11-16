@@ -17,3 +17,11 @@ def raises_two_severities():
 def raises_a_computed_gate(kind):
     code = {'figure': 'COMPUTED_FIGURE_GATE'}.get(kind, 'COMPUTED_OTHER_GATE')
     raise LayoutTreeError('body', code, 'region is shorter than its minimum', [0, 0], [0, 0])
+
+
+def raises_a_composed_gate(mode):
+    issue('COMPOSED_' + mode, 'WARNING' if mode == 'slow' else 'INFO', 'a composed notice')
+
+
+def reports_a_dict_gate(notes):
+    notes.append({'rule': 'DICT_GATE', 'severity': 'REVIEW', 'message': 'a dict notice'})

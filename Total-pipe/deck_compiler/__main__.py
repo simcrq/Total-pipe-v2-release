@@ -125,7 +125,7 @@ def main():
                     sites = found[code]
                     first = (diag.CATALOG.get(code) or {}).get('summary') or next(
                         (site['message'] for site in sites if site['message']), '')
-                    print(f"{diag.severity_of(sites) or 'raises':8} {code:34} {first}")
+                    print(f"{diag.severity_of(sites) or 'unknown':8} {code:34} {first}")
                 if not picks:
                     print(f'no code matches {args.search!r}; try explain --list')
                     return 1
@@ -138,7 +138,7 @@ def main():
                     return 0
                 for row in rows:
                     mark = 'authored' if row['authored'] else '-'
-                    print(f"{row['severity'] or 'raises':8} {row['code']:34} "
+                    print(f"{row['severity'] or 'unknown':8} {row['code']:34} "
                           f"{row['sites']:3} {mark}")
                 owned = sum(row['authored'] for row in rows)
                 print(f'\n{len(rows)} codes, {owned} with authored guidance')

@@ -116,39 +116,61 @@ def _assigned_codes(name, function):
     return found
 
 
-def _argument(node, position, keyword, default):
-    if position is not None and len(node.args) > position:
-        value = _literal(node.args[position])
-        if value:
-            return value
-    if keyword:
-        for word in node.keywords:
-            if word.arg == keyword:
-                value = _literal(word.value)
-                if value:
-                    return value
-    return default
+def _severity(node, position, keyword, default):
+    """Worst severity the call can report; a conditional picks between two literals."""
+    target = node.args[position] if position is not None and len(node.args) > position else None
+    if target is None and keyword:
+        target = next((word.value for word in node.keywords if word.arg == keyword), None)
+    if target is None:
+        return default
+    named = [value for child in ast.walk(target)
+             if (value := _literal(child)) is not None and value in SEVERITY_ORDER]
+    return sorted(named, key=SEVERITY_ORDER.index)[0] if named else default
+
+
+def _composed_prefix(node):
+    """``'EXPLAIN_VIZ_' + status`` builds a code at runtime; the prefix is all a scanner sees."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _literal(node.left)
+        if left and left.endswith('_') and GATE.match(left):
+            return left
+    return None
 
 
 def _codes(node, spec, function):
-    """Every code one call can raise; a computed variable is resolved in its own function."""
+    """(code, is_family) for every code one call can raise; a local variable resolves in place."""
     static = spec.get('code') is None
     if static:
-        return [spec['code_default']] if spec.get('code_default') else []
+        return [(spec['code_default'], False)] if spec.get('code_default') else []
     position, keyword = spec['code']
     target = node.args[position] if position is not None and len(node.args) > position else None
     if target is None and keyword:
         target = next((word.value for word in node.keywords if word.arg == keyword), None)
     if target is None:
-        return [spec['code_default']] if spec.get('code_default') else []
+        return [(spec['code_default'], False)] if spec.get('code_default') else []
     direct = _literal(target)
     if direct and _looks_like_a_code(direct):
-        return [direct]
+        return [(direct, False)]
+    prefix = _composed_prefix(target)
+    if prefix:
+        return [(prefix, True)]
     if isinstance(target, ast.Name) and function is not None:
         resolved = _assigned_codes(target.id, function)
         if resolved:
-            return resolved
-    return _gate_literals(target)
+            return [(code, False) for code in resolved]
+    return [(code, False) for code in _gate_literals(target)]
+
+
+def _dict_gate(node):
+    """Some findings are built as ``{'rule': 'CODE', 'severity': ...}`` dicts."""
+    mapping = {_literal(key): value for key, value in zip(node.keys, node.values)
+               if key is not None and _literal(key)}
+    code = _literal(mapping['rule']) if 'rule' in mapping else None
+    if not code or not _looks_like_a_code(code):
+        return None
+    severity = _literal(mapping['severity']) if 'severity' in mapping else None
+    message = _message(mapping['message']) if 'message' in mapping else None
+    return code, severity if severity in SEVERITY_ORDER else None, message
 
 
 def _tuple_gate(node):
@@ -164,13 +186,20 @@ def _tuple_gate(node):
 
 def discover(root=None):
     """Map every code raised in this package to the sites that raise it."""
-    return _scan(str(Path(root or PACKAGE)))
+    return _scan(str(Path(root or PACKAGE)))[0]
+
+
+def families(root=None):
+    """Composed-code prefixes, e.g. ``EXPLAIN_VIZ_`` whose suffix is decided at runtime."""
+    return _scan(str(Path(root or PACKAGE)))[1]
 
 
 @lru_cache(maxsize=8)
 def _scan(base):
-    found = defaultdict(list)
-    for path in sorted(Path(base).glob('*.py')):
+    found, composed = defaultdict(list), defaultdict(list)
+    for path in sorted(Path(base).rglob('*.py')):
+        if '__pycache__' in path.parts:
+            continue
         try:
             text = path.read_text(encoding='utf-8')
             tree = ast.parse(text)
@@ -179,6 +208,14 @@ def _scan(base):
         source = text.splitlines()
         parents = _parents(tree)
         for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                pair = _dict_gate(node)
+                if pair:
+                    code, severity, message = pair
+                    function = _enclosing(node, parents)
+                    found[code].append(_site(path, node, message, severity, source,
+                                             function.name if function is not None else None))
+                continue
             if not isinstance(node, ast.Call):
                 continue
             function = _enclosing(node, parents)
@@ -194,7 +231,8 @@ def _scan(base):
                 continue
             if spec.get('files') and path.name not in spec['files']:
                 continue
-            codes = [_STATIC.get(name)] if name in _STATIC else _codes(node, spec, function)
+            codes = ([(_STATIC.get(name), False)] if name in _STATIC
+                     else _codes(node, spec, function))
             if not codes:
                 continue
             message = None
@@ -202,12 +240,13 @@ def _scan(base):
                 message = _message(node.args[spec['message']])
             severity = spec['default']
             if spec.get('severity'):
-                severity = _argument(node, *spec['severity'], spec['default'])
+                severity = _severity(node, *spec['severity'], spec['default'])
             site = _site(path, node, message, severity, source, where)
-            for code in codes:
-                found[code].append(dict(site))
-    return {code: sorted(sites, key=lambda s: (s['module'], s['line']))
-            for code, sites in sorted(found.items())}
+            for code, is_family in codes:
+                (composed if is_family else found)[code].append(dict(site))
+    order = lambda sites: sorted(sites, key=lambda s: (s['module'], s['line']))
+    return ({code: order(sites) for code, sites in sorted(found.items())},
+            {code: order(sites) for code, sites in sorted(composed.items())})
 
 
 def mentions(code, root=None):
@@ -218,8 +257,8 @@ def mentions(code, root=None):
 @lru_cache(maxsize=64)
 def _mentions(code, base):
     hits = []
-    for path in sorted(Path(base).glob('*.py')):
-        if path.name == Path(__file__).name:
+    for path in sorted(Path(base).rglob('*.py')):
+        if path.name == Path(__file__).name or '__pycache__' in path.parts:
             continue
         try:
             lines = path.read_text(encoding='utf-8').splitlines()
@@ -241,10 +280,31 @@ def severity_of(sites):
     return None
 
 
+def _longest_prefix(code, keys):
+    best = None
+    for key in keys:
+        if key.endswith('_') and code.startswith(key) and (best is None or len(key) > len(best)):
+            best = key
+    return best
+
+
+def _authored(code):
+    """Exact guidance, else guidance written once for a composed family."""
+    if code in CATALOG:
+        return CATALOG[code]
+    prefix = _longest_prefix(code, CATALOG)
+    return CATALOG.get(prefix) if prefix else None
+
+
 def explain(code, root=None):
     """Return one structured explanation; the code must exist in the source."""
     sites = discover(root).get(code, [])
-    entry = CATALOG.get(code)
+    entry = _authored(code)
+    family = None
+    if not sites:
+        prefix = _longest_prefix(code, families(root))
+        if prefix:
+            family, sites = prefix, families(root)[prefix]
     if not sites:
         sites = mentions(code, root)
     if not sites and entry is None:
@@ -252,6 +312,7 @@ def explain(code, root=None):
     row = {
         'code': code,
         'authored': entry is not None,
+        'family': family,
         'severity': severity_of(sites),
         'summary': (entry or {}).get('summary') or next(
             (site['message'] for site in sites if site['message']), code),
@@ -272,7 +333,7 @@ def search(text, root=None):
         return []
     scored = []
     for code in discover(root):
-        entry = CATALOG.get(code) or {}
+        entry = _authored(code) or {}
         blob = ' '.join(filter(None, (code, entry.get('summary'), entry.get('cause')))).lower()
         if text in code.lower() or text in blob:
             scored.append((0, code))
@@ -286,7 +347,7 @@ def search(text, root=None):
 def unauthored(root=None, severity=None):
     """Codes that exist in the source but still lack authored remediation."""
     found = discover(root)
-    return [code for code in found if code not in CATALOG
+    return [code for code in found if _authored(code) is None
             and (severity is None or severity_of(found[code]) == severity)]
 
 
@@ -294,16 +355,18 @@ def inventory(root=None):
     """Every code with its severity and whether guidance is authored."""
     found = discover(root)
     return [{'code': code, 'severity': severity_of(found[code]),
-             'authored': code in CATALOG, 'sites': len(found[code])}
+             'authored': _authored(code) is not None, 'sites': len(found[code])}
             for code in found]
 
 
 def render(row):
     """Human-readable form of one ``explain`` record."""
     count = row['count']
-    header = f"{row['code']}  [{row['severity'] or 'raises'}]  ({count} site{'s' if count != 1 else ''})"
+    header = f"{row['code']}  [{row['severity'] or 'unknown'}]  ({count} site{'s' if count != 1 else ''})"
     lines = [header, '']
     lines.append(row['summary'] or '(no summary)')
+    if row.get('family'):
+        lines += ['', f"This code is composed at runtime from the prefix {row['family']}."]
     if row['cause']:
         lines += ['', 'Why', *[f'  {line}' for line in _wrap(row['cause'])]]
     if row['fixes']:
@@ -900,6 +963,31 @@ CATALOG = {
             ('split_the_page', 'cheap', 'Keep paper and supplement on separate pages.'),
         ),
         'see': ('docs/explanation-contract.md', 'docs/content-projection.md'),
+    },
+    'OFFICECLI_FORMAT': {
+        'summary': 'OfficeCLI reported a formatting warning, most often a text overflow estimate.',
+        'cause': 'The estimate comes from the writer, not from the compiled layout, so it is kept '
+                 'as INFO with the original issue attached. The page may well render correctly.',
+        'fixes': (
+            ('look_at_the_page', 'cheap', 'Check the rendered page before changing anything.'),
+            ('do_not_shrink_content', 'cheap', 'Do not compress or delete scientific content to '
+             'silence an estimate; treat it as INFO unless the page really overflows.'),
+        ),
+        'see': ('docs/officecli-backend.zh-CN.md',),
+    },
+    'EXPLAIN_VIZ_': {
+        'summary': 'The optional teaching-diagram pass reports what it did, and why.',
+        'cause': 'The suffix is decided at runtime: APPLIED when a diagram was placed, SKIPPED '
+                 'when the page had no reserved slot or the pass was off, FALLBACK when the '
+                 'conservative source rules were used instead of a proposal, DISABLED when the '
+                 'request turned it off. These are notices about an optional pass, not defects.',
+        'fixes': (
+            ('ignore_skipped', 'cheap', 'SKIPPED on a page that never declared a slot is '
+             'expected; no page can be forced to carry a diagram.'),
+            ('read_fallback', 'cheap', 'FALLBACK means no proposal was applied; supply one with '
+             'apply-explain-viz --proposal if the page deserves a diagram.'),
+        ),
+        'see': ('docs/explain-viz.md',),
     },
     'VISUAL_STYLE_INVALID': {
         'summary': 'presentation.visual_style is not a valid style object.',
