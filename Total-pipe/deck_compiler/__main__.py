@@ -24,6 +24,12 @@ def main():
     parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('capabilities', help='Print supported region-tree and backend contracts')
+    p = commands.add_parser('listify', help='Merge a page of prose blocks into one native list')
+    p.add_argument('--ir', required=True, type=Path)
+    p.add_argument('--out', required=True, type=Path, help='Output Deck IR (write beside its source)')
+    p.add_argument('--pages', nargs='+', help='Slide ids to convert; default every page that fits')
+    p.add_argument('--bullet', default='arrow', help='Native marker style (arrow, square, diamond, ...)')
+    p.add_argument('--gap', type=float, default=0.55, help='Item gap as a fraction of the line height')
     for name in ('explain-viz-prompt', 'apply-explain-viz'):
         p = commands.add_parser(name, help='Optional reserved-slot native teaching diagrams')
         p.add_argument('--ir', required=True, type=Path)
@@ -84,6 +90,36 @@ def main():
                    help='Every reviewed slide id, or all')
     args = parser.parse_args()
     try:
+        if args.command == 'listify':
+            from .lists import apply as apply_lists, candidates
+            from .layout import compile_deck
+            from .pipeline import write_json
+            source, out_path = args.ir.resolve(), args.out.resolve()
+            if out_path.parent != source.parent:
+                raise ValueError('Write the listified Deck IR beside its source: relative asset paths '
+                                 'must keep their meaning')
+            ir = json.loads(source.read_text(encoding='utf-8'))
+            attempt = set(args.pages or candidates(ir))
+            dropped = []
+            # A merged page can overflow, or shrink its type to fit. Both mean the page was better
+            # off as blocks, so it goes back one round at a time until the deck compiles clean.
+            for _ in range(6):
+                trial = apply_lists(ir, attempt, bullet=args.bullet, gap=args.gap)
+                layout, issues = compile_deck(trial, source.parent)
+                numbers = {number: slide['id'] for number, slide in enumerate(trial['slides'], 1)}
+                broken = {numbers[item['slide']] for item in issues
+                          if (item['severity'] == 'FAIL' or 'OVERFLOW' in str(item['rule']))
+                          and item.get('slide') in numbers}
+                drop = broken & attempt
+                if not drop:
+                    break
+                attempt -= drop
+                dropped.extend(sorted(drop))
+            write_json(out_path, apply_lists(ir, attempt, bullet=args.bullet, gap=args.gap))
+            print(json.dumps({'status': 'PASS', 'pages': sorted(attempt),
+                              'dropped': sorted(set(dropped)), 'output': str(out_path)},
+                             ensure_ascii=False))
+            return 0
         if args.command == 'capabilities':
             from .layout_tree import capabilities
             from .explain_viz.specs import capabilities as explain_capabilities
