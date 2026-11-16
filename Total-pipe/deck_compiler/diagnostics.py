@@ -98,7 +98,12 @@ def _enclosing(node, parents):
 def _gate_literals(expression):
     """Code-shaped literals anywhere in an expression: if/else arms, dict values, get() defaults."""
     return [value for child in ast.walk(expression)
-            if (value := _literal(child)) is not None and GATE.match(value)]
+            if (value := _literal(child)) is not None and _looks_like_a_code(value)]
+
+
+def _looks_like_a_code(text):
+    """A code is upper case and whole; a trailing underscore means a string prefix."""
+    return bool(GATE.match(text)) and not text.endswith('_')
 
 
 def _assigned_codes(name, function):
@@ -137,7 +142,7 @@ def _codes(node, spec, function):
     if target is None:
         return [spec['code_default']] if spec.get('code_default') else []
     direct = _literal(target)
-    if direct:
+    if direct and _looks_like_a_code(direct):
         return [direct]
     if isinstance(target, ast.Name) and function is not None:
         resolved = _assigned_codes(target.id, function)
@@ -151,7 +156,7 @@ def _tuple_gate(node):
     if not isinstance(node, ast.Tuple) or len(node.elts) < 2:
         return None
     code, severity = _literal(node.elts[0]), _literal(node.elts[1])
-    if not code or not GATE.match(code) or severity not in SEVERITY_ORDER:
+    if not code or not _looks_like_a_code(code) or severity not in SEVERITY_ORDER:
         return None
     message = _message(node.elts[2]) if len(node.elts) > 2 else None
     return code, severity, message
