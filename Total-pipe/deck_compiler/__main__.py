@@ -20,6 +20,12 @@ def qa_summary(qa, out):
             ]}
 
 
+
+def common_load(path):
+    import json as _json
+    from pathlib import Path as _Path
+    return _json.loads(_Path(path).read_text(encoding='utf-8'))
+
 def main():
     parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -30,6 +36,20 @@ def main():
     p.add_argument('--pages', nargs='+', help='Slide ids to convert; default every page that fits')
     p.add_argument('--bullet', default='arrow', help='Native marker style (arrow, square, diamond, ...)')
     p.add_argument('--gap', type=float, default=0.55, help='Item gap as a fraction of the line height')
+    p = commands.add_parser('skeleton', help='Draw every page as a wireframe and report capacity')
+    p.add_argument('--ir', required=True, type=Path)
+    p.add_argument('--out', required=True, type=Path)
+    p.add_argument('--layout', type=Path, help='Compiled layout.json to measure geometric drift against')
+    p = commands.add_parser('units', help='Render each graphic alone and report copy-block fit')
+    p.add_argument('--ir', required=True, type=Path)
+    p.add_argument('--layout', required=True, type=Path)
+    p.add_argument('--out', required=True, type=Path)
+    p = commands.add_parser('assemble', help='Split a Deck IR into pages.json and assemble it back')
+    p.add_argument('--mode', choices=('export', 'build', 'selftest'), required=True)
+    p.add_argument('--ir', required=True, type=Path, help='Source Deck IR (base IR for build)')
+    p.add_argument('--out', required=True, type=Path, help='pages.json, assembled IR, or the report')
+    p.add_argument('--spec', type=Path, help='pages.json for build')
+    p.add_argument('--verify', action='store_true', help='Compile both IRs and compare every bbox')
     for name in ('explain-viz-prompt', 'apply-explain-viz'):
         p = commands.add_parser(name, help='Optional reserved-slot native teaching diagrams')
         p.add_argument('--ir', required=True, type=Path)
@@ -90,6 +110,47 @@ def main():
                    help='Every reviewed slide id, or all')
     args = parser.parse_args()
     try:
+        if args.command == 'skeleton':
+            from .workshop import skeleton
+            return skeleton.build(args.ir, args.out, args.layout)
+        if args.command == 'units':
+            from .workshop import units
+            return units.build(args.ir, args.layout, args.out)
+        if args.command == 'assemble':
+            from .workshop import assembly
+            if args.mode == 'export':
+                from .pipeline import write_json
+                spec = assembly.export(common_load(args.ir))
+                spec['deck'] = {'base_ir': str(args.ir), 'slide_count': len(spec['pages'])}
+                write_json(args.out, spec)
+                print(json.dumps({'status': 'PASS', 'pages': len(spec['pages']),
+                                  'output': str(args.out)}, ensure_ascii=False))
+                return 0
+            if args.mode == 'selftest':
+                return assembly.selftest(args.ir)
+            if args.spec is None:
+                raise ValueError('assemble --mode build needs --spec pages.json')
+            from .pipeline import write_json
+            base = common_load(args.ir)
+            assembled, problems = assembly.assemble(base, common_load(args.spec))
+            issues = assembly.gates(assembled)
+            fails = [item for item in issues if item['severity'] == 'FAIL']
+            write_json(args.out, assembled)
+            print(json.dumps({'status': 'PASS' if not problems and not fails else 'FAIL',
+                              'ownership_problems': problems[:8], 'gate_fails': len(fails),
+                              'output': str(args.out)}, ensure_ascii=False))
+            if args.verify and not problems and not fails:
+                before, _ = assembly.geometry(base, args.ir.parent)
+                after, _ = assembly.geometry(assembled, args.ir.parent)
+                if not before or not after:
+                    print(json.dumps({'verify': 'compile failed'}, ensure_ascii=False))
+                    return 1
+                rows = assembly.diff(before, after)
+                worst = max(row['max_delta_px'] for row in rows)
+                print(json.dumps({'verify': 'PASS' if worst == 0 else 'FAIL',
+                                  'max_delta_px': worst, 'pages': len(rows)}, ensure_ascii=False))
+                return 0 if worst == 0 else 1
+            return 0 if not problems and not fails else 1
         if args.command == 'listify':
             from .lists import apply as apply_lists, candidates
             from .layout import compile_deck
