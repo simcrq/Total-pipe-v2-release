@@ -115,11 +115,13 @@ PowerPoint PDF 的文字越界、正文/列表文字和字体替换，并生成�
 {"job_id":"<job_id>","preview":{"artifact_path":"/absolute/job/work/pages/P01.json","slide_ids":["P01"]}}
 ```
 
-输入为 work/ 中的完整 canonical Deck IR，可一页或整套；省略 slide_ids 时预览输入全部页。
+复杂、稀疏或新布局可先加 `"mode":"layout"`。这一步运行真实草稿的编译和测量，返回 `skeleton_png`、`skeleton_report` 和 `units_report`，包含正文占用、页尾间距、文字框余量及图形标签折行。无需启动 OfficeCLI 或浏览器。默认 `mode="render"` 另外导出 HTML PNG，并同时提供骨架。骨架是编译后的对象框，适合定位空间问题，页面实际字形、公式和遮挡仍要看渲染。
+
+输入为 work/ 中的 canonical Deck IR 草稿，可一页或整套。省略 slide_ids 时预览输入全部页。
 CLI 将该请求的 preview 对象写进 JSON，再用 `python -m agent advance --job-id <job_id> --preview <request.json>`。
 `ir_preview.schema_path` 给出完整协议。preview 不可与提交、preflight、replan、native 或签收混用。
 
-程序绑定原有 Story/来源，按页执行现有科学、设计与 compiler/packer 容量检查，用 OfficeCLI 写出
+程序绑定原有 Story/来源，按页执行现有科学、设计与 compiler/packer 容量检查。渲染模式用 OfficeCLI 写出
 独立的 preview.pptx，再用 **officecli-html** 截图。需要 OfficeCLI 的 screenshot/html 能力和本机可运行的
 Chrome/Edge/Chromium/Firefox（或其支持的 Playwright 浏览器）。无浏览器或宿主阻止启动时返回失败，
 不把未渲染的页标为成功。没有增加 OCR、模型调用或 PowerPoint 自动化。

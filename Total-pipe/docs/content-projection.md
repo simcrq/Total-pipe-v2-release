@@ -75,6 +75,12 @@ unit必含`text/evidence/kind/visibility/epistemic`。一个断言应可被独�
 原单元仍仅拥有一次，允许必要条件重复展示。程序拒绝多重所有权、未声明的复述和仅存notes的活跃条件。
 `content_map`的copy引用display_copy ID；figure引用精确选图；formula/table/chart/graphic引用实际对象并给阅读locator。
 
+组会文案先说现象、比较对象和直接条件。标题说发现，结论说意义，图注指向可读的图中证据。常规出处放来源标签，审读经过放讲稿或工作记录。涉及作者解释时，用“提出”“提示”等动词表达证据强度。
+
+Deck IR 的 body 与 label 可在文字块、标签和原生图形文字之间调整载体，保留批准的完整短语。title、takeaway、caption 保留各自职责。图中的节点和边标签应在设计阶段作为独立文案审批。
+
+有讲解价值的论文公式用独立 body 文案 `$...$` 审读，符号解释另写。Deck IR 通过 `copy_ref` 绑定到正文块时会生成独立公式，编译检查该表达式确实成为原生数学对象。PageScene 用 `type=formula` 加 `copy_ref` 绑定同一表达式。明确标记的行内数学仍随原文进入原生混排。
+
 `display_copy.role`为title/takeaway/body/label/caption，每页一个title和takeaway。可以忠实改写和图示化，不能改变意义、比较对象、
 单位、误差和确定性。paper文案引用科学单元；organization无论文引用和科学数字，只能组织报告；supplement沿用basis/source/constructed协议，
 构造示例须可见标识。实际SI事实仍走paper通道，不能冒充背景补充。

@@ -236,6 +236,11 @@ required 内容保持可见，with_claim 条件在主张出现的每页可见。
 IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 content_projection。文案或去向需改时回退设计并重审。
 数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
 
+若任务显式选择 `page_mode=page_scene`，审读后按 [PageScene](../../docs/page-scene.md) 提交场景。
+包括 recipe 展开结果在内，所有可见文案须逐项匹配本页批准文本；新增标签、图注、公式或图表文字先回退
+设计重审。可直接提交 `work/page_scene.json`；相对图片路径以提交文件目录为基准，工具保存规范化绑定和
+绝对路径，并跟踪图片变化。预览 PNG 后再接受，候选与原生验收按该路径的协议执行。
+
 恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
 设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
 不强制 claim/items/anchor 理由/rationale，也不限制所有页用同一字段或构图。
@@ -396,7 +401,8 @@ paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最�
 
 ### 公式：独立公式与显式行内模式
 
-展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本默认不解析数学标记。
+展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。组会页面设计把需要讲解且有证据的式子写作独立 `$...$` 投屏文案，另写符号和条件。Deck IR 作者用 `copy_ref` 放入正文块，绑定阶段将其转成原生公式。PageScene 作者用 `type=formula` 加 `copy_ref`，绑定阶段填入已审读的 LaTeX。
+IR 草稿优先用 `advance.preview` 的 `mode="layout"` 检查骨架与单件规格，再看渲染 PNG。独立 CLI 的 `skeleton`、`units` 可用于既有工件诊断，`explain` 可查询具体报错。
 需要行内混排时读 `Total-pipe/docs/inline-math.md`：正文块或表格 text 格加 inline_math=true，
 用 `$…$` 或 `\(…\)` 标记完整数学区域；semantic.inline_math 列出 title/takeaway 可开启相应字段。
 先查询 native_inline_equation 与 native_equation 能力；RPA content_refs 传 block.inline_math /

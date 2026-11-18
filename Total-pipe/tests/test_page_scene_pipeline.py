@@ -85,6 +85,18 @@ class PageScenePipelineTests(AgentCase):
 
     def test_recipe_page_expands_before_binding(self):
         work = self.prepare_design()
+        design = page_design()
+        approved = design['pages'][0]
+        approved['section'] = '01 · TEST'
+        approved['display_copy'] = [
+            {'id': 'heading', 'role': 'title', 'text': approved['title']},
+            {'id': 'message', 'role': 'takeaway', 'text': approved['take']},
+            *[{'id': f'label-{index}', 'role': 'label', 'text': text}
+              for index, text in enumerate(('DIGITAL', '固定拓扑', '两种偏置',
+                                            'ANALOG', '保持功能', '可逆',
+                                            '关键：同一电路承载两类功能'))],
+        ]
+        write(work/'page_design.json', design)
         value = {
             'schema_version': '0.1', 'deck_id': 'scene-integration',
             'theme': {'font': 'Microsoft YaHei'},

@@ -28,7 +28,7 @@ status=running 时调用 totalpipe_advance；status=candidate_ready 时交付 ca
 | review_required | 读 qa_report / feedback_path；FAIL 需修复，不能签收；修订耗尽时向用户说明 |
 | none | 若 reason=ADVANCE_REQUIRED 则 advance；若 CANDIDATE_READY 则交付候选 |
 
-queries 是对象数组，含唯一 id、query，可选 intent。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
+queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
 Story 提示的 delegation 绑定用户选择；模型字段仍是声明，必须真实执行子代理，不伪造 provenance。
 Story 缺模型选择时先询问；不得静默选择，也不得由主 Agent 代写。
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
@@ -43,7 +43,8 @@ display_copy 是实际投屏文案，content_map 指定可见载体或允许入�
 IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
 原生图示/表格/数据图图注使用component=caption和caption_for视觉引用，按既有图注字号测量；正文不能伪装图注缩小。论文图的可见来源标签自动绑定。
 提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
-deck_ir 或之后可单独调用 advance.preview={artifact_path,slide_ids}，渲染 work/ 中的草稿页；page_scene 阶段用 advance.scene_preview={artifact_path,page_ids} 导出选中页 PowerPoint PNG；完整协议见回复 schema_path。
+IR 作者先用 `advance.preview={artifact_path,slide_ids,mode:"layout"}` 检查新建、密集或稀疏布局。打开骨架图并读单件报告，判断底部空区、文字余量及图形标注折行。随后用默认 preview 看实际渲染。失败码可用 `python -m deck_compiler explain CODE` 查成因。逐页预检和 preview 均不占修订次数。
+有证据且需要读公式时，设计者批准独立 `$...$` 文案及符号说明。Deck IR 通过 `copy_ref` 绑定原生公式。PageScene 用 `type=formula` 加 `copy_ref` 并通过 `advance.scene_preview` 查看 PowerPoint PNG。完整协议见回复 schema_path。
 实际打开 preview_result.pages 的 PNG，再修改源 IR 并重新 preview；未变页复用渲染缓存。预览不接受 IR、不计修订、不改候选或正式 QA。
 officecli-html 预览可能与 PowerPoint 的字体/公式不同，不能代替篇级 Design、完整构建或原生验收；FAIL 原样保留，不能凭生成图片签收。
 有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页，齐全后整套复验。

@@ -181,9 +181,8 @@ def is_furniture(element):
 
 def capacity(slide, issues):
     elements = slide.get('elements', [])
-    body_roles = ('body', 'label', 'caption', 'definition')
-    prose = [e for e in elements if not is_furniture(e) and e['kind'] in ('text', 'image')]
-    body = [e for e in prose if e['kind'] == 'image' or e.get('role') in body_roles]
+    body = [e for e in elements if not is_furniture(e) and e.get('role') not in ('title', 'takeaway')]
+    prose = [e for e in body if e['kind'] in ('text', 'list', 'image')]
     boxes = [e['bbox'] for e in body]
     body_bottom = max((b[1] + b[3] for b in boxes), default=0)
     body_top = min((b[1] for b in boxes), default=0)
@@ -206,7 +205,7 @@ def capacity(slide, issues):
             'text_boxes': len(text_boxes),
             'images': len(images),
             'graphics': len(graphic_marks),
-            'text_only': not images and not graphic_marks,
+            'text_only': not images and not graphic_marks and all(e['kind'] in ('text', 'list') for e in body),
             'body_top_px': round(body_top, 1),
             'body_bottom_px': round(body_bottom, 1),
             'gap_to_footer_px': round(footer_top - body_bottom, 1),
@@ -216,6 +215,17 @@ def capacity(slide, issues):
             'boxes_under_24px': [e['id'] for e in prose
                                  if e['kind'] == 'text' and e['bbox'][3] < 24],
             'issues': [f"{i['rule']}:{i['severity']}" for i in issues]}
+
+
+def inspect_page(slide, issues, folder):
+    """Draw the actual compiled draft boxes, without replacing or recompiling its text."""
+    folder = Path(folder)
+    metrics = capacity(slide, issues)
+    render(slide, folder/'skeleton.png', None, metrics['ink_ratio'])
+    report = {'slide_id': slide['id'], 'basis': 'compiled-draft-layout', **metrics}
+    (folder/'skeleton_report.json').write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    return report
 
 
 def build(ir_path, out, real_layout=None):
@@ -239,7 +249,7 @@ def build(ir_path, out, real_layout=None):
         json.dumps(layout, ensure_ascii=False, indent=1), encoding='utf-8')
 
     real_geo = {}
-    if real_layout.exists():
+    if real_layout is not None and real_layout.exists():
         real_geo = geometry(json.loads(real_layout.read_text(encoding='utf-8')))
     deltas = drift(geometry(layout), real_geo) if real_geo else {}
 

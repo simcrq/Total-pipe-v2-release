@@ -60,6 +60,19 @@ class IRPreviewTests(AgentCase):
         self.assertTrue(Path(result['pages'][0]['png']).is_file())
         self.assertTrue(runner.status(self.job_id)['ir_preview'])
 
+    def test_layout_preview_returns_workshop_diagnostics_without_officecli(self):
+        state = self.prepare()
+        with patch('deck_compiler.officecli.preflight', side_effect=RuntimeError('no OfficeCLI')):
+            result = self.preview(slide_ids=['P1'], mode='layout')
+        self.assertEqual(result['status'], 'PASS', result)
+        self.assertEqual(self.render.call_count, 0)
+        page = result['pages'][0]
+        self.assertIsNone(page['png'])
+        self.assertTrue(Path(page['skeleton_png']).is_file())
+        self.assertTrue(Path(page['units_report']).is_file())
+        self.assertIn('gap_to_footer_px', read(page['skeleton_report']))
+        self.assertEqual(state, (self.out/'.totalpipe/job.json').read_bytes())
+
     def test_only_changed_page_renders_and_corrupt_cached_outputs_are_rebuilt(self):
         self.prepare()
         first = self.preview()

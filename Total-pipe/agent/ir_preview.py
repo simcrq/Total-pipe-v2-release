@@ -12,16 +12,19 @@ SCHEMA = COMPONENT/'agent/schemas/ir-preview.schema.json'
 
 def descriptor():
     return {'schema_path': str(SCHEMA), 'renderer': 'officecli-html',
-            'instruction': 'Call advance(preview={artifact_path, slide_ids}) on draft IR, open each returned PNG, '
-                           'revise the source IR and repeat. This does not accept IR, consume revisions, '
+            'instruction': 'Before accepting a draft, especially a dense, sparse or new layout, call '
+                           'advance(preview={artifact_path, slide_ids, mode:"layout"}) and inspect skeleton and '
+                           'unit reports. Then use default preview for the actual HTML PNG. This does not accept IR, consume revisions, '
                            'change the candidate or attest PowerPoint review.'}
 
 
 def validate_request(request):
-    if (not isinstance(request, dict) or set(request)-{'artifact_path', 'slide_ids'} or
+    if (not isinstance(request, dict) or set(request)-{'artifact_path', 'slide_ids', 'mode'} or
             not isinstance(request.get('artifact_path'), str) or
             not Path(request['artifact_path']).is_absolute()):
         raise ValueError('preview requires an absolute artifact_path and optional slide_ids.')
+    if request.get('mode', 'render') not in ('layout', 'render'):
+        raise ValueError('preview.mode must be layout or render.')
     if 'slide_ids' in request:
         ids = request['slide_ids']
         if (not isinstance(ids, list) or not 1 <= len(ids) <= 40 or
@@ -69,7 +72,9 @@ def execute(job, request):
         raise ValueError('Preview requested an unknown slide ID.')
     normalized = read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None
     # Include the renderer runtime, compiler sources, resolved fonts and image bytes in cache identity.
-    runtime = officecli.preflight(connectors=True, tables=True)
+    render_pptx = request.get('mode', 'render') == 'render'
+    renderer = 'officecli-html' if render_pptx else 'compiler-layout'
+    runtime = officecli.preflight(connectors=True, tables=True) if render_pptx else None
     pages = []
     for slide in slides:
         if slide['id'] not in selected:
@@ -85,6 +90,7 @@ def execute(job, request):
         used = {ref.get('asset_id') for ref in slide.get('composition', {}).get('figure_refs', [])}
         page['assets'] = {aid: asset for aid, asset in value.get('assets', {}).items() if aid in used}
         page, _ = a.apply_art_direction(page, partial)
+        page = a.normalize_authoring_ir(page)
         root = work/'previews'
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='.prepare-', dir=root) as temp:
@@ -97,7 +103,7 @@ def execute(job, request):
             # stays in prepared IR and the actual resolved fallback font is fingerprinted separately.
             resources = {key: hashed for key, hashed in resources.items() if hashed is not None}
         key = digest({'ir': prepared, 'resources': resources, 'renderer': runtime,
-                      'design': partial, 'normalized': normalized,
+                      'preview_mode': renderer, 'design': partial, 'normalized': normalized,
                       'supplement': job['request'].get('supplement', 'off')})
         folder = root/key
         cached = _cached(folder, key)
@@ -122,20 +128,33 @@ def execute(job, request):
                 seen.add(marker)
         outputs = ['input.json', 'qa_report.json', 'layout_feedback.json']
         png = None
+        diagnostics = {}
         if layout:
             # A debug picture may show a failed layout. The FAIL remains; it is never accepted.
             target = [s for s in layout['slides'] if s['id'] == sid]
             if len(target) != 1:
                 raise ValueError('Compiled preview cannot identify exactly one requested page.')
             write(folder/'preview-layout.json', {**layout, 'slides': target})
-            officecli.render(folder/'preview-layout.json', folder/'preview.pptx')
-            officecli._run('officecli', 'view', folder/'preview.pptx', 'screenshot',
-                           '--render', 'html', '--page', '1', '--out', folder/'slide.png', timeout=90)
-            from PIL import Image
-            with Image.open(folder/'slide.png') as picture:
-                picture.verify()
-            png = str(folder/'slide.png')
-            outputs += ['layout.json', 'preview-layout.json', 'preview.pptx', 'slide.png']
+            from deck_compiler.workshop.skeleton import inspect_page
+            metrics = inspect_page(target[0], issues, folder)
+            diagnostics = {'skeleton_png': str(folder/'skeleton.png'),
+                           'skeleton_report': str(folder/'skeleton_report.json'), 'capacity': metrics}
+            outputs += ['layout.json', 'preview-layout.json', 'skeleton.png', 'skeleton_report.json']
+            if not render_pptx:
+                from deck_compiler.workshop.units import build as inspect_units
+                inspect_units(folder/'input.json', folder/'preview-layout.json', folder/'units', verbose=False)
+                diagnostics['units_report'] = str(folder/'units_report.md')
+                outputs += ['units.json', 'units_report.md']
+                outputs += [str(p.relative_to(folder)) for p in sorted((folder/'units').glob('*.png'))]
+            if render_pptx:
+                officecli.render(folder/'preview-layout.json', folder/'preview.pptx')
+                officecli._run('officecli', 'view', folder/'preview.pptx', 'screenshot',
+                               '--render', 'html', '--page', '1', '--out', folder/'slide.png', timeout=90)
+                from PIL import Image
+                with Image.open(folder/'slide.png') as picture:
+                    picture.verify()
+                png = str(folder/'slide.png')
+                outputs += ['preview.pptx', 'slide.png']
         after = resource_snapshot(folder/'input.json')
         after.pop(str(folder/'input.json'), None)
         after = {key: hashed for key, hashed in after.items() if hashed is not None}
@@ -146,9 +165,9 @@ def execute(job, request):
         write(folder/'preview_qa.json', {'counts': _counts(issues), 'items': issues,
                                        'checks': qa['checks'], 'preview_only': True})
         outputs.append('preview_qa.json')
-        result = {'slide_id': sid, 'cache_key': key, 'renderer': 'officecli-html',
+        result = {'slide_id': sid, 'cache_key': key, 'renderer': renderer,
                   'status': 'FAIL' if _counts(issues)['FAIL'] else 'PASS', 'issues': issues,
-                  'counts': _counts(issues), 'png': png,
+                  'counts': _counts(issues), 'png': png, **diagnostics,
                   'qa_report': str(folder/'preview_qa.json'), 'feedback_path': str(folder/'layout_feedback.json'),
                   'files': {name: sha(folder/name) for name in outputs}}
         write(folder/'preview.json', result)
@@ -156,8 +175,8 @@ def execute(job, request):
     if sha(path) != source_sha:
         raise ValueError('Preview source changed during rendering; retry.')
     return {'status': 'FAIL' if any(p['status'] == 'FAIL' for p in pages) else 'PASS',
-            'source_sha256': source_sha, 'renderer': 'officecli-html', 'pages': pages,
+            'source_sha256': source_sha, 'renderer': renderer, 'pages': pages,
             'job_unchanged': True, 'candidate_unchanged': True, 'powerpoint_ui_review': False,
-            'note': 'Open the returned PNGs before revising. HTML previews can differ from PowerPoint '
+            'note': 'Inspect the skeleton and unit diagnostics when planning, then open the actual rendered PNG. HTML previews can differ from PowerPoint '
                     'in fonts, equations and shapes; isolated page numbers restart and generated agenda pages are omitted. '
                     'Complete Design, full build/QA and native acceptance remain required.'}

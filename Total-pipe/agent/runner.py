@@ -456,7 +456,9 @@ def _accept(job, stage, upstream, kind, path):
         # Persist the canonical representation, including the devices written from the design and
         # the authoring shorthands (latex, diagram, automatic inline math) expanded in place.
         a.persist_ir(value, path, destination)
-    elif destination != path:
+    elif kind == 'page_scene' or destination != path:
+        # Scene binding expands recipes and supplies bindings, provenance and
+        # absolute image paths even when the author used expected_output.
         write(destination, value)
     if kind == 'page_design' and value.get('schema_version') not in ('1.2', '1.3'):
         # The design is approved; the IR stage must now realize it instead of re-deciding it.
@@ -723,6 +725,7 @@ def _preview_ir(job, stage, request):
 
 def _scene_preview(job, stage, request):
     """Render selected PageScene pages natively without accepting or advancing."""
+    from .page_scene_binding import bind as bind_scene
     from .page_scene_qa import preview_pages
     out = Path(job['request']['out_dir'])
     work = out/'work'
@@ -740,7 +743,10 @@ def _scene_preview(job, stage, request):
     response = envelope(job, stage, failure)
     folder = work/'previews'/'scene'/(sha(path) or 'scene')[:12]
     try:
-        result = preview_pages(path, request.get('page_ids'), folder)
+        spec, _ = bind_scene(read(path), work, job['request'], source_dir=path.parent, allow_partial=True)
+        preview_spec = folder/'scene-bound.json'
+        write(preview_spec, spec)
+        result = preview_pages(preview_spec, request.get('page_ids'), folder)
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
         result = {'status': 'FAIL', 'message': a.redact(str(error)), 'pages': [],
                   'job_unchanged': True, 'candidate_unchanged': True,

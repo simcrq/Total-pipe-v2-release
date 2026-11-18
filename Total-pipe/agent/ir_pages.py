@@ -48,7 +48,7 @@ def bind_sources(value, design, work, authored_path):
     for index, slide in enumerate(value.get('slides', [])):
         page = pages.get(slide.get('id'))
         if page and (design or {}).get('schema_version') in ('1.2', '1.3'):
-            from deck_compiler.content_projection import bind_copy, snapshot
+            from deck_compiler.content_projection import bind_copy, snapshot, standalone_math
             slide = bind_copy(slide, page)
             value['slides'][index] = slide
             expected = snapshot(page, design['_content_catalog'], design['_review'])
@@ -57,7 +57,14 @@ def bind_sources(value, design, work, authored_path):
                 raise ValueError('The approved audience projection changed; replan the page design and source/copy review.')
             slide.setdefault('semantic', {})['content_projection'] = expected
             supplements = {item['text']: item for item in page['display_copy'] if item.get('basis') == 'supplement'}
+            equations = {item['text']: standalone_math(item['text']) for item in page['display_copy']
+                         if item['role'] in ('body', 'label') and item.get('basis', 'paper') == 'paper'}
             for block in slide.get('composition', {}).get('blocks', []):
+                expression = equations.get(block.get('text'))
+                if expression is not None and block.get('component') in ('body', 'formula'):
+                    block['text'] = expression
+                    block['component'] = 'formula'
+                    block.pop('inline_math', None)
                 supplement = supplements.get(block.get('text'))
                 if supplement:
                     if block.get('basis', 'supplement') != 'supplement' or block.get('evidence_refs'):
@@ -159,6 +166,9 @@ def descriptor(job, upstream):
     records = cache.get('records', {}) if cache.get('upstream') == upstream else {}
     return {'artifact_kind': 'deck_ir_page', 'schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
             'contract': 'Canonical Deck IR with exactly one slide; common header must match across pages. Story notes/omitted refs and selected asset paths are bound automatically.',
+            'checks_before_submission': 'Measure each new or revised layout with preview.mode=layout. '
+                                       'Read the skeleton and unit reports for gaps, dense groups and short label lines. '
+                                       'Open default preview PNGs for the rendered content and math before acceptance.',
             'max_rejected_revisions_per_page': 3,
             'pages': [{'id': p['id'], 'expected_output': str(work/'pages'/_filename(p['id'])),
                        'input_path': str(work/'ir_page_prompts'/_filename(p['id'])),
@@ -194,6 +204,7 @@ def submit(job, upstream, path, dry=False):
         issues.append({'code': 'PAGE_HEADER_MISMATCH', 'severity': 'FAIL',
                        'message': 'Shared theme/deck presentation changed. Keep the header or explicitly replan_from=deck_ir to reset all pages.'})
     value, _ = a.apply_art_direction(value, partial)
+    value = a.normalize_authoring_ir(value)
     issues.extend(a.ir_issues(value, read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None,
                              job['request'].get('supplement', 'off'), partial, 1))
     fingerprint = digest([value, {a['path']: sha(a['path']) for a in value.get('assets', {}).values() if a.get('path')}])
@@ -213,7 +224,6 @@ def submit(job, upstream, path, dry=False):
             folder = Path(temporary)
             try:
                 a.persist_ir(value, path, folder/'input.json')
-                value = a.normalize_authoring_ir(value)
                 before = _stamp(folder/'input.json')
                 _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
                                          enable_overflow_repair=False, require_visual_design=False, explain_viz_mode='off')

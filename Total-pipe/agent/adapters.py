@@ -13,6 +13,7 @@ from time import perf_counter
 from . import ROOT, COMPONENT
 from .state import read, write, sha, resources
 from .requests import prompt_request
+from .content_review import SPOKEN_COPY
 from .telemetry import span, timestamp
 
 sys.path.insert(0, str(COMPONENT/'pwf2rpa'))
@@ -301,13 +302,11 @@ def normalize_authoring_ir(value):
             if 'latex' in block and 'text' not in block:
                 block['text'] = block.pop('latex')
                 block.setdefault('component', 'formula')
-            if block.get('component') != 'formula':
+            if block.get('component') not in ('formula', 'caption'):
                 converted, changed = _scientific_math(block.get('text'))
                 if changed:
                     block['text'] = converted
-                    block['inline_math'] = True
-            if block.get('component') == 'body' and not block.get('inline_math'):
-                if _has_inline_math(block.get('text')):
+                if changed or _has_inline_math(block.get('text')):
                     block['inline_math'] = True
         # Table cells are text too: a unit such as 1.2 × 10^5 Ω must become native math there as
         # well, otherwise a table shows carets next to superscripts on the rest of the page.
@@ -320,6 +319,7 @@ def normalize_authoring_ir(value):
                 converted, changed = _scientific_math(cell.get('text'))
                 if changed:
                     cell['text'] = converted
+                if changed or _has_inline_math(cell.get('text')):
                     cell['inline_math'] = True
     return value
 
@@ -401,7 +401,12 @@ PROJECTION_IR_INSTRUCTIONS = (
     'geometry gates remain. Set the venue visual_style; declare no page coordinates. '
     'Use composite-research/layout_tree when explicit grouping is needed, and simple archetypes otherwise. '
     'Native data values cannot be guessed from raster curves. Explicit $...$ supports measured inline math. '
-    'Submit deck_ir_page for page measurement/caching; call preview and actually open its PNG while revising. '
+    'Body and label copy can move between editable body/label carriers without rewriting it. '
+    'Put an approved standalone equation in a block using its copy_ref. Binding converts a body block '
+    'with an equation-only paper copy into a native display formula. Keep marked inline math in prose. '
+    'Start with preview.mode=layout for compiled skeleton and single-object diagnostics on dense, sparse '
+    'or new compositions. Then open the default preview PNG and check actual typography and math before '
+    'submitting deck_ir_page. Use layout_feedback and deck_compiler explain for specific failures. '
     'Complete full Design, build/QA and PowerPoint native acceptance after authoring.'
 )
 
@@ -884,7 +889,7 @@ DESIGN_INSTRUCTIONS = (
     'rewrite for this audience, replace verbal repetition with a meaningful diagram, and give each page a clear claim. '
     'Preserve scientific meaning, causal strength, comparison objects, units, uncertainty, controls and negative results. '
     'Scientific record preservation does not require copying its sentences onto the screen. '
-    'Write claim-first audience copy, not an audit memo. Titles state the finding; takeaways state what the evidence shows. '
+    + SPOKEN_COPY + ' Write claim-first audience copy, not an audit memo. '
     'Put a limitation in visible copy only when omitting it would make that page claim false or misleading; otherwise keep it in '
     'speaker notes or on one dedicated boundary page. Do not spread stock caveats (author claim, not verified, only, cannot, '
     'not a ranking) across result pages. A group-meeting audience needs calibrated claims, not defensive boilerplate. '
@@ -901,6 +906,10 @@ DESIGN_INSTRUCTIONS = (
     'page where an applies_to claim is visible, even when owned by another page. These contextual qualifiers may '
     'repeat visually, while source ownership remains unique. notes_allowed needs a reason based on the page claim. '
     'Do not turn important controls, uncertainty or negative findings into optional spoken detail. '
+    'When a sourced equation actually explains how the method works or how to read the result, '
+    'approve the complete equation in display_copy using $...$ (as its own body entry for display math), '
+    'and separately approve short prose explaining the relevant variables and conditions. '
+    'Use the exact source expression and omit decorative math or unsupported formulas. '
     'Keep production_notes separate. design/claim rationale/walkthrough/negative authoring directions are not '
     'display_copy. Do not dump evidence-audit prose onto slides; show a limitation only where it restricts the specific claim. '
     'Design each page as two to four labelled zones (visual, readout, implication), not one full-width bullet stack. '
@@ -956,7 +965,8 @@ def design_task(prompt=None):
 
 - Story 决定科学含义及边界，你负责忠实改写成观众文案和视觉讲解，不重做科学大纲。
 - 每条科学记录用 content_refs 恰好分配一次；display_copy 写实际投屏的标题、结论、正文、图中标签和图注。
-  每项用 source_refs 追溯，关键英文术语和科学含义保持正确；不复制制作说明、核查过程或设计指令。
+  每项用 source_refs 追溯，保留关键英文术语。标题先说发现，正文把比较对象和直接条件说清。图形节点和边短语也在此审批。
+  顶层 marks 只写要强调的现有文案片段，绘图动作写入 design。
 - content_map 给每条分配记录标明 visible 的载体或 notes 的理由。required 必须可见；with_claim 的条件
   跟随它限定的主张同页可见，必要时重复显示条件，而不重复分配原始记录。完整记录由程序归档到讲稿。
 - design 自由说明用什么原图、画什么元素与关系、如何排布、怎样带着观众看。figures 写精确资产 id，先看图。
@@ -1004,7 +1014,8 @@ def ir_task(prompt=None):
   按 content_map 实现；讲稿和元数据不算页面可见。原生图表/公式承载的数据和原图来源保持可追溯。
 - 选择能力实现既定视觉；自绘优先用原生对象，布局树可直接使用。不写页面 bbox，不缩字号、不删内容。
   容量不足时把测量反馈退回页面设计，不能修改科学含义或擅自润色文案。
-- 可以随时 preview，实际打开返回 PNG 后再修 IR；语义、补充归属、几何、完整 Design、构建及原生验收均保留。
+- 复杂、稀疏或新布局先用 preview.mode=layout 查看骨架与单件报告，调整后用默认 preview 查看实际 PNG。
+  已审读的独立公式用 copy_ref 进入原生公式块，混排保留原有数学标记。渲染与 QA 分开检查。
 
 交付实现选择与真实未解决项。"""
     return f"""# Deck IR 实现任务（子代理）

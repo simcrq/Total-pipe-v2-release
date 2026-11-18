@@ -89,6 +89,8 @@ def main():
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
+            p.add_argument('--require-visuals', action='store_const', const=True, default=None,
+                           help='Strictly require a visual or standalone equation on each page')
     p = commands.add_parser('review-officecli')
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--officecli', default='officecli')
@@ -336,7 +338,7 @@ def main():
             qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
                        require_visual_design=not args.skip_visual_design,
                        explain_viz_request=args.explain_viz_request,
-                       explain_viz_mode=args.explain_viz_mode)
+                       explain_viz_mode=args.explain_viz_mode, require_visuals=args.require_visuals)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

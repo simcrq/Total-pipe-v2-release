@@ -52,8 +52,10 @@ def visual_carriers(composition):
               if isinstance(table, dict)
               and isinstance(table.get('row_count'), int) and table['row_count'] >= 2
               and isinstance(table.get('column_count'), int) and table['column_count'] >= 2]
+    equations = [block for block in composition.get('blocks') or []
+                 if isinstance(block, dict) and block.get('component') == 'formula']
     return (len(composition.get('figure_refs') or []) + len(composition.get('graphics') or [])
-            + len(composition.get('charts') or []) + len(tables))
+            + len(composition.get('charts') or []) + len(tables) + len(equations))
 
 
 def text_only_pages(ir):

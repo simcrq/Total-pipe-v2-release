@@ -506,10 +506,10 @@ CATALOG = {
         'see': ('docs/content-projection.md',),
     },
     'TEXT_ONLY_PAGE': {
-        'summary': 'The page carries no figure, table, chart, or native graphic.',
-        'cause': 'A research deck reads as a wall of prose when a page has only text. The gate '
-                 'runs when the build requires visuals; a table counts only at 2x2 or larger, '
-                 'and an inline formula does not count as a carrier.',
+        'summary': 'The page has no standalone equation or visual explanation.',
+        'cause': 'The normal build asks for a reader check. With --require-visuals this becomes a '
+                 'build failure. A standalone equation counts, as does a table of at least 2x2. '
+                 'Inline math is part of the prose.',
         'fixes': (
             ('add_a_visual', 'medium', 'Add a diagram that explains the relation the prose '
              'asserts, not a decorative shape.'),

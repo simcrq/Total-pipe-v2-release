@@ -9,6 +9,22 @@ SCHEMA = COMPONENT/'agent/schemas/page-design-review.schema.json'
 CHECKS = ('scientific_fidelity', 'qualifier_scope', 'audience_copy')
 
 
+SPOKEN_COPY = (
+    'For a spoken presentation, read the visible copy aloud as a colleague presenting a result. '
+    'Say what changed, which two things were compared and under what conditions. Prefer a concrete '
+    'subject and verb. Put the comparison and its condition in the same sentence or a nearby label. '
+    'Distinguish an interpretation with a precise verb such as “提出” or “提示”; credit can live in a '
+    'source label rather than making every sentence start with “作者报告”. For example: '
+    '“同样的训练条件下，边缘增强把加噪图像的识别率从 16% 提到 62%。” '
+    'For a real boundary, state what the evidence covers: “轨迹图比较捕获的观测点数。” '
+    'Keep essential negative controls, uncertainty and test conditions visible. Put routine provenance, '
+    'review history and general cautions in source labels or notes. Keep a title, takeaway and caption '
+    'from repeating the same sentence: finding, implication and what to look at, respectively. '
+    'If an editable diagram carries a claim, approve the actual node/arrow labels the reader will see, '
+    'including short navigation labels. Read the slide without its notes to check it is understandable.'
+)
+
+
 class ReviewRejected(ValueError):
     """An actual failed scientific/copy check requires design revision, not form repair."""
 
@@ -41,6 +57,7 @@ def validate(work, value):
     if (not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages) or
             [page.get('id') for page in pages] != ids):
         raise ValueError('Review every page explicitly in approved order; no all/omitted/duplicate page IDs.')
+    rejected = []
     for page in pages:
         if set(page) != {'id', 'checks'} or not isinstance(page['checks'], dict) or set(page['checks']) != set(CHECKS):
             raise ValueError('Every review page needs all source/copy checks.')
@@ -49,7 +66,9 @@ def validate(work, value):
                     check.get('status') not in ('pass', 'fail') or not isinstance(check.get('note'), str) or not check['note'].strip()):
                 raise ValueError('Each review check requires status=pass|fail and a concrete note.')
             if check['status'] == 'fail':
-                raise ReviewRejected(f'{page["id"]} {key} rejected: {check["note"]}')
+                rejected.append(f'{page["id"]} {key} rejected: {check["note"]}')
+    if rejected:
+        raise ReviewRejected('\n'.join(rejected))
 
 
 def prepare(work):
@@ -68,7 +87,7 @@ def prepare(work):
                               'Check causal strength, observation vs interpretation, numerical/condition scope, important '
                               'controls and negative findings. Read only the audience copy to check objects, referents, '
                               'reasoning steps and production-note leakage. Fail and replan page_design on any mismatch. '
-                              'For audience_copy, also judge communication, not only truth: a result page must lead with a finding, '
+                              + SPOKEN_COPY + ' For audience_copy, also judge communication, not only truth: a result page must lead with a finding, '
                               'not a disclaimer. Fail visible copy that stacks audit boilerplate ("authors claim", "not verified", '
                               '"only", "cannot", "not a ranking") or repeats a scope caveat on page after page; a genuine limitation '
                               'belongs once on a dedicated boundary page or in speaker notes, unless omitting it would make that '
@@ -84,6 +103,8 @@ def prepare(work):
             '观众是否能理解对象、方法、证据和论点。给出每页具体检查说明，不生成模板化 pass。\n\n'
             'audience_copy 同时判断“像不像组会讲解”，不只判断真假：结果页要以发现开头，不能以“作者主张/未验证/仅/'
             '不能/并非排名”等防御句占据主文案；真实局限放在一页边界或讲稿，除非删掉就会让本页主张失真。'
+            '把整页当场读一遍：听众应先听到发现，再听到比较对象和直接条件。标题说发现，结论说意义，图注指向要读的证据。'
+            '避免三处复述同一句。需要表达推测时用“提示”“可能”“提出”等具体动词。'
             '有论文图的页面必须有一句可见的读图说明：看哪几个面板、什么轴/条件、哪个特征、说明什么；只重复标题'
             '或只提醒证据不足不算通过。\n\n'
             '写 `work/page_design_review.json`，绑定当前 story/design 哈希。发现问题填 fail，工具将退回页面设计；'

@@ -134,16 +134,14 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
             write_qa(out, qa, ir, None)
             write_json(out/'layout_feedback.json', make_feedback(ir, None, items))
             return ir, None, qa
-    # A page of prose does not show anything: the reader is told about a relationship but cannot
-    # see it. Every page has to carry a paper figure, a native diagram, a chart or a native table,
-    # so design must draw what the copy claims. Hard gate in the production entry: the deck is not
-    # compiled and no layout is left behind until those pages are drawn.
+    # Strict visual coverage is an explicit policy. The normal build leaves prose-only
+    # slides to a reader: a short opening or boundary slide can be intentional.
     from .ir import text_only_pages
     blocked_pages = text_only_pages(ir) if require_visuals else []
     if blocked_pages:
         items = [issue('TEXT_ONLY_PAGE', 'FAIL',
                        f'{slide_id} carries {count} copy blocks and no visual: add a figure, a native '
-                       'diagram, a chart or a native table that shows the relationship the copy '
+                       'diagram, a chart, a standalone equation or a native table that shows the relationship the copy '
                        'explains, or drop the page',
                        number, detector='design-preflight')
                  for number, slide_id, count in blocked_pages]
@@ -164,6 +162,14 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
     ir = prepared.result.deck_ir
     layout, issues = (prepared.compiled if prepared and prepared.compiled is not None
                       else _compile_ir(ir, ir_path, layout_options))
+
+    if require_visuals is None and layout:
+        issues.extend(issue('TEXT_ONLY_PAGE', 'REVIEW',
+                            f'{slide_id} relies on prose. Check that the audience can follow the point '
+                            'and add a visual if it helps explain the relationship.',
+                            number, detector='design-preflight')
+                      for number, slide_id, _ in text_only_pages(ir)
+                      if (ir['slides'][number-1].get('composition') or {}).get('archetype') != 'cover')
 
     # NEW: Detect severe text overflow and attempt automatic repair
     if enable_overflow_repair and layout is not None:
@@ -230,7 +236,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
 
 def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
           require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
-          require_visuals=True):
+          require_visuals=None):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.

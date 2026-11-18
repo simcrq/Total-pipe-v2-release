@@ -115,22 +115,62 @@ def _walk_objects(objects):
             yield from _walk_objects(obj.get('children') or [])
 
 
-def _visible_texts(page):
-    def page_field(value):
-        return value if isinstance(value, str) else ''
-    yield page_field(page.get('title'))
-    yield page_field(page.get('take'))
+def _object_text(obj, bindings):
+    """Resolve the text the renderer paints, rejecting conflicting carriers."""
+    ref = obj.get('copy_ref')
+    text = obj.get('text')
+    if ref:
+        if ref not in bindings:
+            raise SceneBindingError('PAGE_SCENE_COPY_UNRESOLVED',
+                                    f'Unresolved copy_ref {ref}')
+        if text is not None and text != bindings[ref]:
+            raise SceneBindingError('PAGE_SCENE_COPY_DRIFT',
+                                    f'{obj.get("id", ref)}: text differs from copy_ref {ref}')
+        return bindings[ref]
+    return text if isinstance(text, str) else ''
+
+
+def _visible_texts(page, bindings, equations=None):
+    """Enumerate author-controlled text actually rendered, including nested objects."""
+    yield _resolve_field(page, 'title', bindings)
+    yield _resolve_field(page, 'take', bindings)
+    yield page.get('section') or ''
     for obj in _walk_objects(page.get('objects')):
         if obj.get('type') == 'list':
             for item in obj.get('items') or []:
                 if isinstance(item, dict):
-                    yield page_field(item.get('text'))
+                    yield _object_text(item, bindings)
         elif obj.get('type') in ('text', 'shape'):
-            yield page_field(obj.get('text'))
+            yield _object_text(obj, bindings)
         elif obj.get('type') == 'table':
             for row in obj.get('rows') or []:
                 for cell in row if isinstance(row, list) else []:
-                    yield page_field(str(cell))
+                    yield str(cell)
+        elif obj.get('type') == 'formula':
+            latex = obj.get('latex') or obj.get('text') or ''
+            yield (equations or {}).get(latex, latex)
+        elif obj.get('type') == 'chart':
+            for key in ('title', 'x_label', 'y_label'):
+                yield obj.get(key) or ''
+            for category in obj.get('categories') or []:
+                yield str(category)
+            for series in obj.get('series') or []:
+                yield series.get('name') or ''
+
+
+def _approved_texts(page):
+    copies = _page_copy(page)
+    texts = {item.get('text') for item in copies if isinstance(item.get('text'), str)}
+    if not copies:
+        # Legacy designs have no display_copy ledger; their approved page items
+        # and context items are the body-copy authority.
+        texts.update(page.get(key) or '' for key in ('title', 'take'))
+        for item in [*(page.get('items') or []), *(page.get('context_items') or [])]:
+            if isinstance(item, dict) and isinstance(item.get('text'), str):
+                texts.add(item['text'])
+    if isinstance(page.get('section'), str):
+        texts.add(page['section'])
+    return texts
 
 
 def _copy_refs(page):
@@ -158,6 +198,8 @@ def _corpus(design, story, evidence):
     for page in (design.get('pages') if isinstance(design, dict) else []) or []:
         parts.append(str(page.get('id') or ''))
         parts.append(str(page.get('title') or ''))
+        parts.append(str(page.get('take') or ''))
+        parts.append(str(page.get('section') or ''))
         parts.append(str(page.get('figures') or []))
         parts.append(str(page.get('figure_sources') or {}))
         for item in page.get('items') or []:
@@ -213,17 +255,10 @@ def _image_path(obj, base):
     return str(path.resolve())
 
 
-def _collect_used(page, bindings):
-    used = set()
-    for _, ref in _copy_refs(page):
-        if ref in bindings:
-            used.add(ref)
-    # Literal approved copy also counts, but only after exact comparison.
-    visible = [text for text in _visible_texts(page) if text]
-    for ref, text in bindings.items():
-        if text and text in visible:
-            used.add(ref)
-    return used
+def _collect_used(page, bindings, equations=None):
+    # Count rendered text, not an arbitrary copy_ref on an image or container.
+    visible = {text for text in _visible_texts(page, bindings, equations) if text}
+    return {ref for ref, text in bindings.items() if text and text in visible}
 
 
 def _expected_carriers(page):
@@ -241,7 +276,7 @@ def _expected_carriers(page):
     return required
 
 
-def bind(value, work, request=None, source_dir=None):
+def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
     """Validate and canonicalize a PageScene against the approved page design.
 
     Returns ``(canonical_scene, report)``.  Relative image paths are resolved
@@ -298,7 +333,10 @@ def bind(value, work, request=None, source_dir=None):
     pages = expanded
     value = copy.deepcopy(value)
     value['pages'] = pages
-    if len(pages) != len(design_pages):
+    if allow_partial:
+        submitted = {page.get('id') for page in pages}
+        design_pages = [page for page in design_pages if page['id'] in submitted]
+    if not pages or len(pages) != len(design_pages):
         raise SceneBindingError(
             'PAGE_SCENE_PAGE_COUNT',
             f'PageScene has {len(pages)} pages; approved design has {len(design_pages)}.')
@@ -339,7 +377,29 @@ def bind(value, work, request=None, source_dir=None):
             if ref not in bindings:
                 raise SceneBindingError('PAGE_SCENE_COPY_UNRESOLVED',
                                         f'{pid}/{label}: unresolved copy_ref {ref}')
-        used = _collect_used(page, bindings)
+        from deck_compiler.content_projection import standalone_math
+        equations = {}
+        for item in copies:
+            if item.get('role') in ('body', 'label'):
+                expression = standalone_math(item.get('text'))
+                if expression is not None:
+                    equations[expression] = item['text']
+        realized = set()
+        for obj in _walk_objects(page.get('objects')):
+            if obj.get('type') != 'formula':
+                continue
+            ref = obj.get('copy_ref')
+            if ref:
+                expression = standalone_math(bindings[ref])
+                if expression not in equations or obj.get('latex', expression) != expression or 'text' in obj:
+                    raise SceneBindingError('PAGE_SCENE_COPY_DRIFT',
+                                            f'{pid}: formula copy_ref must bind the exact reviewed standalone equation.')
+                obj['latex'] = expression
+            realized.add(obj.get('latex'))
+        if equations.keys() - realized:
+            raise SceneBindingError('PAGE_SCENE_COPY_MISSING',
+                                    f'{pid}: realize reviewed standalone equations as native formula objects.')
+        used = _collect_used(page, bindings, equations)
         # A page-scoped alias such as P1.title refers to the approved copy id
         # p1-title; count either spelling for the visibility obligation.
         aliases = {item.get('id'): f'{pid}.{item.get("id")}' for item in copies}
@@ -373,17 +433,27 @@ def bind(value, work, request=None, source_dir=None):
             evidence_refs = list(evidence_refs)
         # Only visible prose can introduce a new numeric claim.  Source labels
         # and figure identities are provenance, not scientific assertions.
-        visible = '\n'.join(text for text in _visible_texts(page) if text)
+        visible_texts = [text for text in _visible_texts(page, bindings, equations) if text]
+        visible = '\n'.join(visible_texts)
         unknown = sorted(_numbers(visible) - known_numbers)
         if unknown:
             raise SceneBindingError(
                 'PAGE_SCENE_NUMBER_UNBOUND',
                 f'{pid}: visible numbers absent from approved design/Story/evidence: '
                 f'{", ".join(unknown)}')
-        for obj in _walk_objects(page.get('objects')):
+        approved_texts = _approved_texts(approved)
+        unapproved = [text for text in visible_texts if text not in approved_texts]
+        if unapproved:
+            raise SceneBindingError(
+                'PAGE_SCENE_COPY_DRIFT',
+                f'{pid}: visible copy differs from this page\'s approved text: '
+                f'{unapproved[0]!r}. Revise page_design and review it before changing copy.')
+        canonical_page = canonical['pages'][index - 1]
+        for obj in _walk_objects(canonical_page.get('objects')):
+            if obj.get('type') == 'formula' and obj.get('copy_ref'):
+                obj['latex'] = standalone_math(bindings[obj['copy_ref']])
             if obj.get('type') == 'image':
                 obj['path'] = _image_path(obj, Path(source_dir) if source_dir else work)
-        canonical_page = canonical['pages'][index - 1]
         canonical_page['title'] = title
         canonical_page['take'] = take
         if approved_title:
@@ -459,7 +529,11 @@ PAGE_SCENE_INSTRUCTIONS = (
     'scientific meaning and evidence. Use title_ref and take_ref (and object copy_ref) from '
     'copy_bindings for approved sentences; a literal title/take/body is accepted only when it is '
     'exactly the approved text. Do not paraphrase, add claims, invent numbers, delete conditions, '
-    'or move a claim to another page. One idea per page: a main visual plus at most three short '
+    'or move a claim to another page. All rendered text must match approved copy on this page, '
+    'including recipe-generated labels/captions, table cells, formulas and chart titles/axis labels/'
+    'categories/series names. A section label must match this page\'s approved section or display_copy. '
+    'Revise and review page_design first if a new label or sentence is needed. '
+    'One idea per page: a main visual plus at most three short '
     'conclusions. Prefer a recipe page when one fits: {"id":"P1","recipe":"cover","slots":{...}}. '
     'A slot value may be {"copy_ref":"P1.take"} so approved copy is bound by the tool. Available '
     'recipes and slots are in prompt.recipes; recipe mode owns geometry and native affordances. '
@@ -472,7 +546,9 @@ PAGE_SCENE_INSTRUCTIONS = (
     'nearby label; do not leave the figure as an unlabelled assertion. Use white space, thin accent '
     'rules and small labels; avoid card-like filled containers and large dark fill blocks. Prefer '
     'native text/list/group/image/shape/line/table/path/formula/chart. Use path with view_box and '
-    'absolute M/L/C/Q/Z commands for editable curves; formula with latex for OMML; chart with a '
+    'absolute M/L/C/Q/Z commands for editable curves. For an approved standalone equation, '
+    'use type=formula with copy_ref to the complete marked equation; the binder supplies exact latex for OMML. '
+    'Keep explicitly marked inline equations in the approved prose. Use chart with a '
     'native editable chart data object. Group children are relative to the group origin. Put '
     'speaker notes in page.notes. Do not put production notes, review text, audit caveats or deck '
     'metadata on the slide; limitations belong on one boundary page or in notes. Check density before '
@@ -492,6 +568,8 @@ def scene_task(prompt):
 
 - 页面文案以 `copy_bindings` 为唯一来源。标题/结论用 `title_ref`/`take_ref`；正文、
   标签和图注用对象 `copy_ref`。只有与批准文本逐字相同才允许写字面量。
+  所有文字必须属于当前页，包括 recipe 标签/图注、表格单元格、公式和图表文字；section
+  使用该页批准的 section 或 display_copy。新增文案先回退设计并重审。
 - 优先用 prompt 里的 `recipes`：提交 `{{"id":"P1","recipe":"cover","slots":{{...}}}}`，
   slots 文案用 `{{"copy_ref":"P1.take"}}`，几何和原生列表/公式由 recipe 负责。没有合适
   recipe 时才手写 objects；不要把 recipe 页再包一层手写坐标。

@@ -17,6 +17,12 @@ IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_pa
 未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
+显式页面几何可在新任务选择 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
+页面审读后提交 `work/page_scene.json` 或 `work/` 下其他草稿；工具会写入规范化绑定及 recipe 展开结果，
+相对图片路径以草稿所在目录解析并固化，图像变化使检查点失效。全部可见文案须逐项匹配本页批准文本，
+包括 recipe 标签、表格与图表文字；要改文案先回退设计重审。该路径的交付边界是 candidate 与原生验收证据，
+详细流程见 [PageScene](page-scene.md)。
+
 ## 1. 输入、工作目录与产物
 
 ```text
@@ -316,6 +322,8 @@ chart ID（`composition.charts`），或 1.1 的 table ID。已有 1.0 树保持
 stack 默认 `align: start` 贴合实测内容；可显式 center 居中（位移上限 56 px）或 distribute 把余量
 加进间隙——间隙超过 48 px 时不再均分，改为整组居中。
 weights 各项为 `[0.1,10]` 的相对值，按比例铺满，不能与 center / distribute 同用。
+新布局先用 `advance.preview` 的 `mode="layout"` 检查骨架与单件规格。结合正文占用、图形标签折行与实际渲染判断留白是否帮助阅读。普通构建将纯文字页列为 REVIEW。需要每页都有视觉对象时使用构建 CLI 的 `--require-visuals`，独立公式计入视觉对象。
+
 未加权贴顶 stack 留白超过其高度 15% 时返回 `PAGE_UNDERFILL` REVIEW、`underfill_px`
 及可行的 `suggested_weights`，按实际意图调整或审核接受。
 

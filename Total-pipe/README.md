@@ -132,3 +132,5 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 完整操作见 [USAGE.zh-CN.md](docs/USAGE.zh-CN.md)，协议导航见[当前文档索引](../docs/README.md)。
 旧开发计划和验收记录统一保留于[历史归档](../docs/archive/README.md)，不作为当前操作步骤。
+
+普通构建将纯文字页列为 `TEXT_ONLY_PAGE` REVIEW。脚本如需强制每页有图、表、原生图形或独立公式，可对 `build` 显式使用 `--require-visuals`。

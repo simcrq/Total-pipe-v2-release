@@ -153,7 +153,7 @@ def copy_spec(element):
             'fill': round(min(1., used * size * lh / max(1., height)), 2)}
 
 
-def build(ir_path, layout_path, out):
+def build(ir_path, layout_path, out, *, verbose=True):
     """Render each graphic on its own and report the type contract of every copy block."""
     ir_path, layout_path, out = Path(ir_path), Path(layout_path), Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -161,7 +161,8 @@ def build(ir_path, layout_path, out):
     ir = common.load_json(ir_path)
     layout = common.load_json(layout_path)
     design, theme, fonts, _ = common.runtime(ir, ir_path.parent)
-    matched = list(layout.get('font_hashes') or {}) == [fonts['font_file'], fonts['bold_font_file']]
+    matched = set(layout.get('font_hashes') or {}) == {
+        str(Path(path).resolve()) for path in fonts.values() if path}
 
     graphics, copies = [], []
     for number, (slide, slide_layout) in enumerate(zip(ir['slides'], layout['slides']), 1):
@@ -229,6 +230,8 @@ def build(ir_path, layout_path, out):
         lines.append('| - | 无 ≥3 行余量的块 | | | | | | |')
     (out.parent / 'units_report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
+    if not verbose:
+        return 0
     print(f'graphics={len(graphics)} copy_blocks={len(copies)} slack3={len(slack)} font_match={matched}')
     for item in graphics:
         print(f"  P{item['page']} {item['graphic_id']}: region {int(item['region'][2])}x{int(item['region'][3])} "

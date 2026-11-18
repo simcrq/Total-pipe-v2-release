@@ -51,10 +51,21 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 - 页数与页 ID/顺序必须与批准 `page_design` 一致；
 - `title_ref` / `take_ref` 和对象 `copy_ref` 必须解析到 `copy_bindings`；
 - 字面标题/结论必须与批准文本逐字一致，否则 `PAGE_SCENE_COPY_DRIFT`；
+- 正文、列表项、形状文字、表格单元格、公式和图表的标题/轴标签/类别/系列名，也逐项匹配
+  本页批准的 `display_copy`；`section` 可匹配批准的同名字段或本页文案。跨页引用不能引入本页
+  未批准的文案，`text` 与 `copy_ref` 同时存在时必须一致；
 - `content_map` 标记为 visible 的 copy carrier 必须在页面上真正出现；
 - `evidence_refs` 只能使用该设计页 Story item 已拥有的 EV；省略时自动继承；
 - 正文/标题/结论中未在页面设计、Story 或证据库登记的阿拉伯数字会被拒绝；
 - 图片路径相对提交文件解析，接受后固化为绝对路径并写入 checkpoint，源图变化会使旧页失效。
+
+没有 `display_copy` 的旧设计以该页标题、结论及 `items/context_items.text` 为文案权威。
+需要新增标签、图注或改写文字时，先修改页面设计并重新审读，不能在场景层添加断言。
+检查覆盖实际渲染的文字；把 `copy_ref` 挂在图片等不显示该文字的对象上不能履行可见义务。
+讲稿 `notes` 不计入可见文案。
+
+提交文件可以直接是 `work/page_scene.json`，也可以是 `work/` 下的其他草稿。无论路径是否相同，
+接受后均将规范化场景写入 `work/page_scene.json`，包含工具生成的 bindings、provenance 和绝对图片路径。
 
 `work/page_scene_binding.json` 保存设计哈希、每页 required/used copy 与 evidence 绑定，
 供后续审计；讲稿只写 `page.notes`，不进入投屏对象。
@@ -62,6 +73,7 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 `page_scene` 也接受 recipe 页：`{id, recipe, slots}`。binder 在原有校验之前用
 `agent/page_recipes.expand_page()` 展开；slots 中的 `{"copy_ref":"P1.take"}` 先解析成
 批准文案。展开后仍走同一套标题/结论、可见 carrier、数字和几何门禁。
+recipe 的标签、图注和默认文字也须来自本页批准文案；recipe 本身不授予新增文案权限。
 
 ## 原生对象
 
@@ -82,7 +94,7 @@ PageScene 0.1 当前支持：
 - `shape` / `line`：矩形、圆角、椭圆、箭头、连接线；
 - `table`：原生表格，表头（`header_fill` 可改表头色）、强调行、列宽；
 - `path`：**原生 DrawingML 贝塞尔路径**，`view_box` + 绝对 `M/L/C/Q/Z` 命令；
-- `formula`：**原生 OMML 公式**，`latex` 经现有 `totalpipe_layout.formula` 解析；
+- `formula`：**原生 OMML 公式**，`copy_ref` 可引用已批准的独立 `$...$` 文案。绑定后 `latex` 经 `totalpipe_layout.formula` 解析；
 - `chart`：**原生可编辑数据图**，line/bar/column/scatter，带轴标题、图例和图内数据；
 - `page.notes`：原生演讲者备注。
 
@@ -107,7 +119,7 @@ CLI：
 python -m agent advance --job-id <job_id> --scene-preview request.json
 ```
 
-它只渲染选中页，返回 PowerPoint PDF/PNG、`issues` 和 contact sheet；不写
+它在预览目录绑定已审读文案、公式引用及图片，再渲染选中页，返回 PowerPoint PDF/PNG、`issues` 和 contact sheet；不写
 `work/page_scene.json`、不推进阶段、不消耗修订额度、不改变 candidate。PNG/PDF 检查
 不等于 PowerPoint UI 验收。
 

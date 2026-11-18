@@ -7,8 +7,8 @@ IR 阶段可用 `advance(preflight=true)` 在提交前汇总全部验收问题�
 新任务使用科学记录与观众表达契约：Story 2.0 分离原子科学单元与叙事，先经主 Agent 科学源审读；page_design 1.3 忠实改写投屏文案，
 区分唯一所有权与明确复用，再经页面源文案审读进入 IR。条件只跟随其直接限定的可见断言，旧协议可恢复。
 逐页交 deck_ir_page 可自动绑定来源、测量容量并缓存通过页；齐全后整套复验。见[内容契约](Total-pipe/docs/content-projection.md)。
-IR 编写中可用 `advance.preview` 选页生成 HTML 渲染 PNG，实际看图后改源 IR；未变页复用缓存。
-需要显式页面几何时可启动 `page_mode=page_scene`：绑定 page_design 文案与证据，
+IR 编写中用 `advance.preview` 的 `mode="layout"` 检查真实草稿的骨架、留白及单件尺寸，再用默认模式查看 HTML PNG。两种模式均复用未变页的缓存。普通构建将纯文字页列为 REVIEW，独立公式可作为视觉载体。
+需要显式页面几何时可启动 `page_mode=page_scene`：检查 page_design 文案与证据绑定，
 用 `scene_preview` 逐页导出 PowerPoint PNG，接受后直接生成 PageScene candidate；
 默认 `deck_ir` 路径及 Bezier、OMML、Chart IR、EViz 等能力保持不变。见[PageScene](Total-pipe/docs/page-scene.md)。
 这是编辑预览，最终候选仍整套构建，PowerPoint 原生验收仍须完成。见[选页渲染接口](Total-pipe/docs/agent-adapter.md#ir-选页渲染与看图修订)。
@@ -122,6 +122,27 @@ Story 阶段需要记录用户选择的模型、reasoning 和真实 subagent pro
 从已有证据、Story 或 Deck IR 继续时，按产物状态进入相应阶段。
 RPA 之后先由独立子代理写观众表达和视觉讲解设计，主 Agent 实际源文案审读后，再按 Schema 映射
 canonical Deck IR；Design 的视觉提案阶段随后执行。
+
+### 可选：使用 PageScene 页面几何
+
+新建 PDF、Markdown 或 workflow 任务时，可向 `totalpipe_start` 传入
+`page_mode="page_scene"`；CLI 对应参数为 `--page-mode page_scene`。该模式在页面源文案审读后
+进入 `page_scene`，用显式对象和坐标生成可编辑 candidate，跳过 Deck IR 与整套视觉提案阶段。
+导入已有 Deck IR 的任务继续使用默认的 `deck_ir` 模式。
+
+在 `page_scene` 阶段，可通过 `totalpipe_advance` 的 `scene_preview` 预览选定页面，再提交场景。
+预览需要 PowerPoint 原生导出；PNG 检查不等于 PowerPoint UI 逐页验收。PageScene 当前交付边界是
+candidate 与原生验收证据，不能直接沿用 Deck IR 的 final promotion 流程。完整参数、支持的对象和验收
+步骤见 [PageScene 使用说明](Total-pipe/docs/page-scene.md)。
+
+PageScene 接受时逐项检查本页批准的 `display_copy`：正文、列表、形状文字、表格单元格、公式和图表
+标题/轴标签/类别/系列名均须与批准文案逐字一致；recipe 展开后的文案同样检查。新增或改写文案须先
+回退页面设计并重审；旧设计没有 `display_copy` 时，以该页标题、结论及 items/context_items 原文为准。
+章节标签可使用批准的 `section` 或本页批准文案。
+
+可以直接提交 `work/page_scene.json`，也可以提交 `work/` 下的其他草稿；接受后统一写入包含绑定、
+recipe 展开结果及来源信息的规范场景。相对图片路径以提交文件所在目录解析，随后固化为绝对路径，
+图片内容变化会使对应检查点失效。
 
 ### 2. 已有 Deck IR：编译 CLI
 

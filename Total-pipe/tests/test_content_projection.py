@@ -169,6 +169,36 @@ class ProjectionTests(AgentCase):
         self.ir['slides'][0]['composition']['blocks'][0]['text'] += ' This path is not a device experiment; no system saving factor is reported.'
         self.assertTrue(any('Unapproved body' in message for _, _, message in validate_projection(self.ir['slides'][0], {})))
 
+    def test_approved_label_can_use_a_body_box_but_new_copy_fails(self):
+        self.prepare()
+        page = self.ir['slides'][0]
+        page['semantic']['content_projection']['display_copy'][-1]['role'] = 'label'
+        self.assertEqual(validate_projection(page, {}), [])
+        page['composition']['blocks'][0]['text'] += ' Extra claim.'
+        self.assertTrue(validate_projection(page, {}))
+
+    def test_approved_display_equation_binds_to_native_math_and_compiles(self):
+        work = self.prepare()
+        equation = r'\frac{I}{P}'
+        self.design['pages'][0]['display_copy'][-1]['text'] = f'${equation}$'
+        write(work/'page_design.json', self.design)
+        write(work/'page_design_review.json', synthetic_review(work, self.design))
+        draft = authored_ir(self.design)
+        ir = bind_sources(draft, a.load_design(work), work, work/'draft.json')
+        ir['slides'] = ir['slides'][:1]
+        page = ir['slides'][0]
+        block = page['composition']['blocks'][0]
+        self.assertEqual((block['component'], block['text']), ('formula', equation))
+        a.persist_ir(ir, COMPONENT/'examples/native-bullets.deck_ir.json', work/'equation.json')
+        _, layout, qa = compile_input(work/'equation.json', work/'equation-preview',
+                                      require_visual_design=False, explain_viz_mode='off')
+        self.assertEqual(qa['counts']['FAIL'], 0, qa)
+        element = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'body')
+        self.assertEqual(element['kind'], 'math')
+        self.assertIn('<m:f>', element['omml'])
+        block.update(component='body', text=equation)
+        self.assertTrue(any('needs a native formula' in msg for _, _, msg in validate_projection(page, {})))
+
     def test_records_and_projection_cannot_be_dropped_or_silently_edited(self):
         work = self.prepare()
         self.ir['slides'][0]['semantic']['speaker_notes'] = 'Short summary only.'
