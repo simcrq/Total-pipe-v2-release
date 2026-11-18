@@ -13,6 +13,20 @@ def region(id, kind, children, **options):
     return {'id': id, 'type': kind, 'gap': 'compact', 'children': children, **options}
 
 
+def chip_panel(id, title, body):
+    return {'id': id, 'type': 'panel', 'title': title, 'padding': 'compact', 'gap': 'compact',
+            'frame': {'title_band': 'chip', 'title_fill': '#266E72', 'title_color': '#FFFFFF'},
+            'body': body}
+
+
+def comparison_table(id, rows, column_weights):
+    return {'id': id, 'origin': 'generated', 'header_rows': 1,
+            'row_count': len(rows), 'column_count': len(rows[0]), 'column_weights': column_weights,
+            'cells': [{'id': f'cell-{row}-{column}', 'row': row, 'column': column,
+                       'text': value, 'align': 'left' if column == 0 else 'center'}
+                      for row, values in enumerate(rows) for column, value in enumerate(values)]}
+
+
 def page(id, title, takeaway, blocks, body, *, figures=(), graphics=(), tables=(), charts=(),
          evidence_refs=(SOURCE,)):
     composition = {
