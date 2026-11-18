@@ -3,7 +3,7 @@
 本目录包含 Deck Compiler、确定性布局提供方、pwf2rpa、Schema、示例和总调度 Skill。
 完整论文流程还使用同级的 `PaperWorkflow/` 和 `research-ppt-assistant/`。
 
-**组件、当前版本和全流程入口见 [仓库 README](../README.md)。**
+**组件、版本来源和全流程入口见 [AI 工程索引](../docs/README.md)。**
 插件清单版本为 `3.3.0+codex.20261021203000`；MCP 握手版本为 `3.2.0`，
 编译器 Python 模块仍声明 `2.4.0`。输入 Deck IR 为 `schema_version: "2.0"`，
 可选 layout tree 支持 `1.0 / 1.1 / 1.2`。这些版本属于不同对象。

@@ -2,7 +2,7 @@
 
 本文对应当前仓库的 PaperWorkflow、Story、RPA、page_design、Scientific Visual Planner 和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
-组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
+组件与版本来源见 [AI 工程索引](../../docs/README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
 默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始。在仓库根目录运行
 `python3 install.py --client auto` 检测宿主，也可以通过 `--client` 指定目标。[AI 安装指南与宿主列表](../../INSTALL_FOR_AI.md)

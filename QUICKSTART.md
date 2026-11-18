@@ -1,7 +1,7 @@
 # Total-pipe 快速开始
 
-当前组件、版本、环境和完整入口以 [README.md](README.md) 为准。
 完整操作见 [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)，安装见 [环境清单](Total-pipe/环境清单.md)。
+组件、接口和版本来源见 [AI 工程索引](docs/README.md)。
 
 ## 从论文开始
 
