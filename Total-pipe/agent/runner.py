@@ -710,7 +710,7 @@ def _preflight_ir(job, stage, artifact_path):
 
 def _preview_ir(job, stage, request):
     """A rendering sandbox is not an acceptance attempt or a stage transition."""
-    from .ir_preview import execute
+    from .ir_preview import authoring_follow_up, execute
     old = job.get('last_error')
     failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
     response = envelope(job, stage, failure)
@@ -720,6 +720,9 @@ def _preview_ir(job, stage, request):
         response['preview_result'] = {'status': 'FAIL', 'message': a.redact(str(error)),
                                       'job_unchanged': True, 'candidate_unchanged': True,
                                       'powerpoint_ui_review': False}
+    if stage['id'] == 'deck_ir':
+        response['next_action']['preview_follow_up'] = authoring_follow_up(
+            job['job_id'], request, response['preview_result'])
     return response
 
 

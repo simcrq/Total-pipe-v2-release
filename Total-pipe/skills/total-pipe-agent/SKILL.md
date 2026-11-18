@@ -52,10 +52,12 @@ IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、�
 无序要点可用 `bullet_icon` 指定单个符号，编号可用 `list_start` 承接。
 带文字的圆角分组标签、流程节点和对照路线按设计分别落实；打开预览检查分组边界及阅读顺序。
 每条独立正文用独立 block，设置自身 `copy_ref` 与来源。有序的独立块逐块设置 `list_start`。
-不熟悉某个实现时，使用 IR 提示 `example_lookup.command_prefix` 执行 `search "<关键词>" --limit 2`，
-再执行 `show <id>` 或读取所选脚本。只取匹配示例的结构，文案与证据使用当前任务批准内容。
+先看逐页 IR 提示的 `example_lookup.suggestions`，需要时用 `example_lookup.command_prefix` 执行
+`search "<关键词>" --limit 2`。通过 `show <id>` 或脚本路径打开选中的一项，只取结构，文案与证据使用当前任务批准内容。
 提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
-IR 作者先用 `advance.preview={artifact_path,slide_ids,mode:"layout"}` 检查新建、密集或稀疏布局。打开骨架图并读单件报告，判断底部空区、文字余量及图形标注折行。随后用默认 preview 看实际渲染。失败码可用 `python -m deck_compiler explain CODE` 查成因。逐页预检和 preview 均不占修订次数。
+逐页动作带 `preview_plan` 时，写好草稿后调用其 `first_call`。打开骨架并读单件报告，检查页尾、碰撞、
+完整文字和图形标注折行。修订后重测，随后调用 `next_action.preview_follow_up.next_call` 并打开渲染图。
+其他页可按需使用 `advance.preview`。失败码可用 `python -m deck_compiler explain CODE` 查成因。
 有证据且需要读公式时，设计者批准独立 `$...$` 文案及符号说明。Deck IR 通过 `copy_ref` 绑定原生公式。PageScene 用 `type=formula` 加 `copy_ref` 并通过 `advance.scene_preview` 查看 PowerPoint PNG。完整协议见回复 schema_path。
 实际打开 preview_result.pages 的 PNG，再修改源 IR 并重新 preview；未变页复用渲染缓存。预览不接受 IR、不计修订、不改候选或正式 QA。
 officecli-html 预览可能与 PowerPoint 的字体/公式不同，不能代替篇级 Design、完整构建或原生验收；FAIL 原样保留，不能凭生成图片签收。

@@ -280,7 +280,8 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
 验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
 若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
-IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿选页渲染，实际打开返回 PNG 后再修改 IR。
+逐页动作带 `preview_plan` 时，草稿写好后执行 `first_call`，复核骨架和单件报告后，再按
+`next_action.preview_follow_up.next_call` 生成 PNG 并实际查看。其他页可用 `advance(preview={artifact_path,slide_ids})` 按需渲染。
 未变页按内容/资源指纹复用；预览不接受产物、不占修订、不改 candidate/正式 QA。它使用 officecli-html，
 不能证明 PowerPoint 原生显示，不能签收 REVIEW；完整 Design、构建及原生验收仍必做。完整协议见接入层用法的“IR 选页渲染与看图修订”。
 
@@ -343,8 +344,8 @@ IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿
 按页面设计使用单段标记、并列要点或顺序编号。正文用原文换行划分条目。用
 `text_flow=native_bullet_list` 为单段或并列要点加符号，`bullet_icon` 可指定一个图标。
 有先后关系的步骤用 `text_flow=native_numbered_list`，用 `list_start` 承接编号。
-每条独立正文保留自身 block、文案引用和来源。使用 IR 提示的 `example_lookup` 查询所需结构。
-先执行 `search "<关键词>" --limit 2`，再用 `show <id>` 查看一份 [脚本示例](../../examples/library/README.md)。
+每条独立正文保留自身 block、文案引用和来源。先看逐页 `example_lookup.suggestions` 推荐的索引元数据。
+需要细化时执行 `search "<关键词>" --limit 2`，再用 `show <id>` 查看一份 [脚本示例](../../examples/library/README.md)。
 读 `Total-pipe/docs/native-lists.md`：顶层 presentation.bullet_style/bullet_color 设默认，block 同名字段覆盖。
 单页 presentation.takeaway_marker={style:large_diamond,color:#000000} 为完整 takeaway 加一个独立标记；
 可与 takeaway 行内公式共存，符号颜色不改正文颜色。preserve-terms 不移除项目符号，

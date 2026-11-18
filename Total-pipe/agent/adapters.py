@@ -462,7 +462,7 @@ def finalize_design(work, design=None):
     prompt['example_lookup'] = {
         'command_prefix': [sys.executable, str(library/'catalog.py')],
         'index_path': str(library/'index.json'),
-        'instructions': 'For a new visual treatment, use search "<keywords>" --limit 2. '
+        'instructions': 'Consider the page-specific suggestions first. To refine the match, use search "<keywords>" --limit 2. '
                         'Read one selected result with show <id> or open its script. '
                         'Use its object structure with approved copy and sources. Do not load the whole library.',
     }
@@ -481,11 +481,12 @@ def finalize_design(work, design=None):
         'explanation obligations. Use native editable objects for drawings. If geometry cannot fit at '
         'the required type scale, return measured feedback for page-design replanning; never drop '
         'scientific content or shrink fonts. Set presentation.visual_style for the venue. '
-        'Look up unfamiliar patterns through example_lookup. Read only the matching example and apply its '
-        'structure to the approved content. Keep independent prose blocks separate. '
+        'Use the short example_lookup suggestions in the per-page prompt and refine the search if needed. '
+        'Read only the matching example and apply its structure to the approved content. Keep independent prose blocks separate. '
         'Prefer per-page authoring via artifact_kind=deck_ir_page: each file is canonical Deck IR '
         'with exactly one slide and the same shared header. See next_action.page_authoring for page IDs '
-        'and output paths. Submit a page when ready; the tool binds omitted Story evidence/notes and '
+        'and output paths. Follow the page preview_plan and preview_follow_up where offered. '
+        'Submit a page when ready; the tool binds omitted Story evidence/notes and '
         'known figure paths, measures capacity, and caches passing pages. Revise only failed pages. '
         'All pages are assembled in approved order and checked together before downstream Design/build. '
         'A figure_refs asset_id may directly name an inventory asset ID/path; source_figure may be '
@@ -874,7 +875,9 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
 
 
 BODY_GUIDES = (
-    'Plan visual guides for independent body blocks in design. Explain which blocks belong together and '
+    'Give the presenter a concrete reading path in design: name the first visual anchor, what to compare '
+    'or trace there, and where to point to the explanation or applicable condition. '
+    'Plan visual guides for independent body blocks. Explain which blocks belong together and '
     'how the audience reads them. Treat each body block as a separate editable object. '
     'A short rounded heading can name a group; peers can share a small icon '
     'or bullet and ordered steps can use numbering or connected text-bearing shapes. For a comparison, '
@@ -885,7 +888,8 @@ BODY_GUIDES = (
 )
 
 BODY_GUIDES_TASK = (
-    '为独立正文块设计视觉引导，在 design 里写清哪些块属于同组、读者按什么顺序看。'
+    '在 design 里写清观众先看哪个视觉锚点，在那里比较什么或沿什么顺序看，以及到哪里看解释或适用条件。'
+    '为独立正文块设计视觉引导，写清哪些块属于同组。'
     '各条正文保持独立，分组可以共享标题或标记样式。'
     '短圆角标题框可以给一组正文命名，并列要点共用项目符号或图标，顺序步骤可用编号或相连的带文字形状。'
     '对照流程可用一个共同标题统领两条有名称的路线，用对齐或分隔线区分路线，用带动作短语的箭头说明路线内的步骤。'
@@ -1062,8 +1066,9 @@ def ir_task(prompt=None):
 - 选择能力实现既定视觉；自绘优先用原生对象，布局树可直接使用。不写页面 bbox，不缩字号、不删内容。
   容量不足时把测量反馈退回页面设计，不能修改科学含义或擅自润色文案。
 - 落实已批准的正文分组、圆角标签、项目符号/编号和带箭头的阅读顺序。标题框与实质正文均保持可编辑。
-- 保持每条独立正文各自的 block、文案引用与来源。遇到不熟悉的实现，按 `example_lookup` 检索并只读匹配的示例。
-- 复杂、稀疏或新布局先用 preview.mode=layout 查看骨架与单件报告，调整后用默认 preview 查看实际 PNG。
+- 保持每条独立正文各自的 block、文案引用与来源。先查逐页 `example_lookup.suggestions`，需要时细化检索，只读选中的示例。
+- 写完草稿后，按 `next_action.page_authoring.pages[].preview_plan` 调用骨架预览。检查反馈后按
+  `next_action.preview_follow_up` 渲染并打开实际 PNG。其他页可按需预览。
   已审读的独立公式用 copy_ref 进入原生公式块，混排保留原有数学标记。渲染与 QA 分开检查。
 
 交付实现选择与真实未解决项。"""
@@ -1079,7 +1084,8 @@ def ir_task(prompt=None):
   自绘内容优先用原生对象；图形形式已由设计确定，你只选择可实现它的 archetype / layout_tree 等。
 - 页序、内容分配、选图和视觉关系不变；marks 如有则落实为文字强调。旧 1.0 设计的 claim/items/shape 同样实现。
 - 保留设计要求的可编辑正文标记、分组标签和路线之间的对照关系。
-- 每条独立正文保留一个块。不熟悉的结构按 `example_lookup` 检索，仅读匹配到的示例。
+- 每条独立正文保留一个块。先查逐页 `example_lookup.suggestions`，需要时细化检索，仅读选中的示例。
+- 写完草稿后按 `next_action.page_authoring.pages[].preview_plan` 和 `next_action.preview_follow_up` 检查骨架与渲染图。
 - 理解结论所需的证据必须可见，讲稿不能替代；保留单位、条件、误差和 Story explain 义务。
   放不下时报告具体所需空间并回退页面设计，不改科学含义、不猜数据、不删内容、不缩字号。
 

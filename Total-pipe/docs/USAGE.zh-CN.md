@@ -13,7 +13,8 @@
 调用 advance。各轮本地执行耗时、等待与重规划时间点追加在 `logs/events.jsonl`，不代表模型生成耗时。
 IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 一次检查全部问题与几何容量，
 不消耗修订次数。详见[完整 IR 提交预检](agent-adapter.md#完整-ir-提交预检)；它不替代正式提交或最终 QA。
-边写 IR 边看图时，单独用 `advance(preview={artifact_path,slide_ids})`，实际打开返回 PNG 后改源 IR、重复预览；
+写完复杂、稀疏或新布局的逐页草稿后，先按 `preview_plan.first_call` 看骨架，再按 `preview_follow_up.next_call` 成图。
+也可单独用 `advance(preview={artifact_path,slide_ids})` 按需看图，实际打开返回 PNG 后改源 IR、重复预览；
 未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
@@ -275,7 +276,8 @@ Story 的 `question` 复制成标题。
 用圆角文字节点与连接箭头解释流程，或在共同标题下以两条有名称的路线比较方法。
 将组标题和关键标签纳入批准文案，IR 阶段按关系选择原生对象。
 每条独立正文保留自己的 block ID、文案引用和来源。对独立步骤按读图顺序逐块设置 `list_start`。
-拿到 IR 提示后，利用其中的 `example_lookup` 按关键词查 [脚本示例库](../examples/library/README.md)，打开选中的一项。
+逐页 IR 提示的 `example_lookup.suggestions` 提供至多两条按批准设计匹配的示例元数据。按需打开一项，
+或使用 `example_lookup` 的检索命令细化关键词。见 [脚本示例库](../examples/library/README.md)。
 preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW。传统 `distributed_arrow_list`
 宽度至少 520 CSS px，两种新显式列表至少 240 CSS px。
 高度按完整条目、标记槽、实际换行、标签、间距及内边距测量。区域不足时报告拆页 / 重规划，

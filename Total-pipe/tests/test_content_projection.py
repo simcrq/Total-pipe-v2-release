@@ -365,7 +365,9 @@ class ProjectionRunnerTests(AgentCase):
         self.assertTrue(Path(lookup['command_prefix'][1]).is_file())
         self.assertNotIn('example_lookup', read(work/'page_design_prompt.json'))
         for page in result['next_action']['page_authoring']['pages']:
-            self.assertEqual(read(Path(page['input_path']))['example_lookup'], lookup)
+            page_lookup = read(Path(page['input_path']))['example_lookup']
+            self.assertLessEqual(len(page_lookup.pop('suggestions')), 2)
+            self.assertEqual(page_lookup, lookup)
 
     def test_malformed_review_repairs_only_the_record_but_failed_review_replans_design(self):
         work, design, result = self.start_design()

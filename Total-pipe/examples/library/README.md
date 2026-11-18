@@ -16,6 +16,8 @@ python examples/library/catalog.py build chart-uncertainty --out /tmp/totalpipe-
 `build` 使用正常编译器输出可编辑候选和 QA 报告，PowerPoint 原生验收按实际项目工作流执行。
 
 在 Agent 工作流中，整套及逐页 IR 提示的 `example_lookup` 提供实际解释器和检索脚本路径。
+逐页提示会根据批准的设计描述和视觉载体给出最多两条 `suggestions`，内容和 `search` 一样是索引元数据。
+推荐由本地关键词匹配生成，作者可细化检索或直接实现设计。
 页面设计负责写清视觉关系。IR 作者根据需要查询，把示例的结构应用到批准的 `copy_ref`、证据和选图。
 独立正文每条用一个 block ID，符号逐块声明。顺序由布局树和各块的 `list_start` 表达。
 `independent-blocks` 用无外框的圆角标题标识两组正文。

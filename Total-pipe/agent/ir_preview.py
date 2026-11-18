@@ -18,6 +18,37 @@ def descriptor():
                            'change the candidate or attest PowerPoint review.'}
 
 
+def _preview_call(job_id, request):
+    return {'tool': 'totalpipe_advance', 'arguments': {'job_id': job_id, 'preview': request}}
+
+
+def authoring_plan(job_id, draft_path, slide_id, reasons):
+    """The first preview command for a page, once its draft has been written."""
+    request = {'artifact_path': draft_path, 'slide_ids': [slide_id], 'mode': 'layout'}
+    return {'reasons': reasons, 'first_call': _preview_call(job_id, request)}
+
+
+def authoring_follow_up(job_id, request, result):
+    """Guide the Agent from measured geometry to a visual check of the draft."""
+    pages = result.get('pages', [])
+    if result.get('status') == 'FAIL' or not pages:
+        return {'type': 'review_preview_failure',
+                'instruction': 'Read the preview issues or error. Correct geometry or restore the rendering '
+                               'dependency as indicated, then preview again. Report any unavailable preview.'}
+    if request.get('mode', 'render') == 'layout':
+        return {'type': 'inspect_skeleton',
+                'instruction': 'Open the skeleton and unit reports. Check crowding, footer clearance and any '
+                               'collision or overflow REVIEW. If you revise the draft, rerun layout before rendering.',
+                'next_call': _preview_call(job_id, {**request, 'mode': 'render'})}
+    if not all(page.get('png') for page in pages):
+        return {'type': 'review_preview_failure',
+                'instruction': 'Read the preview feedback for any page without a rendered PNG.'}
+    return {'type': 'inspect_render',
+            'instruction': 'Open the rendered PNGs and follow the approved reading order. Verify the evidence anchor, '
+                           'chart marks, formulas, units and conditions. Check clipping and overlap. Revise and re-preview '
+                           'as needed, then submit the draft through the normal IR acceptance step.'}
+
+
 def validate_request(request):
     if (not isinstance(request, dict) or set(request)-{'artifact_path', 'slide_ids', 'mode'} or
             not isinstance(request.get('artifact_path'), str) or

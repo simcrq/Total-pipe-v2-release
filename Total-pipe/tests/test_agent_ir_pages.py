@@ -7,7 +7,7 @@ from PIL import Image
 
 from agent import COMPONENT, adapters as a, runner
 from agent.ir_pages import bind_sources, prepare_prompts
-from agent.state import read, write, sha
+from agent.state import locate, read, save, sha, write
 from agent_fixture import AgentCase
 from deck_compiler.crops import verified_source
 from deck_compiler.layout import compile_deck
@@ -94,7 +94,69 @@ class PageIRTests(AgentCase):
         self.assertIn('PAGE_HEADER_MISMATCH', [i.get('code') for i in result['issues']])
 
 
+    def test_status_suggests_an_executable_layout_preview_for_pending_complex_pages(self):
+        work = self.prepare()
+        design = read(work/'page_design.json')
+        design['pages'][0]['design'] = 'Compare the lines in the chart, then explain the equation.'
+        write(work/'page_design.json', design)
+        write(work/'ir_prompt_designed.json', {})
+        _, job = locate(self.job_id)
+        job.pop('last_error', None)
+        save(job)
+        before = (self.out/'.totalpipe/job.json').read_bytes()
+
+        action = runner.status(self.job_id)['next_action']
+        complex_page, simple_page = action['page_authoring']['pages']
+        self.assertNotIn('preview_plan', simple_page)
+        plan = complex_page['preview_plan']
+        self.assertIn('multiple_visuals', plan['reasons'])
+        self.assertEqual(plan['first_call']['tool'], 'totalpipe_advance')
+        path = self.page(work, 'P1')
+        self.assertEqual(plan['first_call']['arguments']['preview'],
+                         {'artifact_path': str(path), 'slide_ids': ['P1'], 'mode': 'layout'})
+        preview = runner.advance(**plan['first_call']['arguments'])
+        self.assertEqual(preview['preview_result']['status'], 'PASS', preview)
+        self.assertEqual(preview['next_action']['preview_follow_up']['type'], 'inspect_skeleton')
+        self.assertEqual(before, (self.out/'.totalpipe/job.json').read_bytes())
+        self.assertEqual(self.submit(path)['page_result']['status'], 'PASS')
+        cached_page = runner.status(self.job_id)['next_action']['page_authoring']['pages'][0]
+        self.assertTrue(cached_page['cached'])
+        self.assertNotIn('preview_plan', cached_page)
+        result = self.submit(self.page(work, 'P2', broken=True))
+        self.assertEqual(result['page_result']['status'], 'FAIL')
+        retry_page = result['next_action']['page_authoring']['pages'][1]
+        self.assertIn('previous_submission_failed', retry_page['preview_plan']['reasons'])
+
+
 class SourceBindingTests(AgentCase):
+    def test_page_prompts_recommend_examples_by_approved_visual_intent(self):
+        work = self.out/'work'
+        cases = [
+            ('标注论文原图曲线上的峰，右侧放读图顺序。', ('figure',), 'figure-readout'),
+            ('Trace a proposed mechanism and the control that would test it.', ('graphic',), 'mechanism-hypothesis'),
+            ('给出推导并解释方程的符号。', (), 'equation-explainer'),
+            ({'walkthrough': '先对比两条折线，再到右侧看模型与条件。'},
+             ('chart', 'formula', 'table'), 'rc-discharge-composite'),
+            ('报告开场，交代讨论目标。', (), None),
+        ]
+        pages = [{'id': f'P{index}', 'content_refs': [], 'design': design,
+                  'content_map': {'unit': {'destination': 'visible', 'carriers': [
+                      {'kind': kind, 'ref': kind} for kind in kinds]}} if kinds else {}}
+                 for index, (design, kinds, _) in enumerate(cases, 1)]
+        with patch('runpy.run_path', side_effect=AssertionError('Recommendations must not execute example scripts')):
+            prepare_prompts(work, {'schema_version': '1.3', 'pages': pages},
+                            {'story': {'story': [], 'ending': {}}, 'example_lookup': {'index_path': 'index.json'}})
+        for page, (_, _, expected) in zip(pages, cases):
+            with self.subTest(page=page['id']):
+                prompt = read(work/'ir_page_prompts'/(page['id']+'.json'))
+                suggestions = prompt['example_lookup']['suggestions']
+                if expected is None:
+                    self.assertEqual(suggestions, [])
+                    continue
+                self.assertLessEqual(len(suggestions), 2)
+                self.assertEqual(suggestions[0]['id'], expected)
+                self.assertEqual(set(suggestions[0]), {'id', 'title', 'summary', 'script'})
+
     def test_page_prompt_contains_assigned_story_and_its_complete_evidence(self):
         work = self.out/'work'
         design = {'schema_version': '1.1', 'pages': [{'id': 'P1', 'content_refs': ['S1.answer'], 'design': 'Draw the mechanism.'}]}
