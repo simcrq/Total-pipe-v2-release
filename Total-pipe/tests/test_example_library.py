@@ -27,6 +27,7 @@ class ExampleLibraryTests(unittest.TestCase):
             ('native table merged headers', 'grouped-table'),
             ('行内公式 独立公式 符号定义', 'equation-explainer'),
             ('机制图 假设虚线', 'mechanism-hypothesis'),
+            ('复杂混排 曲线与公式', 'rc-discharge-composite'),
         ):
             rows = catalog('search', query, '--limit', '1')
             self.assertEqual(len(rows), 1)

@@ -56,6 +56,13 @@
       "tags": ["机制图", "机制假设", "假设边", "假设虚线", "抑制关系", "T形端帽", "对照实验", "mechanism diagram", "hypothesis edge", "inhibit", "activate"],
       "summary": "用原生抑制线和箭头表示可检验的两段假设，图下写明需要比较的观测量与匹配条件。",
       "script": "mechanism_hypothesis.py"
+    },
+    {
+      "id": "rc-discharge-composite",
+      "title": "RC 放电综合科研页：同页比较曲线、回路、公式与参数",
+      "tags": ["综合科研页", "复杂混排", "多功能同页", "曲线与公式", "图表公式混排", "电路示意", "RC 放电", "RC discharge", "composite worked example", "native circuit"],
+      "summary": "中文单页构造算例。用可编辑比较曲线、回路、原生独立与行内公式、参数表、图注及逐块编号解释同一次受控比较。",
+      "script": "rc_discharge_composite.py"
     }
   ]
 }

@@ -22,6 +22,18 @@ python examples/library/catalog.py build chart-uncertainty --out /tmp/totalpipe-
 图表与表格示例用脚本保存构造读数，引用和图注保留其身份。将结构复用于论文时，
 从已核实的论文数据重新构建数据图，为所用图表、表格和原图绑定实际图号、出处和证据。
 
+## 综合单页
+
+`rc-discharge-composite` 用中文讲一组理想 RC 放电算例。左边是可编辑的比较曲线、图内标注和两条独立编号正文，
+右边是原生路径电路图、自动排在图下的图注、独立公式和参数表，两组各用无外框的圆角标题定位。
+电压曲线、时间常数和参数表来自脚本中的同一组参数，页面标明“构造示例”。
+
+```bash
+python examples/library/catalog.py search "复杂混排 曲线与公式" --limit 1
+python examples/library/catalog.py show rc-discharge-composite
+python examples/library/catalog.py build rc-discharge-composite --out /tmp/totalpipe-rc-composite
+```
+
 ## 添加示例
 
 1. 在此目录添加一个 Python 文件，提供无参数的 `make_deck()`，返回完整 canonical Deck IR。需要的资源相对脚本定位。
