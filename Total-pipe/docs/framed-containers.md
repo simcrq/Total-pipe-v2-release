@@ -26,7 +26,7 @@
 
 | 字段 | 行为 |
 | --- | --- |
-| frame.border.color | 必填，`#RRGGBB` |
+| frame.border.color | 圆角标题可省略整个 `border` 来去掉外轮廓。声明边框时用 `#RRGGBB` |
 | frame.border.width | 可选，默认 1，范围 0.5–6 CSS px；不是 PowerPoint 点数 |
 | frame.fill | 可选，默认 none；接受 none 或 `#RRGGBB` |
 | frame.title_fill | 可选，默认 none；为实测标题区绘制原生色带 |
@@ -48,8 +48,12 @@
 }
 ```
 
-- chip 高度 = 标题实测高度 + 上下各 7 px，在原有标题行里垂直居中；行高、正文起点、框体高度**都不变**，
-  所以开着 chip 不会挤压下面的内容，也不会让已有面板重新排版。
+只需圆角标题时，保留 `title_band` 和 `title_fill`，省略 `border` 和 `fill`。
+此时编译器只绘制标题的圆角底色，正文分组仍按 panel 的内边距和间距布局。
+示例见 [独立正文块脚本](../examples/library/independent_blocks.py)。
+
+- chip 高度按标题实测尺寸加上下内边距，内边距每侧最多 7 px。胶囊在标题行内居中，文字在胶囊内垂直居中。
+  标题行过矮时使用整行色带。
 - chip 宽度 = 标题实测行宽 + 左右各 14 px（用实际渲染的粗体字面测量），文字默认居中。
 - 标题宽到无法收成标签时自动退回整行色带：需要换行才能塞进标签的 chip 读起来像排版事故。
 - chip 只画在面板内侧 8 px，不越出边框，因此仍受 `FRAME_CONTENT_OUT_OF_BOUNDS` 与层序检查。

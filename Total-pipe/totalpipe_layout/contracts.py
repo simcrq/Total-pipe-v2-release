@@ -368,7 +368,7 @@ def read_requests(path, root=None, *, layout=None, compile_issues=None, deck_ir=
             request['compiler_owned'] = 'scientific_visual_plan'
         elif any(b.get('component') == 'formula' or b.get('inline_math') for b in slide['composition']['blocks']):
             request['compiler_owned'] = 'measured_formula_flow'
-        elif any(b.get('text_flow') == 'distributed_arrow_list' for b in slide['composition']['blocks']):
+        elif any(b.get('text_flow') in module.EXPLICIT_LISTS for b in slide['composition']['blocks']):
             request['compiler_owned'] = 'measured_native_list'
         elif slide['composition'].get('graphics') and slide['composition']['archetype'] != 'native-graphic':
             request['compiler_owned'] = 'native_graphic_composition'

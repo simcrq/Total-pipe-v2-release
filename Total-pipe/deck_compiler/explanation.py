@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from .contracts import digest, issue
+from .text_flow import EXPLICIT_LISTS
 
 
 KINDS = (
@@ -79,7 +80,7 @@ def features(slide):
         found.add("inline_math")
     if any(block.get("component") == "formula" for block in blocks):
         found.add("formula")
-    if any(block.get("text_flow") == "distributed_arrow_list"
+    if any(block.get("text_flow") in EXPLICIT_LISTS and isinstance(block.get('text'), str)
            and len([line for line in block.get("text", "").splitlines() if line.strip()]) >= 2
            for block in blocks):
         found.add("native_list")

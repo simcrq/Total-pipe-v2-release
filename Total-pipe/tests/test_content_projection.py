@@ -1,5 +1,6 @@
 """Science-record preservation, audience-copy authority, scoped qualifiers and review gates."""
 import copy
+from pathlib import Path
 import shutil
 import unittest
 from unittest.mock import patch
@@ -360,6 +361,11 @@ class ProjectionRunnerTests(AgentCase):
         prompt = read(work/'ir_prompt_designed.json')
         self.assertIn('audience copy', prompt['instructions'])
         self.assertNotIn('Preserve complete scientific body, key_points', prompt['instructions'])
+        lookup = prompt['example_lookup']
+        self.assertTrue(Path(lookup['command_prefix'][1]).is_file())
+        self.assertNotIn('example_lookup', read(work/'page_design_prompt.json'))
+        for page in result['next_action']['page_authoring']['pages']:
+            self.assertEqual(read(Path(page['input_path']))['example_lookup'], lookup)
 
     def test_malformed_review_repairs_only_the_record_but_failed_review_replans_design(self):
         work, design, result = self.start_design()

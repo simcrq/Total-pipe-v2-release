@@ -43,6 +43,13 @@ class ListTests(unittest.TestCase):
         out = apply(ir, ['P1'])
         self.assertEqual([b['id'] for b in out['slides'][0]['composition']['blocks']], ['P1-b1'])
 
+    def test_reviewed_body_blocks_stay_independent(self):
+        ir = deck([block('one', 'First finding'), block('two', 'Second finding')],
+                  [leaf('one'), leaf('two')])
+        ir['slides'][0]['semantic']['content_projection'] = {'version': '2.0'}
+        self.assertEqual(candidates(ir), [])
+        self.assertEqual(apply(ir, ['P1']), ir)
+
     def test_inline_math_page_is_left_alone(self):
         ir = deck([block('P1-b1', '第一句'), block('P1-b2', '电压 $V_{ds}$ 固定', inline_math=True)],
                   [{'id': 'P1-c0', 'type': 'stack', 'children': [leaf('P1-b1')]},

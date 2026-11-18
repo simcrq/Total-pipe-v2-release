@@ -8,6 +8,7 @@ import math
 import re
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any
+from .text_flow import EXPLICIT_LISTS
 
 
 def parse_overflow_message(message: str) -> Tuple[float, float]:
@@ -166,10 +167,11 @@ def repair_overflow(ir: Dict, layout: Dict, qa_report: Dict,
         has_inline = (original_slide.get('semantic', {}).get('inline_math')
             or any(b.get('inline_math') for b in comp['blocks'])
             or any(c.get('inline_math') for t in comp.get('tables', []) for c in t['cells']))
-        has_native_list = any(b.get('text_flow') == 'distributed_arrow_list'
+        has_native_list = any(b.get('text_flow') in EXPLICIT_LISTS
                               or 'bullet_style' in b or 'bullet_color' in b for b in comp['blocks'])
+        has_attachments = any('text_for' in b or 'position' in b.get('caption_for', {}) for b in comp['blocks'])
         if (original_slide['composition'].get('graphics') or
-                original_slide.get('presentation', {}).get('visual_plan') or has_inline or has_native_list):
+                original_slide.get('presentation', {}).get('visual_plan') or has_inline or has_native_list or has_attachments):
             # A graphic and its evidence form one scientific page. Replanning must be explicit;
             # cloning its graph while splitting a context paragraph changes that relationship.
             # Mixed text also needs measured replanning: a plain-text split can cut a math span,

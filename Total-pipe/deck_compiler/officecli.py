@@ -73,7 +73,7 @@ def list_paragraph_properties(contract, bullet, index, count):
 
     Written as raw XML because the typed OfficeCLI paragraph API has no bullet colour and no
     before/after paragraph spacing; the element order below is the order DrawingML requires
-    (lnSpc → spcAft → buClr → buSzTx → buFont → buChar).
+    (lnSpc → spcAft → buClr → buSzTx → buFont → buChar/buAutoNum).
     """
     gutter = round(float(bullet['gutter']) * 9525)          # css px → EMU
     spacing = round(contract['font_size'] * contract['line_height'] * 75)   # px → 1/100 pt
@@ -86,7 +86,13 @@ def list_paragraph_properties(contract, bullet, index, count):
     if bullet.get('size_from_text'):
         parts.append('<a:buSzTx />')
     parts.append(f'<a:buFont typeface="{_xml_attribute(bullet["face"])}" />')
-    parts.append(f'<a:buChar char="{_xml_attribute(bullet["char"])}" />')
+    if bullet.get('numbering'):
+        # PowerPoint continues a run when every paragraph has the same numbering style.
+        # Dropping startAt after the first paragraph restarts that run at one.
+        start = f' startAt="{bullet["start"]}"' if bullet['start'] != 1 else ''
+        parts.append(f'<a:buAutoNum type="{bullet["numbering"]}"{start} />')
+    else:
+        parts.append(f'<a:buChar char="{_xml_attribute(bullet["char"])}" />')
     parts.append('</a:pPr>')
     return ''.join(parts)
 

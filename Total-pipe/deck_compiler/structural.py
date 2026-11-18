@@ -308,10 +308,17 @@ def verify(path, layout):
                         for p in tx.findall('a:p', NS):
                             ppr = p.find('a:pPr', NS)
                             char = None if ppr is None else ppr.find('a:buChar', NS)
+                            number = None if ppr is None else ppr.find('a:buAutoNum', NS)
                             colour = None if ppr is None else ppr.find('a:buClr/a:srgbClr', NS)
                             face = None if ppr is None else ppr.find('a:buFont', NS)
                             same_size = None if ppr is None else ppr.find('a:buSzTx', NS)
-                            if (ppr is None or char is None or char.get('char') != marker['char']
+                            if marker.get('numbering'):
+                                start = str(marker['start']) if marker['start'] != 1 else None
+                                matches = (char is None and number is not None and
+                                           number.get('type') == marker['numbering'] and number.get('startAt') == start)
+                            else:
+                                matches = number is None and char is not None and char.get('char') == marker['char']
+                            if (ppr is None or not matches
                                     or face is None or face.get('typeface') != marker['face']
                                     or colour is None or colour.get('val') != marker['color'].lstrip('#').upper()
                                     or (marker.get('size_from_text') and same_size is None)

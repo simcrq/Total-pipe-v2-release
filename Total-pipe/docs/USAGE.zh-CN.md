@@ -269,12 +269,24 @@ Story 的 `question` 复制成标题。
 无序列表用顶层 `presentation.bullet_style / bullet_color` 设默认，正文 block 同名字段独立覆盖；
 符号颜色不改变正文颜色。单页 `presentation.takeaway_marker={"style":"large_diamond","color":"#000000"}`
 为完整 takeaway 加一个原生前导标记，换行和行内公式按剩余宽度实测。
-preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW；显式列表宽度至少 520 CSS px，
+`native_bullet_list` 支持单段要点、换行并列要点和 `bullet_icon`。顺序有意义时用
+`native_numbered_list`，可用 `list_start` 承接编号。
+在 `page_design.design` 先说明正文分组、步骤或对照关系。可用短圆角标题标出一组正文，
+用圆角文字节点与连接箭头解释流程，或在共同标题下以两条有名称的路线比较方法。
+将组标题和关键标签纳入批准文案，IR 阶段按关系选择原生对象。
+每条独立正文保留自己的 block ID、文案引用和来源。对独立步骤按读图顺序逐块设置 `list_start`。
+拿到 IR 提示后，利用其中的 `example_lookup` 按关键词查 [脚本示例库](../examples/library/README.md)，打开选中的一项。
+preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW。传统 `distributed_arrow_list`
+宽度至少 520 CSS px，两种新显式列表至少 240 CSS px。
 高度按完整条目、标记槽、实际换行、标签、间距及内边距测量。区域不足时报告拆页 / 重规划，
 不降级为无符号文本。
 完整用法、优先级及两页样例见 [原生列表](native-lists.md)。
 项目符号可选；plain 关闭正文列表，takeaway 未配置则不加标记。large_square / large_diamond /
 arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸参与空间测量。
+
+图片、流程图或独立公式使用四向解说时，用 `caption_for.position` 或 `text_for.position`
+指定 `top/bottom/left/right`。在布局树中保留目标叶节点，说明块由编译器测量并放置。
+字段和示例见 [四向图注与正文](content-projection.md#四向图注与正文)。
 
 图片来源在 canonical IR 中区分 `paper`、`generated` 与 `reference`：论文图要求图号，管线自绘示意图要求
 生成器和“示意图”图注；用户提供的参考页 / 图片裁图标记为 `reference` 并记录 `reference_source`，不伪装成论文图或

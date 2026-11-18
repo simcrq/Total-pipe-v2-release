@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "independent-blocks",
+      "title": "独立正文块、圆角分组标题与原生标记",
+      "tags": ["独立正文块", "独立 block", "独立要点", "圆角标题", "圆角标签", "圆角框", "分组标题", "原生列表", "项目符号", "图标", "箭头", "编号", "顺序", "native_bullet_list", "native_numbered_list", "bullet_icon", "list_start", "title chip"],
+      "summary": "每条文案保留自己的 block ID。短圆角标题分组，并列块各有符号，有序块各有起始编号。",
+      "script": "independent_blocks.py"
+    },
+    {
+      "id": "comparison-lanes",
+      "title": "共同标题下的 A/B 对照路线",
+      "tags": ["A/B", "对照路线", "对照流程", "对照", "比较", "并列流程", "流程图", "圆角节点", "圆角文字框", "带文字形状", "动作标签", "连接箭头", "分隔线", "comparison lanes", "comparison flow", "rounded nodes"],
+      "summary": "两个命名流程共享一个比较主题。可编辑状态节点、动作文字和箭头分别表达路线内部变化。",
+      "script": "comparison_lanes.py"
+    },
+    {
+      "id": "directional-notes",
+      "title": "图片、原生流程图和独立公式的四向说明",
+      "tags": ["四向说明", "图注", "上方", "下方", "左侧", "右侧", "独立公式", "流程图", "图片", "caption_for", "text_for", "directional annotations"],
+      "summary": "图、流程和公式各有一页，演示如何把顶部、底部和两侧文字绑定在目标对象旁。",
+      "script": "directional_notes.py"
+    }
+  ]
+}

@@ -117,6 +117,42 @@ class NativeListTests(unittest.TestCase):
         self.assertIn('<a:buChar char="\u25aa" />', middle)
         self.assertIn('val="C2410C"', middle)
 
+    @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI required for PPTX roundtrip')
+    def test_compact_icon_and_ordered_list_roundtrip(self):
+        from jsonschema import validate as validate_schema
+        rows = [{**block('standalone', 'body', '−0.5 eV is the boundary.'),
+                 'text_flow': 'native_bullet_list', 'bullet_icon': '★'},
+                {**block('ordered', 'body', 'Read the control.\nCompare the result.'),
+                 'text_flow': 'native_numbered_list', 'list_start': 9, 'bullet_color': '#007F66'}]
+        ir = styled_deck(rows)
+        slide = ir['slides'][0]
+        slide['semantic']['title'] = 'Native list markers'
+        slide['presentation'].pop('takeaway_marker')
+        comp = slide['composition']
+        comp.update(archetype='composite-research', figure_refs=[],
+                    layout_tree={'version': '1.2', 'regions': {'body': {
+                        'id': 'body', 'type': 'columns', 'weights': [1, 3], 'children': [
+                            {'id': row['id'], 'type': 'block', 'ref': row['id']} for row in rows]}}})
+        validate_schema(ir, json.loads((ROOT/'schemas/deck-ir.schema.json').read_text()))
+        elements = self.compile_lists(ir)
+        self.assertEqual([len(e['items']) for e in elements], [1, 2])
+        self.assertLess(elements[0]['bbox'][2], 520)
+        self.assertEqual(elements[0]['source_text'], rows[0]['text'])
+        self.assertEqual(elements[1]['bullet']['start'], 9)
+        with tempfile.TemporaryDirectory() as tmp:
+            layout, _ = compile_deck(ir, ROOT)
+            layout_path, pptx = Path(tmp)/'layout.json', Path(tmp)/'candidate.pptx'
+            write_json(layout_path, layout)
+            render(layout_path, pptx)
+            self.assertFalse([i for i in verify(pptx, layout) if i['severity'] == 'FAIL'])
+            with zipfile.ZipFile(pptx) as z:
+                xml = ET.fromstring(z.read('ppt/slides/slide1.xml'))
+            drawingml = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
+            self.assertEqual([e.attrib for e in xml.findall('.//a:buAutoNum', drawingml)], [
+                {'type': 'arabicPeriod', 'startAt': '9'}, {'type': 'arabicPeriod', 'startAt': '9'}])
+            self.assertIn(elements[0]['bullet']['char'],
+                          [e.get('char') for e in xml.findall('.//a:buChar', drawingml)])
+
     def test_preserve_terms_keeps_explicit_list_in_572_by_226_box(self):
         ir = styled_deck()
         layout, issues = in_feedback_box(ir)

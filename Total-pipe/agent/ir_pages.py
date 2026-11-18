@@ -133,7 +133,7 @@ def prepare_prompts(work, design, prompt):
     if design.get('schema_version') not in ('1.1', '1.2', '1.3'): return
     from deck_compiler.design import bind_design
     design = bind_design(design, prompt['story'])
-    shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities',
+    shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities', 'example_lookup',
               'type_scale', 'visual_style', 'design_forms', 'design_devices', 'request', 'workflow_root') if k in prompt}
     for page in design['pages']:
         refs = {ref for item in [*page.get('items', []), *page.get('context_items', [])] for ref in item.get('evidence', [])}

@@ -42,6 +42,56 @@ class LayoutTreeTests(unittest.TestCase):
         self.assertTrue(any(e['kind'] == 'connector' for e in elements))
         self.assertEqual(sum(e['kind'] == 'image' for e in elements), 5)
 
+    def test_directional_copy_uses_measured_regions_around_each_target(self):
+        import jsonschema
+        ir = fixture()
+        figure_slide, graphic_slide, formula_slide = ir['slides']
+        targets = [
+            (figure_slide, 'figure', 'demo1', 0, 'figure-1'),
+            (graphic_slide, 'graphic', 'workflow', 'workflow', 'graphic:workflow:node:input'),
+            (formula_slide, 'formula', 'energy', 'energy', 'energy'),
+        ]
+        for slide, kind, ref, leaf_ref, _ in targets:
+            blocks = [{'id': 'energy', 'component': 'formula', 'text': 'E=hf'}] if kind == 'formula' else []
+            blocks += [
+                {'id': 'north', 'component': 'body', 'text': 'Read the boundary condition.',
+                 'text_for': {'kind': kind, 'ref': ref, 'position': 'top'}},
+                {'id': 'south', 'component': 'caption', 'text': 'Compare the labelled quantities.',
+                 'caption_for': {'kind': kind, 'ref': ref, 'position': 'bottom'}},
+                {'id': 'west', 'component': 'caption', 'text': 'Input',
+                 'caption_for': {'kind': kind, 'ref': ref, 'position': 'left'}},
+                {'id': 'east', 'component': 'body', 'text': 'Output',
+                 'text_for': {'kind': kind, 'ref': ref, 'position': 'right'}},
+            ]
+            original = slide['composition']
+            slide['composition'] = {
+                'archetype': 'composite-research', 'blocks': blocks,
+                'figure_refs': original['figure_refs'][:1] if kind == 'figure' else [],
+                'graphics': original.get('graphics', []) if kind == 'graphic' else [],
+                'layout_tree': {'version': '1.2', 'regions': {'body': {
+                    'id': 'target', 'type': 'block' if kind == 'formula' else kind, 'ref': leaf_ref}}},
+            }
+        jsonschema.validate(ir, json.loads((ROOT/'schemas/deck-ir.schema.json').read_text()))
+        layout, _ = self.compile_ok(ir)
+        for slide, (_, kind, ref, _, shape_id) in zip(layout['slides'], targets):
+            elements = {e['id']: e for e in slide['elements']}
+            center = (elements[shape_id] if kind != 'graphic' else
+                      next(e for e in elements.values() if e.get('graphic_id') == ref))['layout_region']
+            x, y, w, h = center
+            west = elements['west']['bbox']
+            north = elements['north']['bbox']
+            self.assertLess(west[0]+west[2], x)
+            self.assertLess(north[1]+north[3], y)
+            self.assertGreater(elements['east']['bbox'][0], x+w)
+            self.assertGreater(elements['south']['bbox'][1], y+h)
+            self.assertEqual(elements['south']['role'], 'caption')
+            self.assertEqual(elements['east']['role'], 'body')
+
+        # The layout tree owns the target exactly once and the attachment owns its copy.
+        comp = ir['slides'][0]['composition']
+        comp['blocks'][-1]['text_for']['ref'] = 'missing'
+        self.assertTrue(validate_tree(comp['layout_tree'], comp))
+
     def test_all_leaves_have_local_region_and_no_clipping(self):
         layout, _ = self.compile_ok()
         for slide in layout['slides']:

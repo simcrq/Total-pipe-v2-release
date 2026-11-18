@@ -269,6 +269,7 @@ def normalize_authoring_ir(value):
     Inline ``$...$`` / ``\\(...\\)`` in a body block or title/takeaway enables
     the existing measured inline-math path.
     """
+    from deck_compiler.text_flow import NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST
     if not isinstance(value, dict):
         return value
     slides = value.get('slides')
@@ -302,7 +303,8 @@ def normalize_authoring_ir(value):
             if 'latex' in block and 'text' not in block:
                 block['text'] = block.pop('latex')
                 block.setdefault('component', 'formula')
-            if block.get('component') not in ('formula', 'caption'):
+            if (block.get('component') not in ('formula', 'caption')
+                    and block.get('text_flow') not in (NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST)):
                 converted, changed = _scientific_math(block.get('text'))
                 if changed:
                     block['text'] = converted
@@ -389,8 +391,18 @@ PROJECTION_IR_INSTRUCTIONS = (
     'Keep literal data/formulas and traceable paper-figure/source metadata in their evidence carriers. '
     'For 1.3, inspected figure identities and visible source labels are bound from figure_sources; '
     'do not prepend them to approved caption text or put experimental conditions in source metadata. '
-    'Native diagram/table/chart captions use component=caption with caption_for={kind,ref}; '
-    'they are measured and emitted at the existing caption scale. Body prose cannot masquerade as a caption. '
+    'Use caption_for={kind,ref} for captions. On a layout tree, caption_for.position or text_for.position '
+    '(top/bottom/left/right) binds a caption or prose to an image, graphic, independent formula, table or chart. '
+    'Keep the target leaf in the tree; omit the attached block leaf. '
+    'Use native_bullet_list or native_numbered_list for approved parallel points or ordered steps '
+    '(including one-item callouts); bullet_icon can set one Unicode symbol. Keep scientifically meaningful words intact. '
+    'For independent prose keep one block ID, copy_ref, evidence binding and layout leaf per approved body entry. '
+    'Set the marker on each block. For ordered independent blocks assign each block its own list_start '
+    'in the approved reading order. Do not join approved entries with newlines or run listify on a reviewed page. '
+    'Realize the approved body guides as editable objects: native markers, rounded group labels or text-bearing '
+    'nodes, and the specified comparison lanes, dividers or connectors. Preserve each marker’s reading role '
+    'and the approved copy. A panel title chip can name a group; rounded graphic nodes can show genuine steps '
+    'or branches. Inspect the grouping and reading order in the layout and rendered previews. '
     'Implement content_map carriers exactly; notes never satisfy required visible content or scoped conditions. '
     'The semantic.content_projection is bound automatically from the reviewed design, never authored or edited. '
     'Preserve meaning, units, conditions, uncertainty, important controls and negative findings. '
@@ -446,6 +458,14 @@ def finalize_design(work, design=None):
     prompt['page_design'] = pages
     prompt['design_forms'] = capabilities()['forms']
     prompt['design_devices'] = capabilities()['art_direction']['devices']
+    library = COMPONENT/'examples/library'
+    prompt['example_lookup'] = {
+        'command_prefix': [sys.executable, str(library/'catalog.py')],
+        'index_path': str(library/'index.json'),
+        'instructions': 'For a new visual treatment, use search "<keywords>" --limit 2. '
+                        'Read one selected result with show <id> or open its script. '
+                        'Use its object structure with approved copy and sources. Do not load the whole library.',
+    }
     instructions = prompt.get('instructions', '').split(DESIGN_MARKER)[0]
     if design.get('schema_version') in ('1.2', '1.3'):
         instructions = PROJECTION_IR_INSTRUCTIONS
@@ -461,6 +481,8 @@ def finalize_design(work, design=None):
         'explanation obligations. Use native editable objects for drawings. If geometry cannot fit at '
         'the required type scale, return measured feedback for page-design replanning; never drop '
         'scientific content or shrink fonts. Set presentation.visual_style for the venue. '
+        'Look up unfamiliar patterns through example_lookup. Read only the matching example and apply its '
+        'structure to the approved content. Keep independent prose blocks separate. '
         'Prefer per-page authoring via artifact_kind=deck_ir_page: each file is canonical Deck IR '
         'with exactly one slide and the same shared header. See next_action.page_authoring for page IDs '
         'and output paths. Submit a page when ready; the tool binds omitted Story evidence/notes and '
@@ -851,6 +873,26 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
     return prompt
 
 
+BODY_GUIDES = (
+    'Plan visual guides for independent body blocks in design. Explain which blocks belong together and '
+    'how the audience reads them. Treat each body block as a separate editable object. '
+    'A short rounded heading can name a group; peers can share a small icon '
+    'or bullet and ordered steps can use numbering or connected text-bearing shapes. For a comparison, '
+    'one shared heading can introduce two named groups or lanes, with a divider or alignment identifying '
+    'the boundary; use arrows and short labels for real transitions within a lane. Use display_copy IDs '
+    'when available to name the guided text, and say what the grouping or reading order expresses. Keep '
+    'labels short and in approved audience copy. Choose guides only where they carry a relationship.'
+)
+
+BODY_GUIDES_TASK = (
+    '为独立正文块设计视觉引导，在 design 里写清哪些块属于同组、读者按什么顺序看。'
+    '各条正文保持独立，分组可以共享标题或标记样式。'
+    '短圆角标题框可以给一组正文命名，并列要点共用项目符号或图标，顺序步骤可用编号或相连的带文字形状。'
+    '对照流程可用一个共同标题统领两条有名称的路线，用对齐或分隔线区分路线，用带动作短语的箭头说明路线内的步骤。'
+    '有 display_copy 时指明对应 ID，新增可见标题和标签须进入批准文案。标记服务于实际关系。'
+)
+
+
 LEGACY_DESIGN_INSTRUCTIONS = (
     'Design the visual explanation of the approved Story. Story owns the scientific argument, '
     'claims, evidence and boundaries; do not retell it, reinterpret it or write another outline. '
@@ -862,6 +904,7 @@ LEGACY_DESIGN_INSTRUCTIONS = (
     'Use design as free prose or a custom object, whichever communicates the page best. Describe '
     'concrete visual objects: selected original panels, drawn shapes, layer stacks, arrows and '
     'edge meanings, icons with a purpose, comparison axes, equation annotations or data charts. '
+    + BODY_GUIDES + ' '
     'You may draw your own explanatory diagrams, mechanisms, processes and structures; using a paper '
     'image is a choice, not a requirement for every page. Mark illustrative drawings as schematic, '
     'keep paper facts and data bound to their evidence, and label constructed examples explicitly. '
@@ -912,7 +955,8 @@ DESIGN_INSTRUCTIONS = (
     'Use the exact source expression and omit decorative math or unsupported formulas. '
     'Keep production_notes separate. design/claim rationale/walkthrough/negative authoring directions are not '
     'display_copy. Do not dump evidence-audit prose onto slides; show a limitation only where it restricts the specific claim. '
-    'Design each page as two to four labelled zones (visual, readout, implication), not one full-width bullet stack. '
+    + BODY_GUIDES + ' '
+    'Separate the visual, its reading cue and the implication where that helps the audience follow the claim. '
     'Use short subheads, key-number callouts and emphasis for the terms a speaker would point to; a page of equally '
     'weighted sentences is not a visual explanation. Prefer light panels, thin accent rules and small labels. '
     'Do not use large dark fill blocks, full-width dark banners or near-black cards behind body text; reserve '
@@ -939,8 +983,9 @@ ATOMIC_DESIGN_INSTRUCTIONS = (
     'A concluding conceptual claim can omit a numerical result already explained; if the number is restated, '
     'its source and applicable conditions must remain visible. Keep the whole scientific ledger in the deck, but '
     'keep the visibility ledger separate: scoped limitations can live in notes or one boundary page, not in every result. '
-    'When a page fits a recipe in prompt.recipes, write recipe and slots instead of free-form geometry prose; '
-    'reference display_copy ids as {"copy_ref": "<id>"}. The PageScene builder owns the native layout. '
+    'When a page fits a recipe in prompt.recipes, write recipe and slots; reference display_copy ids '
+    'as {"copy_ref": "<id>"}. Record the body guides in design as well. If a recipe cannot express the '
+    'intended hierarchy or reading order, describe the arrangement in design. '
     'For every selected figure, figure_sources maps its exact asset ID to {source_figure: inspected figure/panel ID}. '
     'These are source identities, not measurements. The tool renders their visible provenance separately from '
     'approved caption wording; never delete source labels to satisfy a numeric check. '
@@ -971,6 +1016,7 @@ def design_task(prompt=None):
   跟随它限定的主张同页可见，必要时重复显示条件，而不重复分配原始记录。完整记录由程序归档到讲稿。
 - design 自由说明用什么原图、画什么元素与关系、如何排布、怎样带着观众看。figures 写精确资产 id，先看图。
   图中数据不能猜点；示意与构造例须可见标识，论文与补充背景来源分开。
+- {BODY_GUIDES_TASK}
 - setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。无需知道编译器能力，不读源码。
 - 你不填写通过审查的记录。主 Agent 之后逐页对照科学记录审读文案，未通过会退回设计。
 
@@ -987,6 +1033,7 @@ Story 已经决定讲什么以及证据边界。你的任务是把它变成可�
 - 每页只必填 `id`、`content_refs`、`design`。`design` 可以是一段话，也可以是你自定字段的对象；
   不规定所有页面用同一套结构。说明**用什么原图、画什么元素与关系、如何排布、怎样带着观众看**。
   可按需写图形、图标、图表、公式标注、对照、局部放大和指示线；不要止于“解释某机制”。
+- {BODY_GUIDES_TASK}
 - `figures` 列精确资产 id，先实际查看图再选择；相对路径基于 `workflow_root`。`title` 和 `marks`
   都可选，marks 只用于需要强调的现有短语。不需要重写 claim、items、anchor 理由或 rationale。
 - `setting` 简述 audience、occasion（沿用 room.default_occasion 或选合适键）、reading（spoken/read/mixed）。
@@ -1014,6 +1061,8 @@ def ir_task(prompt=None):
   按 content_map 实现；讲稿和元数据不算页面可见。原生图表/公式承载的数据和原图来源保持可追溯。
 - 选择能力实现既定视觉；自绘优先用原生对象，布局树可直接使用。不写页面 bbox，不缩字号、不删内容。
   容量不足时把测量反馈退回页面设计，不能修改科学含义或擅自润色文案。
+- 落实已批准的正文分组、圆角标签、项目符号/编号和带箭头的阅读顺序。标题框与实质正文均保持可编辑。
+- 保持每条独立正文各自的 block、文案引用与来源。遇到不熟悉的实现，按 `example_lookup` 检索并只读匹配的示例。
 - 复杂、稀疏或新布局先用 preview.mode=layout 查看骨架与单件报告，调整后用默认 preview 查看实际 PNG。
   已审读的独立公式用 copy_ref 进入原生公式块，混排保留原有数学标记。渲染与 QA 分开检查。
 
@@ -1029,6 +1078,8 @@ def ir_task(prompt=None):
   包含具体元素、关系、排布和注意顺序。完整保留自定义设计说明，不把它退化成文字摘要。
   自绘内容优先用原生对象；图形形式已由设计确定，你只选择可实现它的 archetype / layout_tree 等。
 - 页序、内容分配、选图和视觉关系不变；marks 如有则落实为文字强调。旧 1.0 设计的 claim/items/shape 同样实现。
+- 保留设计要求的可编辑正文标记、分组标签和路线之间的对照关系。
+- 每条独立正文保留一个块。不熟悉的结构按 `example_lookup` 检索，仅读匹配到的示例。
 - 理解结论所需的证据必须可见，讲稿不能替代；保留单位、条件、误差和 Story explain 义务。
   放不下时报告具体所需空间并回退页面设计，不改科学含义、不猜数据、不删内容、不缩字号。
 

@@ -38,10 +38,22 @@ RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完
 display_copy 是实际投屏文案，content_map 指定可见载体或允许入讲稿的细节；重要条件、对照、负面结果和不确定性不能隐藏。
 选图须实际查看；figures列精确资产ID，figure_sources记录真实图号。来源标签与观众图注分开绑定，图号不是实验数值，不能删图号换PASS。
 设计者不读取编译器形式清单，自主决定图形、关系、构图和讲解顺序；IR实现批准设计，不能替换为文字摘要。
+在 page design 的 `design` 指明独立正文块的分组、顺序或对照关系，以及对应 `display_copy` ID。
+短圆角标题框可为一组正文命名，箭头符号可引导并列要点，有顺序的步骤可用编号或相连的带文字形状。
+对照流程可由一个共同标题统领，两条有名称的路线用对齐或分隔线区分，路线内的箭头说明真实动作。
+组标题、路线名和箭头短语进入批准文案，标记按实际关系选用。
 设计后主 Agent 按 page_review 完整提示实际逐页审读科学忠实性、限定范围和观众语言，提交当前哈希及具体说明；不复用设计者自评，不代表看过渲染或完成原生验收。
 旧Story/页面设计1.0、1.1和段落契约1.0/页面设计1.2按原版本恢复；新提示不能降级绕过审读。版本与完整协议见[内容契约](../../docs/content-projection.md)。
 IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
-原生图示/表格/数据图图注使用component=caption和caption_for视觉引用，按既有图注字号测量；正文不能伪装图注缩小。论文图的可见来源标签自动绑定。
+原生图注使用 `component=caption` 和 `caption_for`。页面设计要求让说明紧邻原图、图形或独立公式时，用
+`caption_for.position` 或 `text_for.position` 指定 `top/bottom/left/right`，
+在树里保留目标叶节点。原生图注和正文分别测量，论文图的可见来源标签自动绑定。
+独立要点和有序步骤按批准设计选 `native_bullet_list` 或 `native_numbered_list`。
+无序要点可用 `bullet_icon` 指定单个符号，编号可用 `list_start` 承接。
+带文字的圆角分组标签、流程节点和对照路线按设计分别落实；打开预览检查分组边界及阅读顺序。
+每条独立正文用独立 block，设置自身 `copy_ref` 与来源。有序的独立块逐块设置 `list_start`。
+不熟悉某个实现时，使用 IR 提示 `example_lookup.command_prefix` 执行 `search "<关键词>" --limit 2`，
+再执行 `show <id>` 或读取所选脚本。只取匹配示例的结构，文案与证据使用当前任务批准内容。
 提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
 IR 作者先用 `advance.preview={artifact_path,slide_ids,mode:"layout"}` 检查新建、密集或稀疏布局。打开骨架图并读单件报告，判断底部空区、文字余量及图形标注折行。随后用默认 preview 看实际渲染。失败码可用 `python -m deck_compiler explain CODE` 查成因。逐页预检和 preview 均不占修订次数。
 有证据且需要读公式时，设计者批准独立 `$...$` 文案及符号说明。Deck IR 通过 `copy_ref` 绑定原生公式。PageScene 用 `type=formula` 加 `copy_ref` 并通过 `advance.scene_preview` 查看 PowerPoint PNG。完整协议见回复 schema_path。

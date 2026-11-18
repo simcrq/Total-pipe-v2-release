@@ -162,7 +162,7 @@ BULLET_SYMBOL_FACES = (
 )
 
 
-def resolve_bullet(style, family, font_file):
+def resolve_bullet(style, family, font_file, *, icon=None):
     """Return ``(glyph, face)`` for a bullet style, choosing a face that can actually draw it.
 
     The declared text face wins when it covers the glyph; otherwise a symbol face is searched for,
@@ -180,7 +180,7 @@ def resolve_bullet(style, family, font_file):
                     return glyph, face
             except (OSError, ValueError):
                 pass
-    glyph = BULLET_STYLES.get(style) or BULLET_STYLES['square']
+    glyph = icon or BULLET_STYLES.get(style) or BULLET_STYLES['square']
     if font_file and glyph not in missing_glyphs(font_file, glyph):
         return glyph, family
     for face, names in BULLET_SYMBOL_FACES:
@@ -191,9 +191,9 @@ def resolve_bullet(style, family, font_file):
     return BULLET_STYLES['bullet'], family
 
 
-def bullet_metrics(style, family, font_file, size):
+def bullet_metrics(style, family, font_file, size, *, icon=None):
     """Measure the chosen native glyph at the prose size, without bullet-size scaling."""
-    glyph, face = resolve_bullet(style, family, font_file)
+    glyph, face = resolve_bullet(style, family, font_file, icon=icon)
     path = font_file
     encoding = ''
     if face == 'Wingdings' and style in NATIVE_BULLET_FACES:
@@ -214,10 +214,25 @@ def bullet_metrics(style, family, font_file, size):
     font = ImageFont.truetype(path, int(size), encoding=encoding)
     left, top, right, bottom = font.getbbox(glyph, anchor='ls')
     return {'style': style, 'char': glyph, 'face': face, 'size_from_text': True,
-            'native_font_fallback': style in NATIVE_BULLET_FACES and face != NATIVE_BULLET_FACES[style][0],
+            'native_font_fallback': (glyph != icon if icon else
+                                     style in NATIVE_BULLET_FACES and face != NATIVE_BULLET_FACES[style][0]),
             'gutter': round(max(42., right-left+12.), 2),
             'ascent': max(0, -top)+2, 'descent': max(0, bottom)+2,
             'line_height_px': max(size*1.25, bottom-top+4)}
+
+
+def list_marker_metrics(block, default_style, family, font_file, size, count):
+    from .text_flow import NATIVE_NUMBERED_LIST
+    if block.get('text_flow') == NATIVE_NUMBERED_LIST:
+        start = block.get('list_start', 1)
+        face = ImageFont.truetype(font_file, int(size))
+        width = max(face.getlength(f'{n}.') for n in range(start, start+count))
+        return {'style': 'number', 'numbering': 'arabicPeriod', 'start': start,
+                'face': family, 'gutter': round(max(42., width+12.), 2),
+                'size_from_text': True, 'native_font_fallback': False, 'line_height_px': size*1.25}
+    icon = block.get('bullet_icon')
+    return bullet_metrics('icon' if icon else block.get('bullet_style', default_style),
+                          family, font_file, size, icon=icon)
 
 
 def coverage_is_fatal(missing, text_sample):

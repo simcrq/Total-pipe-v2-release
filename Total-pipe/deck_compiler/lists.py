@@ -10,6 +10,7 @@ This module is the pure transformation. Whether a merged page actually fits is a
 so the CLI wrapper compiles the candidate deck and drops the pages that overflow or shrink.
 """
 import copy
+from .text_flow import NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST
 
 DISTRIBUTED_ARROW_LIST = 'distributed_arrow_list'
 DEFAULT_LIST_GAP = 0.55
@@ -40,8 +41,13 @@ def block_order(frame, blocks):
 
 def merge_page(composition, page_id):
     """Return (blocks, frame) with one native list per page, or None if the page cannot be a list."""
-    frame = composition['layout_tree']['regions']['body']
+    frame = ((composition.get('layout_tree') or {}).get('regions') or {}).get('body')
+    if frame is None:
+        return None
     blocks = composition.get('blocks', [])
+    if any(b.get('text_flow') in (NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST)
+           or b.get('text_for') or 'position' in b.get('caption_for', {}) for b in blocks):
+        return None
     ordered = block_order(frame, blocks)
     if len(ordered) < 2:
         return None
@@ -84,7 +90,8 @@ def merge_page(composition, page_id):
 def candidates(ir):
     """Slide ids that can become lists, in deck order."""
     return [slide['id'] for slide in ir['slides']
-            if merge_page(slide['composition'], slide['id'])]
+            if not slide.get('semantic', {}).get('content_projection')
+            and merge_page(slide['composition'], slide['id'])]
 
 
 def apply(ir, page_ids, bullet=DEFAULT_BULLET, gap=DEFAULT_LIST_GAP):
@@ -93,7 +100,7 @@ def apply(ir, page_ids, bullet=DEFAULT_BULLET, gap=DEFAULT_LIST_GAP):
     out = copy.deepcopy(ir)
     listing = set()
     for slide in out['slides']:
-        if slide['id'] not in wanted:
+        if slide['id'] not in wanted or slide.get('semantic', {}).get('content_projection'):
             continue
         merged = merge_page(slide['composition'], slide['id'])
         if merged is None:
@@ -107,6 +114,8 @@ def apply(ir, page_ids, bullet=DEFAULT_BULLET, gap=DEFAULT_LIST_GAP):
         presentation['bullet_style'] = bullet
         presentation['list_gap'] = gap
         for slide in out['slides']:
+            if not slide['composition'].get('layout_tree'):
+                continue
             for node in walk(slide['composition']['layout_tree']['regions']['body']):
                 kids = node.get('children', [])
                 if (node.get('type') == 'stack' and len(kids) == 1

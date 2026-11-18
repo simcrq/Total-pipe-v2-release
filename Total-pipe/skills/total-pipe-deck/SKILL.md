@@ -28,7 +28,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | **讲解契约 `explain`**（`quantity`/`parallel_items`/`grouped_panels`/`comparison`/`ordered_steps`/`relation`/`curve`/`image_evidence`） | 把“读者必须看见什么”写成逐条义务，覆盖列表、嵌套、曲线、公式等 `form` 表达不了的结构 | 不选组件；required 缺原生载体是 REVIEW；覆盖账本写 `derived/explanation_coverage.json` |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
-| 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
+| 原生列表 `native_bullet_list` / `native_numbered_list` | 单段可加图标，独立要点可并列，步骤可编号 | 1–6 条、宽 ≥240 px、与 `inline_math` 分块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
 | 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |
 | 页脚家具 `page_numbers` / `footer` | 长报告要能按页码引用、要有署名 | 仅设计页生效；一行 ≤120 字符；evidence id 仍留在备注 |
@@ -230,6 +230,11 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
 
+让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
+可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。
+对照流程可用共同标题、两条有名称的路线及分隔线，步骤之间用带动作短语的箭头。
+文案审批覆盖可见的组标题、路线名和动作词，IR 作者据此使用原生可编辑对象。
+
 新任务`schema_version=1.3`使用display_copy/content_map；content_refs保持科学单元唯一所有权，reuse_refs明确再次展示，figure_sources记录真实图号。
 required 内容保持可见，with_claim 条件在主张出现的每页可见。主 Agent 随后实际执行 page_review，
 绑定当前 Story/设计哈希逐页检查忠实性、限定范围与观众文案；不能自动签收或复用设计者自评。
@@ -335,15 +340,24 @@ IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿
 
 ### 原生列表与单段标记
 
-正文列表先明确条目换行，用 text_flow=distributed_arrow_list 保留原生无序列表。
+按页面设计使用单段标记、并列要点或顺序编号。正文用原文换行划分条目。用
+`text_flow=native_bullet_list` 为单段或并列要点加符号，`bullet_icon` 可指定一个图标。
+有先后关系的步骤用 `text_flow=native_numbered_list`，用 `list_start` 承接编号。
+每条独立正文保留自身 block、文案引用和来源。使用 IR 提示的 `example_lookup` 查询所需结构。
+先执行 `search "<关键词>" --limit 2`，再用 `show <id>` 查看一份 [脚本示例](../../examples/library/README.md)。
 读 `Total-pipe/docs/native-lists.md`：顶层 presentation.bullet_style/bullet_color 设默认，block 同名字段覆盖。
 单页 presentation.takeaway_marker={style:large_diamond,color:#000000} 为完整 takeaway 加一个独立标记；
 可与 takeaway 行内公式共存，符号颜色不改正文颜色。preserve-terms 不移除项目符号，
-垂直超容量保留原文与 REVIEW；显式列表宽度至少 520 px，高度按完整内容实测，不使用固定高度门槛；
+垂直超容量保留原文与 REVIEW。新显式列表宽度至少 240 px，旧 `distributed_arrow_list` 仍需 520 px。
+高度按完整内容实测；
 空间不足时回到布局规划或拆页。
 不要为套入列表缩短术语，也不要把失败列表改成普通文本掩盖问题。
 标记可选；plain 关闭正文列表，不配置 takeaway_marker 则无前导标记。优先选 large_square、
 large_diamond、arrowhead 等饱满原生字形，不设置项目符号百分比 / 点数缩放；符号颜色独立配置。
+
+页面设计要求说明与图片、图形或独立公式紧邻时，在布局树用 `caption_for.position` 或
+`text_for.position` 指定上、下、左、右。只给目标建叶节点，说明块由编译器绑定。
+需要判断空间时先看布局骨架，再查看公式、图注、编号和图标的实际渲染。
 
 ### 原生图形
 

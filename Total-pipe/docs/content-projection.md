@@ -102,9 +102,24 @@ IR新增原生图注块：
  "caption_for":{"kind":"graphic","ref":"mechanism"}}
 ```
 
-`caption_for`须指向本页存在的figure/graphic/table/chart。图注用既有图注字号和真实测量路径，成为可编辑原生文本；
+`caption_for` 须指向本页已有的 figure、graphic、独立 formula、table 或 chart。图注用既有图注字号和真实测量路径，成为可编辑原生文本；
 不再当作body计量。它不能带正文标题、公式、列表或使用图注角色缩小批准的body文案；实际copy角色与对象仍严格一致。
 论文图自带的caption仍由figure_refs实现。
+
+### 四向图注与正文
+
+在使用 `layout_tree` 的页面，给 `caption_for` 增加 `position`，或给正文块写 `text_for`。
+`top`、`bottom`、`left`、`right` 可同时使用，同一方向多个块按 `composition.blocks` 的顺序排列。
+
+```json
+{"id":"controls","component":"body","text":{"copy_ref":"approved_controls"},
+ "text_for":{"kind":"graphic","ref":"mechanism","position":"right"}}
+```
+
+布局树仅引用目标叶节点。挂上的文字仍保留在 `composition.blocks`，编译器将它放在目标旁，不需要单独的树节点。
+图片用唯一的 `asset_id`，图形、表格、数据图和独立公式用各自的 ID。公式在树里仍是 `block` 叶节点。
+带四向文字的图片用普通 `figure` 叶节点，可用 `columns` 排列多张图。内置 `figure_refs.caption` 继续随图。
+上下说明使用组合宽度，左右说明与目标并排实测。需要更多空间时加宽组合或拆页。旧 `caption_for` 省略 `position` 时仍按原布局树排放。
 
 ## 页面源文案审读与IR绑定
 

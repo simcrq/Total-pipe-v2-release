@@ -1,9 +1,31 @@
-# 原生项目符号、独立样式与颜色
+# 原生项目符号、编号与独立标记
 
 Deck IR 继续使用 `schema_version: "2.0"`。无序列表由原生段落属性绘制；
 科学术语保留策略不会删除列表标记。
 项目符号是可选的：takeaway 只在声明 takeaway_marker 后加标记；正文可由 auto 识别，
 也可显式要求列表或用 text_flow=plain 关闭。样式与颜色字段本身不强制把普通段落变成列表。
+
+`native_bullet_list` 和 `native_numbered_list` 都支持单条正文，亦可用换行提供最多六条。
+无序可设预设 `bullet_style`，或用 `bullet_icon` 指定一个可见的 Unicode 符号。
+有序编号从 1 开始，`list_start` 可指定 1–9999，便于承接前一组或标注一个独立步骤。
+
+```json
+{"id":"control","component":"body","text":"先读共同实验条件。",
+ "text_flow":"native_bullet_list","bullet_icon":"★"}
+```
+
+```json
+{"id":"steps","component":"body","text":"测量基线。\n比较处理后的结果。",
+ "text_flow":"native_numbered_list","list_start":3}
+```
+
+这两种模式以原文换行分项。编号或图标由 PowerPoint 段落绘制，`bullet_color` 可改变符号和编号的颜色。
+自选符号在本机缺少字形时使用回退圆点并报告 `BULLET_GLYPH_REVIEW`。
+
+页面设计分配的每条独立正文保留自身 ID、文案引用与来源，每块设置一个原生标记。
+并列块可共享 `bullet_style`。顺序块按布局树的讲解顺序各设 `list_start`，例如 1、2、3；
+词句自动换行仍是同一个标记段落。多行模式适合原本就是同一个文本对象中的多个条目。
+逐块标记及圆角分组见 [脚本示例库](../examples/library/README.md)，检索 `independent-blocks`。
 
 ## 配置
 
@@ -53,7 +75,8 @@ capabilities 的 `native_bullets` 声明原生列表能力。
 
 - 显式 distributed_arrow_list 要求 2–6 个非空原文条目，以换行分隔，不按句号创造条目。
 - auto 继续保守识别多段正文；block 样式 / 颜色只配置已选中的列表，不创造条目。
-- 原生列表的组件区域至少宽 **520 CSS px**；高度没有固定下限，按完整条目在 24 CSS px 字号下的实际换行、
+- `distributed_arrow_list` 与自动列表至少宽 **520 CSS px**。两种新显式列表至少宽 **240 CSS px**。
+  高度按完整条目在 24 CSS px 字号下的实际换行、
   标记槽、标签、项目间距和内边距测量。字号下限与宽度门槛分别执行。
 - 显式列表区域不足报告 SPLIT_REQUIRED；递归区域宽度不足报告 INSUFFICIENT_LIST_SPACE，附所需 / 可用尺寸。
   不静默改成无标记正文。auto 在小区域仍可使用原有普通文本回退，记录 TEXT_FLOW_FALLBACK。
@@ -76,7 +99,7 @@ capabilities 的 `native_bullets` 声明原生列表能力。
 
 ## 写入、检查与示例
 
-每条列表是同一文本对象中的一个段落，标记写入 a:buChar / a:buClr / a:buFont，换行使用段内软换行。
+每条列表是同一文本对象中的一个段落。无序标记写入 `a:buChar`，有序写入 `a:buAutoNum`，换行使用段内软换行。
 结构 QA 比较符号、符号颜色、字体、缩进与完整原文；混排 takeaway 比较完整文本体 XML。
 OfficeCLI 固定行高的溢出估计保留为线索，实际显示须在 PowerPoint 逐页检查。
 
