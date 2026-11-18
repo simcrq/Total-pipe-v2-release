@@ -83,7 +83,7 @@ Windows/macOS 上安装 PowerPoint 后，完整构建会通过 PowerPoint 导出
   节点 ID 在图内唯一；编译后对象名包含图形和节点 ID，可在选择窗格中定位。
 - 字体继承 deck theme；描边与箭头取自 `presentation.visual_style`（默认 `academic` 用前景色细线）。
   节点框按标签实测收紧：高度取标签行高加内边距，宽度取最长标签宽度（上限 320 px），
-  不再出现「框很大、字很少」的空盒。文字独立测量并居中，不低于 18 pt；
+  文字独立测量并居中。节点标题下限为 18 pt，academic 和 print 的节点说明作为注释，下限为 15 pt；
   装不下时返回 `SPLIT_REQUIRED`，保留原文。
 - 不写 `x/y/w/h/bbox`。旧平面表示一页最多一张原生图形；独立页使用 `native-graphic`。
   `process-flow`、`figure-parameters` 可与 blocks 和论文图片混排，见下文。
@@ -154,8 +154,8 @@ python -m deck_compiler build --ir examples/native-dag.deck_ir.json --out builds
 孤立节点、互不连接的并行路径不会自动增加边。循环、自环、重复边和失效引用
 在 IR 校验阶段拒绝。
 
-节点复用 v2 的五种形状、独立文字和形状专属连接点。DAG 按实际字体在 18 pt
-下测量文字，计算不同的节点高度；正文最多四行、标题最多两行。原文完整保留，
+节点复用 v2 的五种形状、独立文字和形状专属连接点。DAG 按风格包的实际字号与形状测量节点，
+说明最多四行，标题最多两行。原文完整保留，
 装不下时返回 `GRAPHIC_TEXT_OVERFLOW` 或 `GRAPHIC_CAPACITY`，不会截断。
 
 相邻层使用 `bentConnector3`，跨层绕行使用 `bentConnector5`，均为绑定真实节点 ID 的

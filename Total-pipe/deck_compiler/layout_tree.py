@@ -429,9 +429,9 @@ class RegionCompiler:
             else:
                 label = 44 if block.get('label') else 0
                 preserve = self.preserve and 'text_for' not in block
-                if block.get('text_flow') in EXPLICIT_LISTS:
+                min_width = list_min_width(block)
+                if block.get('text_flow') in EXPLICIT_LISTS and (width >= min_width or not block.get('_inferred_list')):
                     from .layout import native_list_height
-                    min_width = list_min_width(block)
                     if width < min_width:
                         minimum_height = native_list_height(block, min_width, self.fonts['font_file'],
                                                             self.list_gap_ratio, self.list_padding,

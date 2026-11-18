@@ -153,7 +153,7 @@ class LayoutTreeTests(unittest.TestCase):
         rows.reverse()
         self.assertTrue(validate_tree(ir['slides'][0]['composition']['layout_tree'], ir['slides'][0]['composition']))
 
-    def test_wide_process_in_three_columns_returns_path_and_sizes_atomically(self):
+    def test_process_in_a_narrow_column_returns_path_and_sizes_atomically(self):
         ir = fixture()
         slide = ir['slides'][1]
         slide['composition']['layout_tree']['regions']['body']['weights'] = [1, 2.5]
@@ -161,7 +161,7 @@ class LayoutTreeTests(unittest.TestCase):
         layout, issues = compile_deck(ir, EXAMPLE.parent)
         error = next(i for i in issues if i['rule'] == 'INSUFFICIENT_DRAWING_SPACE')
         self.assertEqual(error['source']['component'], 'body.children[0].body')
-        self.assertGreaterEqual(error['source']['required_size_px'][0], 728)
+        self.assertGreaterEqual(error['source']['required_size_px'][0], 3*160+2*32)
         self.assertLess(error['source']['available_size_px'][0], 374)
         self.assertTrue(error['source']['suggested_actions'])
         self.assertFalse(any(e.get('layout_component') for e in layout['slides'][0]['elements']))

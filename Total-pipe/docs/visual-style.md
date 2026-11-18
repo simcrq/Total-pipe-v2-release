@@ -82,8 +82,8 @@ presentation.visual_style = {"pack": "academic", "overrides": {"graphic.node.str
 三条不依赖作者自觉的规则，全部在编译期生效：
 
 1. **标题只有一个字号。** `type_sizes(design)['title']`（标准档 44 px = 33 pt）就是全篇标题的唯一字号。
-   长标题不会缩到 40/38/36 pt，而是让页眉变高（最多 3 行）；超过 3 行报 `TITLE_TOO_LONG`，
-   提示缩写标题或拆页。此前 `fit_text` 会把长标题压小，导致相邻页标题一大一小。
+   长标题保持该字号，页眉按实际行数增高。strict 最多容纳 2 行，preserve-terms 最多容纳 3 行。
+   超出容量时按反馈精简标题或拆页。
 
 2. **多段文字竖排 → 无序列表。** 一个 block 的 `text` 里如果有 2–6 个自然段（换行分隔）、
    每段不超过 240 个显示宽度、且不含表格/代码/公式行，编译器自动改用原生列表（`text_flow`），

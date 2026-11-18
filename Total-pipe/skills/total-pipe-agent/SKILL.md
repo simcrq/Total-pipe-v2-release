@@ -5,18 +5,14 @@ description: 从论文 PDF、Markdown、已有证据包或 Deck IR 生成可编�
 
 # Total-pipe Agent
 
-默认服务是 `total_pipe`，仅有 doctor / start / advance / status 四个工具。先用 totalpipe_doctor 判断当前输入所需能力；source_kind=pdf 时查看 OCR 认证与依赖。
-使用已安装仓库，安装 / 回切说明见 [接入层用法](../../docs/agent-adapter.md)。
+默认服务是 `total_pipe`，有 doctor / start / advance / status 四个工具。先用 totalpipe_doctor 确认能力，PDF 输入需核对 OCR 认证与依赖。安装与回切见 [接入层用法](../../docs/agent-adapter.md)。
 
-将用户提供的 source、out_dir、language、presentation_type 传给 totalpipe_start。
-slide_count 是最终论文页目标（1–40），不等于 Story 节点或 brief 数；独立补充文字页额外计。
+将 source、out_dir、language、presentation_type 传给 totalpipe_start。slide_count 是最终论文页目标（1–40），独立补充文字页另计。
 source_kind 支持 auto/pdf/markdown/workflow/deck_ir；从已有产物继续，保留用户已有要求。page_mode=page_scene 时 page_review 后写显式 box 的 work/page_scene.json，跳过 deck_ir/design；默认 deck_ir 保留全部高级对象。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对；只有内容已进入分析输入时，才传 supplementary_content_included=true。
 ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/空白区域，必要时有限重排正文；草稿预览/预检不增强。用户关闭时 start 传 explain_viz_mode=off，保留已有模式。explain_viz.json 记录位置变化；科学原文、字号、来源门槛不降低，生成图须实际人审。
 
-每次读取返回的 stage、status 和 next_action；阶段顺序由 agent/stages.json 定义。
-status=running 时调用 totalpipe_advance；status=candidate_ready 时交付 candidate 路径及 QA。
-其余按 next_action.type 操作：
+每次读取 stage、status 和 next_action。running 时继续 advance，candidate_ready 时交付候选及 QA。
 
 | type | 动作 |
 | --- | --- |
@@ -29,8 +25,7 @@ status=running 时调用 totalpipe_advance；status=candidate_ready 时交付 ca
 | none | 若 reason=ADVANCE_REQUIRED 则 advance；若 CANDIDATE_READY 则交付候选 |
 
 queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
-Story 提示的 delegation 绑定用户选择；模型字段仍是声明，必须真实执行子代理，不伪造 provenance。
-Story 缺模型选择时先询问；不得静默选择，也不得由主 Agent 代写。
+用 delegation 中用户明确选择的模型和 reasoning 调用真实 Story 子代理。选择缺失时询问，保留真实调用记录。
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
 Story 后按 next_action 进入 scientific_review：主 Agent 读完整任务、提示、Schema、原文和实际SI，实际审查单位粒度、来源及遗漏的初始化/对照/负面结果；禁止自动 pass，失败回退 Story。
 RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完成；完整读 work/page_design_task.md、page_design_prompt.json、schema_path。
@@ -38,38 +33,25 @@ RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完
 display_copy 是实际投屏文案，content_map 指定可见载体或允许入讲稿的细节；重要条件、对照、负面结果和不确定性不能隐藏。
 选图须实际查看；figures列精确资产ID，figure_sources记录真实图号。来源标签与观众图注分开绑定，图号不是实验数值，不能删图号换PASS。
 设计者不读取编译器形式清单，自主决定图形、关系、构图和讲解顺序；IR实现批准设计，不能替换为文字摘要。
-在 page design 的 `design` 指明独立正文块的分组、顺序或对照关系，以及对应 `display_copy` ID。
-短圆角标题框可为一组正文命名，箭头符号可引导并列要点，有顺序的步骤可用编号或相连的带文字形状。
-对照流程可由一个共同标题统领，两条有名称的路线用对齐或分隔线区分，路线内的箭头说明真实动作。
-组标题、路线名和箭头短语进入批准文案，标记按实际关系选用。
+在 `design` 指明独立正文块的分组、阅读顺序与对照关系，引用对应的 `display_copy`。短标题可分组，箭头或编号引导正文。对照路线可共用标题并分行对齐，动作标签进入批准文案。
 设计后主 Agent 按 page_review 完整提示实际逐页审读科学忠实性、限定范围和观众语言，提交当前哈希及具体说明；不复用设计者自评，不代表看过渲染或完成原生验收。
 旧Story/页面设计1.0、1.1和段落契约1.0/页面设计1.2按原版本恢复；新提示不能降级绕过审读。版本与完整协议见[内容契约](../../docs/content-projection.md)。
 IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
-原生图注使用 `component=caption` 和 `caption_for`。页面设计要求让说明紧邻原图、图形或独立公式时，用
-`caption_for.position` 或 `text_for.position` 指定 `top/bottom/left/right`，
-在树里保留目标叶节点。原生图注和正文分别测量，论文图的可见来源标签自动绑定。
-独立要点和有序步骤按批准设计选 `native_bullet_list` 或 `native_numbered_list`。
-无序要点可用 `bullet_icon` 指定单个符号，编号可用 `list_start` 承接。
-带文字的圆角分组标签、流程节点和对照路线按设计分别落实；打开预览检查分组边界及阅读顺序。
-每条独立正文用独立 block，设置自身 `copy_ref` 与来源。有序的独立块逐块设置 `list_start`。
-先看逐页 IR 提示的 `example_lookup.suggestions`，需要时用 `example_lookup.command_prefix` 执行
-`search "<关键词>" --limit 2`。通过 `show <id>` 或脚本路径打开选中的一项，只取结构，文案与证据使用当前任务批准内容。
+图注用 `component=caption` 和 `caption_for`。用 `caption_for.position` 或 `text_for.position` 将说明放在目标的上下左右，布局树引用目标。论文图的可见来源标签自动绑定。
+每条独立正文用自己的 block、`copy_ref` 和来源。无序用 `native_bullet_list` 和可选 `bullet_icon`，有序用 `native_numbered_list` 和 `list_start`。保留批准的圆角标签、流程节点和对照路线。
+先看 `example_lookup.suggestions`，需要时用其 `command_prefix` 执行 `search "<关键词>" --limit 2`。按需打开一份脚本，复用结构和当前任务批准内容。
 提交 IR 前可用 advance 的 preflight=true（deck_ir + artifact_path）检查全部语义/设计问题并测量几何；读取全部 issues，预检不改 job、不占修订次数，正式验收仍必做。
-逐页动作带 `preview_plan` 时，写好草稿后调用其 `first_call`。打开骨架并读单件报告，检查页尾、碰撞、
-完整文字和图形标注折行。修订后重测，随后调用 `next_action.preview_follow_up.next_call` 并打开渲染图。
-其他页可按需使用 `advance.preview`。失败码可用 `python -m deck_compiler explain CODE` 查成因。
+有 `preview_plan` 时先调用 `first_call`，看骨架与单件报告，检查碰撞、页尾、文案和标签。修订后重测，再按 `preview_follow_up.next_call` 查看渲染图。其他页按需预览，失败码查 `python -m deck_compiler explain CODE`。
 有证据且需要读公式时，设计者批准独立 `$...$` 文案及符号说明。Deck IR 通过 `copy_ref` 绑定原生公式。PageScene 用 `type=formula` 加 `copy_ref` 并通过 `advance.scene_preview` 查看 PowerPoint PNG。完整协议见回复 schema_path。
 实际打开 preview_result.pages 的 PNG，再修改源 IR 并重新 preview；未变页复用渲染缓存。预览不接受 IR、不计修订、不改候选或正式 QA。
 officecli-html 预览可能与 PowerPoint 的字体/公式不同，不能代替篇级 Design、完整构建或原生验收；FAIL 原样保留，不能凭生成图片签收。
 有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页，齐全后整套复验。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。
-status 只读；同一提交可重复 advance，已完成组件不会重复执行，未完成下游继续运行。
-局部布局/裁图修复可按 repair 指定的完整 Schema 提交 deck_ir_patch，先预检；科学文字/数据/分组变更仍重规划。
+status 只读，重复 advance 可继续未完成阶段。局部布局或裁图修复按 repair Schema 预检并提交 deck_ir_patch，科学文字、数据与分组变更走重规划。
 默认回复为摘要；完整请求/哈希清单用 status(detail="full")；各轮执行/等待时间见 logs/events.jsonl。job_id 在重启后可用；job.json 损坏时不能从产物伪造用户选择，按 remedy 处理。
 候选 REVIEW 如实报告；仅真实复核后用 advance.acknowledge 传 reviewer、note、review_ids。
 原生验收按 native.schema_path 完整协议，用 advance.native 单独提交 render / review / ingest；复用候选，不重跑上游。
 自动 PDF/PNG 导出不等于直接 PowerPoint 眼检；review 只在实际逐页检查后提交当前哈希、全部页 ID、检查项和说明。候选笔记不能替代 final 审核；promote 仍仅用原 CLI，原生接入与预览说明见接入层用法。
 
-需要完整 Story 规范时读 [总调度 Skill 的 Story 节](../total-pipe-deck/SKILL.md#2-科学故事story-planner)。
-复杂页、公式及原生对象的额外限制按提示包和 [当前文档索引](../../../docs/README.md) 按需读取。
+按需读 [完整 Story 规范](../total-pipe-deck/SKILL.md#2-科学故事story-planner) 和 [复杂页、公式及原生对象协议](../../../docs/README.md)。

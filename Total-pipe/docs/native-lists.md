@@ -74,12 +74,13 @@ capabilities 的 `native_bullets` 声明原生列表能力。
 ## 内容与容量
 
 - 显式 distributed_arrow_list 要求 2–6 个非空原文条目，以换行分隔，不按句号创造条目。
-- auto 继续保守识别多段正文；block 样式 / 颜色只配置已选中的列表，不创造条目。
+- auto 继续保守识别多段正文；编译器从省略 `text_flow` 的显式换行推断出的列表同样属于自动列表。
+  block 样式 / 颜色只配置已选中的列表。
 - `distributed_arrow_list` 与自动列表至少宽 **520 CSS px**。两种新显式列表至少宽 **240 CSS px**。
   高度按完整条目在 24 CSS px 字号下的实际换行、
   标记槽、标签、项目间距和内边距测量。字号下限与宽度门槛分别执行。
 - 显式列表区域不足报告 SPLIT_REQUIRED；递归区域宽度不足报告 INSUFFICIENT_LIST_SPACE，附所需 / 可用尺寸。
-  不静默改成无标记正文。auto 在小区域仍可使用原有普通文本回退，记录 TEXT_FLOW_FALLBACK。
+  自动列表在容量允许时可以回退为完整普通文本，记录 TEXT_FLOW_FALLBACK。
 - 字号下限为 **24 CSS px（18 pt）**；标记的实际字形宽度、上下伸参与容量测量。项目间距默认是行高的 0.45，可用顶层 presentation.list_gap 调整。
   不均分剩余空间拉大空白。
 - strict 下，条目超过四行或分配高度不足以容纳实测列表内容时报告 SPLIT_REQUIRED。

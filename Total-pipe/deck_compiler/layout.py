@@ -1119,6 +1119,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if show_sequence:
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
+            if b.get('_inferred_list') and flow['source'] == 'explicit':
+                flow = {**flow, 'source': 'auto'}
             if b.get('inline_math'):
                 flow = {**flow, 'mode': 'plain'}
             if flow['mode'] == DISTRIBUTED_ARROW_LIST and has_markup(b['text']):
@@ -1858,7 +1860,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 n, detector='geometric-preflight', body_font_px=body_sizes,
                 suggested_actions=['reflow_region', 'split_slide']))
         for b in blocks:
-            if (b.get('text_flow') in EXPLICIT_LISTS
+            if (b.get('text_flow') in EXPLICIT_LISTS and not b.get('_inferred_list')
                     and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in elements)
                     and not any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues)):
                 issues.append(issue('SPLIT_REQUIRED', 'FAIL',

@@ -255,12 +255,20 @@ class NativeListTests(unittest.TestCase):
         comp['layout_tree']['regions']['body']['children'].append({'id': 'c-leaf', 'type': 'block', 'ref': 'c'})
         _, issues = compile_deck(ir, ROOT)
         self.assertIn('INSUFFICIENT_LIST_SPACE', [i['rule'] for i in issues])
+        for item in comp['blocks']:
+            item.pop('text_flow')
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        inferred = [e for e in layout['slides'][0]['elements'] if e['id'] in ('a', 'b', 'c')]
+        self.assertEqual([(e['kind'], e['source_text']) for e in inferred], [('text', BODY)]*3)
 
     def test_short_explicit_lists_fit_measured_boxes_below_220px(self):
         for designed in (False, True):
             with self.subTest(designed=designed):
                 ir = styled_deck() if designed else list_deck([])
                 ir['presentation']['text_capacity_policy'] = 'strict'
+                title_text = 'Compare the response\nunder matched conditions'
+                ir['slides'][0]['semantic']['title'] = title_text
                 row = {**block('short', 'body', 'Complete first finding.\nComplete second finding.'),
                        'text_flow': 'distributed_arrow_list', 'label': 'Findings'}
                 ir['slides'][0]['composition']['blocks'] = [row]
@@ -273,6 +281,10 @@ class NativeListTests(unittest.TestCase):
                 self.assertLess(height, 220)
                 layout, issues = in_feedback_box(ir, 572, height)
                 self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+                title = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'title')
+                self.assertEqual(title['text'], title_text)
+                if designed:
+                    self.assertEqual(title['contract']['font_size'], 40)
                 native = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short')
                 label = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short:label')
                 self.assertEqual(native['kind'], 'list')
@@ -289,7 +301,10 @@ class NativeListTests(unittest.TestCase):
             element = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')
             self.assertEqual(element['kind'], 'list' if mode == 'auto' else 'text')
         layout, issues = in_feedback_box(list_deck([block('automatic', 'body', BODY)]), 519, 300)
-        self.assertEqual(next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')['kind'], 'text')
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        plain = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')
+        self.assertEqual(plain['kind'], 'text')
+        self.assertEqual(plain['source_text'], BODY)
         self.assertIn('TEXT_FLOW_FALLBACK', [i['rule'] for i in issues])
 
     def test_preserve_terms_recursive_floor_reserves_every_marker_row(self):

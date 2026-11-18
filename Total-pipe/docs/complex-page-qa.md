@@ -101,7 +101,7 @@ REVIEW ID，另检查完整 PowerPoint UI review、原生 PDF、OfficeCLI proven
 | 无编组、provider 不接管复杂页 | 明示边界与维护方式；不以放宽 bbox 覆盖代替专用测量 |
 | “QA 无留白规则” | 已有纯文字页规则，本次补充的是布局树 stack |
 | “正文与图注下限均 18 pt” | 正文下限 18 pt；图注、caveat 等注释角色下限是 15 pt，具体字号由模板决定 |
-| “三节点 DAG 最少 728 px” | 728 px 是三节点 process 的宽度下限；DAG 按实际分层、文字和路由测量 |
+| “三节点 DAG 最少 728 px” | 短标签的三节点水平 process 链宽度下限为 544 CSS px；DAG 按实际分层、文字和路由测量 |
 | “caveat 固定 46 px / 20 pt” | 模板有 36 / 46 px 等槽位；代码字号单位为 CSS px，20 CSS px 是 15 pt |
 
 公式宏的受限语法、行内公式作用域和树 / 表格规模仍以当前 Schema、解析器与

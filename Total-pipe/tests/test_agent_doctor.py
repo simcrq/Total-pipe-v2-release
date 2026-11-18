@@ -41,6 +41,9 @@ class DoctorTests(AgentCase):
                 if 'mineru_auth' in argv:
                     return True, json.dumps({'ok': True, 'result': {
                         'ready': status == 'verified', 'verified': status == 'verified', 'status': status}})
+                if 'dependencies' in argv:
+                    # Isolate the authentication decision from optional PDF dependencies.
+                    return True, json.dumps({'ok': True, 'result': {'markdown_ready': True, 'pdf_ready': True}})
                 return original(argv, *args, **kwargs)
             with self.subTest(status=status), patch.dict(os.environ, {'MINERU_TOKEN': ''}), patch.object(module, 'probe', side_effect=probe):
                 result = module.doctor(source_kind='pdf')

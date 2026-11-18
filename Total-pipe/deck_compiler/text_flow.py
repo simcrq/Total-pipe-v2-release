@@ -58,7 +58,7 @@ def fallback_list(block):
         return block
     if any(_display_units(item) > 240 for item in items):
         return block
-    return {**block, 'text_flow': DISTRIBUTED_ARROW_LIST}
+    return {**block, 'text_flow': DISTRIBUTED_ARROW_LIST, '_inferred_list': True}
 
 
 def select_text_flow(value, requested="auto"):
