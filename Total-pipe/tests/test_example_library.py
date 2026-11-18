@@ -22,6 +22,11 @@ class ExampleLibraryTests(unittest.TestCase):
             ('独立正文块加圆角标题和编号', 'independent-blocks'),
             ('A/B 对照路线 动作标签', 'comparison-lanes'),
             ('directional annotations caption_for', 'directional-notes'),
+            ('原图导读 图文并排', 'figure-readout'),
+            ('误差棒 y_error', 'chart-uncertainty'),
+            ('native table merged headers', 'grouped-table'),
+            ('行内公式 独立公式 符号定义', 'equation-explainer'),
+            ('机制图 假设虚线', 'mechanism-hypothesis'),
         ):
             rows = catalog('search', query, '--limit', '1')
             self.assertEqual(len(rows), 1)

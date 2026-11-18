@@ -21,6 +21,41 @@
       "tags": ["四向说明", "图注", "上方", "下方", "左侧", "右侧", "独立公式", "流程图", "图片", "caption_for", "text_for", "directional annotations"],
       "summary": "图、流程和公式各有一页，演示如何把顶部、底部和两侧文字绑定在目标对象旁。",
       "script": "directional_notes.py"
+    },
+    {
+      "id": "figure-readout",
+      "title": "保留原图比例与来源，右侧逐步导读",
+      "tags": ["原图导读", "论文原图", "读图", "图文并排", "图号", "来源", "figure reading", "figure readout", "figure_refs", "source_label"],
+      "summary": "用仓库现有图演示原图等比放置、图注署名和分块编号，按顺序读基准线、平均值与最差值。",
+      "script": "figure_readout.py"
+    },
+    {
+      "id": "chart-uncertainty",
+      "title": "样品与空白的折线图，含误差棒和图内标注",
+      "tags": ["数据图", "原生数据图", "折线图", "误差棒", "标准差", "不确定性", "图内标注", "error bars", "sample SD", "line chart", "y_error", "annotations"],
+      "summary": "由明确的构造读数计算均值与样本标准差，注明单位、误差定义和构造来源，图上标出最后一个样品点。",
+      "script": "chart_uncertainty.py"
+    },
+    {
+      "id": "grouped-table",
+      "title": "对照表的合并表头、单位和构造示例",
+      "tags": ["科研表格", "对照表", "合并表头", "多级表头", "单位", "构造示例", "merged headers", "native table", "row_span", "column_span", "constructed"],
+      "summary": "在原生表格中合并行列标题，比较均值与中位数；表下独立标注构造输入及来源。",
+      "script": "grouped_table.py"
+    },
+    {
+      "id": "equation-explainer",
+      "title": "行内定义符号，独立展示主公式",
+      "tags": ["原生公式", "行内公式", "独立公式", "符号定义", "物理意义", "模型假设", "分式", "inline math", "display equation", "OMML", "inline_math", "anchor"],
+      "summary": "同页展示 RC 放电的行内数学、锚定到正文的独立分式、变量定义和时间常数的解释。",
+      "script": "equation_explainer.py"
+    },
+    {
+      "id": "mechanism-hypothesis",
+      "title": "机制假设图与可以检验它的对照",
+      "tags": ["机制图", "机制假设", "假设边", "假设虚线", "抑制关系", "T形端帽", "对照实验", "mechanism diagram", "hypothesis edge", "inhibit", "activate"],
+      "summary": "用原生抑制线和箭头表示可检验的两段假设，图下写明需要比较的观测量与匹配条件。",
+      "script": "mechanism_hypothesis.py"
     }
   ]
 }

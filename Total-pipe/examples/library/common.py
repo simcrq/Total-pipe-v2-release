@@ -13,17 +13,23 @@ def region(id, kind, children, **options):
     return {'id': id, 'type': kind, 'gap': 'compact', 'children': children, **options}
 
 
-def page(id, title, takeaway, blocks, body, *, figures=(), graphics=()):
+def page(id, title, takeaway, blocks, body, *, figures=(), graphics=(), tables=(), charts=(),
+         evidence_refs=(SOURCE,)):
+    composition = {
+        'archetype': 'composite-research', 'blocks': blocks, 'figure_refs': list(figures),
+        'graphics': list(graphics), 'layout_tree': {'version': '1.2', 'regions': {'body': body}},
+    }
+    if tables:
+        composition['tables'] = list(tables)
+    if charts:
+        composition['charts'] = list(charts)
     return {
         'id': id,
         'semantic': {'title': title, 'takeaway': takeaway,
                      'purpose': 'Illustrate an editable layout pattern',
-                     'evidence_refs': [SOURCE], 'caveats': [],
-                     'speaker_notes': 'Constructed layout example. Replace the sample text and source references with approved project content.'},
-        'composition': {
-            'archetype': 'composite-research', 'blocks': blocks, 'figure_refs': list(figures),
-            'graphics': list(graphics), 'layout_tree': {'version': '1.2', 'regions': {'body': body}},
-        },
+                     'evidence_refs': list(evidence_refs), 'caveats': [],
+                     'speaker_notes': 'Layout example. Replace the sample text and source references with approved project content.'},
+        'composition': composition,
         'presentation': {},
     }
 

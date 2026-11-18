@@ -227,7 +227,7 @@ MCP 文件参数使用绝对路径。更新源码后重载服务。
 - **ExplainViz 自动讲解图**：默认 auto；自动从明确的当前页事实生成原生图示，优先预留区域，其次自动空白检测，再尝试当前页正文区有限重排。图示跟随主题着色，显式 print 风格保留单色；来源、完整文字、原字号和碰撞门槛不降低，失败保留原页；可用 `--explain-viz-mode off` 关闭。见[协议](Total-pipe/docs/explain-viz.md)与[本轮实现/验证](docs/explain-viz-auto-layout.md)。
 - **四向图注与正文**：布局树可把原生图注或解说绑定在图片、流程图、独立公式、表格或数据图的上、下、左、右，编译器测量整体。见 [内容投影协议](Total-pipe/docs/content-projection.md)。
 - **原生列表**：单条或多条正文可显式使用无序符号、自选 Unicode 图标或连续编号。样式与颜色支持逐 block 设置，按完整条目测量。见 [列表协议](Total-pipe/docs/native-lists.md)。
-- **可检索脚本示例库**：IR 作者可按关键词取一份可编译示例，涵盖独立正文标记、圆角分组、A/B 路线和四向说明。见 [检索与扩展示例](Total-pipe/examples/library/README.md)。
+- **可检索脚本示例库**：IR 作者可按版式、中英文关键词或 IR 字段取一份可编译示例，涵盖独立正文标记、A/B 路线、四向说明、原图导读、数据图、表格、公式和机制图。见 [检索与扩展示例](Total-pipe/examples/library/README.md)。
 - **讲解契约**：Story 的 `explain` 逐条绑定证据，声明读者必须看见的量、并列项、分组、对照、顺序、关系或示意曲线；IR 带进 `semantic.explanation`，编译生成 `derived/explanation_coverage.json`。required 义务缺原生载体时保留 REVIEW，不静默当纯文字页。见 [讲解契约](docs/explanation-contract.md)。
 - **补充内容旁路**：`basis: supplement` 允许无论文 EV 的背景、类比、构造示例、推导说明或示意图；论文块仍强制 EV，补充块可选来源、构造示例须可见标注，Agent 检查论文数值/图/长引用泄漏；默认关闭，`supplement=inline|pages|both` 显式开启。见 [Deck IR 协议](Total-pipe/docs/deck-compiler-v2.md#supplement-content-basis-supplement)。
 - **图片来源**：区分论文图 `paper`、自绘示意图 `generated` 和用户参考裁图 `reference`；参考裁图保留 `reference_source`，不要求论文图号或“示意图”图注。见 [来源协议](Total-pipe/docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)。
