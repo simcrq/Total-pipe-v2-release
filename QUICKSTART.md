@@ -5,13 +5,13 @@
 
 ## 从论文开始
 
-在完整仓库根目录安装并注册默认四工具入口：
+在完整仓库根目录安装并注册默认四工具入口。
 
 ```bash
-python3.12 install.py --client codex
+python3 install.py --client codex
 ```
 
-Claude 使用 `--client claude`，先检查配置可加 `--dry-run`。
+其他宿主使用对应的 `--client`，可加 `--dry-run` 查看安装计划。[AI 一键安装与宿主列表](INSTALL_FOR_AI.md)
 使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提交 queries、
 真实 Story 子代理产物、IR 与视觉提案；用户选择的模型和完整科学内容必须保留。
 需要低层三服务时用 `--profile advanced`；[安装与恢复](Total-pipe/docs/agent-adapter.md)。

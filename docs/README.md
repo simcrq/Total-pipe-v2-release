@@ -12,7 +12,8 @@
 | Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
 | 原子科学记录、两次源审读与观众表达（Story2.0 / 设计1.3） | [内容契约](../Total-pipe/docs/content-projection.md)、[原设计动机](audience-content-contract-design.md) |
 | 旧内容契约1.2实现与回归（新协议见内容契约） | [验证记录](content-projection-validation.md) |
-| 安装、环境、字体和平台要求 | [环境清单](../Total-pipe/环境清单.md) |
+| AI 安装与宿主配置 | [一键安装](../INSTALL_FOR_AI.md) |
+| 运行依赖、字体和平台要求 | [环境清单](../Total-pipe/环境清单.md) |
 | 从 canonical Deck IR 编译 | [编译器 README](../Total-pipe/README.md)、[Deck IR / 公式协议](../Total-pipe/docs/deck-compiler-v2.md) |
 | 开发、检查或更新文档 | [开发与文档维护](development.md)、[文档同步 Skill](../Total-pipe/skills/total-pipe-doc-sync/SKILL.md) |
 

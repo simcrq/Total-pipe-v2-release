@@ -4,9 +4,10 @@
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
 组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
-默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始；
-`python3.12 install.py --client codex` 注册服务。按 next_action 读取完整产物提示，模型选择仍来自用户。
-[安装、推进与恢复](agent-adapter.md)；下文保留完整规范与低层 CLI 操作。
+默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始。在仓库根目录运行
+`python3 install.py --client auto` 检测宿主，也可以通过 `--client` 指定目标。[AI 安装指南与宿主列表](../../INSTALL_FOR_AI.md)
+
+安装后按 `next_action` 读取完整产物提示，模型选择仍来自用户。[推进与恢复](agent-adapter.md)
 
 四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
 `totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED

@@ -7,31 +7,30 @@
 ## 安装和 profile
 
 完整仓库需包含相邻的 Total-pipe、PaperWorkflow、research-ppt-assistant，使用 Python 3.12+、Node.js 22+，
-生成 PPTX 需 OfficeCLI 1.0.152+。在仓库根目录运行：
+生成 PPTX 需 OfficeCLI 1.0.152+。在仓库根目录选择当前宿主运行。
 
 ```bash
-python3.12 install.py --client codex
-# Claude 用户：
-python3.12 install.py --client claude
-# 只安装、验证服务，不注册客户端：
-python3.12 install.py --client none
+python3 install.py --client codex
+python3 install.py --client auto
+python3 install.py --client none
 ```
 
-安装器在仓库 `.venv` 安装真实依赖，启动服务执行 initialize / tools/list，然后才写客户端配置。
+安装器在仓库 `.venv` 安装依赖，执行 deep doctor 和 MCP `initialize` / `tools/list`，再写客户端配置并安装技能。
+`--client auto` 仅在检测到一个候选宿主时注册。`--client none` 只安装和验证服务，并提供可移植的 `stdio` 配置。
 `--python` 指定创建 venv 的解释器，`--venv` 指定环境目录；已有完备环境可用 `--skip-deps`。
-`--config` 指定目标配置。`--dry-run` 只展示计划和配置检查，不创建 venv、不安装依赖、不写文件。
-安装结果在根目录 `install-report.json`（已 gitignore），包含 doctor、握手与工具数。
+`--config` 指定文件型宿主的目标配置，`--skills-root` 指定技能目录。`--dry-run` 只展示安装计划和配置检查。
+安装结果通过 JSON 返回，成功后的报告默认写入根目录的 `install-report.json`，包含 doctor、握手和工具数。[宿主 ID 与配置路径](../../INSTALL_FOR_AI.md)
 
 Codex 默认配置位置是 `$CODEX_HOME/config.toml`，未设置时为 `~/.codex/config.toml`。
 只替换末尾受管块，写前备份；坏 TOML、非托管同名服务或作用域歧义会中止。
-Claude 默认 `~/.claude.json`，保留其他键并备份；仅命令、参数、环境写入其 stdio 配置，
-绝对 launcher 自行切换正确 cwd。明确 `--force` 可替换 JSON 同名冲突，不能绕过 TOML 语义保护。
+文件型宿主保留其他配置键，并在写入前备份。JSON 型宿主使用绝对路径的 launcher，由 launcher 切换工作目录。
+显式传入 `--force` 可替换有冲突的 JSON 同名服务。Codex 的 TOML 冲突需要在宿主配置中解决。
 运行本仓库的开发测试不会修改真实用户配置；示例中的配置目标可换到临时目录。
 
 默认 [`.mcp.json`](../.mcp.json) 仅声明四工具。调试 / 回切使用：
 
 ```bash
-python3.12 install.py --client codex --profile advanced
+python3 install.py --client codex --profile advanced
 ```
 
 [`.mcp.advanced.json`](../.mcp.advanced.json) 声明 PWF、RPA、低层 total_pipe_v3 三服务。
@@ -341,7 +340,7 @@ python -m agent advance --job-id <job-id> --inputs /abs/selection.json
 python -m agent serve
 ```
 
-`python -m agent setup` 返回安装器位置。IR 提示由接入层准备：
+`python -m agent setup` 返回安装器、AI 安装指南、工作目录和建议命令。IR 提示由接入层准备。
 
 ```bash
 python -m agent ir-prompt --workflow /abs/workflow.json --rpa /abs/rpa_input.json \

@@ -5,24 +5,16 @@ its skills in exactly that layout, so installing one is a copy. Nothing here
 provisions the interpreter or the MCP server; that is ``agent.installation``.
 """
 
-import os
 import shutil
 from pathlib import Path
+from .harnesses import CLIENTS, client_home
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT/'skills'
 
-# Where each client looks for personal skills. Both honour a config-dir override.
-_TARGETS = {
-    'claude': lambda: Path(os.environ.get('CLAUDE_CONFIG_DIR')
-                           or Path.home()/'.claude')/'skills',
-    'codex': lambda: Path(os.environ.get('CODEX_HOME')
-                          or Path.home()/'.codex')/'skills',
-}
-
 
 def clients():
-    return tuple(sorted(_TARGETS))
+    return tuple(sorted(CLIENTS))
 
 
 def source_dir(root=None):
@@ -33,9 +25,9 @@ def target_dir(client, root=None):
     """The client's skills directory; ``root`` overrides it for tests and packaging."""
     if root:
         return Path(root)
-    if client not in _TARGETS:
+    if client not in CLIENTS:
         raise ValueError(f'unknown client {client!r}; expected one of {clients()}')
-    return _TARGETS[client]()
+    return client_home(client)/'skills'
 
 
 def _files(directory):

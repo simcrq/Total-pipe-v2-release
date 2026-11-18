@@ -97,11 +97,9 @@ Story Planner、page_design 和 Scientific Visual Planner 是 Agent 工作阶段
 
 ### 1. 从论文开始：Agent + Skill
 
-在完整仓库根目录执行 `python3.12 install.py --client codex`（Claude 使用 `--client claude`），
-默认注册 `total_pipe`，只暴露 doctor / start / advance / status 四工具。
-同一命令把 `Total-pipe/skills/` 下的四个技能拷进该客户端的技能目录（`$CODEX_HOME/skills`
-或 `~/.claude/skills`），首次安装不需要手工复制；目标已有不同副本时跳过并列入 `skipped`，
-加 `--force` 覆盖，`--dry-run` 只列计划，`--skills-root` 改写目标目录。
+在完整仓库根目录执行 `python3 install.py --client codex`。同一个安装器支持 Codex、Claude Code、
+WorkBuddy、OpenCode、Gemini CLI 和 DeepSeek Harness，默认注册 `total_pipe` 的 doctor / start / advance / status 四工具并安装技能。
+宿主不明确时可用 `--client auto` 检测，用 `--dry-run` 预览安装计划。[AI 一键安装](INSTALL_FOR_AI.md)
 使用 [total-pipe-agent Skill](Total-pipe/skills/total-pipe-agent/SKILL.md)，按 next_action 提供 Agent 产物与用户选择。
 已有 IR / workflow 可从对应阶段继续；安装、状态与恢复详见[接入层说明](Total-pipe/docs/agent-adapter.md)。例如：
 
@@ -178,7 +176,7 @@ python -m deck_compiler build --ir designed.deck_ir.json --out build/my-deck \
 
 默认服务在 `<repo>/Total-pipe` 执行 `python -m agent.mcp_server`，配置为
 [Total-pipe/.mcp.json](Total-pipe/.mcp.json)。原低层三服务保留在
-[.mcp.advanced.json](Total-pipe/.mcp.advanced.json)，用 `install.py --profile advanced` 注册，
+[.mcp.advanced.json](Total-pipe/.mcp.advanced.json)，用 `python3 install.py --client auto --profile advanced` 注册，
 以下是各低层服务的独立启动方式：
 
 | 服务 | 服务进程的工作目录 | 启动命令 | 配置 |

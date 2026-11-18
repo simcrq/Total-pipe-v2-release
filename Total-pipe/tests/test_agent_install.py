@@ -5,8 +5,10 @@ import tomllib
 import os
 import stat
 from pathlib import Path
+from unittest.mock import patch
 
 from agent import ROOT
+from agent.harnesses import CLIENTS, default_config, deepseek_plan, register_deepseek
 from agent.installation import BEGIN, END, configure, profile_servers, handshake, toml_config, json_config
 from agent_fixture import AgentCase
 
@@ -76,6 +78,75 @@ class InstallTests(AgentCase):
 
     def test_target_interpreter_keeps_venv_identity(self):
         self.assertEqual(profile_servers('agent', sys.executable)['total_pipe']['command'], sys.executable)
+
+    def test_host_formats_support_a_real_stdio_handshake(self):
+        servers = profile_servers('agent', sys.executable)
+        for client, version in (('claude', '2'), ('workbuddy', '2'), ('gemini', '2'),
+                                ('opencode', '1'), ('opencode', '2')):
+            with self.subTest(client=client, version=version):
+                original = {'theme': 'custom', 'mcp': {'policy': 'keep'}} if client == 'opencode' else {
+                    'mcpServers': {'keep': {'command': 'other'}}, 'theme': 'custom'}
+                encoded = json_config(json.dumps(original), servers, client=client, opencode_default=version)
+                value = json.loads(encoded)
+                self.assertEqual(value['theme'], 'custom')
+                self.assertEqual(json_config(encoded, servers, client=client, opencode_default=version), encoded)
+                if client == 'opencode':
+                    self.assertEqual(value['mcp']['policy'], 'keep')
+                    entries = value['mcp']['servers'] if version == '2' else value['mcp']
+                    command, *args = entries['total_pipe']['command']
+                    if version == '2':
+                        self.assertFalse(entries['total_pipe']['codemode'])
+                    environment = {}  # Host-specific variable expansion belongs to OpenCode.
+                else:
+                    self.assertEqual(value['mcpServers']['keep'], original['mcpServers']['keep'])
+                    entry = value['mcpServers']['total_pipe']
+                    command, args, environment = entry['command'], entry['args'], entry['env']
+                    if client == 'gemini':
+                        self.assertFalse(entry['trust'])
+                        self.assertEqual(entry['timeout'], 1800000)
+                        self.assertEqual(environment['MINERU_TOKEN'], '${MINERU_TOKEN}')
+                        environment = {'PYTHONUTF8': environment['PYTHONUTF8']}
+                result = handshake({'command': command, 'args': args, 'cwd': str(self.root), 'env': environment})
+                self.assertEqual(set(result['tools']),
+                                 {'totalpipe_doctor', 'totalpipe_start', 'totalpipe_advance', 'totalpipe_status'})
+
+    def test_opencode_jsonc_backs_up_comments_and_retains_legacy_map(self):
+        path = self.root/'opencode.jsonc'
+        text = '''{
+          // User comment
+          "url": "https://example.test/a/*literal*/", /* a second comment */
+          "mcp": {"old": {"type": "remote", "url": "https://example.test/mcp"},},
+        }'''
+        path.write_text(text, encoding='utf-8')
+        configured = configure(path, 'opencode', profile_servers('agent', sys.executable))
+        self.assertEqual(Path(configured['backup']).read_text(encoding='utf-8'), text)
+        data = json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(data['url'], 'https://example.test/a/*literal*/')
+        self.assertEqual(data['mcp']['old']['type'], 'remote')
+        self.assertEqual(data['mcp']['total_pipe']['timeout'], 1800000)
+
+    def test_client_discovery_and_default_paths(self):
+        result = subprocess.run([sys.executable, ROOT/'install.py', '--list-clients'], check=True,
+                                capture_output=True, text=True)
+        self.assertEqual({item['id'] for item in json.loads(result.stdout)['clients']}, set(CLIENTS))
+        with patch.dict(os.environ, {'GEMINI_CLI_HOME': str(self.root),
+                                     'OPENCODE_CONFIG_DIR': str(self.root), 'OPENCODE_CONFIG': ''}):
+            self.assertEqual(default_config('gemini'), self.root/'.gemini/settings.json')
+            self.assertEqual(default_config('opencode'), self.root/'opencode.json')
+
+    def test_deepseek_bundle_is_registered_and_checked_via_profile_cli(self):
+        with patch('agent.harnesses.shutil.which', return_value='/usr/bin/dsh'):
+            planned = deepseek_plan(self.root/'venv', 'web')
+        responses = [subprocess.CompletedProcess([], 0, '', ''),
+                     subprocess.CompletedProcess([], 0, 'totalpipe-mcp-total-pipe', '')]
+        with patch('agent.harnesses.subprocess.run', side_effect=responses) as cli:
+            result = register_deepseek(planned, profile_servers('agent', sys.executable))
+        self.assertEqual([call.args[0] for call in cli.call_args_list], [planned['register'], planned['inspect']])
+        self.assertTrue(result['verified_profile'])
+        row = json.loads((Path(result['path'])/'cordis.patch.yml').read_text())[0]['insert'][0]
+        self.assertEqual(row['config']['transport'], 'stdio')
+        self.assertEqual(row['config']['toolCallTimeoutMs'], 1800000)
+        self.assertNotIn('MINERU_TOKEN', row['config']['env'])
 
     def test_config_and_backup_permissions_do_not_expose_existing_secrets(self):
         path = self.root/'private.toml'

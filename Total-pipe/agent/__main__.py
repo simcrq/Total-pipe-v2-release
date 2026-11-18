@@ -42,7 +42,7 @@ def main():
     p.add_argument('--scene-preview', type=Path, help='PageScene native preview request JSON: artifact_path and optional page_ids')
     p.add_argument('--replan-from')
     commands.add_parser('serve')
-    commands.add_parser('setup', help='Print the repository installer location')
+    commands.add_parser('setup', help='Print the installer, guide and next command')
     p = commands.add_parser('ir-prompt')
     for name in ('workflow', 'rpa', 'normalized', 'plan', 'out'):
         p.add_argument('--'+name, required=True, type=Path)
@@ -83,7 +83,8 @@ def main():
             return transport.main()
         if command == 'setup':
             from . import ROOT
-            result = {'installer': str(ROOT/'install.py'), 'next': 'python install.py --client codex'}
+            result = {'installer': str(ROOT/'install.py'), 'guide': str(ROOT/'INSTALL_FOR_AI.md'),
+                      'cwd': str(ROOT), 'next': 'python3 install.py --client auto'}
         elif command == 'ir-prompt':
             from .adapters import ir_prompt
             result = ir_prompt(read(args['workflow']), read(args['rpa']), read(args['normalized']), read(args['plan']))
