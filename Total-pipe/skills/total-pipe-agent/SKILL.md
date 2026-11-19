@@ -24,7 +24,7 @@ ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/
 | review_required | 读 qa_report / feedback_path；FAIL 需修复，不能签收；修订耗尽时向用户说明 |
 | none | 若 reason=ADVANCE_REQUIRED 则 advance；若 CANDIDATE_READY 则交付候选 |
 
-queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
+queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本和声明的 intent 传入 PWF。PWF 在缺少有效声明时推导检索意图，各条不同查询独立检索，即使 intent 相同。
 用 delegation 中用户明确选择的模型和 reasoning 调用真实 Story 子代理。选择缺失时询问，保留真实调用记录。
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
 Story 后按 next_action 进入 scientific_review：主 Agent 读完整任务、提示、Schema、原文和实际SI，实际审查单位粒度、来源及遗漏的初始化/对照/负面结果；禁止自动 pass，失败回退 Story。

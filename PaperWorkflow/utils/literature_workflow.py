@@ -631,7 +631,7 @@ def build_evidence_queries(
             spec["language_bridge_applied"] = False
             query_specs.append(spec)
 
-    seen = {item["query"].casefold() for item in query_specs}
+    seen = {(item["query"].casefold(), item["intent"]) for item in query_specs}
     for index, item in enumerate(custom_queries, start=1):
         # Accept plain strings or {"query": ..., "intent": ...} objects. An
         # explicit intent is honoured; otherwise it is inferred from the text.
@@ -642,12 +642,15 @@ def build_evidence_queries(
             raw = str(item)
             declared = None
         normalised = re.sub(r"\s+", " ", raw.strip())
-        if not normalised or normalised.casefold() in seen:
+        if not normalised:
             continue
-        seen.add(normalised.casefold())
         declared_intent = declared.strip() if isinstance(declared, str) else ""
         declared_ok = declared_intent in INTENT_QUERY_EXPANSIONS or declared_intent == "general"
         intent = declared_intent if declared_ok else infer_query_intent(normalised)
+        query_key = (normalised.casefold(), intent)
+        if query_key in seen:
+            continue
+        seen.add(query_key)
         expanded = _expanded_query(normalised, intent)
         query_specs.append(
             {
@@ -844,7 +847,7 @@ def build_literature_workflow(
     source_path: Path,
     project_root: Path,
     output_dir: Path,
-    custom_queries: Iterable[str] = (),
+    custom_queries: Iterable[str | Mapping[str, Any]] = (),
     include_default_queries: bool | None = None,
     supplementary_paths: Iterable[str | Path] = (),
     supplementary_content_included: bool = False,
@@ -924,33 +927,31 @@ def build_literature_workflow(
         include_default_queries = not custom_queries
     query_specs = build_evidence_queries(custom_queries, include_defaults=include_default_queries)
     evidence: list[dict[str, Any]] = []
-    canonical_by_intent: dict[str, str] = {}
-    results_by_canonical: dict[str, list[dict[str, Any]]] = {}
     for query_spec in query_specs:
-        intent = query_spec.get("intent", "general")
-        canonical_id = (
-            canonical_by_intent.setdefault(intent, query_spec["query_id"])
-            if intent != "general"
-            else query_spec["query_id"]
+        intent = query_spec["intent"]
+        coverage_depth = {
+            "sample_preparation": 12,
+            "physical_mechanism": 9,
+            "key_results": 8,
+            "limitations": 5,
+        }.get(intent, top_k)
+        results = search_graph(
+            graph,
+            query_spec["expanded_query"],
+            top_k=max(top_k, coverage_depth),
+            intent=intent,
         )
-        if canonical_id not in results_by_canonical:
-            coverage_depth = {
-                "sample_preparation": 12,
-                "physical_mechanism": 9,
-                "key_results": 8,
-                "limitations": 5,
-            }.get(intent, top_k)
-            results_by_canonical[canonical_id] = search_graph(
-                graph,
-                query_spec["expanded_query"],
-                top_k=max(top_k, coverage_depth),
-                intent=intent,
-            )
+        # Compare outcomes after retrieval so one query cannot replace another's search.
+        canonical_id = next(
+            (group["canonical_query_id"] for group in evidence
+             if results and group["intent"] == intent and group["results"] == results),
+            query_spec["query_id"],
+        )
         evidence.append(
             {
                 **query_spec,
                 "canonical_query_id": canonical_id,
-                "results": results_by_canonical[canonical_id],
+                "results": results,
             }
         )
     evidence_registry = build_evidence_registry(evidence)

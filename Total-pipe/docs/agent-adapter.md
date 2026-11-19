@@ -179,7 +179,8 @@ source_kind 可为 auto、pdf、markdown、workflow、deck_ir。JSON 自动按 s
 已有 IR 保持语义，在 work 中保存以绝对资源路径重定位的副本，完整设计可直接 build。
 已有 workflow 保留原证据包目录，从 readiness 与模型选择门禁继续。
 PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","query":"具体检索问题"}]`，
-可附 intent；接入层将 query 字符串交给 PWF，PWF 自行推导检索 intent 和 custom query ID。
+可附 intent。接入层将查询文本和声明的 intent 交给 PWF。PWF 为每条查询生成 custom query ID，
+在缺少有效声明时推导意图。每条不同的查询独立排序，结果共用同一原文片段的证据 ID。
 显式配对 supplementary_paths；内容确已合入分析输入后才确认 supplementary_content_included=true。
 
 `supplement` 取 `off`（默认）/ `inline` / `pages` / `both`，只影响 Deck IR 阶段：允许模型
