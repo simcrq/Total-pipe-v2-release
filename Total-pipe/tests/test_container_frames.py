@@ -111,6 +111,8 @@ class ContainerFrameTests(unittest.TestCase):
         self.assertLess(band['bbox'][2], frame['bbox'][2]-20)      # a label, not a strip
         self.assertGreater(band['bbox'][0], frame['bbox'][0])
         self.assertEqual(title['align'], 'center')
+        self.assertEqual(title['contract']['vertical_anchor'], 'middle')
+        self.assertAlmostEqual(title['bbox'][1]+title['bbox'][3]/2, band['bbox'][1]+band['bbox'][3]/2)
         self.assertGreaterEqual(title['bbox'][0], band['bbox'][0])
         self.assertLessEqual(title['bbox'][0]+title['bbox'][2], band['bbox'][0]+band['bbox'][2]+.1)
         plan = next(a for a in layout['slides'][0]['adaptation_log'] if a['action'] == 'layout_tree')

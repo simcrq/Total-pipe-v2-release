@@ -64,24 +64,63 @@
           "version": "1.0",
           "regions": {
             "body": {
-              "id": "local-markers-columns",
-              "type": "columns",
+              "id": "local-markers-columns-stack",
+              "type": "stack",
               "gap": "standard",
               "children": [
                 {
-                  "id": "capabilities-leaf",
-                  "type": "block",
-                  "ref": "capabilities"
+                  "id": "marker-flow-leaf",
+                  "type": "graphic",
+                  "ref": "marker-flow"
                 },
                 {
-                  "id": "projects-leaf",
-                  "type": "block",
-                  "ref": "projects"
+                  "id": "local-markers-columns",
+                  "type": "columns",
+                  "gap": "standard",
+                  "children": [
+                    {
+                      "id": "capabilities-leaf",
+                      "type": "block",
+                      "ref": "capabilities"
+                    },
+                    {
+                      "id": "projects-leaf",
+                      "type": "block",
+                      "ref": "projects"
+                    }
+                  ]
                 }
               ]
             }
           }
-        }
+        },
+        "graphics": [
+          {
+            "id": "marker-flow",
+            "type": "mechanism",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "n1",
+                "shape": "rect",
+                "title": "两处独立样式"
+              },
+              {
+                "id": "n2",
+                "shape": "rect",
+                "title": "列表与颜色互不影响"
+              }
+            ],
+            "edges": [
+              {
+                "from": "n1",
+                "to": "n2",
+                "kind": "activate",
+                "basis": "explain"
+              }
+            ]
+          }
+        ]
       },
       "presentation": {
         "takeaway_marker": {
@@ -128,24 +167,63 @@
           "version": "1.0",
           "regions": {
             "body": {
-              "id": "mixed-takeaway-columns",
-              "type": "columns",
+              "id": "mixed-takeaway-columns-stack",
+              "type": "stack",
               "gap": "standard",
               "children": [
                 {
-                  "id": "mixed-context-leaf",
-                  "type": "block",
-                  "ref": "mixed-context"
+                  "id": "takeaway-flow-leaf",
+                  "type": "graphic",
+                  "ref": "takeaway-flow"
                 },
                 {
-                  "id": "constraints-leaf",
-                  "type": "block",
-                  "ref": "constraints"
+                  "id": "mixed-takeaway-columns",
+                  "type": "columns",
+                  "gap": "standard",
+                  "children": [
+                    {
+                      "id": "mixed-context-leaf",
+                      "type": "block",
+                      "ref": "mixed-context"
+                    },
+                    {
+                      "id": "constraints-leaf",
+                      "type": "block",
+                      "ref": "constraints"
+                    }
+                  ]
                 }
               ]
             }
           }
-        }
+        },
+        "graphics": [
+          {
+            "id": "takeaway-flow",
+            "type": "mechanism",
+            "direction": "horizontal",
+            "nodes": [
+              {
+                "id": "n1",
+                "shape": "rect",
+                "title": "术语保留"
+              },
+              {
+                "id": "n2",
+                "shape": "rect",
+                "title": "公式继续可用"
+              }
+            ],
+            "edges": [
+              {
+                "from": "n1",
+                "to": "n2",
+                "kind": "activate",
+                "basis": "explain"
+              }
+            ]
+          }
+        ]
       },
       "presentation": {
         "takeaway_marker": {

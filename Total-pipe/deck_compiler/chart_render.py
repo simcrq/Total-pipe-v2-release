@@ -139,14 +139,23 @@ def compile_chart(chart, bbox, theme, font_paths):
     y_values = [value-bar for entry, errors in zip(series, bars) for value, bar in zip(entry['values'], errors)]
     y_values += [value+bar for entry, errors in zip(series, bars) for value, bar in zip(entry['values'], errors)]
     y_low, y_high = min(y_values), max(y_values)
-    if chart['kind'] == 'bar':
-        y_low = min(0., y_low)
-        y_high = max(0., y_high)
+    if y_scale == 'log':
+        # A log axis has no zero and no additive padding: bars grow from the axis floor and the
+        # range pads by a factor. Forcing y_low to zero here - and then subtracting a linear pad -
+        # made every log chart raise "log of zero", so a page about several decades could not be
+        # plotted at all and fell back to repeating its numbers as text.
+        if y_low <= 0:
+            raise ChartLayoutError('a log y axis needs strictly positive values')
+        y_low, y_high = y_low/1.25, y_high*1.25
+    else:
+        if chart['kind'] == 'bar':
+            y_low = min(0., y_low)
+            y_high = max(0., y_high)
+        pad = (y_high-y_low)*.08
+        if chart['kind'] in ('line', 'scatter'):
+            y_low, y_high = y_low-pad, y_high+pad
     if y_high <= y_low:
         y_high = y_low+1.
-    pad = (y_high-y_low)*.08
-    if chart['kind'] in ('line', 'scatter'):
-        y_low, y_high = y_low-pad, y_high+pad
     if chart['kind'] == 'scatter':
         x_values = []
         all_x = [value for entry in series for value in (entry.get('x_values') or [])]
@@ -197,7 +206,7 @@ def compile_chart(chart, bbox, theme, font_paths):
         if chart['kind'] == 'bar':
             band = pw/len(x_values)
             width = band*.6/max(1, len(series))
-            zero = _positions([0.], y_low, y_high, y_scale, py+ph, -ph)[0]
+            zero = _positions([y_low if y_scale == 'log' else 0.], y_low, y_high, y_scale, py+ph, -ph)[0]
             centres = []
             for point, value in enumerate(entry['values']):
                 centre = px+(point+.5)*band+series_index*width-(len(series)-1)*width/2

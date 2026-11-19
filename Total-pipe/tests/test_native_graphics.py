@@ -87,7 +87,8 @@ class GraphicTests(unittest.TestCase):
             labels = [e for e in page['elements'] if e.get('graphic_id') and e['kind'] == 'text']
             self.assertEqual([e['source_text'] for e in labels],
                              [node[key] for node in g['nodes'] for key in ('title', 'body')])
-            self.assertTrue(all(e['contract']['font_size'] >= 24 for e in labels))
+            self.assertTrue(all(e['contract']['font_size'] >= (20 if e['id'].endswith(':body') else 24)
+                                for e in labels))
             self.assertTrue(all(e['align'] == 'center' for e in labels))
 
     def test_all_five_presets_and_native_connectors(self):
@@ -171,19 +172,26 @@ class GraphicTests(unittest.TestCase):
                 mutate(graphic(ir))
                 self.assertTrue(any(i['rule'] == 'GRAPHIC_INVALID' for i in validate(ir)))
 
-    def test_emphasis_tone_changes_only_the_node_fill_and_rule(self):
-        plain = fixture()
-        plain_layout, _ = compile_deck(plain, ROOT)
-        plain_node = next(e for e in plain_layout['slides'][0]['elements']
-                          if e.get('role') == 'graphic-node')
-        emphasised = copy.deepcopy(plain)
-        graphic(emphasised)['nodes'][0]['tone'] = 'emphasis'
-        emphasised_layout, issues = compile_deck(emphasised, ROOT)
-        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
-        strong_node = next(e for e in emphasised_layout['slides'][0]['elements']
-                           if e.get('role') == 'graphic-node')
-        self.assertNotEqual(plain_node['fill'], strong_node['fill'])
-        self.assertGreater(strong_node['line_width'], plain_node['line_width'])
+    def test_emphasis_tone_respects_each_style_pack_without_moving_the_node(self):
+        for pack in ('academic', 'commercial'):
+            with self.subTest(pack=pack):
+                ir = fixture()
+                ir.setdefault('presentation', {})['visual_style'] = {'pack': pack}
+                plain_layout, _ = compile_deck(ir, ROOT)
+                plain = next(e for e in plain_layout['slides'][0]['elements']
+                             if e.get('role') == 'graphic-node')
+                graphic(ir)['nodes'][0]['tone'] = 'emphasis'
+                layout, issues = compile_deck(ir, ROOT)
+                self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+                strong = next(e for e in layout['slides'][0]['elements'] if e['id'] == plain['id'])
+                self.assertEqual(strong['bbox'], plain['bbox'])
+                self.assertGreater(strong['line_width'], plain['line_width'])
+                if pack == 'academic':
+                    self.assertEqual(plain['fill'], 'none')
+                    self.assertEqual(strong['fill'], 'none')
+                    self.assertNotEqual(strong['line'], plain['line'])
+                else:
+                    self.assertNotEqual(strong['fill'], plain['fill'])
 
     def test_no_unintended_overlap_or_out_of_bounds(self):
         layout, _ = compile_deck(fixture(), ROOT)

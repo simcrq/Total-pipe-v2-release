@@ -3,7 +3,7 @@
 本目录包含 Deck Compiler、确定性布局提供方、pwf2rpa、Schema、示例和总调度 Skill。
 完整论文流程还使用同级的 `PaperWorkflow/` 和 `research-ppt-assistant/`。
 
-**组件、当前版本和全流程入口见 [仓库 README](../README.md)。**
+**组件、版本来源和全流程入口见 [AI 工程索引](../docs/README.md)。**
 插件清单版本为 `3.3.0+codex.20261021203000`；MCP 握手版本为 `3.2.0`，
 编译器 Python 模块仍声明 `2.4.0`。输入 Deck IR 为 `schema_version: "2.0"`，
 可选 layout tree 支持 `1.0 / 1.1 / 1.2`。这些版本属于不同对象。
@@ -116,7 +116,9 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 - [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排与跟随主题的图示着色，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
-- [原生列表](docs/native-lists.md)：takeaway 独立标记，整套 / block 样式与符号颜色；最低宽度 520 CSS px，高度按完整内容实测；preserve-terms 保留列表呈现和全文。
+- [原生列表](docs/native-lists.md)：单条和多条正文可使用无序图标或连续编号，支持逐 block 样式、颜色和起始编号。布局按完整条目测量。
+- [四向图注与正文](docs/content-projection.md)：图片、流程图和独立公式可在布局树中绑定上、下、左、右的说明文字。
+- [可检索的脚本示例库](examples/library/README.md)：按版式或 IR 字段搜索、查看单项或编译候选。涵盖独立正文标记、A/B 路线、四向说明、原图导读、误差棒、合并表头、公式讲解和机制假设。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
 - [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、间隙上限 48 px / 居中 56 px、15% 留白反馈、合法相对权重与增量候选签收。
@@ -132,3 +134,5 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 完整操作见 [USAGE.zh-CN.md](docs/USAGE.zh-CN.md)，协议导航见[当前文档索引](../docs/README.md)。
 旧开发计划和验收记录统一保留于[历史归档](../docs/archive/README.md)，不作为当前操作步骤。
+
+普通构建将纯文字页列为 `TEXT_ONLY_PAGE` REVIEW。脚本如需强制每页有图、表、原生图形或独立公式，可对 `build` 显式使用 `--require-visuals`。

@@ -1,11 +1,65 @@
 """Deterministic source binding and measured, independently replaceable IR pages."""
 import copy
+import json
 from pathlib import Path
 import tempfile
 import re
 
 from . import COMPONENT
 from .state import read, write, sha, digest, resources, save
+
+
+VISUAL_TERMS = {
+    'figure': (r'原图|读图|\b(?:paper figure|figure readout|figure reading)\b', '原图导读 图文并排'),
+    'chart': (r'曲线图|折线图|散点图|柱状图|数据图|误差棒|\b(?:charts?|(?:line|data) plots?|error bars?)\b', '数据图'),
+    'formula': (r'公式|方程|\b(?:equations?|formulas?|inline math)\b', '原生公式 符号定义'),
+    'table': (r'表格|对照表|表头|\b(?:tables?|merged headers)\b', '对照表 原生表格'),
+    'graphic': (r'机制|流程|示意图|结构图|电路图|\b(?:mechanism|diagram|workflow|flowchart)\b', ''),
+}
+LAYOUT_RISK = re.compile(r'混排|多栏|图文并排|标注|留白|稀疏|密集|嵌套|新布局|'
+                         r'\b(?:annotations?|side.by.side|nested|sparse|dense|new layout)\b', re.I)
+
+
+def _visual_intent(page):
+    """Interpret approved design language without copying Story text into search."""
+    from deck_compiler.content_projection import standalone_math
+    design = page.get('design', '')
+    text = design if isinstance(design, str) else json.dumps(design, ensure_ascii=False)
+    objects = {('figure', ref) for ref in page.get('figures', [])}
+    objects.update((carrier['kind'], carrier['ref'])
+                   for route in page.get('content_map', {}).values() if route.get('destination') == 'visible'
+                   for carrier in route.get('carriers', []) if carrier.get('kind') in VISUAL_TERMS)
+    kinds = {kind for kind, _ in objects}
+    if any(item.get('role') in ('body', 'label') and standalone_math(item.get('text'))
+           for item in page.get('display_copy', [])):
+        kinds.add('formula')
+    kinds.update(kind for kind, (pattern, _) in VISUAL_TERMS.items() if re.search(pattern, text, re.I))
+    return text, objects, kinds
+
+
+def _example_suggestions(page, entries):
+    from deck_compiler.example_index import search
+    text, _, kinds = _visual_intent(page)
+    hints = [hint for kind, (_, hint) in VISUAL_TERMS.items() if kind in kinds and hint]
+    if {'chart', 'formula'}.issubset(kinds):
+        hints.append('图表公式混排 曲线与公式 多功能同页')
+    if re.search(r'机制|\bmechanism\b', text, re.I):
+        hints.append('机制图')
+    return search(' '.join([text, *hints]), entries, limit=2)
+
+
+def _preview_reasons(page, errors):
+    text, objects, kinds = _visual_intent(page)
+    reasons = []
+    if len(objects) > 1 or len(kinds) > 1:
+        reasons.append('multiple_visuals')
+    if kinds.intersection(('chart', 'formula', 'table', 'graphic')):
+        reasons.append('compiled_visual')
+    if LAYOUT_RISK.search(text):
+        reasons.append('layout_or_annotation_risk')
+    if errors:
+        reasons.append('previous_submission_failed')
+    return reasons
 
 
 def _inventory(work):
@@ -48,7 +102,7 @@ def bind_sources(value, design, work, authored_path):
     for index, slide in enumerate(value.get('slides', [])):
         page = pages.get(slide.get('id'))
         if page and (design or {}).get('schema_version') in ('1.2', '1.3'):
-            from deck_compiler.content_projection import bind_copy, snapshot
+            from deck_compiler.content_projection import bind_copy, snapshot, standalone_math
             slide = bind_copy(slide, page)
             value['slides'][index] = slide
             expected = snapshot(page, design['_content_catalog'], design['_review'])
@@ -57,7 +111,14 @@ def bind_sources(value, design, work, authored_path):
                 raise ValueError('The approved audience projection changed; replan the page design and source/copy review.')
             slide.setdefault('semantic', {})['content_projection'] = expected
             supplements = {item['text']: item for item in page['display_copy'] if item.get('basis') == 'supplement'}
+            equations = {item['text']: standalone_math(item['text']) for item in page['display_copy']
+                         if item['role'] in ('body', 'label') and item.get('basis', 'paper') == 'paper'}
             for block in slide.get('composition', {}).get('blocks', []):
+                expression = equations.get(block.get('text'))
+                if expression is not None and block.get('component') in ('body', 'formula'):
+                    block['text'] = expression
+                    block['component'] = 'formula'
+                    block.pop('inline_math', None)
                 supplement = supplements.get(block.get('text'))
                 if supplement:
                     if block.get('basis', 'supplement') != 'supplement' or block.get('evidence_refs'):
@@ -126,8 +187,15 @@ def prepare_prompts(work, design, prompt):
     if design.get('schema_version') not in ('1.1', '1.2', '1.3'): return
     from deck_compiler.design import bind_design
     design = bind_design(design, prompt['story'])
-    shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities',
+    shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities', 'example_lookup',
               'type_scale', 'visual_style', 'design_forms', 'design_devices', 'request', 'workflow_root') if k in prompt}
+    entries = []
+    if 'example_lookup' in shared:
+        from deck_compiler.example_index import inventory
+        try:
+            entries = inventory()
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # The library is optional for IR authoring.
     for page in design['pages']:
         refs = {ref for item in [*page.get('items', []), *page.get('context_items', [])] for ref in item.get('evidence', [])}
         nodes = {int(item['source'].split('.')[0][1:])-1 for item in page.get('items', [])
@@ -147,22 +215,38 @@ def prepare_prompts(work, design, prompt):
                  'evidence': {key: text for key, text in prompt.get('evidence', {}).items() if key in refs},
                  'figures': [f for f in prompt.get('figures', []) if f.get('path') in page.get('figures', []) or f.get('asset_id') in page.get('figures', [])],
                  'page_contract': 'Read this complete pack and the complete schema. Write canonical Deck IR with one slide of this page ID and a shared header identical across pages. Only assigned content_refs are allocated here; other Story context is background. Omitted notes/evidence refs are copied from assigned Story items. Use inventory asset IDs/paths or absolute custom asset paths. Submit deck_ir_page to measure; retain passing pages.'}
+        if 'example_lookup' in shared:
+            value['example_lookup'] = {**shared['example_lookup'],
+                                       'suggestions': _example_suggestions(page, entries)}
         path = work/'ir_page_prompts'/_filename(page['id'])
         if not path.is_file() or read(path) != value: write(path, value)
 
 
 def descriptor(job, upstream):
+    from .ir_preview import authoring_plan
     work = Path(job['request']['out_dir'])/'work'
     if not (work/'page_design.json').is_file(): return None
-    pages = read(work/'page_design.json')['pages']
+    design = read(work/'page_design.json')
     cache = job.get('ir_pages', {})
-    records = cache.get('records', {}) if cache.get('upstream') == upstream else {}
+    if cache.get('upstream') != upstream:
+        cache = {}
+    pages = []
+    for page in design['pages']:
+        sid = page['id']
+        name = _filename(sid)
+        output = str(work/'pages'/name)
+        cached = sid in cache.get('records', {})
+        entry = {'id': sid, 'expected_output': output,
+                 'input_path': str(work/'ir_page_prompts'/name), 'cached': cached}
+        if not cached and design.get('schema_version') in ('1.1', '1.2', '1.3'):
+            reasons = _preview_reasons(page, cache.get('errors', {}).get(sid))
+            if reasons:
+                entry['preview_plan'] = authoring_plan(job['job_id'], output, sid, reasons)
+        pages.append(entry)
     return {'artifact_kind': 'deck_ir_page', 'schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
             'contract': 'Canonical Deck IR with exactly one slide; common header must match across pages. Story notes/omitted refs and selected asset paths are bound automatically.',
-            'max_rejected_revisions_per_page': 3,
-            'pages': [{'id': p['id'], 'expected_output': str(work/'pages'/_filename(p['id'])),
-                       'input_path': str(work/'ir_page_prompts'/_filename(p['id'])),
-                       'cached': p['id'] in records} for p in pages]}
+            'checks_before_submission': 'For pages with preview_plan, write the draft and follow its preview calls before submission. Other pages can use the same preview interface as needed.',
+            'max_rejected_revisions_per_page': 3, 'pages': pages}
 
 
 def _stamp(path):
@@ -194,6 +278,7 @@ def submit(job, upstream, path, dry=False):
         issues.append({'code': 'PAGE_HEADER_MISMATCH', 'severity': 'FAIL',
                        'message': 'Shared theme/deck presentation changed. Keep the header or explicitly replan_from=deck_ir to reset all pages.'})
     value, _ = a.apply_art_direction(value, partial)
+    value = a.normalize_authoring_ir(value)
     issues.extend(a.ir_issues(value, read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None,
                              job['request'].get('supplement', 'off'), partial, 1))
     fingerprint = digest([value, {a['path']: sha(a['path']) for a in value.get('assets', {}).values() if a.get('path')}])
@@ -213,7 +298,6 @@ def submit(job, upstream, path, dry=False):
             folder = Path(temporary)
             try:
                 a.persist_ir(value, path, folder/'input.json')
-                value = a.normalize_authoring_ir(value)
                 before = _stamp(folder/'input.json')
                 _, _, qa = compile_input(folder/'input.json', folder, {'name': 'packer'},
                                          enable_overflow_repair=False, require_visual_design=False, explain_viz_mode='off')

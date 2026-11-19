@@ -263,7 +263,8 @@ def _validate_reference_design(design, story, evidence, slide_count):
                 problems.append(f'{pid}: title must agree with approved title display_copy')
         for mark in page.get('marks') or []:
             if _squash(mark) not in _squash(text+' '+page.get('title', '')):
-                problems.append(f'{pid}: mark {mark!r} does not occur in assigned Story text or title')
+                target = 'display_copy' if design.get('schema_version') in ('1.2', '1.3') else 'assigned Story text or title'
+                problems.append(f'{pid}: mark {mark!r} does not occur in {target}. Put drawing directions in design.')
     for source in catalog:
         count = len(used.get(source) or [])
         if not count:

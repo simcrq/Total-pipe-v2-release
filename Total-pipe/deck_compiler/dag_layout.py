@@ -7,6 +7,18 @@ from totalpipe_layout.inline_math import strip_markup
 from .graphic_layout import CONNECTION_SITES, SHAPES, GraphicLayoutError, node_elements
 
 EPS = .05
+# How far a node box may grow past its 18 pt minimum when the band offers spare height, and the
+# widest a grown box may be relative to its own width. A 72-96 px strip reads as a thin band in a
+# 400 px region, but a 320 px-wide node stretched to a 320 px-tall card is an empty frame: 0.45
+# keeps a one-line box landscape and leaves the rest of the surplus to the parent's centring.
+MAX_NODE_STRETCH = 3.0
+MAX_NODE_ASPECT = 0.34
+# The label box node_elements draws into is 94 % of the node width; this module measures line
+# counts at the narrower INSETS ratio below, so a widow has to be detected at the drawn width or
+# it is predicted away. Keep TEXT_INSET in step with graphic_layout.node_elements.
+TEXT_INSET = .94
+# Narrowest arrow channel worth keeping: below this the connectors read as dashes between cards.
+MIN_COLUMN_GAP = 64.
 INSETS = {'diamond': (.5, .5), 'ellipse': (.66, .66), 'hexagon': (.66, .76)}
 
 
@@ -221,11 +233,71 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
         heights[nid] = max(minimum, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
     boxes = {}
     left = x+(width-(node_width*columns+gap*(columns-1)))/2
+    # A diagram in a tall band has to grow into it. Node heights come from the 18 pt floor, so a
+    # two-line label keeps a 72 px box; centring that in a 400 px band left the surplus as white
+    # space above and below (the reported "thin strip" defect). Stretch the boxes - not the type -
+    # until the tallest layer fills the band, capped so a sparse chain does not become a column of
+    # empty cards. Text stays vertically centred inside each node.
+    natural = max(sum(heights[n] for n in layer)+12*(len(layer)-1) for layer in layers) if layers else 0.
+    if natural > EPS and available > natural:
+        stretch = min(available/natural, MAX_NODE_STRETCH)
+        if stretch > 1.0:
+            # Grow the boxes, but keep them landscape: a one-line label in a 320x330 card reads as
+            # an empty frame, which is worse than the thin strip this replaced. The surplus past the
+            # aspect cap is left to the parent region, which centres the whole diagram.
+            widest = max(len(layer) for layer in layers)
+            room = available-12*(widest-1)
+            cap = MAX_NODE_ASPECT*node_width
+            uniform = min(max(heights.values())*stretch, cap)
+            if room > 0:
+                uniform = min(uniform, room/widest)
+            uniform = max(uniform, max(heights.values()))
+            # Grow the type with the box, otherwise a grown box is just a frame with a line of
+            # small text in it. The label must still wrap to at most two lines at the larger size,
+            # so a long label simply keeps the smaller type.
+            growth = uniform/max(heights.values()) if max(heights.values()) else 1.0
+            if growth > 1.05:
+                scale = min(1.45, math.sqrt(growth))
+                sized = title_size*scale
+                face = ImageFont.truetype(str(font_paths['bold_font_file' if style.get('bold', True)
+                                               else 'font_file']), int(sized))
+                if all(len(break_lines(strip_markup(by_id[nid]['title']), face, node_width
+                                       * INSETS.get(SHAPES[by_id[nid].get('shape', 'rounded-rect')],
+                                                    (.84, .78))[0])) <= 2 for nid in ids):
+                    title_size = sized
+                    faces['title'] = face
+                    for nid in ids:
+                        line_count = len(break_lines(strip_markup(by_id[nid]['title']), face,
+                                                     node_width*INSETS.get(
+                                                         SHAPES[by_id[nid].get('shape', 'rounded-rect')],
+                                                         (.84, .78))[0]))
+                        th, bh = text_heights[nid]
+                        text_heights[nid] = line_count*title_size*1.25, bh
+            heights = {nid: uniform for nid in heights}
+    # A label whose last line is one or two characters is a widow: the node is a few pixels too
+    # narrow, not the type too large. Take the width back from the arrow gap (never below
+    # MIN_COLUMN_GAP) rather than shrinking the type or dropping a word from the explanation.
+    # This runs after the type has been scaled up for a tall band, because that scaling is what
+    # creates most widows: measured at the 18 pt face a label fits, at the grown face it does not.
+    if columns > 1:
+        wanted = 0.
+        for nid in ids:
+            face, inset = faces['title'], TEXT_INSET
+            lines = break_lines(strip_markup(by_id[nid]['title']), face, node_width*inset)
+            if len(lines) > 1 and len(lines[-1].strip()) <= 2:
+                wanted = max(wanted, face.getlength(strip_markup(by_id[nid]['title']))/inset+4)
+        if node_width < wanted <= 320.:
+            room = (width-wanted*columns)/(columns-1)
+            if room >= MIN_COLUMN_GAP:
+                node_width, gap = wanted, min(gap, room)
+                left = x+(width-(node_width*columns+gap*(columns-1)))/2
     for rank, layer in enumerate(layers):
         need = sum(heights[n] for n in layer)+12*(len(layer)-1)
         if need > available+EPS:
             raise GraphicLayoutError('GRAPHIC_CAPACITY',
                 f'DAG layer {rank+1} needs {need:.0f} px, only {available:.0f} px available at 18 pt; split the diagram')
+        # The 4 px per-layer stagger is what lets a feedback connector find distinct endpoint
+        # heights; uniform node heights otherwise collapse every layer onto one baseline.
         cursor = y+pad+(available-need)/2+4*rank
         for nid in layer:
             boxes[nid] = [left+rank*(node_width+gap), cursor, node_width, heights[nid]]

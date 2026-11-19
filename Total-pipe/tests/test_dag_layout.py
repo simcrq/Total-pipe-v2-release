@@ -41,13 +41,20 @@ class DAGLayoutTests(unittest.TestCase):
         self.assertFalse([i for i in issues if i['severity']=='FAIL'], issues)
         return layout
 
-    def test_linear_three_node_positions_and_commands_remain_v2(self):
+    def test_linear_three_node_chain_is_centered_with_native_connectors(self):
         ir = example(); ir['slides'] = ir['slides'][:1]
         layout = self.compile(ir)
-        nodes = [e for e in layout['slides'][0]['elements'] if e.get('role')=='graphic-node']
-        for node, x in zip(nodes, (128.0, 480.0, 832.0)):
-            self.assertAlmostEqual(node['bbox'][0], x)
-            self.assertEqual(node['bbox'][1:], [360.0, 320.0, 180.0])
+        page = layout['slides'][0]
+        nodes = [e for e in page['elements'] if e.get('role')=='graphic-node']
+        self.assertEqual([e['node_id'] for e in nodes], ['input', 'check', 'output'])
+        left, top, width, height = next(a['region'] for a in page['adaptation_log']
+                                        if a['action'] == 'native_graphic')
+        boxes = [e['bbox'] for e in nodes]
+        self.assertAlmostEqual((boxes[0][0] + boxes[-1][0] + boxes[-1][2])/2, left+width/2)
+        for _, y, _, h in boxes:
+            self.assertAlmostEqual(y+h/2, top+height/2)
+        for first, second in zip(boxes, boxes[1:]):
+            self.assertAlmostEqual(second[0]-first[0]-first[2], 32)
         edges = [c for c in commands(layout) if c.get('type')=='connector']
         self.assertEqual(len(edges), 2)
         self.assertTrue(all(c['props']['shape']=='straightConnector1' and c['props']['height']=='0px' for c in edges))
@@ -104,9 +111,15 @@ class DAGLayoutTests(unittest.TestCase):
         self.assertEqual(len({e['geometry'] for e in elements if e.get('role')=='graphic-node'}), 5)
         body = next(e for e in elements if e['id'].endswith(':node:b:body'))
         self.assertEqual(body['source_text'], node['body'])
-        self.assertGreaterEqual(body['contract']['font_size'], 24)
+        self.assertGreaterEqual(body['contract']['font_size'], 20)
         nodes = [e for e in elements if e.get('role')=='graphic-node']
-        self.assertGreater(len({e['bbox'][3] for e in nodes}), 1)
+        node_bbox = next(e['bbox'] for e in nodes if e['node_id'] == 'b')
+        x, y, w, h = body['bbox']
+        nx, ny, nw, nh = node_bbox
+        self.assertGreaterEqual(x, nx)
+        self.assertGreaterEqual(y, ny)
+        self.assertLessEqual(x+w, nx+nw)
+        self.assertLessEqual(y+h, ny+nh)
 
     def test_cycles_self_loops_duplicate_and_invalid_edges_are_rejected(self):
         cases = [([('A','B'),('B','A')], 'cycle'),

@@ -1,0 +1,67 @@
+# Deck IR 脚本示例库
+
+从 `Total-pipe/` 目录执行。先按任务关键词查索引，再打开相关的一份示例。
+
+要从现有演示文稿提炼一批可重建的单页，可从[真实 PPTX 转示例页指南](FROM_PPTX.md)开始。
+
+```bash
+python examples/library/catalog.py search "独立正文块 圆角标题 编号" --limit 2
+python examples/library/catalog.py search "折线图 误差棒" --limit 1
+python examples/library/catalog.py show chart-uncertainty
+python examples/library/catalog.py build chart-uncertainty --out /tmp/totalpipe-chart-uncertainty
+```
+
+`search` 仅读取元数据索引，返回 ID、标题、摘要和脚本路径。用中文、英文或 Deck IR 字段名检索，例如
+`原图导读`、`merged headers`、`y_error`、`inline_math` 或 `机制图 假设虚线`。无匹配时返回空数组。
+`show` 只执行所选脚本，并输出 canonical Deck IR，其中的文案、证据编号和素材用于演示结构。
+`search` 返回的 `script` 路径可用于查看生成逻辑和输入数据。
+`build` 使用正常编译器输出可编辑候选和 QA 报告，PowerPoint 原生验收按实际项目工作流执行。
+
+在 Agent 工作流中，整套及逐页 IR 提示的 `example_lookup` 提供实际解释器和检索脚本路径。
+逐页提示会根据批准的设计描述和视觉载体给出最多两条 `suggestions`，内容和 `search` 一样是索引元数据。
+推荐由本地关键词匹配生成，作者可细化检索或直接实现设计。
+页面设计负责写清视觉关系。IR 作者根据需要查询，把示例的结构应用到批准的 `copy_ref`、证据和选图。
+独立正文每条用一个 block ID，符号逐块声明。顺序由布局树和各块的 `list_start` 表达。
+`independent-blocks` 用无外框的圆角标题标识两组正文。
+多正文块页面先确定读者第一眼该看哪里。分步讲解用连续的原生编号，并列观察用同组项目符号，跨组切换用短圆角标签。
+图表与表格示例用脚本保存构造读数，引用和图注保留其身份。将结构复用于论文时，
+从已核实的论文数据重新构建数据图，为所用图表、表格和原图绑定实际图号、出处和证据。
+
+## 综合单页
+
+`rc-discharge-composite` 用中文讲一组理想 RC 放电算例。左边是可编辑的比较曲线、图内标注和两条独立编号正文，
+右边是原生路径电路图、自动排在图下的图注、独立公式和参数表，两组各用无外框的圆角标题定位。
+电压曲线、时间常数和参数表来自脚本中的同一组参数，页面标明“构造示例”。
+
+```bash
+python examples/library/catalog.py search "复杂混排 曲线与公式" --limit 1
+python examples/library/catalog.py show rc-discharge-composite
+python examples/library/catalog.py build rc-discharge-composite --out /tmp/totalpipe-rc-composite
+```
+
+另外可以检索 `对数散点 端点对照`、`双泳道 空白扣除` 或 `原图与表格 图上导读`，分别打开加标回收、
+同批空白和软件基准的综合示例。前两页使用构造值，基准页的图和表来自同一份仓库测量夹具。
+
+| 检索词 | 示例构图与适用任务 |
+| --- | --- |
+| `采样混叠 同尺度双图` | 并排看两张同尺度的折线图，图内标出同一采样时刻，下方组合独立编号和原生恒等式。适合说明曲线差别为什么在采样时消失。 |
+| `串联热阻 材料剖面` | 横向剖面带四向说明。按原生编号先读界面温度，再用独立公式和参数表核算温降。 |
+| `二维对照矩阵 交互量` | 按原生编号读矩阵、算交互量、核对条件。公式带上下说明，下方是分支流程。 |
+
+这三页均为构造示例。图表和公式分别从脚本中的模型参数或对照读数生成，便于核对和替换。
+
+## 从主图到定量判断
+
+| 检索词 | 可复用的讲解方式 |
+| --- | --- |
+| `双回波测厚 波形时间尺` | 用同色声路和回波峰让读者在剖面与波形间来回定位。时间括号标间隔，原生分式解释为何换算厚度要除以二。 |
+| `配对哑铃图 样品级反例` | 每行保留同一样品的两次读数。空心和实心点区分前后，暖色强调反向样品，编号引到配对差中位数。 |
+| `收敛阶核算 双对数误差图` | 大图先看两条误差线，侧栏再用原生表格和分式核算框定的两点。积分结果、图中坐标和表格来自同一计算。 |
+
+以上三页的输入均为构造读数或脚本内计算值。用相应关键词检索后，按返回的 ID 单独查看或构建。
+
+## 添加示例
+
+1. 在此目录添加一个 Python 文件，提供无参数的 `make_deck()`，返回完整 canonical Deck IR。需要的资源相对脚本定位。
+2. 在 [index.json](index.json) 添加唯一 `id`、`title`、中英关键词 `tags`、短 `summary` 和脚本文件名 `script`。
+3. 验证检索能命中。用 `show` 检查生成的 IR，用 `build` 检查候选。测试会检查所有新索引项的 Schema 和编译结果。

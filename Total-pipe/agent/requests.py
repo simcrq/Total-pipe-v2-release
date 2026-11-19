@@ -52,6 +52,7 @@ def request_identity(request):
     """
     value = dict(request)
     value.setdefault('explain_viz_mode', 'auto')
+    value.setdefault('page_mode', 'deck_ir')
     canonical = presentation_type(value['presentation_type'])
     context = value.pop('presentation_context', value['presentation_type'])
     label, details = _parts(context)

@@ -1,0 +1,1062 @@
+{
+  "schema_version": "0.1",
+  "deck_id": "avdg-p0-demo",
+  "theme": {
+    "font": "Microsoft YaHei",
+    "ink": "#1B2A3A",
+    "navy": "#102A43",
+    "accent": "#0B6E99",
+    "orange": "#D97706",
+    "gray": "#5E7084",
+    "light": "#F3F6F8"
+  },
+  "pages": [
+    {
+      "id": "P1",
+      "section": "研究生组会 · 论文精读",
+      "title": "同一个 WSe₂ 器件，\n如何同时做数字与模拟？",
+      "take": "Asymmetric vertical double-gate (AVDG) WSe₂ transistors for digital–analog multimode circuits",
+      "footer": false,
+      "title_y": 0.9,
+      "title_h": 1.28,
+      "title_size": 32,
+      "rule_y": 2.18,
+      "take_y": 2.34,
+      "take_h": 0.8,
+      "objects": [
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.95,
+            3.32,
+            8.3,
+            0.3
+          ],
+          "text": "Tian et al.  ·  Nature Communications 17, 10614 (2026)",
+          "size": 11.5
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.95,
+            3.78,
+            10.8,
+            0.42
+          ],
+          "text": "不是把两种电路拼在一起，而是让一个器件成为可编程的输运平台。",
+          "size": 15,
+          "color": "#0B6E99",
+          "italic": true
+        },
+        {
+          "type": "image",
+          "box": [
+            1.25,
+            4.28,
+            10.4,
+            2.3
+          ],
+          "path": "demo_assets/fig1a.jpg",
+          "fit": "contain"
+        },
+        {
+          "type": "text",
+          "role": "caption",
+          "box": [
+            1.25,
+            6.64,
+            10.4,
+            0.28
+          ],
+          "text": "Fig. 1a  |  非对称垂直双栅 AVDG：源在上、漏在下；双空气隙与金属屏蔽把注入方向写进结构。",
+          "size": 9.2
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "section": "01 · 问题",
+      "title": "数字与模拟，被迫分成两块硬件",
+      "take": "Mixed-signal 系统按功能域分区：模拟前端处理连续信号，数字后端做逻辑与决策。",
+      "objects": [
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            0.9,
+            2.25,
+            4.7,
+            1.05
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "模拟前端\n连续信号 / 传感 / 驱动",
+          "size": 17,
+          "bold": true,
+          "color": "#102A43",
+          "align": "center",
+          "line_spacing": 1.0
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            0.9,
+            3.8,
+            4.7,
+            1.05
+          ],
+          "fill": "#F3F6F8",
+          "stroke": "#8C9BAE",
+          "text": "数字后端\n逻辑 / 决策 / 存储",
+          "size": 17,
+          "bold": true,
+          "color": "#102A43",
+          "align": "center",
+          "line_spacing": 1.0
+        },
+        {
+          "type": "line",
+          "box": [
+            5.75,
+            2.18,
+            5.75,
+            5.0
+          ],
+          "stroke": "#8C9BAE",
+          "stroke_width": 1.0,
+          "dash": true
+        },
+        {
+          "type": "shape",
+          "shape": "arrow",
+          "box": [
+            1.55,
+            5.18,
+            2.9,
+            0.48
+          ],
+          "fill": "#E6E9ED",
+          "stroke": "none"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            1.7,
+            5.27,
+            2.6,
+            0.28
+          ],
+          "text": "能不能用同一最小硬件？",
+          "size": 12,
+          "bold": true,
+          "align": "center",
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.9,
+            5.9,
+            4.9,
+            0.58
+          ],
+          "text": "分块实现带来接口、面积和功能切换成本。",
+          "size": 14.5,
+          "color": "#0B6E99"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            6.55,
+            2.16,
+            5.2,
+            0.26
+          ],
+          "text": "结果：三个被分割的限制",
+          "size": 12.8,
+          "bold": true,
+          "color": "#0B6E99"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            7.12,
+            2.62,
+            4.8,
+            0.25
+          ],
+          "text": "面积",
+          "size": 15,
+          "bold": true,
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            7.12,
+            2.92,
+            4.8,
+            0.58
+          ],
+          "text": "模拟与数字各自成块，接口和冗余电路占用面积。",
+          "size": 14.5
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            7.12,
+            3.57,
+            4.8,
+            0.25
+          ],
+          "text": "复用",
+          "size": 15,
+          "bold": true,
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            7.12,
+            3.87,
+            4.8,
+            0.58
+          ],
+          "text": "同一硅片上的硬件难以在不同任务阶段复用。",
+          "size": 14.5
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            7.12,
+            4.52,
+            4.8,
+            0.25
+          ],
+          "text": "可编程性",
+          "size": 15,
+          "bold": true,
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            7.12,
+            4.82,
+            4.8,
+            0.58
+          ],
+          "text": "功能切换依赖重配置互连或增加专用模块。",
+          "size": 14.5
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            6.55,
+            5.75,
+            5.8,
+            0.58
+          ],
+          "text": "问题不是把两块拼得更近，而是让单个器件承担两种任务。",
+          "size": 14.5,
+          "bold": true,
+          "color": "#102A43"
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "section": "02 · 输运要求",
+      "title": "真正的难点：两种输运要求互斥",
+      "take": "数字逻辑要求对称源漏注入与明确极性；模拟处理利用非对称注入或连续可调输运。",
+      "objects": [
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            0.75,
+            2.18,
+            5.7,
+            0.04
+          ],
+          "fill": "#0B6E99",
+          "stroke": "none"
+        },
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            6.9,
+            2.18,
+            5.65,
+            0.04
+          ],
+          "fill": "#D97706",
+          "stroke": "none"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            0.75,
+            2.3,
+            4.2,
+            0.3
+          ],
+          "text": "DIGITAL LOGIC",
+          "size": 11.5,
+          "bold": true,
+          "color": "#0B6E99"
+        },
+        {
+          "type": "text",
+          "role": "body",
+          "box": [
+            0.75,
+            2.7,
+            5.3,
+            1.8
+          ],
+          "text": "明确的载流子极性\n对称的源—漏注入\nON / OFF 两个极端状态",
+          "size": 18,
+          "bold": true,
+          "color": "#102A43",
+          "line_spacing": 1.3
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.75,
+            4.65,
+            5.35,
+            0.9
+          ],
+          "text": "数字逻辑需要可复现的两个稳定态，而不是一条可连续调制的曲线。",
+          "size": 14.5,
+          "color": "#5E7084",
+          "line_spacing": 1.08
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            6.9,
+            2.3,
+            4.2,
+            0.3
+          ],
+          "text": "ANALOG SIGNAL PROCESSING",
+          "size": 11.5,
+          "bold": true,
+          "color": "#D97706"
+        },
+        {
+          "type": "text",
+          "role": "body",
+          "box": [
+            6.9,
+            2.7,
+            5.3,
+            1.8
+          ],
+          "text": "非对称的源—漏注入\n连续可调的载流子输运\n工作在二进制开关之外",
+          "size": 18,
+          "bold": true,
+          "color": "#102A43",
+          "line_spacing": 1.3
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            6.9,
+            4.65,
+            5.35,
+            0.9
+          ],
+          "text": "模拟处理需要连续的输入—输出关系，或可调的整流/电阻状态。",
+          "size": 14.5,
+          "color": "#5E7084",
+          "line_spacing": 1.08
+        },
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            0.75,
+            5.9,
+            11.8,
+            0.72
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "none"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.95,
+            6.04,
+            11.4,
+            0.4
+          ],
+          "text": "所以：同一器件必须同时调节沟道极性  +  源/漏两侧的注入势垒。",
+          "size": 15.5,
+          "bold": true,
+          "color": "#102A43",
+          "align": "center"
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "section": "03 · 结构",
+      "title": "把注入方向写进结构：源在上，漏在下",
+      "take": "双空气隙 + 金属屏蔽，让源、漏两侧的势垒可以被不同栅分别调制。",
+      "objects": [
+        {
+          "type": "image",
+          "box": [
+            0.8,
+            2.05,
+            11.7,
+            2.75
+          ],
+          "path": "demo_assets/fig1a.jpg",
+          "fit": "contain"
+        },
+        {
+          "type": "text",
+          "role": "caption",
+          "box": [
+            0.8,
+            4.92,
+            11.7,
+            0.35
+          ],
+          "text": "Fig. 1a  |  AVDG 的横截面 TEM/EDS 与结构示意；双空气隙位于源/漏接触边缘（保持原图比例）。",
+          "size": 9.2
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            0.8,
+            5.42,
+            3.4,
+            0.26
+          ],
+          "text": "源在上",
+          "size": 15,
+          "bold": true,
+          "color": "#D97706"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.8,
+            5.73,
+            3.4,
+            0.9
+          ],
+          "text": "源极位于沟道上方，漏极位于下方，故意打破接触对称。",
+          "size": 14.5
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            4.55,
+            5.42,
+            3.4,
+            0.26
+          ],
+          "text": "漏在下",
+          "size": 15,
+          "bold": true,
+          "color": "#D97706"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            4.55,
+            5.73,
+            3.4,
+            0.9
+          ],
+          "text": "上下几何差让两端接触不再等价，注入方向开始有结构偏好。",
+          "size": 14.5
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            8.3,
+            5.42,
+            4.0,
+            0.26
+          ],
+          "text": "双空气隙",
+          "size": 15,
+          "bold": true,
+          "color": "#D97706"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            8.3,
+            5.73,
+            4.0,
+            0.9
+          ],
+          "text": "空气隙展宽肖特基势垒；金属屏蔽抑制非目标侧注入。",
+          "size": 14.5
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "section": "04 · 机制",
+      "title": "屏蔽之后，两端势垒各自听一个栅",
+      "take": "漏端主要由顶栅 Vtg 调制，源端主要由底栅 Vbg 调制；Vds 因此成为第三个控制端。",
+      "objects": [
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            1.55,
+            2.1,
+            4.4,
+            0.42
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "顶栅 Vtg",
+          "size": 13.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            1.45,
+            2.65,
+            2.2,
+            0.48
+          ],
+          "fill": "#FCE8E6",
+          "stroke": "#D97706",
+          "text": "源 S（上）",
+          "size": 13.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            1.7,
+            3.2,
+            4.2,
+            0.45
+          ],
+          "fill": "#E6E9ED",
+          "stroke": "#8C9BAE",
+          "text": "WSe₂ 沟道",
+          "size": 13.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            3.75,
+            3.75,
+            2.1,
+            0.48
+          ],
+          "fill": "#FCE8E6",
+          "stroke": "#D97706",
+          "text": "漏 D（下）",
+          "size": 13.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            1.55,
+            4.3,
+            4.4,
+            0.42
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "底栅 Vbg",
+          "size": 13.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            2.1,
+            3.12,
+            0.35,
+            0.06
+          ],
+          "fill": "#D97706",
+          "stroke": "none"
+        },
+        {
+          "type": "shape",
+          "shape": "rect",
+          "box": [
+            4.75,
+            3.67,
+            0.35,
+            0.06
+          ],
+          "fill": "#D97706",
+          "stroke": "none"
+        },
+        {
+          "type": "text",
+          "role": "caption",
+          "box": [
+            0.75,
+            4.9,
+            6.3,
+            0.5
+          ],
+          "text": "截面示意（非等比，据论文结构重绘）；橙色短线为双空气隙，金属屏蔽抑制对侧注入。",
+          "size": 9.2
+        },
+        {
+          "type": "text",
+          "role": "body",
+          "box": [
+            7.5,
+            2.1,
+            4.9,
+            3.5
+          ],
+          "text": "源/漏上下非对称，打破接触对称\n金属屏蔽 + 双空气隙抑制非目标侧注入\nVds 与双栅并列，成为第三个静电控制端",
+          "size": 18,
+          "bold": true,
+          "color": "#102A43",
+          "line_spacing": 1.35,
+          "bullet": true
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            7.5,
+            5.75,
+            4.9,
+            0.65
+          ],
+          "text": "不是体 p-n 结，而是两个接触势垒的独立门控。",
+          "size": 14.5,
+          "color": "#5E7084",
+          "line_spacing": 1.05
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "section": "05 · 器件证据",
+      "title": "同一器件，五种可编程输运模式",
+      "take": "n-FET / p-FET / 本征双极 / 正偏二极管 / 反偏二极管；模式由 Vbg、Vtg、Vds 的组合选择。",
+      "objects": [
+        {
+          "type": "table",
+          "box": [
+            0.8,
+            2.05,
+            11.7,
+            3.72
+          ],
+          "rows": [
+            [
+              "模式",
+              "主导行为",
+              "选择条件",
+              "关键指标"
+            ],
+            [
+              "n-FET",
+              "电子导电",
+              "Vds = +2 V；Vtg = +7 V；Vbg = -7→7 V",
+              "on/off > 10⁸"
+            ],
+            [
+              "p-FET",
+              "空穴导电",
+              "Vds = -2 V；Vtg = -7 V；Vbg = -7→7 V",
+              "on/off > 10⁸"
+            ],
+            [
+              "intrinsic ambipolar",
+              "电子 + 空穴",
+              "Vbg = Vtg 扫描",
+              "阈值 ≈ 0 V"
+            ],
+            [
+              "forward diode",
+              "正向注入",
+              "Vbg = +7 V；Vtg = -7 V",
+              "整流比 > 10⁶"
+            ],
+            [
+              "reverse diode",
+              "反向注入",
+              "Vbg = -7 V；Vtg = +7 V",
+              "ideality factor 1.8"
+            ]
+          ],
+          "col_widths": [
+            1.45,
+            2.3,
+            4.4,
+            3.55
+          ],
+          "row_height": 0.62,
+          "font_size": 14.2,
+          "header": true,
+          "accent_rows": [
+            1,
+            2
+          ]
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.8,
+            5.92,
+            11.7,
+            0.55
+          ],
+          "text": "关键是同一物理器件，不是五种独立器件；Vds 的极性决定哪一侧注入，双栅决定两端势垒。",
+          "size": 12.8,
+          "color": "#5E7084"
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "section": "05 · 器件证据",
+      "title": "开关比 >10⁸，n/p 开态电流相当",
+      "take": "在 Vds = ±2 V、Vtg = ±7 V、Vbg = -7→7 V 下，两种极性都达到高开关比。",
+      "objects": [
+        {
+          "type": "image",
+          "box": [
+            0.7,
+            2.05,
+            3.6,
+            3.6
+          ],
+          "path": "demo_assets/fig2b.jpg",
+          "fit": "contain"
+        },
+        {
+          "type": "image",
+          "box": [
+            4.45,
+            2.05,
+            3.6,
+            3.6
+          ],
+          "path": "demo_assets/fig2c.jpg",
+          "fit": "contain"
+        },
+        {
+          "type": "text",
+          "role": "caption",
+          "box": [
+            0.7,
+            5.72,
+            3.6,
+            0.25
+          ],
+          "text": "Fig. 2b  |  n-FET 转移曲线",
+          "size": 9.2
+        },
+        {
+          "type": "text",
+          "role": "caption",
+          "box": [
+            4.45,
+            5.72,
+            3.6,
+            0.25
+          ],
+          "text": "Fig. 2c  |  p-FET 转移曲线",
+          "size": 9.2
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            8.55,
+            2.1,
+            2.6,
+            0.3
+          ],
+          "text": "10⁸",
+          "size": 30,
+          "bold": true,
+          "color": "#0B6E99"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            8.55,
+            2.55,
+            3.5,
+            0.25
+          ],
+          "text": "on/off ratio 下界",
+          "size": 10.5,
+          "color": "#5E7084"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            8.55,
+            3.25,
+            3.6,
+            0.3
+          ],
+          "text": "13 / 10.3",
+          "size": 24,
+          "bold": true,
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            8.55,
+            3.62,
+            3.6,
+            0.3
+          ],
+          "text": "µA µm⁻¹ 开态电流（p / n）",
+          "size": 10.5,
+          "color": "#5E7084"
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            8.55,
+            4.35,
+            3.0,
+            0.3
+          ],
+          "text": "≈100",
+          "size": 24,
+          "bold": true,
+          "color": "#102A43"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            8.55,
+            4.72,
+            3.6,
+            0.3
+          ],
+          "text": "fA µm⁻¹ 关态电流",
+          "size": 10.5,
+          "color": "#5E7084"
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.7,
+            6.18,
+            11.9,
+            0.35
+          ],
+          "text": "条件：Vds = ±2 V；Vtg = ±7 V；Vbg 从 -7 扫到 7 V。栅漏电保持低水平（作者定性）。",
+          "size": 10,
+          "color": "#5E7084"
+        }
+      ]
+    },
+    {
+      "id": "P8",
+      "section": "06 · 结论",
+      "title": "结论：把 Vds 变成第三个编程端",
+      "take": "从结构方向性到五种模式，再到两只相同器件的 7 + 6 功能。",
+      "objects": [
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            0.8,
+            2.2,
+            3.25,
+            0.9
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "Vds 第三控制端",
+          "size": 15.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "arrow",
+          "box": [
+            4.15,
+            2.57,
+            0.42,
+            0.16
+          ],
+          "fill": "#0B6E99",
+          "stroke": "none"
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            4.6,
+            2.2,
+            3.25,
+            0.9
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "五种输运模式",
+          "size": 15.5,
+          "bold": true
+        },
+        {
+          "type": "shape",
+          "shape": "arrow",
+          "box": [
+            7.95,
+            2.57,
+            0.42,
+            0.16
+          ],
+          "fill": "#0B6E99",
+          "stroke": "none"
+        },
+        {
+          "type": "shape",
+          "shape": "rounded",
+          "box": [
+            8.4,
+            2.2,
+            4.1,
+            0.9
+          ],
+          "fill": "#E8F3F8",
+          "stroke": "#0B6E99",
+          "text": "7 数字 + 6 模拟功能",
+          "size": 15.5,
+          "bold": true
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            0.8,
+            3.55,
+            5.4,
+            0.28
+          ],
+          "text": "这篇论文演示了什么",
+          "size": 13,
+          "bold": true,
+          "color": "#0B6E99"
+        },
+        {
+          "type": "text",
+          "role": "body",
+          "box": [
+            0.8,
+            3.95,
+            5.4,
+            2.2
+          ],
+          "text": "WSe₂ 器件与两管电路层面的完整功能演示\n>10⁸ 开关比、full-swing 与 225 峰值增益\n同一固定拓扑复用数字与模拟功能",
+          "size": 18,
+          "bold": true,
+          "line_spacing": 1.35,
+          "bullet": true
+        },
+        {
+          "type": "text",
+          "role": "label",
+          "box": [
+            6.9,
+            3.55,
+            5.4,
+            0.28
+          ],
+          "text": "仍然开放的边界",
+          "size": 13,
+          "bold": true,
+          "color": "#D97706"
+        },
+        {
+          "type": "text",
+          "role": "body",
+          "box": [
+            6.9,
+            3.95,
+            5.4,
+            2.2
+          ],
+          "text": "材料普适性与短沟道缩放只有定性证据\n速度、功耗、良率、稳定性尚未报告\n功能对标不包含系统性能指标",
+          "size": 18,
+          "bold": true,
+          "line_spacing": 1.35,
+          "bullet": true
+        },
+        {
+          "type": "text",
+          "role": "note",
+          "box": [
+            0.8,
+            6.45,
+            11.7,
+            0.35
+          ],
+          "text": "不是一项新指标，而是把“控制端”重新定义。",
+          "size": 14.5,
+          "color": "#0B6E99",
+          "italic": true
+        }
+      ]
+    }
+  ]
+}

@@ -21,15 +21,16 @@ def validate_frame(value, panel=False):
     errors = []
     if set(value)-allowed:
         errors.append('unknown frame fields; geometry belongs to the compiler')
-    border = value.get('border')
-    if not isinstance(border, dict) or set(border)-{'color', 'width'}:
-        errors.append('frame.border requires color and optional width')
-    else:
-        if not isinstance(border.get('color'), str) or not COLOR.fullmatch(border['color']):
-            errors.append('frame.border.color must be #RRGGBB')
-        width = border.get('width', 1.)
-        if isinstance(width, bool) or not isinstance(width, (int, float)) or not math.isfinite(width) or not .5 <= width <= 6:
-            errors.append('frame.border.width must be finite in [0.5,6] CSS px')
+    if not panel or 'border' in value or value.get('title_band') != 'chip':
+        border = value.get('border')
+        if not isinstance(border, dict) or set(border)-{'color', 'width'}:
+            errors.append('frame.border requires color and optional width')
+        else:
+            if not isinstance(border.get('color'), str) or not COLOR.fullmatch(border['color']):
+                errors.append('frame.border.color must be #RRGGBB')
+            width = border.get('width', 1.)
+            if isinstance(width, bool) or not isinstance(width, (int, float)) or not math.isfinite(width) or not .5 <= width <= 6:
+                errors.append('frame.border.width must be finite in [0.5,6] CSS px')
     for key in ('fill', 'title_fill', 'title_color'):
         if key not in value:
             continue
@@ -49,7 +50,7 @@ def validate_frame(value, panel=False):
 
 
 def stroke_width(style):
-    return float(style['border'].get('width', 1.))
+    return float(style['border'].get('width', 1.)) if 'border' in style else 0.
 
 
 def rectangle(element_id, outer, style, members):
@@ -59,7 +60,7 @@ def rectangle(element_id, outer, style, members):
     return {'id': element_id, 'kind': 'shape', 'role': 'decoration',
             'bbox': [x+stroke/2, y+stroke/2, w-stroke, h-stroke],
             'geometry': 'rect', 'fill': style.get('fill', 'none'),
-            'line': style['border']['color'], 'line_width': stroke,
+            'line': style.get('border', {}).get('color', 'none'), 'line_width': stroke,
             'visual_decoration': True, 'frame_members': list(members), 'container_frame': True}
 
 
@@ -85,8 +86,10 @@ def title_chip(style, band, title_height, text_width):
         return None
     chip_w = text_width+2*CHIP_PAD_X
     chip_h = min(max(0., height-2*CHIP_INSET), title_height+2*CHIP_PAD_Y)
+    if chip_h < title_height:
+        return None
     chip = [x+CHIP_INSET, y+(height-chip_h)/2, chip_w, chip_h]
-    return {'chip': chip, 'text': [chip[0]+CHIP_PAD_X, chip[1]+CHIP_PAD_Y,
+    return {'chip': chip, 'text': [chip[0]+CHIP_PAD_X, chip[1]+(chip_h-title_height)/2,
                                    chip_w-2*CHIP_PAD_X, title_height]}
 
 

@@ -114,9 +114,13 @@
     },
     "frame-fill": {"anyOf": [{"const": "none"}, {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}]},
     "panel-frame": {
-      "type": "object", "additionalProperties": false, "required": ["border"],
+      "type": "object", "additionalProperties": false,
+      "anyOf": [{"required": ["border"]},
+                {"required": ["title_band", "title_fill"], "properties": {
+                  "title_band": {"const": "chip"}, "title_fill": {"pattern": "^#[0-9A-Fa-f]{6}$"}}}],
       "properties": {
-        "border": {"$ref": "#/$defs/frame-border"}, "fill": {"$ref": "#/$defs/frame-fill"},
+        "border": {"$ref": "#/$defs/frame-border", "description": "Omit for a title chip without an outer outline."},
+        "fill": {"$ref": "#/$defs/frame-fill"},
         "title_fill": {"$ref": "#/$defs/frame-fill"},
         "title_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
         "title_align": {"enum": ["left", "center"]},
@@ -389,6 +393,14 @@
       ]
     },
     "identifier": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+    "visual-attachment": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "ref"],
+      "properties": {
+        "kind": {"enum": ["figure", "graphic", "formula", "table", "chart"]},
+        "ref": {"type": "string", "pattern": "\\S"},
+        "position": {"enum": ["top", "bottom", "left", "right"]}
+      }
+    },
     "process-graphic": {
       "type": "object",
       "additionalProperties": false,
@@ -675,13 +687,18 @@
                     ]
                   },
                   "label": {"type": "string"},
-                  "caption_for": {"type":"object", "additionalProperties":false, "required":["kind","ref"], "properties": {
-                    "kind":{"enum":["figure","graphic","table","chart"]}, "ref":{"type":"string","pattern":"\\S"}
-                  }, "description":"Visual this native caption explains; must exist on this page."},
+                  "caption_for": {"$ref":"#/$defs/visual-attachment",
+                    "description":"Visual this native caption explains. With position, omit the caption block from the body tree; the compiler places it beside the target."},
+                  "text_for": {"$ref":"#/$defs/visual-attachment", "required":["position"],
+                    "description":"Place this prose block beside a visual or independent formula in the body tree. Omit the prose block from the tree."},
                   "text": {"type": "string", "minLength": 1},
                   "inline_math": {"type": "boolean", "default": false,
                     "description": "Prose only: explicitly enable measured native $...$ or \\(...\\) inline formulas; no auto-list conversion."},
-                  "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list"]},
+                  "text_flow": {"enum": ["auto", "plain", "distributed_arrow_list", "native_bullet_list", "native_numbered_list"]},
+                  "bullet_icon": {"type":"string","minLength":1,"maxLength":1,
+                    "description":"One visible Unicode symbol or punctuation glyph for native_bullet_list."},
+                  "list_start": {"type":"integer","minimum":1,"maximum":9999,"default":1,
+                    "description":"Starting Arabic number for native_numbered_list."},
                   "bullet_style": {"enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash", "large_square", "large_diamond", "arrowhead"],
                     "description": "Override the deck default for this native prose list; does not invent list rows."},
                   "bullet_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$",
@@ -702,6 +719,9 @@
                 }, {
                   "if":{"required":["caption_for"]}, "then":{"properties":{"component":{"const":"caption"}}}
                 }, {
+                  "if":{"required":["text_for"]},
+                  "then":{"properties":{"component":{"not":{"enum":["caption","formula"]}}}}
+                }, {
                   "if": {"required": ["supplement"]},
                   "then": {"required": ["basis"], "properties": {"basis": {"const": "supplement"}}}
                 }, {
@@ -716,7 +736,20 @@
                 }, {
                   "if": {"anyOf": [{"required": ["bullet_style"]}, {"required": ["bullet_color"]}]},
                   "then": {"properties": {"component": {"not": {"const": "formula"}},
-                    "inline_math": {"const": false}, "text_flow": {"enum": ["auto", "distributed_arrow_list"]}}}
+                    "inline_math": {"const": false}, "text_flow": {"enum": ["auto", "distributed_arrow_list", "native_bullet_list", "native_numbered_list"]}}}
+                }, {
+                  "if": {"required":["text_flow"],"properties":{"text_flow":{"enum":["distributed_arrow_list","native_bullet_list","native_numbered_list"]}}},
+                  "then": {"properties":{"component":{"not":{"enum":["caption","formula"]}},"inline_math":{"const":false}}}
+                }, {
+                  "if": {"required":["bullet_icon"]},
+                  "then": {"required":["text_flow"],"properties":{"text_flow":{"const":"native_bullet_list"}},
+                    "not":{"required":["bullet_style"]}}
+                }, {
+                  "if": {"required":["list_start"]},
+                  "then": {"required":["text_flow"],"properties":{"text_flow":{"const":"native_numbered_list"}}}
+                }, {
+                  "if": {"required":["text_flow"],"properties":{"text_flow":{"const":"native_numbered_list"}}},
+                  "then": {"not":{"required":["bullet_style"]}}
                 }]
               }
             },
@@ -762,6 +795,10 @@
             "if": {"required": ["layout_tree"]},
             "then": {"not": {"required": ["visual_intent"]}},
             "else": {"properties": {"graphics": {"maxItems": 1}}}
+          }, {
+            "if": {"properties":{"blocks":{"contains":{"anyOf":[{"required":["text_for"]},
+              {"required":["caption_for"],"properties":{"caption_for":{"required":["position"]}}}]}}}},
+            "then": {"required":["layout_tree"]}
           }, {
             "if": {"properties": {"archetype": {"const": "composite-research"}}},
             "then": {"required": ["layout_tree"]}

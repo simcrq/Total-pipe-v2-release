@@ -1,10 +1,12 @@
 """Versioned body-region trees. Content stays canonical; only the compiler owns geometry."""
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 import math
 import re
 
 from totalpipe_layout.inline_math import has_markup, strip_markup
+from .text_flow import EXPLICIT_LISTS, list_min_width
 
 VERSION = '1.2'
 VERSIONS = ('1.0', '1.1', '1.2')
@@ -26,6 +28,7 @@ DISTRIBUTED_GAP_MAX_PX = 48.
 STACK_CENTER_MAX_PX = 56.
 PADDING = {'none': 0., 'compact': 12., 'standard': 20.}
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+ATTACHMENT_POSITIONS = ('top', 'bottom', 'left', 'right')
 
 
 def capabilities():
@@ -35,12 +38,15 @@ def capabilities():
             'limits': {'max_depth': MAX_DEPTH, 'max_nodes': MAX_NODES, 'max_columns': 4,
                        'max_graphics': 8, 'max_grid_figures': 12, 'max_tables': 4},
             'geometry_owner': 'deck_compiler', 'figure_fit': 'contain',
+            'attachments': {'fields': ['caption_for', 'text_for'], 'positions': list(ATTACHMENT_POSITIONS),
+                            'targets': ['figure', 'graphic', 'formula', 'table', 'chart']},
             'stack_alignment': {'values': list(STACK_ALIGNMENTS), 'default': 'start',
                                 'underfill_review_ratio': UNDERFILL_RATIO},
             'column_fit': {'values': list(COLUMN_FITS), 'default': 'stretch'},
             'container_frames': {'panel': {'min_tree_version': '1.2', 'native_rectangle': True,
                                           'title_band': True}, 'takeaway': {'measured': True}},
-            'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier', 'native_table', 'native_bullets'],
+            'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier',
+                       'native_table', 'native_bullets', 'native_numbered_lists'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'chart': {'types': ['line', 'bar', 'scatter'], 'bases': ['evidence', 'explain'],
                       'min_size_px': [420, 260], 'max_series': 4, 'error_bars': True,
@@ -61,6 +67,97 @@ def walk(tree):
         yield from visit(root, region)
 
 
+def attachment_link(block):
+    return block.get('text_for', block.get('caption_for', {}))
+
+
+def expand_attachments(tree, composition):
+    """Lower directional copy onto ordinary measured columns and stacks."""
+    blocks = [b for b in composition.get('blocks', []) if isinstance(b, dict)]
+    attachments = {}
+    for block in blocks:
+        link = attachment_link(block)
+        if not isinstance(link, dict) or 'position' not in link:
+            continue
+        position, kind, ref = link['position'], link.get('kind'), link.get('ref')
+        if position not in ATTACHMENT_POSITIONS or not isinstance(ref, str):
+            raise ValueError('Directional text needs a known position and an object reference')
+        if kind == 'figure':
+            matches = [i for i, f in enumerate(composition.get('figure_refs', []))
+                       if isinstance(f, dict) and f.get('asset_id') == ref]
+            if len(matches) != 1:
+                raise ValueError(f'Directional figure text requires a unique asset ID: {ref!r}')
+            kind, ref = 'figure', matches[0]
+        elif kind == 'formula':
+            if not any(b.get('id') == ref and b.get('component') == 'formula' and not b.get('anchor')
+                       for b in blocks):
+                raise ValueError(f'Directional formula text requires an independent formula: {ref!r}')
+            kind = 'block'
+        elif kind not in ('graphic', 'table', 'chart'):
+            raise ValueError('Directional text target must be a figure, graphic, formula, table or chart')
+        bid = block.get('id')
+        if not isinstance(bid, str) or not bid:
+            raise ValueError('A directional text block needs an id')
+        attachments.setdefault((kind, ref), {}).setdefault(position, []).append(bid)
+    if not attachments:
+        return tree
+
+    if not isinstance(tree.get('regions'), dict) or set(tree['regions']) != {'body'}:
+        raise ValueError('Directional text requires a body layout tree')
+    # Read and cap depth before walking any untrusted tree. The expanded tree also
+    # goes through the ordinary bounds and exactly-once checks.
+    ids = set()
+    def collect(node, depth):
+        if not isinstance(node, dict) or depth > MAX_DEPTH:
+            raise ValueError('Invalid body subtree for directional text')
+        if isinstance(node.get('id'), str):
+            ids.add(node['id'])
+        if node.get('type') == 'panel':
+            collect(node.get('body'), depth+1)
+        else:
+            for child in node.get('children', []):
+                collect(child, depth+1)
+    collect(tree['regions']['body'], 1)
+    tree = deepcopy(tree)
+    serial = 0
+    def node_id():
+        nonlocal serial
+        serial += 1
+        while f'attachment-{serial}' in ids:
+            serial += 1
+        return f'attachment-{serial}'
+    def group(kind, children, **options):
+        return {'id': node_id(), 'type': kind, 'gap': 'compact', 'children': children, **options}
+    def wrap(node, parent=None):
+        kind = node.get('type')
+        if kind == 'panel':
+            node['body'] = wrap(node['body'], kind)
+        elif 'children' in node:
+            node['children'] = [wrap(child, kind) for child in node['children']]
+        ref = node.get('ref')
+        sides = attachments.pop((kind, ref), {}) if isinstance(kind, str) and isinstance(ref, (str, int)) else {}
+        if not sides:
+            return node
+        if parent == 'image_grid':
+            raise ValueError('Use a columns row instead of image_grid for a directionally annotated figure')
+        side_blocks = {side: [{'id': node_id(), 'type': 'block', 'ref': bid} for bid in bids]
+                       for side, bids in sides.items()}
+        left, right = (side_blocks.get(side, []) for side in ('left', 'right'))
+        if left or right:
+            columns = [group('stack', left, align='center')] if left else []
+            columns.append(node)
+            if right:
+                columns.append(group('stack', right, align='center'))
+            weights = [2.5, 5, 2.5] if left and right else [3, 7] if left else [7, 3]
+            node = group('columns', columns, weights=weights, fit='hug')
+        rows = [*side_blocks.get('top', []), node, *side_blocks.get('bottom', [])]
+        return group('stack', rows) if len(rows) > 1 else node
+    tree['regions']['body'] = wrap(tree['regions']['body'])
+    if attachments:
+        raise ValueError('Directional text target must occur in the body layout tree')
+    return tree
+
+
 def validate_tree(tree, composition):
     """Strict runtime contract, including complete references and bounded recursion."""
     errors, ids, references, parents = [], set(), [], {}
@@ -68,6 +165,10 @@ def validate_tree(tree, composition):
         errors.append(f'{path}: {message}')
     if not isinstance(tree, dict) or set(tree) != {'version', 'regions'}:
         return ['layout_tree requires only version and regions']
+    try:
+        tree = expand_attachments(tree, composition)
+    except (ValueError, TypeError) as error:
+        return [str(error)]
     if tree.get('version') not in VERSIONS:
         fail('layout_tree.version', f'unsupported version; expected {VERSION}')
     regions = tree.get('regions')
@@ -327,22 +428,24 @@ class RegionCompiler:
                 need = Need(height, max(height, preferred.height+12 if preferred else height), required_w)
             else:
                 label = 44 if block.get('label') else 0
-                if block.get('text_flow') == 'distributed_arrow_list':
+                preserve = self.preserve and 'text_for' not in block
+                min_width = list_min_width(block)
+                if block.get('text_flow') in EXPLICIT_LISTS and (width >= min_width or not block.get('_inferred_list')):
                     from .layout import native_list_height
-                    if width < 520:
-                        minimum_height = native_list_height(block, 520, self.fonts['font_file'],
+                    if width < min_width:
+                        minimum_height = native_list_height(block, min_width, self.fonts['font_file'],
                                                             self.list_gap_ratio, self.list_padding,
                                                             default_style=self.bullet_style)
                         raise LayoutTreeError(path, 'INSUFFICIENT_LIST_SPACE',
-                            'Explicit native lists require at least 520 px width; markers cannot be discarded.',
-                            [520, minimum_height], available,
+                            f'Explicit native lists require at least {min_width} px width; markers cannot be discarded.',
+                            [min_width, minimum_height], available,
                             ['widen_region', 'switch_to_two_columns', 'split_slide'])
                     natural = native_list_height(block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
                                                  default_style=self.bullet_style)
                     hard_minimum = (native_list_height(
                         block, width, self.fonts['font_file'], self.list_gap_ratio, self.list_padding,
-                        default_style=self.bullet_style, wrap_items=False) if self.preserve else natural)
-                    need = Need(hard_minimum, natural, 520)
+                        default_style=self.bullet_style, wrap_items=False) if preserve else natural)
+                    need = Need(hard_minimum, natural, min_width)
                 elif block.get('inline_math') or has_markup(block.get('text')):
                     from totalpipe_layout.inline_math import measure_inline, InlineWidthError
                     from .fonts import load_font_file
@@ -359,12 +462,12 @@ class RegionCompiler:
                         raise LayoutTreeError(path, 'INLINE_FORMULA_SPACE', str(error), [error.required_width, 0], available,
                                               ['widen_region', 'use_display_formula', 'split_slide']) from error
                     natural = label+measured['height']
-                    need = Need(label+30 if self.preserve else natural, natural, measured['min_width'])
+                    need = Need(label+30 if preserve else natural, natural, measured['min_width'])
                 else:
                     from .type_scale import body_size, display_size
                     size = display_size(block, self.design) or body_size(self.design)
                     natural = label+self.text_height(block['text'], width, size=size)
-                    need = Need(label+30 if self.preserve else natural,
+                    need = Need(label+30 if preserve else natural,
                                 max(natural, label+self.text_height(block['text'], width, size=size)))
         elif kind == 'figure':
             ref = self.comp['figure_refs'][node['ref']]
@@ -394,7 +497,28 @@ class RegionCompiler:
         elif kind == 'graphic':
             graphic = self.graphics[node['ref']]
             height = self.graphic_height(graphic, width, path, available)
-            preferred = width*graphic['view_box'][3]/graphic['view_box'][2]+8 if graphic['type'] == 'path' else height
+            if graphic['type'] == 'path':
+                fill = max(height, width*graphic['view_box'][3]/graphic['view_box'][2]+8.)
+            elif graphic['type'] in ('dag', 'mechanism', 'architecture'):
+                # Boxes grow only up to a landscape aspect (dag_layout.MAX_NODE_ASPECT). Asking the
+                # stack for the whole band instead produced 320x330 cards holding one line of text.
+                from .dag_layout import MAX_NODE_ASPECT, layered_order
+                try:
+                    layers, _ = layered_order(
+                        [n['id'] for n in graphic.get('nodes', [])],
+                        [(e['from'], e['to']) for e in graphic.get('edges', []) if not e.get('feedback')])
+                    columns = max(1, len(layers))
+                except (KeyError, TypeError, ValueError):
+                    columns = max(1, len(graphic.get('nodes') or [1]))
+                node_w = min(320.0, max(120.0, (width-32.0*(columns-1))/columns))
+                fill = MAX_NODE_ASPECT*node_w+24.
+            else:
+                # Funnel levels scale with the band, so they may take the whole of it.
+                fill = available[1]
+            # `height` is a readability floor; `fill` is what the drawing can use without turning
+            # into empty frames. The surplus above `fill` belongs to the parent, which centres the
+            # diagram instead of inflating it.
+            preferred = min(max(height, available[1]), max(height, fill))
             need = Need(height, max(height, preferred), self.graphic_min_width(graphic))
         elif kind == 'chart':
             from .chart_render import chart_need
@@ -545,7 +669,11 @@ class RegionCompiler:
                                       'set_stack_align_distribute', 'review_intentional_whitespace']}
             if all(usable*w/sum(suggested) >= m-.1 for w, m in zip(suggested, minimums)):
                 entry['underfill']['suggested_weights'] = suggested
-        cursor = y+(min(remaining/2, STACK_CENTER_MAX_PX) if kind == 'stack' and alignment == 'center' else 0)
+        cursor = y
+        if kind == 'stack' and alignment == 'center':
+            side_text = all(c['type'] == 'block' and attachment_link(self.blocks[c['ref']]).get('position')
+                            in ('left', 'right') for c in children)
+            cursor += remaining/2 if side_text else min(remaining/2, STACK_CENTER_MAX_PX)
         for row, row_h in enumerate(heights):
             for col in range(columns):
                 index = row*columns+col
@@ -622,7 +750,7 @@ def compile_regions(composition, region, assets, fonts, theme, preserve_terms=Fa
                     formula_sizes=None):
     compiler = RegionCompiler(composition, assets, fonts, theme, preserve_terms, list_gap_ratio, list_padding,
                               bullet_style, design=design, formula_sizes=formula_sizes)
-    root = composition['layout_tree']['regions']['body']
+    root = expand_attachments(composition['layout_tree'], composition)['regions']['body']
     original = list(region)
     region = balanced_region(root, compiler, list(region), theme)
     compiler.allocate(root, list(region), 'body')

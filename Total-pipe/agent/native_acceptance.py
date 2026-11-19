@@ -185,12 +185,121 @@ def _previews(build, evidence):
     return value
 
 
+def _is_page_scene(build):
+    return (Path(build)/'page_scene.json').is_file() and (
+        Path(build)/'qa_report.json').is_file()
+
+
+def _scene_execute(build, request):
+    """PageScene native evidence; never runs the Deck IR semantic verifier."""
+    from deck_compiler import native
+    from deck_compiler.pipeline import locked as locked_path, record_powerpoint_review
+    from . import page_scene_build
+    qa = _candidate(build)
+    if any(request[key] != qa[key] for key in HASHES):
+        raise ValueError('Native request is stale; use the current native hashes from status.')
+    operation = request['operation']
+    failures = [item for item in qa['items'] if item['severity'] == 'FAIL']
+    retry_native = (failures and all(item.get('source', {}).get('detector') == 'page-scene-native'
+                                   for item in failures) and
+                    (operation == 'ingest' or operation == 'render' and request.get('force') is True))
+    if (failures or qa['counts']['FAIL']) and not retry_native:
+        raise ValueError('FAIL findings must be repaired before native acceptance.')
+    evidence = _native_current(build, qa)
+    reused = False
+    review = None
+    review_path = build/'powerpoint_review.json'
+    if review_path.is_file():
+        try:
+            from deck_compiler.pipeline import _load_powerpoint_review
+            review = _load_powerpoint_review(build, build/'staging.pptx', build/'layout.json')
+        except (OSError, ValueError, KeyError, TypeError):
+            review = None
+    if operation == 'render':
+        if evidence and not request.get('force'):
+            reused = True
+        else:
+            folder = build/'native-renders'/uuid.uuid4().hex
+            folder.mkdir(parents=True)
+            source = folder/('native-'+folder.name+'.pptx')
+            with locked_path(build):
+                shutil.copyfile(build/'staging.pptx', source)
+                if sha(source) != request['artifact_sha256']:
+                    raise ValueError('Candidate changed before native export.')
+                evidence, issues = native.render(source, folder/'native.pdf')
+            if not evidence:
+                raise RuntimeError('; '.join(i['message'] for i in issues) or 'PowerPoint export unavailable.')
+            if evidence['artifact_sha256'] != request['artifact_sha256']:
+                raise ValueError('Native export does not describe the requested candidate.')
+            shutil.copyfile(folder/'native.pdf', build/'native.pdf')
+            evidence['pdf'] = str((build/'native.pdf').resolve())
+            evidence['pdf_sha256'] = sha(build/'native.pdf')
+            evidence['layout_sha256'] = qa['layout_sha256']
+            write(build/'native.json', evidence)
+    elif operation == 'ingest':
+        pdf = Path(request['pdf_path'])
+        if sha(pdf) != request['pdf_sha256']:
+            raise ValueError('Manual PDF bytes differ from the supplied pdf_sha256.')
+        if not pdf.read_bytes().startswith(b'%PDF'):
+            raise ValueError('Native evidence is not a PDF.')
+        if not review_path.is_file():
+            raise ValueError('Manual PDF ingest needs a direct PowerPoint UI review of the same staging deck.')
+        shutil.copyfile(pdf, build/'native.pdf')
+        evidence = {'renderer': 'powerpoint', 'artifact_sha256': request['artifact_sha256'],
+                    'pdf_sha256': sha(build/'native.pdf'), 'layout_sha256': qa['layout_sha256'],
+                    'export_method': 'powerpoint-manual'}
+        write(build/'native.json', evidence)
+    elif operation == 'review':
+        expected = [s['id'] for s in read(build/'layout.json')['slides']]
+        if set(request['reviewed_slide_ids']) != set(expected):
+            raise ValueError('PowerPoint UI review must explicitly cover every slide ID; all is not accepted.')
+        record_powerpoint_review(build, request['reviewer'], request['reviewed_slide_ids'],
+                                 request['note'], expected_hashes=request)
+        review = read(build/'powerpoint_review.json')
+        evidence = _native_current(build, qa)
+    else:
+        raise ValueError('Unsupported PageScene native operation.')
+    # Uploaded manual PDFs must be inspected with the same PageScene boxes.
+    if evidence:
+        scene = read(build/'page_scene.json')
+        items = page_scene_build.native_items(build/'native.pdf', scene)
+        prior = read(build/'qa_report.json')
+        kept = [item for item in prior.get('items', [])
+                if item.get('source', {}).get('detector') != 'page-scene-native']
+        metrics = prior.get('page_scene_metrics')
+        page_scene_build._write_qa(build, scene, kept + items, structural=True, native=True,
+                                   metrics=metrics, native_evidence=evidence, review=review,
+                                   extra_checks={'page_scene_native': True})
+    elif review:
+        # A UI review can be recorded before the native PDF exists; preserve the
+        # evidence but do not claim native validation.
+        prior = read(build/'qa_report.json')
+        scene = read(build/'page_scene.json')
+        page_scene_build._write_qa(build, scene, prior.get('items', []), structural=True,
+                                   native=False, metrics=prior.get('page_scene_metrics'),
+                                   review=review, extra_checks={'page_scene_native': False})
+    preview_error = None
+    if evidence:
+        try:
+            _previews(build, evidence)
+        except Exception as error:
+            preview_error = type(error).__name__+': '+str(error)
+    info = descriptor(build.parent)
+    return {'operation': operation, 'status': info['status'],
+            'reused_native_export': reused,
+            'counts': read(build/'qa_report.json')['counts'],
+            'preview_error': preview_error,
+            'candidate_unchanged': sha(build/'candidate.pptx') == request['artifact_sha256']}
+
+
 def execute(job, request):
     """Run one explicit operation without rerunning Story, design or OfficeCLI."""
     from deck_compiler import native
     from deck_compiler.pipeline import locked, ingest_native, record_powerpoint_review
     validate_request(request)
     build = Path(job['request']['out_dir'])/'build'
+    if _is_page_scene(build):
+        return _scene_execute(build, request)
     qa = _candidate(build)
     if any(request[key] != qa[key] for key in HASHES):
         raise ValueError('Native request is stale; use the current native hashes from status.')

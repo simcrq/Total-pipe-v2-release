@@ -7,31 +7,30 @@
 ## 安装和 profile
 
 完整仓库需包含相邻的 Total-pipe、PaperWorkflow、research-ppt-assistant，使用 Python 3.12+、Node.js 22+，
-生成 PPTX 需 OfficeCLI 1.0.152+。在仓库根目录运行：
+生成 PPTX 需 OfficeCLI 1.0.152+。在仓库根目录选择当前宿主运行。
 
 ```bash
-python3.12 install.py --client codex
-# Claude 用户：
-python3.12 install.py --client claude
-# 只安装、验证服务，不注册客户端：
-python3.12 install.py --client none
+python3 install.py --client codex
+python3 install.py --client auto
+python3 install.py --client none
 ```
 
-安装器在仓库 `.venv` 安装真实依赖，启动服务执行 initialize / tools/list，然后才写客户端配置。
+安装器在仓库 `.venv` 安装依赖，执行 deep doctor 和 MCP `initialize` / `tools/list`，再写客户端配置并安装技能。
+`--client auto` 仅在检测到一个候选宿主时注册。`--client none` 只安装和验证服务，并提供可移植的 `stdio` 配置。
 `--python` 指定创建 venv 的解释器，`--venv` 指定环境目录；已有完备环境可用 `--skip-deps`。
-`--config` 指定目标配置。`--dry-run` 只展示计划和配置检查，不创建 venv、不安装依赖、不写文件。
-安装结果在根目录 `install-report.json`（已 gitignore），包含 doctor、握手与工具数。
+`--config` 指定文件型宿主的目标配置，`--skills-root` 指定技能目录。`--dry-run` 只展示安装计划和配置检查。
+安装结果通过 JSON 返回，成功后的报告默认写入根目录的 `install-report.json`，包含 doctor、握手和工具数。[宿主 ID 与配置路径](../../INSTALL_FOR_AI.md)
 
 Codex 默认配置位置是 `$CODEX_HOME/config.toml`，未设置时为 `~/.codex/config.toml`。
 只替换末尾受管块，写前备份；坏 TOML、非托管同名服务或作用域歧义会中止。
-Claude 默认 `~/.claude.json`，保留其他键并备份；仅命令、参数、环境写入其 stdio 配置，
-绝对 launcher 自行切换正确 cwd。明确 `--force` 可替换 JSON 同名冲突，不能绕过 TOML 语义保护。
+文件型宿主保留其他配置键，并在写入前备份。JSON 型宿主使用绝对路径的 launcher，由 launcher 切换工作目录。
+显式传入 `--force` 可替换有冲突的 JSON 同名服务。Codex 的 TOML 冲突需要在宿主配置中解决。
 运行本仓库的开发测试不会修改真实用户配置；示例中的配置目标可换到临时目录。
 
 默认 [`.mcp.json`](../.mcp.json) 仅声明四工具。调试 / 回切使用：
 
 ```bash
-python3.12 install.py --client codex --profile advanced
+python3 install.py --client codex --profile advanced
 ```
 
 [`.mcp.advanced.json`](../.mcp.advanced.json) 声明 PWF、RPA、低层 total_pipe_v3 三服务。
@@ -43,9 +42,9 @@ python3.12 install.py --client codex --profile advanced
 
 | 工具 | 输入与行为 |
 | --- | --- |
-| totalpipe_doctor | 可选 deep / source_kind；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR |
-| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode |
-| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
+| totalpipe_doctor | 可选 deep / source_kind / page_mode；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR；page_scene 不要求 OfficeCLI |
+| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode、page_mode（deck_ir 默认 / page_scene） |
+| totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、page_scene、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染或 scene_preview 选页原生预览；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
 start / advance / status 默认返回阶段、next_action、QA 摘要、out_dir、state_path、events_path 和
@@ -60,11 +59,13 @@ PDF doctor 使用 PWF 的实际 CLI/配置执行 `mineru-open-api auth --verify`
 
 ### 逐页 IR 与来源绑定
 
-已通过 page_design 1.1，或 1.2 的实际源文案审读后，`next_action.page_authoring.pages` 提供每页完整 input_path、输出路径和缓存状态。
+已通过 page_design 1.1，或 1.2 / 1.3 的实际源文案审读后，`next_action.page_authoring.pages` 提供每页完整 input_path、输出路径和缓存状态。
 逐页读取提示包及完整 Schema，写一个 canonical Deck IR（slides 恰好一页，ID 与设计相同），再调用
 `advance(job_id, artifact_kind="deck_ir_page", artifact_path=...)`。各页共用相同 deck_id/theme/presentation 头部。
 逐页包保留本页全部分配文本、相关 Story 上下文、证据和完整实现指令；Schema 通过绝对路径引用。
 设计者可以自绘机制、流程、结构及解释性图示，保持可见的示意标识与科学来源边界。
+`example_lookup.suggestions` 根据本页设计描述、选图和可见载体推荐至多两条示例元数据。
+IR 作者按需打开一份脚本，可通过 `example_lookup.command_prefix` 细化检索。命中为空时仍能按批准设计实现。
 
 程序补入省略的 Story 证据清单和完整原文讲稿；显式提供的证据按逐页锚点/跨页完整覆盖检查。
 figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径，由证据包解析；source_figure 可在
@@ -77,7 +78,45 @@ figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径
 最终候选 PPTX 仍整套生成，草稿选页可按下一节单独渲染，不能充当原生验收。改变公共头部须显式 replan_from="deck_ir"，
 这会重置全部页缓存；只改局部内容时继续提交对应页即可。
 
+### PageScene 页面模式（page_scene）
+
+`page_mode=page_scene` 是默认 `deck_ir` 之外的显式页面几何路径：page_design 通过
+page_review 后进入 `page_scene`，作者按 Schema 写每页对象 `box`（英寸），接受后由
+python-pptx 直接渲染 candidate，跳过 `deck_ir`、`design`、`visual_design`。
+原 `deck_ir` 路径完整保留，仍是 Bezier/Path IR、OMML、Chart IR、EViz、完整
+mechanism/funnel/architecture 编译器和 OfficeCLI 对象模型的入口。
+
+```json
+{"job_id":"<job_id>","scene_preview":{
+  "artifact_path":"/absolute/job/work/page_scene.json","page_ids":["P5","P6"]}}
+```
+
+`scene_preview` 只在 `page_scene` 阶段有效；它渲染选中页 PowerPoint PDF/PNG，不接受
+草稿、不推进阶段、不消耗修订额度、不改候选。CLI 对应
+`python -m agent advance --job-id <job_id> --scene-preview request.json`。
+
+接受时 `page_scene_binding` 强制：页序与 page_design 一致；`title_ref`/`take_ref`/
+`copy_ref` 必须解析批准 `display_copy`；可见 carrier 必须出现；`evidence_refs` 不得
+越权；未登记数字被拒绝；图片路径固化为绝对路径并进入 checkpoint。字面标题/结论只有
+逐字等于批准文案才通过。
+
+PageScene 支持原生 text/list/group/image/shape/line/table/path/formula/chart 和
+`page.notes`；其中 path 是 DrawingML 贝塞尔，formula 是 OMML，chart 是原生可编辑
+数据图。EViz 和完整图形组件仍走 `deck_ir`。
+
+候选后仍用 `advance.native` render/review/ingest。PageScene 分支按显式 box 检查
+PowerPoint PDF 的文字越界、正文/列表文字和字体替换，并生成逐页 PNG；UI review 的
+人工边界不变。完整协议、门禁和限制见 [PageScene](page-scene.md)。
+
 ### IR 选页渲染与看图修订
+
+待编的逐页 IR 若涉及多个视觉对象、图表/公式/表格/示意图、布局与标注风险，或前次提交被拒，
+`next_action.page_authoring.pages[].preview_plan` 会列出原因及 `first_call`。
+先把草稿写入页面的 `expected_output`，再把 `first_call.arguments` 原样传给 `totalpipe_advance`。
+骨架成功时，先看骨架和单件反馈，再使用 `next_action.preview_follow_up.next_call` 对同一草稿成图。
+草稿改动后重新测量。成图成功时，后续动作提示打开 PNG 并按批准的阅读顺序实际复核。
+失败时按反馈修草稿或恢复渲染依赖，返回不提供直接跳到成图的请求。
+普通页可按需走同一预览接口。逐页提交及质量门禁沿用正常验收流程。
 
 在 deck_ir 或之后的阶段，可单独调用 preview，不接受产物、不推进阶段、不占修订额度：
 
@@ -85,11 +124,13 @@ figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径
 {"job_id":"<job_id>","preview":{"artifact_path":"/absolute/job/work/pages/P01.json","slide_ids":["P01"]}}
 ```
 
-输入为 work/ 中的完整 canonical Deck IR，可一页或整套；省略 slide_ids 时预览输入全部页。
+复杂、稀疏或新布局可先加 `"mode":"layout"`。这一步运行真实草稿的编译和测量，返回 `skeleton_png`、`skeleton_report` 和 `units_report`，包含正文占用、页尾间距、文字框余量及图形标签折行。无需启动 OfficeCLI 或浏览器。默认 `mode="render"` 另外导出 HTML PNG，并同时提供骨架。骨架是编译后的对象框，适合定位空间问题，页面实际字形、公式和遮挡仍要看渲染。
+
+输入为 work/ 中的 canonical Deck IR 草稿，可一页或整套。省略 slide_ids 时预览输入全部页。
 CLI 将该请求的 preview 对象写进 JSON，再用 `python -m agent advance --job-id <job_id> --preview <request.json>`。
 `ir_preview.schema_path` 给出完整协议。preview 不可与提交、preflight、replan、native 或签收混用。
 
-程序绑定原有 Story/来源，按页执行现有科学、设计与 compiler/packer 容量检查，用 OfficeCLI 写出
+程序绑定原有 Story/来源，按页执行现有科学、设计与 compiler/packer 容量检查。渲染模式用 OfficeCLI 写出
 独立的 preview.pptx，再用 **officecli-html** 截图。需要 OfficeCLI 的 screenshot/html 能力和本机可运行的
 Chrome/Edge/Chromium/Firefox（或其支持的 Playwright 浏览器）。无浏览器或宿主阻止启动时返回失败，
 不把未渲染的页标为成功。没有增加 OCR、模型调用或 PowerPoint 自动化。
@@ -101,7 +142,7 @@ Agent **实际打开 PNG**，检查文案是否易懂、图文是否匹配、文
 
 渲染图可能显示仍有 FAIL 的调试布局，preview_result 保留 FAIL；它不是通过门禁的候选。
 输入结构无效、无法编译时可以只有错误报告，没有 PNG。预览图及 QA 均不写入 build/，job/checkpoint、
-candidate 和正式 QA 保持不变。顶层 status/next_action 仍描述当前任务，预览状态看 preview_result.status。
+candidate 和正式 QA 保持不变。预览状态看 `preview_result.status`，`next_action.preview_follow_up` 随本次预览回复返回。
 
 这是快速编辑预览。HTML 的字体、公式和形状可能与 PowerPoint 不同；单页页码从头计，自动目录页不渲染。
 篇级 Design 尚未合入时，预览反映当前草稿而非最终视觉。修订完成仍须正常提交、整套 Design、完整构建/QA
@@ -169,6 +210,13 @@ RPA 独立 CLI 的模板规划功能不变。页面设计在目标页数内安�
 原生caption与可见图号来源分别实现，关键限定跟随直接约束的主张同页可见。完整数据、Schema、审读和迁移规则见[科学记录与观众表达契约](content-projection.md)。
 page_review 由主 Agent 实际审读，用 artifact_kind=page_design_review 单独提交当前哈希和逐页具体检查；
 不能自动填 pass，也不代表已完成渲染图或 PowerPoint 验收。
+
+独立正文块的视觉引导由 `page_design` 决定。在 `design` 说明从哪个视觉锚点开始、在那里比较或追踪什么、到哪里看解释或条件，并写清哪个标记对应哪段批准文案。
+例如，圆角短标题标识一组正文，箭头项目符号引导并列段落，带文字的节点与箭头表达步骤。
+比较两种方法时，可让共同标题统领两条有名称的路线，用对齐或分隔线建立对照，用动作标签说明各自的步骤。
+组标题、路线名和箭头文字进入 `display_copy`，IR 阶段负责实现并预览。
+每条独立正文由独立 block 承载。逐页 IR 提示先根据设计推荐短索引，作者可从 `example_lookup` 继续检索并读取选中示例。
+示例代码及示范证据不进入作者提示。见 [脚本示例库](../examples/library/README.md)。
 
 以下描述保留的 **1.1 恢复协议**。已有旧 Story/旧设计按原规则恢复，不静默改写为新契约。
 
@@ -292,7 +340,7 @@ python -m agent advance --job-id <job-id> --inputs /abs/selection.json
 python -m agent serve
 ```
 
-`python -m agent setup` 返回安装器位置。IR 提示由接入层准备：
+`python -m agent setup` 返回安装器、AI 安装指南、工作目录和建议命令。IR 提示由接入层准备。
 
 ```bash
 python -m agent ir-prompt --workflow /abs/workflow.json --rpa /abs/rpa_input.json \

@@ -123,12 +123,17 @@ recorded in the slide's `adaptation_log`; an explicit `distributed_arrow_list` r
 contain two to six rows and fit the component box above the font floor.
 
 Blocks may override `bullet_style` and `bullet_color` independently; prose color remains unchanged.
+For one to six explicit items use `native_bullet_list` or `native_numbered_list`. The former accepts
+an optional Unicode `bullet_icon`; the latter uses DrawingML auto-numbering and optionally `list_start`.
 Slide `presentation.takeaway_marker: {"style":"diamond","color":"#000000"}` gives the complete takeaway
 one native leading marker, including on an inline-math takeaway, with continuation lines aligned to the prose.
-Explicit lists need at least 520 px width; the required height is measured from complete native rows, marker gutter,
+Legacy lists need at least 520 px width; the two explicit compact modes need 240 px. Height is measured from native rows, marker gutter,
 wrapping, labels, spacing and padding rather than a fixed floor. `preserve-terms` retains full native list rows, markers and colors;
 vertical overflow becomes REVIEW at the 18 pt floor, while strict mode requires replanning or splitting.
 It never silently removes explicit bullets. See [native list styles and capacity](native-lists.md).
+
+Use `caption_for.position` or `text_for.position` for top, bottom, left or right annotations beside a layout-tree visual
+or independent formula. See [the directional attachment contract](content-projection.md#四向图注与正文).
 
 `examples/distributed-arrow-list.deck_ir.json` is the canonical model/compiler reference.
 Models should emit explicit paragraph boundaries or `key_points`; the compiler will not infer

@@ -13,12 +13,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile', choices=('agent', 'advanced'), required=True)
     parser.add_argument('--service', required=True)
+    parser.add_argument('--node', help='Use the Node executable discovered when the host was configured')
     args = parser.parse_args()
     path = COMPONENT/('.mcp.json' if args.profile == 'agent' else '.mcp.advanced.json')
     server = json.loads(path.read_text(encoding='utf-8'))['mcpServers'][args.service]
     os.chdir((COMPONENT/server['cwd']).resolve())
     environment = {**os.environ, **server.get('env', {}), 'PYTHONIOENCODING': 'utf-8'}
-    command = sys.executable if server['command'] == 'python' else server['command']
+    command = sys.executable if server['command'] == 'python' else args.node or server['command']
     # Do not os.exec*: on Windows that overlays the process, so the PID the host
     # spawned exits immediately and its inherited stdio pipes are lost. A stdio
     # host then sees a clean exit with no initialize response and reports a

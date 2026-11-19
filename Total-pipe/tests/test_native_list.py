@@ -117,6 +117,42 @@ class NativeListTests(unittest.TestCase):
         self.assertIn('<a:buChar char="\u25aa" />', middle)
         self.assertIn('val="C2410C"', middle)
 
+    @unittest.skipUnless(shutil.which('officecli'), 'OfficeCLI required for PPTX roundtrip')
+    def test_compact_icon_and_ordered_list_roundtrip(self):
+        from jsonschema import validate as validate_schema
+        rows = [{**block('standalone', 'body', '−0.5 eV is the boundary.'),
+                 'text_flow': 'native_bullet_list', 'bullet_icon': '★'},
+                {**block('ordered', 'body', 'Read the control.\nCompare the result.'),
+                 'text_flow': 'native_numbered_list', 'list_start': 9, 'bullet_color': '#007F66'}]
+        ir = styled_deck(rows)
+        slide = ir['slides'][0]
+        slide['semantic']['title'] = 'Native list markers'
+        slide['presentation'].pop('takeaway_marker')
+        comp = slide['composition']
+        comp.update(archetype='composite-research', figure_refs=[],
+                    layout_tree={'version': '1.2', 'regions': {'body': {
+                        'id': 'body', 'type': 'columns', 'weights': [1, 3], 'children': [
+                            {'id': row['id'], 'type': 'block', 'ref': row['id']} for row in rows]}}})
+        validate_schema(ir, json.loads((ROOT/'schemas/deck-ir.schema.json').read_text()))
+        elements = self.compile_lists(ir)
+        self.assertEqual([len(e['items']) for e in elements], [1, 2])
+        self.assertLess(elements[0]['bbox'][2], 520)
+        self.assertEqual(elements[0]['source_text'], rows[0]['text'])
+        self.assertEqual(elements[1]['bullet']['start'], 9)
+        with tempfile.TemporaryDirectory() as tmp:
+            layout, _ = compile_deck(ir, ROOT)
+            layout_path, pptx = Path(tmp)/'layout.json', Path(tmp)/'candidate.pptx'
+            write_json(layout_path, layout)
+            render(layout_path, pptx)
+            self.assertFalse([i for i in verify(pptx, layout) if i['severity'] == 'FAIL'])
+            with zipfile.ZipFile(pptx) as z:
+                xml = ET.fromstring(z.read('ppt/slides/slide1.xml'))
+            drawingml = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
+            self.assertEqual([e.attrib for e in xml.findall('.//a:buAutoNum', drawingml)], [
+                {'type': 'arabicPeriod', 'startAt': '9'}, {'type': 'arabicPeriod', 'startAt': '9'}])
+            self.assertIn(elements[0]['bullet']['char'],
+                          [e.get('char') for e in xml.findall('.//a:buChar', drawingml)])
+
     def test_preserve_terms_keeps_explicit_list_in_572_by_226_box(self):
         ir = styled_deck()
         layout, issues = in_feedback_box(ir)
@@ -219,12 +255,20 @@ class NativeListTests(unittest.TestCase):
         comp['layout_tree']['regions']['body']['children'].append({'id': 'c-leaf', 'type': 'block', 'ref': 'c'})
         _, issues = compile_deck(ir, ROOT)
         self.assertIn('INSUFFICIENT_LIST_SPACE', [i['rule'] for i in issues])
+        for item in comp['blocks']:
+            item.pop('text_flow')
+        layout, issues = compile_deck(ir, ROOT)
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        inferred = [e for e in layout['slides'][0]['elements'] if e['id'] in ('a', 'b', 'c')]
+        self.assertEqual([(e['kind'], e['source_text']) for e in inferred], [('text', BODY)]*3)
 
     def test_short_explicit_lists_fit_measured_boxes_below_220px(self):
         for designed in (False, True):
             with self.subTest(designed=designed):
                 ir = styled_deck() if designed else list_deck([])
                 ir['presentation']['text_capacity_policy'] = 'strict'
+                title_text = 'Compare the response\nunder matched conditions'
+                ir['slides'][0]['semantic']['title'] = title_text
                 row = {**block('short', 'body', 'Complete first finding.\nComplete second finding.'),
                        'text_flow': 'distributed_arrow_list', 'label': 'Findings'}
                 ir['slides'][0]['composition']['blocks'] = [row]
@@ -237,6 +281,10 @@ class NativeListTests(unittest.TestCase):
                 self.assertLess(height, 220)
                 layout, issues = in_feedback_box(ir, 572, height)
                 self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+                title = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'title')
+                self.assertEqual(title['text'], title_text)
+                if designed:
+                    self.assertEqual(title['contract']['font_size'], 40)
                 native = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short')
                 label = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'short:label')
                 self.assertEqual(native['kind'], 'list')
@@ -253,7 +301,10 @@ class NativeListTests(unittest.TestCase):
             element = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')
             self.assertEqual(element['kind'], 'list' if mode == 'auto' else 'text')
         layout, issues = in_feedback_box(list_deck([block('automatic', 'body', BODY)]), 519, 300)
-        self.assertEqual(next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')['kind'], 'text')
+        self.assertFalse([i for i in issues if i['severity'] == 'FAIL'], issues)
+        plain = next(e for e in layout['slides'][0]['elements'] if e['id'] == 'automatic')
+        self.assertEqual(plain['kind'], 'text')
+        self.assertEqual(plain['source_text'], BODY)
         self.assertIn('TEXT_FLOW_FALLBACK', [i['rule'] for i in issues])
 
     def test_preserve_terms_recursive_floor_reserves_every_marker_row(self):

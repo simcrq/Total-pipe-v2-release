@@ -10,6 +10,9 @@ from .explanation import validate_explanation
 from .graphic_layout import graphic_texts, mechanism_edges, validate_graphics
 from .provenance import validate as validate_provenance
 from .visual_design import preserve_scientific_terms, validate_design, validate_plan
+from .layout_tree import ATTACHMENT_POSITIONS
+from .text_flow import (EXPLICIT_LISTS, NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST,
+                        TEXT_FLOWS, select_text_flow, valid_bullet_icon)
 
 
 SOURCE_FIGURE = re.compile(r"^S?[1-9][0-9]*[a-z]?$")
@@ -39,6 +42,33 @@ def coarse_characters(text, inline_math=False):
         return sum(len(s.text) if s.kind == 'text' else 1 for s in parse_inline(text))
     except InlineMathError:
         return len(text)  # Syntax is reported separately; validation must return structured errors.
+
+
+def visual_carriers(composition):
+    """Visual objects a page can be built around: figures, native diagrams, charts, real tables.
+
+    A table counts only as a matrix - two rows by two columns or more - so a one-cell table cannot
+    stand in for an explanation.
+    """
+    composition = composition if isinstance(composition, dict) else {}
+    tables = [table for table in composition.get('tables') or []
+              if isinstance(table, dict)
+              and isinstance(table.get('row_count'), int) and table['row_count'] >= 2
+              and isinstance(table.get('column_count'), int) and table['column_count'] >= 2]
+    equations = [block for block in composition.get('blocks') or []
+                 if isinstance(block, dict) and block.get('component') == 'formula']
+    return (len(composition.get('figure_refs') or []) + len(composition.get('graphics') or [])
+            + len(composition.get('charts') or []) + len(tables) + len(equations))
+
+
+def text_only_pages(ir):
+    """[(slide number, slide id, copy block count)] for pages that are prose only."""
+    found = []
+    for number, slide in enumerate(ir.get('slides', []), 1):
+        composition = slide.get('composition') or {}
+        if not visual_carriers(composition):
+            found.append((number, slide.get('id'), len(composition.get('blocks') or [])))
+    return found
 
 
 def validate(ir):
@@ -253,18 +283,34 @@ def validate(ir):
                 ids.add(bid)
             check(b.get("component") in COMPONENTS, "Unknown component", n)
             caption = b.get('component') == 'caption'
-            if caption or 'caption_for' in b:
-                link = b.get('caption_for')
-                valid = (caption and isinstance(link, dict) and set(link) == {'kind', 'ref'}
-                         and isinstance(link.get('ref'), str) and bool(link['ref']))
-                check(valid, 'A native caption needs a caption_for visual identity', n, 'CAPTION_ANCHOR_INVALID')
+            if caption or 'caption_for' in b or 'text_for' in b:
+                field = 'caption_for' if caption or 'caption_for' in b else 'text_for'
+                link = b.get(field)
+                valid = (isinstance(link, dict) and {'kind', 'ref'} <= set(link) <= {'kind', 'ref', 'position'}
+                         and isinstance(link.get('ref'), str) and bool(link['ref'].strip()))
+                check(valid, f'Block {bid} needs a valid {field} visual identity', n, 'CAPTION_ANCHOR_INVALID')
                 if valid:
                     kind, ref = link['kind'], link['ref']
-                    pool = comp.get({'graphic':'graphics', 'table':'tables', 'chart':'charts'}.get(kind, ''), [])
+                    pool_key = {'graphic': 'graphics', 'table': 'tables', 'chart': 'charts'}
+                    pool = comp.get(pool_key.get(kind, ''), []) if isinstance(kind, str) else []
                     found = any(obj.get('id') == ref for obj in pool if isinstance(obj, dict))
-                    if kind == 'figure': found = any(f.get('asset_id') == ref for f in figures)
-                    check(found, f'Caption {bid} must explain an existing visual on this page', n, 'CAPTION_ANCHOR_INVALID')
-                check(not any(key in b for key in ('label', 'anchor', 'bullet_style', 'bullet_color'))
+                    if kind == 'figure':
+                        found = any(f.get('asset_id') == ref for f in figures if isinstance(f, dict))
+                    elif kind == 'formula':
+                        found = any(f.get('id') == ref and f.get('component') == 'formula' and not f.get('anchor')
+                                    for f in blocks if isinstance(f, dict))
+                    check(found, f'Block {bid} must explain an existing visual on this page', n, 'CAPTION_ANCHOR_INVALID')
+                    if 'position' in link or field == 'text_for':
+                        check(has_tree and link.get('position') in ATTACHMENT_POSITIONS,
+                              f'Block {bid} needs a body layout tree and top/bottom/left/right',
+                              n, 'CAPTION_ANCHOR_INVALID')
+                check(caption if field == 'caption_for' else b.get('component') != 'formula',
+                      'Use caption_for on captions and text_for on prose blocks', n, 'CAPTION_ANCHOR_INVALID')
+                check(not ('text_for' in b and 'caption_for' in b),
+                      'A block may attach to one object', n, 'CAPTION_ANCHOR_INVALID')
+            if caption:
+                check(not any(key in b for key in ('label', 'anchor', 'bullet_style', 'bullet_color',
+                                                   'bullet_icon', 'list_start'))
                       and not b.get('inline_math') and b.get('text_flow', 'plain') == 'plain',
                       'Native captions use plain annotation text; body/list/formula treatments are not captions', n, 'CAPTION_INVALID')
             if 'bullet_style' in b:
@@ -274,17 +320,30 @@ def validate(ir):
             if 'bullet_color' in b:
                 check(isinstance(b['bullet_color'], str) and ACCENT.fullmatch(b['bullet_color']),
                       f'block {bid}: bullet_color must be #RRGGBB', n, 'BULLET_COLOR_INVALID')
-            if 'bullet_style' in b or 'bullet_color' in b:
+            flow = b.get('text_flow', 'auto')
+            if 'bullet_style' in b or 'bullet_color' in b or flow in EXPLICIT_LISTS:
                 check(b.get('component') != 'formula' and not b.get('inline_math') and b.get('text_flow', 'auto') != 'plain',
                       f'block {bid}: bullet overrides require native prose-list flow', n, 'TEXT_FLOW_INVALID')
-            if b.get('text_flow') == 'distributed_arrow_list' and isinstance(b.get('text'), str):
-                from .text_flow import select_text_flow
-                check(select_text_flow(b['text'], 'distributed_arrow_list')['mode'] != 'plain',
-                      f'block {bid}: explicit native lists require two to six nonempty rows', n, 'TEXT_FLOW_INVALID')
+            if 'bullet_icon' in b:
+                check(flow == NATIVE_BULLET_LIST and 'bullet_style' not in b and valid_bullet_icon(b['bullet_icon']),
+                      f'block {bid}: bullet_icon requires one symbol or punctuation glyph and native_bullet_list',
+                      n, 'BULLET_STYLE_INVALID')
+            if 'list_start' in b:
+                start = b['list_start']
+                check(flow == NATIVE_NUMBERED_LIST and type(start) is int and 1 <= start <= 9999,
+                      f'block {bid}: list_start is an integer from 1 to 9999 for native_numbered_list',
+                      n, 'TEXT_FLOW_INVALID')
+            if flow == NATIVE_NUMBERED_LIST:
+                check('bullet_style' not in b, f'block {bid}: numeric lists use native Arabic numbers',
+                      n, 'TEXT_FLOW_INVALID')
+            if flow in EXPLICIT_LISTS and isinstance(b.get('text'), str):
+                minimum = 2 if flow == EXPLICIT_LISTS[0] else 1
+                check(select_text_flow(b['text'], flow)['mode'] != 'plain',
+                      f'block {bid}: this native list requires {minimum} to 6 nonempty rows', n, 'TEXT_FLOW_INVALID')
             check(isinstance(b.get("text"), str) and bool(b["text"].strip()), "Block text required", n)
             check(type(b.get('inline_math', False)) is bool, 'inline_math must be boolean', n, 'INLINE_MATH_INVALID')
             if b.get('inline_math') is True:
-                check(b.get('component') != 'formula' and b.get('text_flow', 'auto') != 'distributed_arrow_list',
+                check(b.get('component') != 'formula' and flow not in EXPLICIT_LISTS,
                       'Inline math requires a prose block with auto/plain text flow', n, 'INLINE_MATH_INVALID')
                 if isinstance(b.get('text'), str):
                     try:
@@ -301,7 +360,7 @@ def validate(ir):
             elif "anchor" in b:
                 check(False, f"block {b.get('id')}: only a formula block may carry an anchor", n,
                       rule="FORMULA_ANCHOR_INVALID")
-            check(b.get("text_flow", "auto") in ("auto", "plain", "distributed_arrow_list"),
+            check(flow in TEXT_FLOWS,
                   "Unknown block text_flow", n)
             check(not any(k in b for k in ("bbox", "x", "y", "w", "h")), "Geometry belongs to compiled layout", n)
         # Formula count is not a capacity measure. Complete equations and explanations must fit

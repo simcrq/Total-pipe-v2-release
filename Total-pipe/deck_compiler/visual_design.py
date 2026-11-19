@@ -186,7 +186,7 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
             'takeaway': [56, 100 if compact else 148, 1168, 70],
             'body_top': 190 if compact else 240,
             'rule': [56, 92 if compact else 140, 1168, 2]}
-    if preserve_terms and slide and fonts:
+    if slide and fonts:
         from .fonts import load_font_file
         from .layout import break_lines
         from .fonts import bullet_metrics
@@ -197,12 +197,13 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
         # The title is one size across the deck: measure it at that size and let the header grow,
         # instead of shrinking a long title until the pages stop agreeing with each other.
         title_size = type_sizes(design)['title']
-        title_line = round(title_size*1.25)
+        title_line = title_size*1.25
+        max_title_lines = TITLE_BOX_LINES if preserve_terms else 2
         title_lines = len(break_lines(strip_markup(slide['semantic']['title']),
                                       load_font_file(fonts['bold_font_file'], title_size), 1168))
         takeaway_lines = len(break_lines(strip_markup(slide['semantic']['takeaway']),
                                          load_font_file(fonts['font_file'], 24), takeaway_width))
-        title_height = min(title_lines, TITLE_BOX_LINES)*title_line
+        title_height = min(title_lines, max_title_lines)*title_line
         takeaway_height = takeaway_lines*(max(30, marker['line_height_px']) if marker else 30)
         if slide['semantic'].get('inline_math'):
             from totalpipe_layout.inline_math import measure_inline, InlineWidthError
@@ -216,18 +217,19 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
                     continue  # The final emitter reports a structured width failure at its font floor.
                 if field == 'title':
                     title_lines = len(plan['lines'])
-                    title_height = min(plan['height'], TITLE_BOX_LINES*title_line)
+                    title_height = min(plan['height'], max_title_lines*title_line)
                 else: takeaway_height, takeaway_lines = plan['height'], len(plan['lines'])
         title_extra = max(0, title_height-header['title'][3])
-        takeaway_extra = max(0, takeaway_height-header['takeaway'][3])
+        takeaway_extra = max(0, takeaway_height-header['takeaway'][3]) if preserve_terms else 0
         header['title'][3] += title_extra
         header['rule'][1] += title_extra
         header['takeaway'][1] += title_extra
         header['takeaway'][3] += takeaway_extra
         header['body_top'] += title_extra+takeaway_extra
-        header['title_lines'] = max(2, min(title_lines, TITLE_BOX_LINES))
+        header['title_lines'] = max(2, min(title_lines, max_title_lines))
         header['title_size'] = title_size
-        header['takeaway_lines'] = max(2, takeaway_lines)
+        if preserve_terms:
+            header['takeaway_lines'] = max(2, takeaway_lines)
     if slide and fonts and slide.get('presentation', {}).get('takeaway_frame'):
         from .container_frames import measure_takeaway
         plan = measure_takeaway(slide, fonts, header['takeaway'])

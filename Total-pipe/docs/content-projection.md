@@ -75,6 +75,12 @@ unit必含`text/evidence/kind/visibility/epistemic`。一个断言应可被独�
 原单元仍仅拥有一次，允许必要条件重复展示。程序拒绝多重所有权、未声明的复述和仅存notes的活跃条件。
 `content_map`的copy引用display_copy ID；figure引用精确选图；formula/table/chart/graphic引用实际对象并给阅读locator。
 
+组会文案先说现象、比较对象和直接条件。标题说发现，结论说意义，图注指向可读的图中证据。常规出处放来源标签，审读经过放讲稿或工作记录。涉及作者解释时，用“提出”“提示”等动词表达证据强度。
+
+Deck IR 的 body 与 label 可在文字块、标签和原生图形文字之间调整载体，保留批准的完整短语。title、takeaway、caption 保留各自职责。图中的节点和边标签应在设计阶段作为独立文案审批。
+
+有讲解价值的论文公式用独立 body 文案 `$...$` 审读，符号解释另写。Deck IR 通过 `copy_ref` 绑定到正文块时会生成独立公式，编译检查该表达式确实成为原生数学对象。PageScene 用 `type=formula` 加 `copy_ref` 绑定同一表达式。明确标记的行内数学仍随原文进入原生混排。
+
 `display_copy.role`为title/takeaway/body/label/caption，每页一个title和takeaway。可以忠实改写和图示化，不能改变意义、比较对象、
 单位、误差和确定性。paper文案引用科学单元；organization无论文引用和科学数字，只能组织报告；supplement沿用basis/source/constructed协议，
 构造示例须可见标识。实际SI事实仍走paper通道，不能冒充背景补充。
@@ -96,14 +102,32 @@ IR新增原生图注块：
  "caption_for":{"kind":"graphic","ref":"mechanism"}}
 ```
 
-`caption_for`须指向本页存在的figure/graphic/table/chart。图注用既有图注字号和真实测量路径，成为可编辑原生文本；
+`caption_for` 须指向本页已有的 figure、graphic、独立 formula、table 或 chart。图注用既有图注字号和真实测量路径，成为可编辑原生文本；
 不再当作body计量。它不能带正文标题、公式、列表或使用图注角色缩小批准的body文案；实际copy角色与对象仍严格一致。
 论文图自带的caption仍由figure_refs实现。
+
+### 四向图注与正文
+
+在使用 `layout_tree` 的页面，给 `caption_for` 增加 `position`，或给正文块写 `text_for`。
+`top`、`bottom`、`left`、`right` 可同时使用，同一方向多个块按 `composition.blocks` 的顺序排列。
+
+```json
+{"id":"controls","component":"body","text":{"copy_ref":"approved_controls"},
+ "text_for":{"kind":"graphic","ref":"mechanism","position":"right"}}
+```
+
+布局树仅引用目标叶节点。挂上的文字仍保留在 `composition.blocks`，编译器将它放在目标旁，不需要单独的树节点。
+图片用唯一的 `asset_id`，图形、表格、数据图和独立公式用各自的 ID。公式在树里仍是 `block` 叶节点。
+带四向文字的图片用普通 `figure` 叶节点，可用 `columns` 排列多张图。内置 `figure_refs.caption` 继续随图。
+上下说明使用组合宽度，左右说明与目标并排实测。需要更多空间时加宽组合或拆页。旧 `caption_for` 省略 `position` 时仍按原布局树排放。
 
 ## 页面源文案审读与IR绑定
 
 接受设计后按原page_review检查scientific_fidelity、qualifier_scope、audience_copy。主Agent只读投屏文案，核对观众能否理解对象、做法、
-证据和论点，避免制作指令/核查过程泄漏。提交[page review Schema](../agent/schemas/page-design-review.schema.json)要求的当前哈希与20页具体记录，
+证据和论点，避免制作指令/核查过程泄漏。`audience_copy` 还要判断它是否像组会讲解：结果页以发现开头，
+不以“作者主张/未验证/仅/不能”等审查句占据主文案；真实局限只放在会改变本页结论的位置，或集中到一页边界/讲稿。
+有论文图的页面必须有可见读图说明（面板、轴/条件、要看的变化和含义），只重复标题或只提醒证据不足不通过。
+提交[page review Schema](../agent/schemas/page-design-review.schema.json)要求的当前哈希与20页具体记录，
 不能自动填pass或复用设计者自评。改文案/内容去向须重审。
 
 IR可用`{"copy_ref":"id"}`实现批准文字。程序绑定科学单元、直接限定、复用主张、来源清单和两次实际审读的哈希，

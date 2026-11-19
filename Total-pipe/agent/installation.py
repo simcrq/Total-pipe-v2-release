@@ -93,38 +93,106 @@ def toml_config(text, servers):
     return updated
 
 
-def json_config(text, servers, force=False):
+MANAGED = {
+    'total_pipe': (COMPONENT, ['-m', 'agent.mcp_server']),
+    'total_pipe_v3': (COMPONENT, ['-m', 'deck_compiler.mcp_server']),
+    'paperworkflow': (ROOT/'PaperWorkflow', ['mcp_server.py']),
+    'research_ppt': (ROOT/'research-ppt-assistant', ['./server/mcp-server.mjs']),
+}
+JSON_TOKEN = re.compile(r'"(?:\\.|[^"\\])*"|//[^\r\n]*|/\*[\s\S]*?\*/|,(?=\s*[}\]])')
+
+
+def json_settings(text, jsonc=False):
+    if jsonc:
+        text = JSON_TOKEN.sub(lambda match: ' ' if match[0].startswith('/') else match[0], text)
+        text = JSON_TOKEN.sub(lambda match: '' if match[0] == ',' else match[0], text)
     value = json.loads(text) if text.strip() else {}
-    if not isinstance(value, dict) or not isinstance(value.get('mcpServers', {}), dict):
-        raise ValueError('Client configuration must be an object with mcpServers')
-    table = value.setdefault('mcpServers', {})
-    managed_cwds = {str(COMPONENT), str(ROOT/'PaperWorkflow'), str(ROOT/'research-ppt-assistant')}
-    for name in ('total_pipe', 'total_pipe_v3', 'paperworkflow', 'research_ppt'):
-        old = table.get(name)
-        if isinstance(old, dict) and old.get('cwd') in managed_cwds:
-            expected = ['-m', 'agent.mcp_server'] if name == 'total_pipe' else ['-m', 'deck_compiler.mcp_server'] if name == 'total_pipe_v3' else \
-                       ['mcp_server.py'] if name == 'paperworkflow' else ['./server/mcp-server.mjs']
-            if old.get('args') == expected:
-                table.pop(name)
+    if not isinstance(value, dict):
+        raise ValueError('Client configuration must be a JSON object')
+    return value
+
+
+def portable_servers(servers):
+    """Command-only runtimes can launch the same profiles from any cwd."""
     profile = 'agent' if 'total_pipe' in servers else 'advanced'
     python = next(server['command'] for name, server in servers.items() if name != 'research_ppt')
-    for name in list(table):
-        old = table[name]
-        if (isinstance(old, dict) and len(old.get('args', [])) >= 1 and
-                old['args'][0] == str(COMPONENT/'agent/launch.py') and name in
-                ('total_pipe', 'total_pipe_v3', 'paperworkflow', 'research_ppt')):
-            table.pop(name)
+    return {name: {'command': python, 'args': [str(COMPONENT/'agent/launch.py'),
+                  '--profile', profile, '--service', name,
+                  *(['--node', spec['command']] if name == 'research_ppt' else [])],
+                  'env': spec.get('env', {})} for name, spec in servers.items()}
+
+
+def _managed_entry(name, old):
+    if name not in MANAGED or not isinstance(old, dict):
+        return False
+    command = old.get('command')
+    args = command[1:] if isinstance(command, list) else old.get('args', [])
+    cwd, direct_args = MANAGED[name]
+    if old.get('cwd') == str(cwd) and args == direct_args:
+        return True
+    return (isinstance(args, list) and len(args) >= 5 and args[:2] ==
+            [str(COMPONENT/'agent/launch.py'), '--profile'] and args[3:5] == ['--service', name])
+
+
+def json_config(text, servers, force=False, *, client='claude', opencode_default='2'):
+    value = json_settings(text, jsonc=client == 'opencode')
+    table = value.setdefault('mcp' if client == 'opencode' else 'mcpServers', {})
+    if not isinstance(table, dict):
+        raise ValueError('Client MCP settings must be an object')
+    modern = False
+    if client == 'opencode':
+        if 'servers' in table and not isinstance(table['servers'], dict):
+            raise ValueError('OpenCode mcp.servers must be an object')
+        legacy = any(isinstance(entry, dict) and entry.get('type') in ('local', 'remote')
+                     for entry in table.values())
+        modern = 'servers' in table or (not legacy and opencode_default == '2')
+        if modern:
+            table = table.setdefault('servers', {})
+    before = deepcopy(value)
+    portable = portable_servers(servers)
+    owned = {name: entry for name, entry in table.items() if _managed_entry(name, entry)}
+    for name in owned:
+        table.pop(name)
     if (set(servers)&set(table)) and not force:
         raise ValueError('Unmanaged MCP server conflict; explicitly --force for JSON replacement.')
-    table.update({name: {'command': python, 'args': [str(COMPONENT/'agent/launch.py'), '--profile', profile, '--service', name],
-                         'env': server.get('env', {})} for name, server in servers.items()})
+    for name, launcher in portable.items():
+        spec = servers[name]
+        prior = owned.get(name, {})
+        timeout = spec.get('tool_timeout_sec', 1800)*1000
+        if client == 'opencode':
+            environment = dict(launcher['env'])
+            for key in spec.get('env_vars', []):
+                if key != 'PATH':
+                    environment.setdefault(key, '{env:'+key+'}')
+            entry = {'type': 'local', 'command': [launcher['command'], *launcher['args']],
+                     'environment': {**environment, **prior.get('environment', {})},
+                     'timeout': {'execution': timeout} if modern else timeout}
+            if modern:
+                entry['codemode'] = prior.get('codemode', False)
+        else:
+            entry = {**launcher, 'env': {**launcher['env'], **prior.get('env', {})}}
+            if client == 'workbuddy':
+                entry.update(cwd=spec['cwd'], disabled=prior.get('disabled', False))
+            if client == 'gemini':
+                for key in spec.get('env_vars', []):
+                    if key != 'PATH':
+                        entry['env'].setdefault(key, '${'+key+'}')
+                entry.update(timeout=prior.get('timeout', timeout), trust=prior.get('trust', False))
+        table[name] = {**prior, **entry}
+    if value == before and text.strip():
+        return text
     return json.dumps(value, ensure_ascii=False, indent=2)+'\n'
 
 
-def configure(path, client, servers, force=False, dry_run=False):
+def configure(path, client, servers, force=False, dry_run=False, *, opencode_default='2'):
     path = Path(path).expanduser().resolve()
     text = path.read_text(encoding='utf-8') if path.exists() else ''
-    updated = toml_config(text, servers) if client == 'codex' else json_config(text, servers, force)
+    updated = (toml_config(text, servers) if client == 'codex' else
+               json_config(text, servers, force, client=client, opencode_default=opencode_default))
+    return write_config(path, text, updated, dry_run)
+
+
+def write_config(path, text, updated, dry_run=False):
     if dry_run or updated == text:
         return {'path': str(path), 'changed': updated != text, 'dry_run': dry_run}
     path.parent.mkdir(parents=True, exist_ok=True)

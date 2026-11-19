@@ -12,7 +12,7 @@ from .ir import validate
 from .layout_tree import walk as walk_regions
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
                              graphic_texts, intentional_overlap)
-from .text_flow import DISTRIBUTED_ARROW_LIST, select_text_flow
+from .text_flow import DISTRIBUTED_ARROW_LIST, EXPLICIT_LISTS, list_min_width, select_text_flow
 from .visual_design import (TITLE_BOX_LINES, header_decoration, header_layout, preserve_scientific_terms,
                             resolve_design, rule, type_sizes)
 from totalpipe_layout.inline_math import has_markup, strip_markup, unmatched_markers
@@ -193,18 +193,18 @@ def native_list_height(block, width, font_file, gap_ratio=DEFAULT_LIST_GAP, padd
     """
     if block.get('component') == 'caption':
         return None
-    if flow is None and block.get('text_flow') != DISTRIBUTED_ARROW_LIST:
+    if flow is None and block.get('text_flow') not in EXPLICIT_LISTS:
         return None
-    flow = flow or select_text_flow(block['text'], DISTRIBUTED_ARROW_LIST)
+    flow = flow or select_text_flow(block['text'], block.get('text_flow'))
     if flow['mode'] != DISTRIBUTED_ARROW_LIST:
         return None
-    if width < 520:
+    if width < list_min_width(block):
         return 10000.0
     pad_x, pad_y = padding
     rows = flow['items']
     face = ImageFont.truetype(font_file, 24)
-    from .fonts import bullet_metrics
-    marker = bullet_metrics(block.get('bullet_style', default_style), face.getname()[0], font_file, 24)
+    from .fonts import list_marker_metrics
+    marker = list_marker_metrics(block, default_style, face.getname()[0], font_file, 24, len(rows))
     line_h = marker['line_height_px']
     line_count = (sum(len(break_lines(row, face, width-2*pad_x-marker['gutter'])) for row in rows)
                   if wrap_items else len(rows))
@@ -1119,6 +1119,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             if show_sequence:
                 box = [box[0]+56, box[1], box[2]-56, box[3]]
             flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
+            if b.get('_inferred_list') and flow['source'] == 'explicit':
+                flow = {**flow, 'source': 'auto'}
             if b.get('inline_math'):
                 flow = {**flow, 'mode': 'plain'}
             if flow['mode'] == DISTRIBUTED_ARROW_LIST and has_markup(b['text']):
@@ -1130,18 +1132,18 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     "use text_flow=plain to keep the emphasis.", n, b['id'], detector='geometric-preflight',
                     suggested_actions=['text_flow_plain', 'drop_markers']))
             pad_x, pad_y = (0, 0) if design else (28, 18)
+            min_list_width = list_min_width(b)
             measured_list_height = (native_list_height(
-                b, max(520, box[2]), font_paths["font_file"], list_gap_ratio,
+                b, max(min_list_width, box[2]), font_paths["font_file"], list_gap_ratio,
                 (pad_x, pad_y), preserve_terms, bullet_style, flow=flow)
                 if flow["mode"] == DISTRIBUTED_ARROW_LIST else None)
-            if (flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= 520
+            if (flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= min_list_width
                     and measured_list_height is not None
                     and (preserve_terms or box[3] + .5 >= measured_list_height)):
                 label_h = 44 if label else 0
                 items = flow["items"]
-                current_style = b.get('bullet_style', bullet_style)
-                from .fonts import bullet_metrics
-                marker = bullet_metrics(current_style, theme['font_family'], regular_font, 24)
+                from .fonts import list_marker_metrics
+                marker = list_marker_metrics(b, bullet_style, theme['font_family'], regular_font, 24, len(items))
                 # One text object, one paragraph per item, marker set by the paragraph itself.
                 # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
                 fitted = fit_list_items(items, box[2]-2*pad_x-marker['gutter'],
@@ -1185,7 +1187,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         suggested_actions=['increase_region_height', 'split_slide', 'review_native_render']))
                 # The card hugs the list instead of stretching to the page: a panel with 150 px of
                 # empty space under three rows reads as a layout mistake, not as breathing room.
-                if not design:
+                if not design and min_list_width == 520:
                     elements.append({
                     "id": b["id"] + ":panel", "kind": "shape", "role": "decoration",
                     "bbox": [box[0], box[1], box[2], panel_h],
@@ -1205,11 +1207,10 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                            line_height=line_h/size,
                                            max_lines=max(len(item_lines) for item_lines in lines),
                                            vertical_anchor="top")
-                bullet_glyph, bullet_face = marker['char'], marker['face']
                 current_color = b.get('bullet_color', bullet_color)
                 if marker['native_font_fallback']:
                     issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
-                        'Requested native marker font is unavailable; inspect the Unicode fallback glyph.',
+                        'Requested native marker is unavailable in the installed fonts; inspect the fallback glyph.',
                         n, b['id'], detector='font-resolution'))
                 elements.append({**style, "items": lines,
                                  "text": "\n".join("\v".join(item_lines) for item_lines in lines),
@@ -1224,10 +1225,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     "action": DISTRIBUTED_ARROW_LIST,
                     "source": flow["source"],
                     "item_count": len(lines),
-                    "bullet_style": current_style,
+                    "bullet_style": marker['style'],
                     "bullet_color": current_color,
-                    "bullet_glyph": bullet_glyph,
-                    "bullet_face": bullet_face,
+                    "bullet_glyph": marker.get('char', ''),
+                    "bullet_face": marker['face'],
+                    **({'list_start': marker['start']} if marker.get('numbering') else {}),
                     "distribution": flow["distribution"],
                 })
                 return
@@ -1235,8 +1237,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 if flow['source'] == 'explicit':
                     required_height = round(measured_list_height, 1)
                     issues.append(issue('SPLIT_REQUIRED', 'FAIL',
-                        f"{b['id']}: explicit native list requires at least 520 px width and its measured content height; markers were not removed.",
-                        n, b['id'], detector='geometric-preflight', required_size_px=[520, required_height],
+                        f"{b['id']}: explicit native list requires at least {min_list_width} px width and its measured content height; markers were not removed.",
+                        n, b['id'], detector='geometric-preflight', required_size_px=[min_list_width, required_height],
                         available_size_px=box[2:], suggested_actions=['widen_region', 'increase_region_height', 'split_slide']))
                     return
                 adaptations.append({
@@ -1438,7 +1440,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         has_formulas = any(b.get('component') == 'formula' or b.get('inline_math') for b in blocks)
         proposal = None if comp.get('layout_tree') or visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
         if comp.get('layout_tree'):
-            from .layout_tree import LayoutTreeError, compile_regions
+            from .layout_tree import LayoutTreeError, attachment_link, compile_regions
+            from .container_frames import grow_frame, rectangle, stroke_width
             checkpoints = [len(elements), len(issues), len(adaptations)]
             try:
                 plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
@@ -1449,6 +1452,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 if balance_shift > .5:
                     adaptations.append({'action': 'vertical_balance', **plan['balanced']})
                 by_id = {b['id']: b for b in blocks}
+                annotated_formulas = {link['ref'] for b in blocks if (link := attachment_link(b))
+                                      and link['kind'] == 'formula' and 'position' in link}
                 graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
                 charts_by_id = {c['id']: c for c in comp.get('charts', [])}
                 for entry in plan['nodes']:
@@ -1456,22 +1461,28 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                     if entry['type'] == 'panel':
                         title_id = 'region:'+entry['node_id']+':title'
                         style = entry.get('frame')
-                        if style:
-                            from .container_frames import rectangle
+                        if style and (style.get('border') or style.get('fill', 'none') != 'none'):
                             elements.append(rectangle('region:'+entry['node_id']+':frame', entry['bbox'], style, []))
-                            if style.get('title_fill', 'none') != 'none':
-                                elements.append({'id': 'region:'+entry['node_id']+':title-band', 'kind': 'shape',
-                                    'role': 'decoration', 'bbox': entry['title_band_bbox'],
-                                    'geometry': entry.get('title_band_geometry', 'rect'),
-                                    'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
-                                    'visual_decoration': True, 'frame_members': [title_id],
-                                    'frame_growth_inset': style['border'].get('width', 1.)})
+                        if style and style.get('title_fill', 'none') != 'none':
+                            elements.append({'id': 'region:'+entry['node_id']+':title-band', 'kind': 'shape',
+                                'role': 'decoration', 'bbox': entry['title_band_bbox'],
+                                'geometry': entry.get('title_band_geometry', 'rect'),
+                                'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
+                                'visual_decoration': True, 'frame_members': [title_id],
+                                'frame_growth_inset': stroke_width(style)})
                         text('region:'+entry['node_id']+':title', entry['title'], entry['title_bbox'],
                              'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)),
+                             anchor='middle' if entry.get('title_band_geometry') == 'roundRect' else 'top',
                              color=style.get('title_color') if style else None,
                              align=entry.get('title_align') or (style.get('title_align') if style else None))
                     elif entry['type'] == 'block':
-                        block(by_id[entry['ref']], entry['bbox'], formula_align='left')
+                        source = by_id[entry['ref']]
+                        block(source, entry['bbox'],
+                              formula_align='center' if source['id'] in annotated_formulas else 'left')
+                        if source.get('text_for'):
+                            for element in elements[first:]:
+                                if element['id'] == source['id']:
+                                    element['text_for'] = dict(source['text_for'])
                     elif entry['type'] == 'figure':
                         figure(figs[entry['ref']], entry['bbox'], entry['ref']+1)
                     elif entry['type'] == 'graphic':
@@ -1535,6 +1546,16 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         element.update(layout_component=entry['component'], layout_region=entry['bbox'])
                         ex, ey, ew, eh = element['bbox']
                         rx, ry, rw, rh = entry['bbox']
+                        # Sub-pixel rounding is not a layout decision: a preserve-terms block whose
+                        # region came out of a ratio split can be 0.7 px shorter than the line grid.
+                        # Clamp that residue so "an element never leaves its assigned region" stays
+                        # true; anything larger is still reported as a real overflow below.
+                        if eh > rh and eh-rh < 1.0:
+                            element['bbox'][3] = rh
+                            eh = rh
+                        if ew > rw and ew-rw < 1.0:
+                            element['bbox'][2] = rw
+                            ew = rw
                         if (not element.get('scientific_text_overflow') and
                             (ex < rx-.1 or ey < ry-.1 or ex+ew > rx+rw+.1 or ey+eh > ry+rh+.1)):
                             issues.append(issue('REGION_CONTENT_OUT_OF_BOUNDS', 'FAIL',
@@ -1548,12 +1569,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                             cause=failures[0]['message'])
                 # Grow opted-in frames bottom-up when preserve-terms releases complete text.
                 # Each frame only exempts its own descendants from overlap checks.
-                from .container_frames import grow_frame, stroke_width
                 for entry in reversed(plan['nodes']):
                     if not entry.get('frame'):
                         continue
                     prefix, eid = entry['component'], 'region:'+entry['node_id']
-                    framed = next(e for e in elements if e['id'] == eid+':frame')
+                    framed = next((e for e in elements if e['id'] == eid+':frame'), None)
                     title_element = next(e for e in elements if e['id'] == eid+':title')
                     band = next((e for e in elements if e['id'] == eid+':title-band'), None)
                     # A chip is a label around its text, not a row that can absorb extra height:
@@ -1563,6 +1583,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                         if needed > band['bbox'][3]+.1:
                             band['bbox'] = [*band['bbox'][:3], needed]
                             band['scientific_text_overflow'] = {'policy': 'preserve-terms'}
+                    if framed is None:
+                        continue
                     members = [e for e in elements if e is not framed and
                                (e.get('layout_component') == prefix or e.get('layout_component', '').startswith(prefix+'.'))]
                     framed['frame_members'] = [e['id'] for e in members]
@@ -1838,7 +1860,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 n, detector='geometric-preflight', body_font_px=body_sizes,
                 suggested_actions=['reflow_region', 'split_slide']))
         for b in blocks:
-            if (b.get('text_flow') == DISTRIBUTED_ARROW_LIST
+            if (b.get('text_flow') in EXPLICIT_LISTS and not b.get('_inferred_list')
                     and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in elements)
                     and not any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues)):
                 issues.append(issue('SPLIT_REQUIRED', 'FAIL',

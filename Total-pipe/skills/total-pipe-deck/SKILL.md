@@ -28,7 +28,7 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | **讲解契约 `explain`**（`quantity`/`parallel_items`/`grouped_panels`/`comparison`/`ordered_steps`/`relation`/`curve`/`image_evidence`） | 把“读者必须看见什么”写成逐条义务，覆盖列表、嵌套、曲线、公式等 `form` 表达不了的结构 | 不选组件；required 缺原生载体是 REVIEW；覆盖账本写 `derived/explanation_coverage.json` |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
 | `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
-| 原生列表 `distributed_arrow_list` | ≥2 条并列、顺序可换 | 2–6 条、宽 ≥520 px、不能与 `inline_math` 同块 |
+| 原生列表 `native_bullet_list` / `native_numbered_list` | 单段可加图标，独立要点可并列，步骤可编号 | 1–6 条、宽 ≥240 px、与 `inline_math` 分块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
 | 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |
 | 页脚家具 `page_numbers` / `footer` | 长报告要能按页码引用、要有署名 | 仅设计页生效；一行 ≤120 字符；evidence id 仍留在备注 |
@@ -230,11 +230,21 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
 
+让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
+可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。
+对照流程可用共同标题、两条有名称的路线及分隔线，步骤之间用带动作短语的箭头。
+文案审批覆盖可见的组标题、路线名和动作词，IR 作者据此使用原生可编辑对象。
+
 新任务`schema_version=1.3`使用display_copy/content_map；content_refs保持科学单元唯一所有权，reuse_refs明确再次展示，figure_sources记录真实图号。
 required 内容保持可见，with_claim 条件在主张出现的每页可见。主 Agent 随后实际执行 page_review，
 绑定当前 Story/设计哈希逐页检查忠实性、限定范围与观众文案；不能自动签收或复用设计者自评。
 IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 content_projection。文案或去向需改时回退设计并重审。
 数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
+
+若任务显式选择 `page_mode=page_scene`，审读后按 [PageScene](../../docs/page-scene.md) 提交场景。
+包括 recipe 展开结果在内，所有可见文案须逐项匹配本页批准文本；新增标签、图注、公式或图表文字先回退
+设计重审。可直接提交 `work/page_scene.json`；相对图片路径以提交文件目录为基准，工具保存规范化绑定和
+绝对路径，并跟踪图片变化。预览 PNG 后再接受，候选与原生验收按该路径的协议执行。
 
 恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
 设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
@@ -270,7 +280,8 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
 验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
 若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
-IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿选页渲染，实际打开返回 PNG 后再修改 IR。
+逐页动作带 `preview_plan` 时，草稿写好后执行 `first_call`，复核骨架和单件报告后，再按
+`next_action.preview_follow_up.next_call` 生成 PNG 并实际查看。其他页可用 `advance(preview={artifact_path,slide_ids})` 按需渲染。
 未变页按内容/资源指纹复用；预览不接受产物、不占修订、不改 candidate/正式 QA。它使用 officecli-html，
 不能证明 PowerPoint 原生显示，不能签收 REVIEW；完整 Design、构建及原生验收仍必做。完整协议见接入层用法的“IR 选页渲染与看图修订”。
 
@@ -330,15 +341,24 @@ IR 编写中可用 `advance(preview={artifact_path,slide_ids})` 对 work/ 草稿
 
 ### 原生列表与单段标记
 
-正文列表先明确条目换行，用 text_flow=distributed_arrow_list 保留原生无序列表。
+按页面设计使用单段标记、并列要点或顺序编号。正文用原文换行划分条目。用
+`text_flow=native_bullet_list` 为单段或并列要点加符号，`bullet_icon` 可指定一个图标。
+有先后关系的步骤用 `text_flow=native_numbered_list`，用 `list_start` 承接编号。
+每条独立正文保留自身 block、文案引用和来源。先看逐页 `example_lookup.suggestions` 推荐的索引元数据。
+需要细化时执行 `search "<关键词>" --limit 2`，再用 `show <id>` 查看一份 [脚本示例](../../examples/library/README.md)。
 读 `Total-pipe/docs/native-lists.md`：顶层 presentation.bullet_style/bullet_color 设默认，block 同名字段覆盖。
 单页 presentation.takeaway_marker={style:large_diamond,color:#000000} 为完整 takeaway 加一个独立标记；
 可与 takeaway 行内公式共存，符号颜色不改正文颜色。preserve-terms 不移除项目符号，
-垂直超容量保留原文与 REVIEW；显式列表宽度至少 520 px，高度按完整内容实测，不使用固定高度门槛；
+垂直超容量保留原文与 REVIEW。新显式列表宽度至少 240 px，旧 `distributed_arrow_list` 仍需 520 px。
+高度按完整内容实测；
 空间不足时回到布局规划或拆页。
 不要为套入列表缩短术语，也不要把失败列表改成普通文本掩盖问题。
 标记可选；plain 关闭正文列表，不配置 takeaway_marker 则无前导标记。优先选 large_square、
 large_diamond、arrowhead 等饱满原生字形，不设置项目符号百分比 / 点数缩放；符号颜色独立配置。
+
+页面设计要求说明与图片、图形或独立公式紧邻时，在布局树用 `caption_for.position` 或
+`text_for.position` 指定上、下、左、右。只给目标建叶节点，说明块由编译器绑定。
+需要判断空间时先看布局骨架，再查看公式、图注、编号和图标的实际渲染。
 
 ### 原生图形
 
@@ -396,7 +416,8 @@ paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最�
 
 ### 公式：独立公式与显式行内模式
 
-展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。普通文本默认不解析数学标记。
+展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。组会页面设计把需要讲解且有证据的式子写作独立 `$...$` 投屏文案，另写符号和条件。Deck IR 作者用 `copy_ref` 放入正文块，绑定阶段将其转成原生公式。PageScene 作者用 `type=formula` 加 `copy_ref`，绑定阶段填入已审读的 LaTeX。
+IR 草稿优先用 `advance.preview` 的 `mode="layout"` 检查骨架与单件规格，再看渲染 PNG。独立 CLI 的 `skeleton`、`units` 可用于既有工件诊断，`explain` 可查询具体报错。
 需要行内混排时读 `Total-pipe/docs/inline-math.md`：正文块或表格 text 格加 inline_math=true，
 用 `$…$` 或 `\(…\)` 标记完整数学区域；semantic.inline_math 列出 title/takeaway 可开启相应字段。
 先查询 native_inline_equation 与 native_equation 能力；RPA content_refs 传 block.inline_math /
@@ -535,6 +556,11 @@ IR 草稿预览、逐页测量、修补预检关闭自动增强，正式候选�
 python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
   --layout-provider packer --officecli <officecli-path> --skip-native
 ```
+
+遇到 FAIL/WARNING 或 QA 里的 `rule`，先跑
+`python -m deck_compiler explain <CODE>`：给出该码的抛出点、成因与按代价排序的修法，
+`--list` 列全部码，`--search <词>` 反查，`--unauthored` 只看还没有处置建议的码。
+码表由源码扫描得出，新增门禁不会漏条目；据此改 IR，不要凭猜测压缩或改写科学内容。
 
 MCP：`totalpipe_compile` 仅编译布局与 QA；`totalpipe_build` 生成候选与 QA；
 `totalpipe_review` 按需检查现有构建并截图。提供方只建议几何，编译器执行真实字体、容量、

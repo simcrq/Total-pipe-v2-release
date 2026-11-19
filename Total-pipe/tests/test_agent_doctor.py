@@ -41,6 +41,9 @@ class DoctorTests(AgentCase):
                 if 'mineru_auth' in argv:
                     return True, json.dumps({'ok': True, 'result': {
                         'ready': status == 'verified', 'verified': status == 'verified', 'status': status}})
+                if 'dependencies' in argv:
+                    # Isolate the authentication decision from optional PDF dependencies.
+                    return True, json.dumps({'ok': True, 'result': {'markdown_ready': True, 'pdf_ready': True}})
                 return original(argv, *args, **kwargs)
             with self.subTest(status=status), patch.dict(os.environ, {'MINERU_TOKEN': ''}), patch.object(module, 'probe', side_effect=probe):
                 result = module.doctor(source_kind='pdf')
@@ -79,6 +82,17 @@ class DoctorTests(AgentCase):
         self.assertFalse(result['can_rpa'])
         self.assertNotIn('rpa', result['blocked_stages'])
         self.assertNotIn('evidence', result['blocked_stages'])
+
+    def test_page_scene_does_not_require_officecli_for_candidate_build(self):
+        with patch.object(module.shutil, 'which', return_value=None):
+            result = module.doctor(source_kind='markdown', page_mode='page_scene')
+        self.assertTrue(result['can_build_editable'])
+        self.assertNotIn('build', result['blocked_stages'])
+        self.assertEqual(result['page_mode'], 'page_scene')
+        with patch.object(module.shutil, 'which', return_value=None):
+            deck = module.doctor(source_kind='markdown', page_mode='deck_ir')
+        self.assertFalse(deck['can_build_editable'])
+        self.assertIn('build', deck['blocked_stages'])
 
     def test_stage_instruction_routes_and_light_skill_are_complete(self):
         from agent.runner import TABLE, STAGES

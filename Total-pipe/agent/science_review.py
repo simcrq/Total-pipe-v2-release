@@ -71,11 +71,16 @@ def prepare(work, request):
         'Review every unit, grouped into concrete scientific topics. Judge completeness of essential prerequisites, controls, '
         'negative results, uncertainty and source discrepancies; record missing facts even if no unit represents them. '
         'Every assertion must be independently limitable. A mixed paragraph or a qualifier cascade must fail. '
+        'Separate evidence completeness from display policy: a condition that changes a quantitative claim stays visible, '
+        'while a scope/detail unit may be notes_allowed when a dedicated boundary page or speaker notes carries it with a '
+        'scientific reason. Do not mark every caveat required and do not turn the result pages into an audit memo. '
         'Do not mechanically mark pass, reuse the planner self-review, or count file availability as source reading. '
         'Failures replan Story; no page-design invocation or IR can bypass this review.'})
     (work/'scientific_review_task.md').write_text(
         '# 原子科学记录源审读\n\n主 Agent 完整读取 scientific_review_prompt.json、Schema、原文和实际SI。'
         '逐个覆盖全部科学单元，可按真实科学主题分组，实际检查证据忠实性、独立可限定性和必要条件。'
         'coverage 须审查原文中未进入 ledger 的重要条件/对照/负面结果与矛盾，不能只查已有单元。'
+        '同时区分“证据完整”与“投屏可见”：改变定量主张的条件必须可见；scope/detail 若由一页边界或讲稿承载，'
+        '可 notes_allowed，但必须给科学相关性理由，不能把所有 caveat 都标 required。'
         '每项给具体说明；禁止自动 pass 或复用规划者自评。写 scientific_review.json；失败回退 Story。\n', encoding='utf-8')
     return [work/'scientific_review_prompt.json', work/'scientific_review_task.md']

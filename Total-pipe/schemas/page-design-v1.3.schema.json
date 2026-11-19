@@ -73,6 +73,14 @@
               "pattern": "\\S"
             }
           },
+          "recipe": {
+            "type": "string",
+            "description": "Optional PageScene recipe id from the design prompt; slots then carry copy_ref values."
+          },
+          "slots": {
+            "type": "object",
+            "description": "Recipe slots; text values may be {copy_ref: display_copy id}."
+          },
           "design": {
             "description": "Drawing, composition and presenter walkthrough instructions; custom structures welcome, no compiler vocabulary required.",
             "oneOf": [

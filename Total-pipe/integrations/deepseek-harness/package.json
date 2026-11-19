@@ -1,0 +1,14 @@
+{
+  "name": "totalpipe-dsh-plugin",
+  "version": "3.3.0",
+  "private": true,
+  "description": "Total-pipe four-tool agent (doctor/start/advance/status) for DeepSeek Harness.",
+  "type": "module",
+  "main": "index.js",
+  "files": ["index.js", "bridge.py", "cordis.patch.yml"],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

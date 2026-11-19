@@ -123,9 +123,24 @@
       "max_attempts": 2
     },
     {
+      "id": "page_scene",
+      "kind": "agent",
+      "artifact": "page_scene",
+      "sources": [
+        "pdf",
+        "markdown",
+        "workflow"
+      ],
+      "prepare": "page_scene",
+      "skip_if": "deck_ir_mode",
+      "instructions_ref": "page_scene",
+      "max_attempts": 4
+    },
+    {
       "id": "deck_ir",
       "kind": "agent",
       "artifact": "deck_ir",
+      "skip_if": "page_scene_mode",
       "instructions_ref": "ir",
       "max_attempts": 3
     },
@@ -160,6 +175,7 @@
     "story": "skills/total-pipe-deck/SKILL.md#2-科学故事story-planner",
     "page_design": "work/page_design_prompt.json",
     "page_review": "work/page_design_review_prompt.json",
+    "page_scene": "work/page_scene_prompt.json",
     "ir": "work/ir_prompt.json",
     "design": "work/visual_prompt.json",
     "scientific_review": "work/scientific_review_prompt.json"

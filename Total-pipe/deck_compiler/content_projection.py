@@ -22,6 +22,18 @@ def normalized(text):
     return re.sub(r'(?<=\d)[xX]10\^', '×10^', re.sub(r'\s+', '', text))
 
 
+def standalone_math(text):
+    """Return the exact expression in a standalone, explicitly marked equation."""
+    from totalpipe_layout.inline_math import InlineMathError, parse_inline
+    if not isinstance(text, str) or not text.strip().startswith(('$', r'\(')):
+        return None
+    try:
+        spans = parse_inline(text.strip())
+    except InlineMathError:
+        return None
+    return spans[0].text if len(spans) == 1 and spans[0].kind == 'formula' else None
+
+
 def page_sources(page, source_catalog):
     """Ownership is unique; a scoped qualifier may be displayed again beside another claim."""
     owned = set(page.get('content_refs', []))
@@ -197,7 +209,9 @@ def visible_slots(slide):
     slots += [('body', text) for text in visible_caveats(slide)]
     for block in comp.get('blocks', []):
         if not isinstance(block, dict): continue
-        if block.get('component') != 'formula':
+        if block.get('component') == 'formula':
+            slots.append(('formula', block.get('text', '')))
+        else:
             slots.append(('caption' if block.get('component') == 'caption' else 'body', block.get('text', '')))
         if block.get('label'):
             slots.append(('label', block['label']))
@@ -301,17 +315,35 @@ def validate_ir(slide, assets, rendered=None):
         elif approved and block.get('basis') == 'supplement':
             fail(f'{approved["id"]}: paper/organizational copy cannot change to supplement basis')
     for role, text in slots:
-        accepted_roles = ('body', 'label') if role == 'graphic' else (role,)
+        # Body and labels describe how readers use a phrase, not its PPTX carrier.
+        # Titles and captions keep their distinct semantic roles.
+        if role == 'formula':
+            continue  # Literal visual evidence may be routed as a formula in content_map.
+        accepted_roles = ('body', 'label') if role in ('body', 'label', 'graphic') else (role,)
         candidates = [normalized(item['text']) for item in copies if item['role'] in accepted_roles]
         # An explicit native list may carry one approved sentence per paragraph.
         parts = [normalized(part) for part in text.split('\n') if part.strip()]
-        if normalized(text) not in candidates and not (role == 'body' and parts and all(p in candidates for p in parts)):
+        phrase = normalized(text)
+        is_list = role == 'body' and parts and all(p in candidates for p in parts)
+        if phrase not in candidates and not is_list:
             fail(f'Unapproved {role} copy: {text[:100]}')
-    raw_visible = [normalized(text) for _, text in slots]
-    rendered_text = [normalized(e.get('source_text', e.get('text', ''))) for e in (rendered or {}).get('elements', [])
-                     if e.get('kind') in ('text', 'list', 'math')]
+        if role in ('label', 'graphic') and by_text.get(phrase, {}).get('basis') == 'supplement':
+            fail('Supplementary copy needs a block with explicit supplement source and basis.')
+    elements = (rendered or {}).get('elements', [])
+    raw_visible = [normalized(text) for role, text in slots if role != 'formula']
+    rendered_text = [normalized(e.get('source_text', e.get('text', ''))) for e in elements
+                     if e.get('kind') in ('text', 'list')]
+    raw_formulas = {text for role, text in slots if role == 'formula'}
+    rendered_formulas = {e.get('source_text') for e in elements if e.get('kind') == 'math'}
     for item in copies:
         needle = normalized(item['text'])
+        equation = standalone_math(item['text']) if item['role'] in ('body', 'label') else None
+        if equation is not None and item.get('basis', 'paper') == 'paper':
+            if equation not in raw_formulas:
+                fail(f'Approved equation {item["id"]} needs a native formula block with the exact reviewed expression')
+            elif rendered is not None and equation not in rendered_formulas:
+                fail(f'Approved equation {item["id"]} is absent from compiled native formula objects')
+            continue
         if not any(needle in text for text in raw_visible):
             fail(f'Approved copy {item["id"]} has no visible IR object; notes do not count')
         if rendered is not None and not any(needle in text for text in rendered_text):

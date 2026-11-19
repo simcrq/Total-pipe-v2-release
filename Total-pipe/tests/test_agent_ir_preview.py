@@ -60,6 +60,32 @@ class IRPreviewTests(AgentCase):
         self.assertTrue(Path(result['pages'][0]['png']).is_file())
         self.assertTrue(runner.status(self.job_id)['ir_preview'])
 
+    def test_layout_preview_returns_workshop_diagnostics_without_officecli(self):
+        state = self.prepare()
+        with patch('deck_compiler.officecli.preflight', side_effect=RuntimeError('no OfficeCLI')):
+            result = self.preview(slide_ids=['P1'], mode='layout')
+        self.assertEqual(result['status'], 'PASS', result)
+        self.assertEqual(self.render.call_count, 0)
+        page = result['pages'][0]
+        self.assertIsNone(page['png'])
+        self.assertTrue(Path(page['skeleton_png']).is_file())
+        self.assertTrue(Path(page['units_report']).is_file())
+        self.assertIn('gap_to_footer_px', read(page['skeleton_report']))
+        self.assertEqual(state, (self.out/'.totalpipe/job.json').read_bytes())
+
+    def test_layout_preview_links_to_render_then_png_inspection(self):
+        state = self.prepare()
+        response = runner.advance(self.job_id, preview={'artifact_path': str(self.path),
+                                                       'slide_ids': ['P2'], 'mode': 'layout'})
+        follow_up = response['next_action']['preview_follow_up']
+        self.assertEqual(follow_up['type'], 'inspect_skeleton')
+        self.assertEqual(follow_up['next_call']['tool'], 'totalpipe_advance')
+        rendered = runner.advance(**follow_up['next_call']['arguments'])
+        self.assertEqual(rendered['next_action']['preview_follow_up']['type'], 'inspect_render')
+        self.assertEqual([page['slide_id'] for page in rendered['preview_result']['pages']], ['P2'])
+        self.assertTrue(Path(rendered['preview_result']['pages'][0]['png']).is_file())
+        self.assertEqual(state, (self.out/'.totalpipe/job.json').read_bytes())
+
     def test_only_changed_page_renders_and_corrupt_cached_outputs_are_rebuilt(self):
         self.prepare()
         first = self.preview()
@@ -86,6 +112,17 @@ class IRPreviewTests(AgentCase):
         report = read(result['pages'][0]['qa_report'])
         self.assertEqual(report['counts'], result['pages'][0]['counts'])
         self.assertEqual(state, (self.out/'.totalpipe/job.json').read_bytes())
+
+    def test_layout_failure_does_not_offer_render_as_the_next_call(self):
+        self.prepare()
+        self.value['slides'][0]['semantic'].pop('purpose')
+        write(self.path, self.value)
+        response = runner.advance(self.job_id, preview={'artifact_path': str(self.path),
+                                                       'slide_ids': ['P1'], 'mode': 'layout'})
+        self.assertEqual(response['preview_result']['status'], 'FAIL')
+        follow_up = response['next_action']['preview_follow_up']
+        self.assertEqual(follow_up['type'], 'review_preview_failure')
+        self.assertNotIn('next_call', follow_up)
 
     def test_source_change_during_render_cannot_produce_a_current_cached_preview(self):
         state = self.prepare()

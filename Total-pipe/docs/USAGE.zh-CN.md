@@ -2,20 +2,28 @@
 
 本文对应当前仓库的 PaperWorkflow、Story、RPA、page_design、Scientific Visual Planner 和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
-组件与当前版本见 [仓库 README](../../README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
+组件与版本来源见 [AI 工程索引](../../docs/README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
-默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始；
-`python3.12 install.py --client codex` 注册服务。按 next_action 读取完整产物提示，模型选择仍来自用户。
-[安装、推进与恢复](agent-adapter.md)；下文保留完整规范与低层 CLI 操作。
+默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始。在仓库根目录运行
+`python3 install.py --client auto` 检测宿主，也可以通过 `--client` 指定目标。[AI 安装指南与宿主列表](../../INSTALL_FOR_AI.md)
+
+安装后按 `next_action` 读取完整产物提示，模型选择仍来自用户。[推进与恢复](agent-adapter.md)
 
 四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
 `totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED
 调用 advance。各轮本地执行耗时、等待与重规划时间点追加在 `logs/events.jsonl`，不代表模型生成耗时。
 IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 一次检查全部问题与几何容量，
 不消耗修订次数。详见[完整 IR 提交预检](agent-adapter.md#完整-ir-提交预检)；它不替代正式提交或最终 QA。
-边写 IR 边看图时，单独用 `advance(preview={artifact_path,slide_ids})`，实际打开返回 PNG 后改源 IR、重复预览；
+写完复杂、稀疏或新布局的逐页草稿后，先按 `preview_plan.first_call` 看骨架，再按 `preview_follow_up.next_call` 成图。
+也可单独用 `advance(preview={artifact_path,slide_ids})` 按需看图，实际打开返回 PNG 后改源 IR、重复预览；
 未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
+
+显式页面几何可在新任务选择 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
+页面审读后提交 `work/page_scene.json` 或 `work/` 下其他草稿；工具会写入规范化绑定及 recipe 展开结果，
+相对图片路径以草稿所在目录解析并固化，图像变化使检查点失效。全部可见文案须逐项匹配本页批准文本，
+包括 recipe 标签、表格与图表文字；要改文案先回退设计重审。该路径的交付边界是 candidate 与原生验收证据，
+详细流程见 [PageScene](page-scene.md)。
 
 ## 1. 输入、工作目录与产物
 
@@ -263,12 +271,25 @@ Story 的 `question` 复制成标题。
 无序列表用顶层 `presentation.bullet_style / bullet_color` 设默认，正文 block 同名字段独立覆盖；
 符号颜色不改变正文颜色。单页 `presentation.takeaway_marker={"style":"large_diamond","color":"#000000"}`
 为完整 takeaway 加一个原生前导标记，换行和行内公式按剩余宽度实测。
-preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW；显式列表宽度至少 520 CSS px，
+`native_bullet_list` 支持单段要点、换行并列要点和 `bullet_icon`。顺序有意义时用
+`native_numbered_list`，可用 `list_start` 承接编号。
+在 `page_design.design` 先说明正文分组、步骤或对照关系。可用短圆角标题标出一组正文，
+用圆角文字节点与连接箭头解释流程，或在共同标题下以两条有名称的路线比较方法。
+将组标题和关键标签纳入批准文案，IR 阶段按关系选择原生对象。
+每条独立正文保留自己的 block ID、文案引用和来源。对独立步骤按读图顺序逐块设置 `list_start`。
+逐页 IR 提示的 `example_lookup.suggestions` 提供至多两条按批准设计匹配的示例元数据。按需打开一项，
+或使用 `example_lookup` 的检索命令细化关键词。见 [脚本示例库](../examples/library/README.md)。
+preserve-terms 保留列表原文、符号和颜色，垂直超容量记录 REVIEW。传统 `distributed_arrow_list`
+宽度至少 520 CSS px，两种新显式列表至少 240 CSS px。
 高度按完整条目、标记槽、实际换行、标签、间距及内边距测量。区域不足时报告拆页 / 重规划，
 不降级为无符号文本。
 完整用法、优先级及两页样例见 [原生列表](native-lists.md)。
 项目符号可选；plain 关闭正文列表，takeaway 未配置则不加标记。large_square / large_diamond /
 arrowhead 选择较饱满的原生字形，不缩放项目符号，字形尺寸参与空间测量。
+
+图片、流程图或独立公式使用四向解说时，用 `caption_for.position` 或 `text_for.position`
+指定 `top/bottom/left/right`。在布局树中保留目标叶节点，说明块由编译器测量并放置。
+字段和示例见 [四向图注与正文](content-projection.md#四向图注与正文)。
 
 图片来源在 canonical IR 中区分 `paper`、`generated` 与 `reference`：论文图要求图号，管线自绘示意图要求
 生成器和“示意图”图注；用户提供的参考页 / 图片裁图标记为 `reference` 并记录 `reference_source`，不伪装成论文图或
@@ -316,6 +337,8 @@ chart ID（`composition.charts`），或 1.1 的 table ID。已有 1.0 树保持
 stack 默认 `align: start` 贴合实测内容；可显式 center 居中（位移上限 56 px）或 distribute 把余量
 加进间隙——间隙超过 48 px 时不再均分，改为整组居中。
 weights 各项为 `[0.1,10]` 的相对值，按比例铺满，不能与 center / distribute 同用。
+新布局先用 `advance.preview` 的 `mode="layout"` 检查骨架与单件规格。结合正文占用、图形标签折行与实际渲染判断留白是否帮助阅读。普通构建将纯文字页列为 REVIEW。需要每页都有视觉对象时使用构建 CLI 的 `--require-visuals`，独立公式计入视觉对象。
+
 未加权贴顶 stack 留白超过其高度 15% 时返回 `PAGE_UNDERFILL` REVIEW、`underfill_px`
 及可行的 `suggested_weights`，按实际意图调整或审核接受。
 

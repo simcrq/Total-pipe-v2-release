@@ -130,7 +130,7 @@ Skill/调用者控制最多三轮编译与修订，合入 patch 后重新生成�
 `adaptation_log[action=layout_tree].nodes`；最终对象携带 layout_component/layout_region。
 树由 compiler 独占，平面 packer 不重新分配其叶节点。
 
-三节点水平流程图最少需要 `3×200+2×64=728 px` 宽；均匀三栏无法容纳时返回 INSUFFICIENT_DRAWING_SPACE。
+使用短标签的三节点水平链最少需要 `3×160+2×32=544 px` 宽。较长标签会增加测量需求，区域不足时返回 INSUFFICIENT_DRAWING_SPACE。
 可以调整权重、放整行、换两栏或拆页，不缩小节点绕过下限。
 原生表格按列宽、完整文字换行、跨行需求及数学 AST 测量，不使用源字符串长度代替公式尺寸。
 表格每页最多 4 项、每表最多 32 行/12 列，详见 [原生表格协议](native-tables.md)。
@@ -145,7 +145,7 @@ Skill/调用者控制最多三轮编译与修订，合入 patch 后重新生成�
   "code": "INSUFFICIENT_DRAWING_SPACE", "severity": "FAIL",
   "component": "body.children[0].body",
   "message": "Native graphic cannot reach its readable minimum width in this region.",
-  "required_size_px": [728, 272], "available_size_px": [326.86, 450],
+  "required_size_px": [544, 272], "available_size_px": [326.86, 450],
   "measurement": "conservative_minimum",
   "suggested_actions": ["switch_to_two_columns", "split_slide"]
 }
