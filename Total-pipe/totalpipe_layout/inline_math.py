@@ -1,4 +1,4 @@
-"""Opt-in mixed prose/math measurement. A formula is one indivisible line-breaking atom."""
+"""Mixed prose/math measurement. A formula is one indivisible line-breaking atom."""
 from dataclasses import dataclass
 from functools import lru_cache
 import re
@@ -22,6 +22,7 @@ class Span:
     kind: str
     text: str
     mark: str = ''      # '' | 'emphasis' | 'highlight' | 'citation'; only text spans carry a mark
+    shorthand: str = ''   # original spelling of an inferred subscript
 
 
 # Emphasis and citations are written in the text, not declared in a parallel array: the author
@@ -30,6 +31,37 @@ class Span:
 MARKERS = (('**', '**', 'emphasis'), ('==', '==', 'highlight'), ('[[', ']]', 'citation'))
 MARK_NAMES = tuple(name for _, _, name in MARKERS)
 ESCAPES = ('\\\\', '\\$', '\\*', '\\=')
+_SUBSCRIPT = re.compile(
+    r'(?<![A-Za-z0-9_\\.@])(?P<base>[A-Za-z\u0370-\u03ff])_'
+    r'(?:\{(?P<group>[A-Za-z0-9\u0370-\u03ff]+(?:-[A-Za-z0-9]+)?)\}'
+    r'|(?P<label>[a-z]-[A-Z]{2,}\d*|[A-Za-z0-9\u0370-\u03ff]+))'
+    r'(?![A-Za-z0-9_\u0370-\u03ff]|\.[A-Za-z0-9]|@[A-Za-z0-9])'
+)
+_LITERAL = re.compile(
+    r'(?P<ticks>`+)[^`]*?(?P=ticks)(?!`)|(?:[a-zA-Z][a-zA-Z0-9+.-]*://|www\.)[^\s<>，。；）]+|'
+    r'(?<![\w/})])(?:[A-Za-z]:[\\/]|[.~]{1,2}/|/)[^\s<>，。；）]+'
+)
+
+
+def _prose_spans(source):
+    """Keep prose and identifier literals, and give each inferred symbol an exact source span."""
+    start = 0
+    literals = iter(_LITERAL.finditer(source))
+    literal = next(literals, None)
+    for match in _SUBSCRIPT.finditer(source):
+        while literal and literal.end() <= match.start():
+            literal = next(literals, None)
+        if literal and literal.start() <= match.start():
+            continue
+        if start < match.start():
+            yield Span('text', source[start:match.start()])
+        label = match['group'] or match['label']
+        if len(label) > 1 and label.isascii() and any(ch.isalpha() for ch in label):
+            label = r'\mathrm{' + label + '}'
+        yield Span('formula', match['base'] + '_{' + label + '}', shorthand=match[0])
+        start = match.end()
+    if start < len(source):
+        yield Span('text', source[start:])
 
 
 def _closing_marker(source, start, closer):
@@ -54,14 +86,19 @@ def _closing_marker(source, start, closer):
 
 
 @lru_cache(maxsize=2048)
-def parse_inline(source):
-    """Recognize $...$ and \\(...\\) only after explicit opt-in; preserve the source elsewhere."""
+def parse_inline(source, *, subscripts_only=False):
+    """Recognize explicit math and bare subscript symbols in prose."""
+    if subscripts_only:
+        return tuple(_prose_spans(source))
     spans, prose, index = [], [], 0
     def flush():
         if prose:
-            spans.append(Span('text', ''.join(prose)))
+            spans.extend(_prose_spans(''.join(prose)))
             prose.clear()
     while index < len(source):
+        literal = _LITERAL.match(source, index)
+        if literal:
+            prose.append(literal[0]); index = literal.end(); continue
         if source.startswith(ESCAPES, index):
             prose.append(source[index+1]); index += 2; continue
         if source.startswith(('$$', '\\[', '\\]'), index):
@@ -102,11 +139,20 @@ def parse_inline(source):
         except FormulaError as error:
             raise InlineMathError(f'Inline formula at char {start}: {error}') from error
         spans.append(Span('formula', expression))
-        if sum(s.kind == 'formula' for s in spans) > 128:
-            raise InlineMathError('At most 128 inline formulas per text field are supported.')
         index += len(closing)
     flush()
+    if sum(s.kind == 'formula' for s in spans) > 128:
+        raise InlineMathError('At most 128 inline formulas per text field are supported.')
     return tuple(spans)
+
+
+def has_bare_subscript(source):
+    if not isinstance(source, str) or not _SUBSCRIPT.search(source):
+        return False
+    try:
+        return any(span.shorthand for span in parse_inline(source))
+    except InlineMathError:
+        return False
 
 
 def plain_text(source):
@@ -269,6 +315,6 @@ def strip_markup(source):
     if not isinstance(source, str):
         return source
     try:
-        return ''.join(span.text for span in parse_inline(source))
+        return ''.join(span.shorthand or span.text for span in parse_inline(source))
     except InlineMathError:
         return source

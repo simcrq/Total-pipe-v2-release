@@ -115,7 +115,7 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 - [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排与跟随主题的图示着色，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
-- [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
+- [行内公式与自动下标](docs/inline-math.md)：正文、标题、结论、图注和表格文字格自动排版 `V_OUT`、`V_G` 等下标，混排容量按片段宽度及基线上下需求计算。
 - [原生列表](docs/native-lists.md)：单条和多条正文可使用无序图标或连续编号，支持逐 block 样式、颜色和起始编号。布局按完整条目测量。
 - [四向图注与正文](docs/content-projection.md)：图片、流程图和独立公式可在布局树中绑定上、下、左、右的说明文字。
 - [可检索的脚本示例库](examples/library/README.md)：页面设计阶段可按讲解关系查构图，IR 阶段可按批准设计查实现。涵盖 A/B 路线、原图导读、公式讲解和机制假设等。

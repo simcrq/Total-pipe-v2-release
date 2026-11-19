@@ -1,5 +1,6 @@
 """One candidate, one staging file, one atomically promoted final per workspace."""
 from contextlib import contextmanager
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -7,7 +8,7 @@ import shutil
 import subprocess
 import time
 from .contracts import digest, file_hash, issue, report
-from .ir import derive, validate
+from .ir import derive, enable_bare_subscripts, validate
 from .layout import compile_deck
 from .structural import verify
 from . import officecli
@@ -103,8 +104,8 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                   require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
                   require_visuals=False):
     ir_path, out = Path(ir_path), Path(out)
-    ir = json.loads(ir_path.read_text(encoding='utf-8'))
-    source_ir = ir
+    source_ir = json.loads(ir_path.read_text(encoding='utf-8'))
+    ir = enable_bare_subscripts(deepcopy(source_ir))
     _explain_outputs(ir_path, out, explain_viz_request)
     if require_visual_design and not any(item['severity'] == 'FAIL' for item in validate(ir)):
         from .visual_planner import make_prompt, pending_design

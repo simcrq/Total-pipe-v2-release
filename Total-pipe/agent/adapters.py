@@ -269,7 +269,8 @@ def normalize_authoring_ir(value):
     Inline ``$...$`` / ``\\(...\\)`` in a body block or title/takeaway enables
     the existing measured inline-math path.
     """
-    from deck_compiler.text_flow import NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST
+    from deck_compiler.ir import enable_bare_subscripts
+    from deck_compiler.text_flow import EXPLICIT_LISTS
     if not isinstance(value, dict):
         return value
     slides = value.get('slides')
@@ -304,7 +305,7 @@ def normalize_authoring_ir(value):
                 block['text'] = block.pop('latex')
                 block.setdefault('component', 'formula')
             if (block.get('component') not in ('formula', 'caption')
-                    and block.get('text_flow') not in (NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST)):
+                    and block.get('text_flow') not in EXPLICIT_LISTS):
                 converted, changed = _scientific_math(block.get('text'))
                 if changed:
                     block['text'] = converted
@@ -323,7 +324,7 @@ def normalize_authoring_ir(value):
                     cell['text'] = converted
                 if changed or _has_inline_math(cell.get('text')):
                     cell['inline_math'] = True
-    return value
+    return enable_bare_subscripts(value)
 
 
 def check_design(value, story, evidence, slide_count=None, figures=None):

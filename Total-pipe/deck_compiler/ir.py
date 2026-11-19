@@ -44,6 +44,36 @@ def coarse_characters(text, inline_math=False):
         return len(text)  # Syntax is reported separately; validation must return structured errors.
 
 
+def enable_bare_subscripts(ir):
+    """Enable native math on supported text fields without modifying their copy."""
+    from totalpipe_layout.inline_math import has_bare_subscript
+
+    def objects(value, field):
+        entries = value.get(field) if isinstance(value, dict) else None
+        return (entry for entry in entries if isinstance(entry, dict)) if isinstance(entries, list) else ()
+
+    for slide in objects(ir, 'slides'):
+        semantic = slide.get('semantic')
+        if isinstance(semantic, dict):
+            fields = semantic.get('inline_math', [])
+            if isinstance(fields, list):
+                automatic = [key for key in ('title', 'takeaway') if key not in fields
+                             and has_bare_subscript(semantic.get(key))]
+                if automatic:
+                    semantic['inline_math'] = [*fields, *automatic]
+        comp = slide.get('composition')
+        for block in objects(comp, 'blocks'):
+            if (block.get('component') not in ('caption', 'formula')
+                    and block.get('text_flow') not in EXPLICIT_LISTS
+                    and has_bare_subscript(block.get('text'))):
+                block.setdefault('inline_math', True)
+        for table in objects(comp, 'tables'):
+            for cell in objects(table, 'cells'):
+                if cell.get('kind') != 'formula' and has_bare_subscript(cell.get('text')):
+                    cell.setdefault('inline_math', True)
+    return ir
+
+
 def visual_carriers(composition):
     """Visual objects a page can be built around: figures, native diagrams, charts, real tables.
 

@@ -85,8 +85,7 @@ recipe 的标签、图注和默认文字也须来自本页批准文案；recipe 
 
 PageScene 0.1 当前支持：
 
-- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`、`emphasis`；正文中 `$...$` /
-  `\(...\)` 会转成原生 OMML 行内公式（带 plain fallback），见 `inline-math.md`；
+- `text`：标题/正文/标签/图注/注释，支持 `copy_ref`、`emphasis`。`V_OUT`、`V_G` 等直接写作原生 OMML 行内公式，正文也支持 `$...$` 和 `\(...\)`。列表、带文字的形状和表格单元格同样识别裸写下标。见 [行内公式](inline-math.md)；
 - `list`：**多级无序列表**，0–3 级、`bullet_style=dot|dash|square|arrow|none`、
   逐项字号/粗细/颜色、行内公式、原生段落；
 - `group`：**嵌套容器**，子对象 box 相对 group，递归渲染；

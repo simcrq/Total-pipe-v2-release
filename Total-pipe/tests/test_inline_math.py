@@ -51,6 +51,36 @@ class InlineMathTests(unittest.TestCase):
         self.assertIn('√', plain_text(source))
         self.assertEqual(parse_inline(source), spans)
 
+    def test_auto_subscripts_keep_complete_labels_and_protect_literal_tokens(self):
+        from totalpipe_layout.formula import parse, Scripts, Text
+        from totalpipe_layout.inline_math import strip_markup
+        source = ('以 V_OUT/V_G、I_D、T_h-BN 和 x_{ij} 表示。'
+                  ' `V_IN`、V_D.csv、https://host/V_D 和 ./data/V_G 保持字面值。')
+        inferred = [span for span in parse_inline(source) if span.kind == 'formula']
+        self.assertEqual([span.shorthand for span in inferred], ['V_OUT', 'V_G', 'I_D', 'T_h-BN', 'x_{ij}'])
+        self.assertEqual(strip_markup(source), source)
+        self.assertEqual(parse('V_OUT'), Scripts(Text('V'), sub=Text('OUT', upright=True)))
+        self.assertEqual(parse(r'\text{V_OUT}'), Text('V_OUT', upright=True))
+
+    def test_direct_deck_ir_compile_automatically_enables_subscripts(self):
+        ir = fixture()
+        slide = ir['slides'][0]
+        slide['semantic']['inline_math'].remove('title')
+        slide['semantic']['title'] = '传输曲线中的 V_OUT'
+        slide['composition']['blocks'][0].pop('inline_math')
+        slide['composition']['blocks'][0]['text'] = '当 V_G 增加时，监测 I_D。'
+        table = ir['slides'][2]['composition']['tables'][0]
+        cell = next(c for c in table['cells'] if c.get('inline_math'))
+        cell.pop('inline_math')
+        cell['text'] = 'V_OUT'
+        layout, _ = self.compile_ok(ir)
+        elements = {e['id']: e for e in layout['slides'][0]['elements']}
+        title = ET.fromstring(elements['title']['inline_xml'])
+        self.assertEqual(''.join(title.xpath('.//m:sSub/m:sub//m:t/text()', namespaces=MATH_NS)), 'OUT')
+        self.assertEqual(elements[slide['composition']['blocks'][0]['id']]['inline_layout']['formula_count'], 2)
+        rendered = next(e for e in layout['slides'][2]['elements'] if e['kind'] == 'table')
+        self.assertIn('OUT', ''.join(ET.fromstring(rendered['table_xml']).xpath('.//m:sSub/m:sub//m:t/text()', namespaces=MATH_NS)))
+
     def test_malformed_inline_math_never_silently_becomes_plain_text(self):
         for source in ('unclosed $x', '$$', '$ $', r'\[x\]', r'\(x', r'\)', r'$\unknown{x}$', r'$x^$'):
             with self.subTest(source=source), self.assertRaises(InlineMathError): parse_inline(source)

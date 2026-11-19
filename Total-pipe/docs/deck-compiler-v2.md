@@ -253,10 +253,12 @@ Supported inputs include fractions, `\sqrt{…}` / `\sqrt[3]{…}`, grouped/nest
 Greek, sums/integrals, `\left` / `\right`, `\exp` / `\log` / `\ln` and common trigonometric
 functions, plus `\text` / `\mathrm` / `\mathbf` / `\mathit`. Optional outer `$…$`, `$$…$$`,
 `\(…\)` and `\[…\]` are accepted on a **formula block**. Backslashes must be doubled in JSON.
-Ordinary prose remains literal by default. Optional [inline math](inline-math.md) enables mixed native
-prose/math for explicitly marked blocks, title/takeaway fields and table text cells. It measures atomic
+Bare scientific subscripts such as `V_OUT` and `V_G` become native [inline math](inline-math.md)
+in prose blocks, title/takeaway fields, captions and table text cells. Explicit delimiters can
+mark full inline expressions. The compiler measures atomic
 formula widths and per-line baseline extents; the inline_layout line metrics override the base
-TextBoxContract's ordinary fixed line spacing. Existing display math is unchanged.
+TextBoxContract's ordinary fixed line spacing. Display formula blocks also accept multi-letter
+subscripts such as `V_OUT`.
 Unknown commands, empty/missing operands and
 unclosed groups return `FORMULA_SYNTAX`; `array` and `cases` remain unsupported.
 

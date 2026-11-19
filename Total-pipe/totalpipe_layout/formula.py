@@ -128,6 +128,7 @@ MATRIX_DELIMITERS = {'matrix': ('', ''), 'pmatrix': ('(', ')'), 'bmatrix': ('[',
 # --------------------------------------------------------------------------------------------
 
 _TOKEN = re.compile(r'\\[A-Za-z]+|\\.|[{}^_&]|\s+|.', re.DOTALL)
+_SUBSCRIPT_LABEL = re.compile(r'(?:[A-Z][A-Z0-9]+|[0-9]{2,}|[a-z]-[A-Z]{2,}\d*)(?![A-Za-z0-9])')
 _ESCAPES = {'\\{': '{', '\\}': '}', '\\,': ' ', '\\;': ' ', '\\!': '', '\\ ': ' ',
             '\\%': '%', '\\$': '$', '\\&': '&', '\\#': '#'}
 _FUNCTIONS = {'exp', 'log', 'ln', 'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan',
@@ -193,8 +194,13 @@ class _Parser:
         base = self.atom()
         sup = sub = None
         while self.script_marker() is not None:
-            marker, _ = self.take()
-            argument = self.group_or_atom()
+            marker, position = self.take()
+            label = _SUBSCRIPT_LABEL.match(self.source, position+1) if marker == '_' else None
+            if label and isinstance(base, Text) and len(base.value) == 1 and base.value.isalpha():
+                self.index += len(label[0])
+                argument = Text(label[0], upright=True)
+            else:
+                argument = self.group_or_atom()
             if marker == '^':
                 if sup is not None:
                     self.error('double superscript')

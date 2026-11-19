@@ -186,17 +186,15 @@ class Renderer:
         t.text = to_plain(ast)
 
     def add_rich_runs(self, paragraph, text, size, color, bold=False, italic=False,
-                      emphasis=None, emphasis_color=None):
-        """Render opt-in ``$...$`` math inside ordinary prose/list runs."""
-        if '$' not in text and '\\(' not in text:
-            spans = [(text, 'text')]
-        else:
-            from totalpipe_layout.inline_math import parse_inline
-            try:
-                spans = [(span.text, span.kind) for span in parse_inline(text)]
-            except ValueError as error:
-                raise ValueError('inline math: %s' % error) from error
-        for value, kind in spans:
+                      emphasis=None, emphasis_color=None, *, subscripts_only=False):
+        """Render explicit math and inferred subscript symbols inside native paragraphs."""
+        from totalpipe_layout.inline_math import InlineMathError, parse_inline
+        try:
+            spans = parse_inline(text, subscripts_only=subscripts_only or ('$' not in text and '\\(' not in text))
+        except InlineMathError as error:
+            raise ValueError('inline math: %s' % error) from error
+        for span in spans:
+            value, kind = span.text, span.kind
             if not value:
                 continue
             if kind == 'formula':
@@ -311,12 +309,9 @@ class Renderer:
             p = tf.paragraphs[0]
             p.alignment = align_from(obj.get('align', 'center'))
             p.line_spacing = obj.get('line_spacing', 1.0)
-            r = p.add_run()
-            r.text = self.resolve_text(obj)
-            r.font.name = self.font
-            r.font.size = Pt(obj.get('size', 14))
-            r.font.bold = obj.get('bold', False)
-            r.font.color.rgb = rgb(obj.get('color', '#102A43'))
+            self.add_rich_runs(p, self.resolve_text(obj), obj.get('size', 14),
+                               rgb(obj.get('color', '#102A43')), obj.get('bold', False),
+                               subscripts_only=True)
         return sh
 
     def add_line(self, slide, obj):
@@ -382,12 +377,9 @@ class Renderer:
                 cell.text = ''
                 p = cell.text_frame.paragraphs[0]
                 p.alignment = align_from('center' if c else 'left')
-                run = p.add_run()
-                run.text = str(rows[r][c])
-                run.font.name = self.font
-                run.font.size = Pt(obj.get('font_size', 15))
-                run.font.bold = (header and r == 0) or (r in accent_rows)
-                run.font.color.rgb = self.white if (header and r == 0) else self.ink
+                self.add_rich_runs(p, str(rows[r][c]), obj.get('font_size', 15),
+                                   self.white if header and r == 0 else self.ink,
+                                   (header and r == 0) or (r in accent_rows), subscripts_only=True)
                 cell.fill.solid()
                 if header and r == 0:
                     cell.fill.fore_color.rgb = header_fill

@@ -231,7 +231,14 @@ def expression_report(spec, spec_path):
     This is intentionally advisory for the pilot. It measures whether a deck uses the
     renderer's native vocabulary instead of turning every page into a text block.
     """
-    import re
+    from totalpipe_layout.inline_math import InlineMathError, parse_inline
+
+    def count_formulas(value, *, subscripts_only=False):
+        try:
+            return sum(span.kind == 'formula' for span in parse_inline(value, subscripts_only=subscripts_only))
+        except InlineMathError:
+            return 0
+
     spec_path = Path(spec_path)
     bindings = spec.get('bindings') or {}
     rows, styles = [], set()
@@ -239,7 +246,7 @@ def expression_report(spec, spec_path):
         title, _ = _resolve_field(page, 'title', bindings)
         take, _ = _resolve_field(page, 'take', bindings)
         text = [title or '', take or '']
-        formulas = len(re.findall(r'\$[^$]+\$', (title or '') + ' ' + (take or '')))
+        formulas = sum(count_formulas(value) for value in text)
         objects = list(_flatten_objects(page.get('objects') or []))
         native, card_area = 0, 0.0
         lists = 0
@@ -248,7 +255,7 @@ def expression_report(spec, spec_path):
             if kind == 'text':
                 value = _resolve_item(obj, bindings) or ''
                 text.append(value)
-                formulas += len(re.findall(r'\$[^$]+\$', value))
+                formulas += count_formulas(value)
             elif kind == 'list':
                 items = obj.get('items') or []
                 lists += 1
@@ -258,10 +265,14 @@ def expression_report(spec, spec_path):
                 for item in items:
                     value = _resolve_item(item, bindings) or ''
                     text.append(value)
-                    formulas += len(re.findall(r'\$[^$]+\$', value))
+                    formulas += count_formulas(value)
             elif kind in ('image', 'table', 'chart', 'path', 'formula'):
                 native += 1
+                if kind == 'table':
+                    formulas += sum(count_formulas(str(cell), subscripts_only=True)
+                                    for row in obj.get('rows', []) for cell in row)
             elif kind == 'shape':
+                formulas += count_formulas(_resolve_item(obj, bindings) or '', subscripts_only=True)
                 area = float(obj['box'][2]) * float(obj['box'][3])
                 fill = str(obj.get('fill', 'none')).upper()
                 if (area > 0.5 and not page.get('svg_import') and

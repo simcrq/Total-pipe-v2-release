@@ -389,7 +389,7 @@ PWF 新增 `artifacts.figure_assets_metadata`，pwf2rpa 对显式匹配的资源
 ```
 
 anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标签公式默认位于前一说明块下方，
-有 label 时标签与公式并排。普通正文默认不解析 `$…$`；显式开启行内模式后按下节处理。
+有 label 时标签与公式并排。公式块中的 `V_OUT = G V_IN` 可直接写成多字母下标简写。
 
 经 Agent 接入层时还可以只写 `latex`，接入层在校验前补成 `component:"formula"` + `text`：
 
@@ -399,9 +399,11 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
 
 正文、标题或 takeaway 中的 `$…$` / `\\(…\\)` 会自动开启行内公式，不必再手写
 `inline_math:true`。展开后的 canonical IR 会写回 `work/deck_ir.json`；直接调用
-`deck_compiler build` 仍以 canonical 字段为准。
+`deck_compiler build` 的显式公式使用 canonical 字段。
 
 #### 行内公式与混排容量
+
+在 Deck IR 或 PageScene 的正文、标题、结论、图注或表格文字中直接写 `V_OUT`、`V_G`、`I_D` 或 `x_i`，编译时会生成可编辑的原生行内下标公式。输入文本及证据引用仍使用原始拼法。
 
 正文块或表格 text 格加 `inline_math: true`，以 `$…$` 或 `\(…\)` 标记公式：
 
@@ -410,9 +412,9 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
  "text":"当 $x>0$ 时，响应为 $\\sqrt{1+x^{2}}$，完整说明保持可编辑。"}
 ```
 
-标题/结论在 semantic.inline_math 中列出 title/takeaway；未列出的字段保持原样。
+显式公式可在 semantic.inline_math 中列出 title/takeaway 来启用对应字段。
 开启后字面美元符号写 `\$`（JSON：`"\\$"`），不接受显示公式分隔符或分布式项目列表。
-图注、panel 标题和图形标签仍按原有文字处理。
+Deck IR 的 panel 标题和图形标签沿用各自的文字协议。
 
 容量改为逐行测量文字与公式宽度、最大上伸/下伸高度，再累计实际行高；高矩阵只影响所在行。
 数学区域整体换行，不按 LaTeX 字符长度估算，不拆根号和指数。正文、树和表格复用混排测量，
