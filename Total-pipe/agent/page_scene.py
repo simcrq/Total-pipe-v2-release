@@ -14,6 +14,7 @@ import argparse
 import copy
 import json
 import re
+import tempfile
 from pathlib import Path
 
 from lxml import etree
@@ -334,27 +335,30 @@ class Renderer:
         path = Path(obj['path'])
         if not path.is_absolute():
             path = self.spec_path.parent / path
-        im = Image.open(path)
-        iw, ih = im.size
-        if obj.get('fit', 'contain') == 'cover':
-            target_ratio = w / h
-            src_ratio = iw / ih
-            if src_ratio > target_ratio:
-                new_w = int(ih * target_ratio)
-                left = (iw - new_w) // 2
-                im = im.crop((left, 0, left + new_w, ih))
-            else:
-                new_h = int(iw / target_ratio)
-                top = (ih - new_h) // 2
-                im = im.crop((0, top, iw, top + new_h))
-            tmp = path.with_name(path.stem + '_fit' + path.suffix)
-            im.save(tmp, quality=95)
-            path = tmp
-        scale = min(w / im.width, h / im.height)
-        ww, hh = im.width * scale, im.height * scale
-        xx = x + (w - ww) / 2
-        yy = y + (h - hh) / 2
-        return slide.shapes.add_picture(str(path), Inches(xx), Inches(yy), Inches(ww), Inches(hh))
+        # The cropped copy lives in a private temp dir: writing next to the source would mutate
+        # checkpointed evidence directories and collide when one asset is cropped twice.
+        with tempfile.TemporaryDirectory(prefix='totalpipe-fit-') as scratch, Image.open(path) as source:
+            im = source
+            iw, ih = im.size
+            if obj.get('fit', 'contain') == 'cover':
+                target_ratio = w / h
+                src_ratio = iw / ih
+                if src_ratio > target_ratio:
+                    new_w = int(ih * target_ratio)
+                    left = (iw - new_w) // 2
+                    im = im.crop((left, 0, left + new_w, ih))
+                else:
+                    new_h = int(iw / target_ratio)
+                    top = (ih - new_h) // 2
+                    im = im.crop((0, top, iw, top + new_h))
+                tmp = Path(scratch) / ('fit' + path.suffix)
+                im.save(tmp, quality=95)
+                path = tmp
+            scale = min(w / im.width, h / im.height)
+            ww, hh = im.width * scale, im.height * scale
+            xx = x + (w - ww) / 2
+            yy = y + (h - hh) / 2
+            return slide.shapes.add_picture(str(path), Inches(xx), Inches(yy), Inches(ww), Inches(hh))
 
     def add_table(self, slide, obj):
         rows = obj['rows']
@@ -366,6 +370,8 @@ class Renderer:
         widths = obj.get('col_widths')
         if widths:
             total = sum(widths)
+            if len(widths) != ncols:
+                raise ValueError('col_widths has %d entries for %d columns' % (len(widths), ncols))
             for i, cw in enumerate(widths):
                 table.columns[i].width = Inches(w * cw / total)
         header = obj.get('header', True)
@@ -583,8 +589,10 @@ class Renderer:
         slide.notes_slide.notes_text_frame.text = page.get('notes') or ''
         if page.get('footer', not self.topic):
             self.add_rule(slide, MARGIN, FOOTER['rule_y'], PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.01)
-            if not self.topic:
-                self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, 'Tian et al. · Nat. Commun. 2026 · AVDG digital–analog multimode circuits', 8.8, self.gray)
+            # Footer text is per-deck content; never ship a built-in paper citation.
+            footer_text = page.get('footer_text') or self.spec.get('footer_text')
+            if footer_text and not self.topic:
+                self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, str(footer_text), 8.8, self.gray)
             self.add_text(slide, PAGE_W - 1.0, FOOTER['text_y'], 0.35, 0.18, str(page.get('page_number', index)), 8.8, self.gray, align=PP_ALIGN.RIGHT)
         return slide
 

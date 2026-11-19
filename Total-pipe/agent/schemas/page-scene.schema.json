@@ -51,6 +51,7 @@
           "notes": {"type": "string"},
           "evidence_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
           "footer": {"type": "boolean", "description": "Defaults to false for topic jobs and true for paper jobs."},
+          "footer_text": {"type": "string", "description": "Optional footer citation for paper jobs; no built-in text is drawn."},
           "objects": {
             "type": "array",
             "items": {

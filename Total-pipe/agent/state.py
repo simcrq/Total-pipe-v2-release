@@ -158,7 +158,7 @@ def resources(path):
     if path.suffix.lower() == '.md' and path.is_file():
         for ref in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', path.read_text(encoding='utf-8')):
             ref = ref.strip('<>').split(' "', 1)[0].split('#', 1)[0]
-            if not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*:', ref):
+            if not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]+:', ref):
                 target = Path(unquote(ref))
                 if not target.is_absolute():
                     target = path.parent/target

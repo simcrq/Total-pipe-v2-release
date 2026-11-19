@@ -273,7 +273,7 @@ def _expected_carriers(page):
     return required
 
 
-def _canonical_pages(value, design_pages, bindings, allow_partial):
+def _canonical_pages(value, design_pages, bindings, allow_partial, svg_root=None):
     if not isinstance(value, dict) or value.get('schema_version') != '0.1':
         raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene must be a 0.1 JSON object.')
     pages = value.get('pages')
@@ -298,7 +298,7 @@ def _canonical_pages(value, design_pages, bindings, allow_partial):
     for index, page in enumerate(canonical['pages']):
         if page.get('recipe'):
             try:
-                canonical['pages'][index] = expand_page(page, bindings)
+                canonical['pages'][index] = expand_page(page, bindings, svg_root)
             except (KeyError, TypeError, ValueError) as error:
                 raise SceneBindingError(
                     'PAGE_SCENE_RECIPE_INVALID',
@@ -316,7 +316,7 @@ def _bind_topic_scene(value, work, request, source_dir, allow_partial):
         raise SceneBindingError('PAGE_SCENE_DESIGN_REQUIRED', str(error)) from error
 
     bindings = copy_bindings(design)
-    canonical, plans = _canonical_pages(value, design['pages'], bindings, allow_partial)
+    canonical, plans = _canonical_pages(value, design['pages'], bindings, allow_partial, work)
     canonical.setdefault('deck_id', design['deck_id'])
     canonical['bindings'] = bindings
     canonical['provenance'] = {'schema_version': '1.0', 'mode': 'topic', 'design_sha256': digest(design)}
@@ -377,7 +377,7 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
                     'PAGE_SCENE_SUPPLEMENT_NOT_ENABLED',
                     f'{page.get("id")}: the approved design contains supplement copy, '
                     'but this job did not enable supplement content.')
-    canonical, design_pages = _canonical_pages(value, design_pages, bindings, allow_partial)
+    canonical, design_pages = _canonical_pages(value, design_pages, bindings, allow_partial, work)
     known_numbers = _numbers(_corpus(design, story, evidence))
     report = {'schema_version': '1.0', 'design_sha256': digest(design),
               'copy_refs': len(bindings), 'pages': [], 'issues': []}

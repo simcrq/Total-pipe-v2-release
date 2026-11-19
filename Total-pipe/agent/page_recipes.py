@@ -15,7 +15,7 @@ PAGE_W = 13.333
 
 RECIPES = {
     'cover': ('figure', 'stats', 'title', 'take'),
-    'contrast': ('left', 'right', 'key', 'title', 'take'),
+    'contrast': ('left', 'right', 'key', 'waves', 'title', 'take'),
     'figure_readout': ('figure', 'items', 'title', 'take'),
     'metrics': ('figures', 'items', 'condition', 'title', 'take'),
     'mechanism': ('items', 'formula', 'title', 'take'),
@@ -92,17 +92,20 @@ def _resolve(value, bindings):
     return value
 
 
-def expand_page(page, bindings):
+def expand_page(page, bindings, svg_root=None):
     """Expand a recipe page into a normal PageScene page.
 
     Text slots may be ``{"copy_ref": "P1.take"}``; they are resolved against
-    the approved copy bindings before native composition.
+    the approved copy bindings before native composition. ``svg_root`` is the
+    only directory an ``svg_path`` may be read from.
     """
     recipe = page.get('recipe')
     if recipe not in BUILDERS:
         raise ValueError('unknown recipe %r' % recipe)
     spec = {key: value for key, value in page.items() if key not in ('recipe', 'slots')}
     spec.update(_resolve(page.get('slots') or {}, bindings))
+    if spec.get('svg_path'):
+        spec['svg'] = _read_confined_svg(spec.pop('svg_path'), svg_root)
     for field in ('title', 'take'):
         if not spec.get(field) and page.get(field + '_ref'):
             spec[field] = bindings.get(page[field + '_ref'])
@@ -173,7 +176,7 @@ def cover(spec):
                              image.get('caption', 'Fig. 1a'), 9.5, 'caption', '#5E7084'))
     objects.append(_text('cover_meta', [MARGIN, 5.2, 11.9, .28],
                          spec.get('meta', ''), 11.5, 'label', '#0B6E99', True))
-    stats = spec.get('stats') or [('13', '种功能'), ('7', '数字逻辑'), ('6', '模拟功能')]
+    stats = spec.get('stats') or []
     for index, (number, label) in enumerate(stats[:3]):
         x = (0.72, 4.5, 8.55)[index]
         objects.append(_text('stat_%d' % index, [x, 5.58, 1.25, .55],
@@ -195,12 +198,18 @@ def contrast(spec):
         _text('right_head', [6.72, 2.24, 5.4, .3], right.get('head', ''), 11.5, 'label', '#D97706', True),
         _list('right_list', [6.72, 2.68, 5.4, 1.55], right.get('items') or [], 19, 'dash', 6),
         _line('column_rule', [6.28, 2.3, 6.28, 5.1], '#D7DEE6', .8),
-        _path('wave_digital', [0.95, 4.45, 3.4, .55],
-              'M 0 15 L 0 5 L 20 5 L 20 25 L 40 25 L 40 5 L 60 5 L 60 25 L 80 25 L 80 5 L 100 5',
-              '#0B6E99', 2.0),
-        _path('wave_analog', [6.95, 4.45, 3.4, .55],
-              'M 0 15 C 8 2 17 2 25 15 C 33 28 42 28 50 15 C 58 2 67 2 75 15 C 83 28 92 28 100 15',
-              '#D97706', 2.0),
+    ]
+    if spec.get('waves'):
+        # Decorative digital/analog waveforms are opt-in; they only make sense for that topic.
+        objects += [
+            _path('wave_digital', [0.95, 4.45, 3.4, .55],
+                  'M 0 15 L 0 5 L 20 5 L 20 25 L 40 25 L 40 5 L 60 5 L 60 25 L 80 25 L 80 5 L 100 5',
+                  '#0B6E99', 2.0),
+            _path('wave_analog', [6.95, 4.45, 3.4, .55],
+                  'M 0 15 C 8 2 17 2 25 15 C 33 28 42 28 50 15 C 58 2 67 2 75 15 C 83 28 92 28 100 15',
+                  '#D97706', 2.0),
+        ]
+    objects += [
         _line('key_rule', [0.72, 5.55, 0.77, 6.05], '#0B6E99', 2.0),
         _text('key_line', [0.98, 5.55, 11.5, .5], spec.get('key', ''), 19, 'body',
               None, True),
@@ -266,28 +275,34 @@ def panel_grid(spec):
 
 def table_compare(spec):
     table = spec['table']
+    columns = len(table['rows'][0]) if table.get('rows') else 0
+    widths = table.get('col_widths') or [1] * columns
     objects = [
         {'id': 'compare_table', 'type': 'table', 'box': [0.72, 2.28, 8.3, 3.4],
-         'rows': table['rows'], 'col_widths': table.get('col_widths', [1.2, 2.4, 2.3, 1.9]),
+         'rows': table['rows'], 'col_widths': widths,
          'row_height': table.get('row_height', .82), 'header': True,
          'header_fill': table.get('header_fill', '#3F6FA8'), 'font_size': 13.2},
-        _text('big_stat', [9.35, 2.24, 1.15, .9], spec.get('big', '13'), 42, 'label', '#0B6E99', True),
-        _text('big_label', [10.65, 2.48, 1.5, .35], spec.get('big_label', '种功能'), 13, 'label', '#102A43', True),
         _list('readout', [9.35, 3.55, 3.3, 2.45], spec.get('items') or [], 18, 'dot', 8),
         _text('source', [0.72, 6.55, 10.0, .3], spec.get('source', ''), 11.2, 'label', '#D97706'),
     ]
+    if spec.get('big'):
+        objects += [
+            _text('big_stat', [9.35, 2.24, 1.15, .9], spec['big'], 42, 'label', '#0B6E99', True),
+            _text('big_label', [10.65, 2.48, 1.5, .35], spec.get('big_label', ''), 13, 'label', '#102A43', True)]
     return _page(spec, objects)
 
 
 def closing(spec):
     objects = [
-        _text('big_stat', [0.72, 2.2, 2.7, 1.7], spec.get('big', '13'), 104, 'label', '#0B6E99', True),
-        _text('big_label', [0.95, 3.95, 2.4, .38], spec.get('big_label', '种功能'), 21, 'label', '#102A43', True),
-        _text('big_sub', [0.95, 4.36, 2.4, .3], spec.get('big_sub', '一个结构'), 11.5, 'label', '#5E7084'),
         _list('path_list', [4.1, 2.38, 8.2, 2.8], spec.get('items') or [], 20, 'arrow', 10),
         _text('stats', [0.72, 5.45, 11.9, .45], spec.get('stats', ''), 17, 'label', '#0B6E99', True),
         _text('fixed', [0.72, 5.98, 11.9, .4], spec.get('fixed', ''), 18, 'body', None, True),
     ]
+    if spec.get('big'):
+        objects += [
+            _text('big_stat', [0.72, 2.2, 2.7, 1.7], spec['big'], 104, 'label', '#0B6E99', True),
+            _text('big_label', [0.95, 3.95, 2.4, .38], spec.get('big_label', ''), 21, 'label', '#102A43', True),
+            _text('big_sub', [0.95, 4.36, 2.4, .3], spec.get('big_sub', ''), 11.5, 'label', '#5E7084')]
     return _page(spec, objects)
 
 
@@ -340,12 +355,25 @@ def eviz_chain(spec):
     return _page(spec, objects, spec.get('notes', 'ExplainViz process chain; schematic geometry.'))
 
 
+def _read_confined_svg(raw, root):
+    """Read an SVG only from inside ``root``; a recipe must not become a file-read primitive."""
+    if root is None:
+        raise ValueError('svg_path is not allowed here; inline the markup in svg')
+    base = Path(root).resolve()
+    path = Path(raw)
+    path = (path if path.is_absolute() else base / path).resolve()
+    if not path.is_relative_to(base) or path.suffix.lower() != '.svg' or not path.is_file():
+        raise ValueError('svg_path must be an existing .svg file inside the job work directory')
+    return path.read_text(encoding='utf-8')
+
+
 def svg_diagram(spec):
     """Import a model-authored SVG as editable native text/rect/path objects."""
     from .svg_scene import svg_to_objects
     source = spec.get('svg')
     if not source and spec.get('svg_path'):
-        source = Path(spec['svg_path']).read_text(encoding='utf-8')
+        # Only expand_page may resolve a path (confined); direct callers must pass markup.
+        raise ValueError('svg_path is only accepted through a confined expansion; pass svg')
     if not source:
         raise ValueError('svg_diagram needs svg or svg_path')
     box = spec.get('box') or [0.9, 2.22, 9.35, 4.72]

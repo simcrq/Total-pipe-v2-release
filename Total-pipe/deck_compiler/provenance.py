@@ -157,8 +157,25 @@ def validate(ir):
     slides = ir.get("slides")
     if not isinstance(slides, list) or not slides:
         return problems
-    # Fast path: an all-paper deck keeps the exact pre-supplement behaviour.
+    # An all-paper deck skips the supplement analysis, but the per-block basis contract still
+    # holds: a typo'd basis or a stray supplement object must not pass just because no block
+    # happens to declare basis=supplement.
     if not any(_supplement_blocks(slide) for slide in slides if isinstance(slide, dict)):
+        for number, slide in enumerate(slides, 1):
+            if not isinstance(slide, dict):
+                continue
+            for index, block in enumerate(_blocks(slide)):
+                basis = block.get("basis", "paper")
+                if basis not in BASES:
+                    problems.append(issue(
+                        "SUPPLEMENT_BASIS_INVALID", "FAIL",
+                        f"blocks[{index}]: basis must be paper or supplement",
+                        number, f"blocks[{index}]", block=block.get("id")))
+                elif "supplement" in block:
+                    problems.append(issue(
+                        "SUPPLEMENT_ON_PAPER_BLOCK", "FAIL",
+                        f"blocks[{index}]: a paper block must not carry a supplement object",
+                        number, f"blocks[{index}]", block=block.get("id")))
         return problems
 
     paper_assets = _paper_asset_ids(ir)

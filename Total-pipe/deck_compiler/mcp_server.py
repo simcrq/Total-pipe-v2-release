@@ -103,6 +103,23 @@ transport.TOOLS['totalpipe_capabilities'] = {'description': 'Declare compiler re
     'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
     'handler': capability_handler, 'timeout': 10}
 
+# The pwf2rpa transport is reused, but its capacity refresh writes into an arbitrary checkout and
+# executes node from it; a compiler MCP client must not be able to reach that.
+transport.TOOLS.pop('pwf2rpa_refresh_capacity', None)
+
+BUILTIN_PROVIDERS = {'packer', 'compiler', 'deterministic', 'none'}
+
+
+def _check_executables(arguments):
+    """MCP arguments may select built-in behaviour only, never arbitrary code or executables."""
+    provider = arguments.get('layout_provider')
+    if provider is not None and provider not in BUILTIN_PROVIDERS:
+        raise ValueError('layout_provider over MCP must be one of ' + ', '.join(sorted(BUILTIN_PROVIDERS))
+                         + '; external module:factory providers are CLI-only')
+    officecli = arguments.get('officecli')
+    if officecli is not None and Path(officecli).stem.lower() != 'officecli':
+        raise ValueError('officecli must name the OfficeCLI executable (officecli or a path ending in it)')
+
 
 def invoke(command, arguments):
     argv = [sys.executable, '-m', 'deck_compiler', command, '--out', arguments['out']]
@@ -181,6 +198,7 @@ for name, command, description in (
         for key in ('ir','out','explain_viz_request'):
             if key in arguments and not Path(arguments[key]).is_absolute():
                 raise ValueError(f'{key} must be an absolute path')
+        _check_executables(arguments)
         return invoke(command, arguments)
     transport.TOOLS[name] = {'description':description,
         'inputSchema':{'type':'object','properties':properties,'required':required,'additionalProperties':False},

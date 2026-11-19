@@ -22,7 +22,8 @@ def emit(out, event, *, job_id=None, stage=None, operation=None, status=None,
     record.update({key: value for key, value in fields.items() if value is not None})
     path = Path(out)/'logs/events.jsonl'
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('a', encoding='utf-8') as stream:
+    # newline='\n' keeps the log byte-stable (and append-prefix comparable) on Windows.
+    with path.open('a', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(record, ensure_ascii=True, allow_nan=False)+'\n')
 
 

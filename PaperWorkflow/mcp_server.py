@@ -178,11 +178,9 @@ def config_candidates() -> list[Path]:
     if explicit:
         candidates.append(Path(explicit).expanduser())
 
-    inherited_pwd = str(os.environ.get("PWD") or "").strip()
-    if inherited_pwd:
-        workspace = Path(inherited_pwd).expanduser()
-        candidates.extend((workspace / "config.yaml", workspace / "PaperWorkflow" / "config.yaml"))
-
+    # The process working directory is untrusted input: a config.yaml found there can name
+    # arbitrary executables (mineru cli_command), so it is never auto-discovered. Use
+    # PAPERWORKFLOW_CONFIG, the package config, or the user config instead.
     candidates.extend(
         (
             ROOT / "config.yaml",
@@ -681,8 +679,11 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def respond(message: dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(message, ensure_ascii=True) + "\n")
-    sys.stdout.flush()
+    # A timed-out tool worker may still hold a diverted sys.stdout; the protocol must keep
+    # writing to the real stream or every later reply would be lost to stderr.
+    output = sys.__stdout__ or sys.stdout
+    output.write(json.dumps(message, ensure_ascii=True) + "\n")
+    output.flush()
 
 
 def handle(request: dict[str, Any]) -> dict[str, Any] | None:
@@ -756,7 +757,10 @@ def handle(request: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def read_message() -> dict[str, Any] | None:
-    """Read one message, accepting newline-delimited JSON or Content-Length framing."""
+    """Read one message, accepting newline-delimited JSON or Content-Length framing.
+
+    Returns ``None`` only at EOF; a blank line yields an empty dict that ``main`` skips.
+    """
     stream = sys.stdin.buffer
     first = stream.readline()
     if not first:
@@ -766,15 +770,18 @@ def read_message() -> dict[str, Any] | None:
         line = first
         while line and line.strip() not in (b"", b"\r\n"):
             if line.lstrip().lower().startswith(b"content-length"):
-                length = int(line.split(b":", 1)[1].strip())
+                try:
+                    length = int(line.split(b":", 1)[1].strip())
+                except ValueError as exc:
+                    raise json.JSONDecodeError("invalid Content-Length", "", 0) from exc
             line = stream.readline()
         payload = stream.read(length) if length else b""
         if not payload:
-            return None
+            return {}
         return json.loads(payload.decode("utf-8"))
     text = first.strip()
     if not text:
-        return None
+        return {}
     return json.loads(text.decode("utf-8"))
 
 
@@ -790,6 +797,8 @@ def main() -> None:
             return
         if request is None:
             return
+        if not request:
+            continue
         try:
             response = handle(request)
         except Exception as exc:  # noqa: BLE001
