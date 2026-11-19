@@ -17,7 +17,8 @@ python examples/library/catalog.py build chart-uncertainty --out /tmp/totalpipe-
 `search` 返回的 `script` 路径可用于查看生成逻辑和输入数据。
 `build` 使用正常编译器输出可编辑候选和 QA 报告，PowerPoint 原生验收按实际项目工作流执行。
 
-在 Agent 工作流中，整套及逐页 IR 提示的 `example_lookup` 提供实际解释器和检索脚本路径。
+在 Agent 工作流中，页面设计、整套及逐页 IR 提示的 `example_lookup` 提供实际解释器和检索脚本路径。
+页面设计子代理可按讲解关系检索，按需打开一份匹配示例，参考构图、视觉关系和讲解顺序。
 逐页提示会根据批准的设计描述和视觉载体给出最多两条 `suggestions`，内容和 `search` 一样是索引元数据。
 推荐由本地关键词匹配生成，作者可细化检索或直接实现设计。
 页面设计负责写清视觉关系。IR 作者根据需要查询，把示例的结构应用到批准的 `copy_ref`、证据和选图。

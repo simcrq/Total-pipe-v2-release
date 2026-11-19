@@ -229,6 +229,7 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
+页面设计提示中的 `example_lookup.command_prefix` 可执行 `search "<讲解关系>" --limit 2`。按需打开一份匹配示例，参考构图、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
 
 让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
 可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。

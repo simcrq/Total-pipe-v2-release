@@ -118,7 +118,7 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 - [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
 - [原生列表](docs/native-lists.md)：单条和多条正文可使用无序图标或连续编号，支持逐 block 样式、颜色和起始编号。布局按完整条目测量。
 - [四向图注与正文](docs/content-projection.md)：图片、流程图和独立公式可在布局树中绑定上、下、左、右的说明文字。
-- [可检索的脚本示例库](examples/library/README.md)：按版式或 IR 字段搜索、查看单项或编译候选。涵盖独立正文标记、A/B 路线、四向说明、原图导读、误差棒、合并表头、公式讲解和机制假设。
+- [可检索的脚本示例库](examples/library/README.md)：页面设计阶段可按讲解关系查构图，IR 阶段可按批准设计查实现。涵盖 A/B 路线、原图导读、公式讲解和机制假设等。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
 - [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、间隙上限 48 px / 居中 56 px、15% 留白反馈、合法相对权重与增量候选签收。

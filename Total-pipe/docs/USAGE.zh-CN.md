@@ -491,6 +491,8 @@ HTML 截图仅显示 fallback，实际根号、分式线和指数用 PowerPoint 
 
 Story 负责科学内容与证据，独立页面设计子代理负责视觉讲解。完整读取任务书、提示包和
 [1.1 Schema](../schemas/page-design.schema.json) 后，交付 `page_design.json`。
+设计子代理可用提示包中 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 2`，
+按需打开一份匹配的[示例脚本](../examples/library/README.md)，参考构图、视觉关系和讲解顺序。
 
 每页只必填 `id`、`content_refs`（Story 路径）和 `design`（自由文本或自定对象）。内容与证据自动继承，
 不再要求重写 claim/items/anchor 理由/rationale。设计应具体说明选哪张原图、画哪些元素与关系、怎样排布、

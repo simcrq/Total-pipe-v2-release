@@ -225,6 +225,8 @@ Story 决定研究问题、论证顺序、科学结论和证据边界；页面�
 RPA 之后交给独立子代理，完整读取 `work/page_design_task.md`、`work/page_design_prompt.json` 和
 其中 `schema_path` 指向的 [page-design 1.1 Schema](../schemas/page-design.schema.json)。设计提示不提供
 编译器 forms / devices / type_scale 清单；设计者可以选择视觉形式，IR 作者负责翻译为实现能力。
+各版本的页面设计提示均提供 `example_lookup`。设计子代理可用 `command_prefix` 按讲解关系检索，
+按需打开一份匹配的示例脚本，参考构图与走读顺序。逐页自动推荐根据批准的设计生成，供 IR 作者使用。
 
 ```json
 {"schema_version":"1.1","deck_id":"example",
