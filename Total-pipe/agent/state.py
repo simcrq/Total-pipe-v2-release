@@ -95,6 +95,8 @@ def validate_job(job):
         raise ValueError('Malformed ExplainViz mode')
     if job['request'].get('page_mode', 'deck_ir') not in ('deck_ir', 'page_scene'):
         raise ValueError('Malformed page mode')
+    if job['request']['source_kind'] == 'topic' and job['request'].get('page_mode') != 'page_scene':
+        raise ValueError('Malformed topic page mode')
     if inputs and (set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
                    not isinstance(inputs.get('model'), str) or not inputs['model'].strip() or
                    inputs.get('reasoning_effort') not in ('high','xhigh','max','ultra') or inputs.get('selected_by_user') is not True):
@@ -194,6 +196,9 @@ def code_hash():
 
 def dependency(job, previous):
     request = job['request']
+    if request['source_kind'] == 'topic':
+        return digest({'request': request, 'inputs': job.get('inputs', {}),
+                       'code': code_hash(), 'previous': previous})
     inputs = resources(request['source'])
     for path in request.get('supplementary_paths', []):
         inputs.update(resources(path))

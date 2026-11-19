@@ -88,7 +88,7 @@ export function apply(ctx) {
     description: 'Check Total-pipe prerequisites and candidate/native capabilities without starting a job.',
     parameters: {
       deep: { type: 'boolean' },
-      source_kind: { type: 'string' },
+      source_kind: { type: 'string', enum: ['pdf', 'markdown', 'workflow', 'deck_ir', 'topic'] },
       page_mode: { type: 'string', enum: ['deck_ir', 'page_scene'] },
     },
     timeoutMs: 300000,
@@ -100,13 +100,13 @@ export function apply(ctx) {
 
   ctx.tools.register(defineTool({
     name: 'totalpipe_start',
-    description: 'Start or resume a Total-pipe job from PDF, Markdown, workflow, or Deck IR. Does not choose a model implicitly.',
+    description: 'Start or resume a Total-pipe job from a topic, PDF, Markdown, workflow, or Deck IR. For topic jobs, pass the question or subject as source.',
     parameters: {
       source: { ...STRING, required: true },
       out_dir: { ...STRING, required: true },
-      language: { ...STRING, required: true },
-      presentation_type: { ...STRING, required: true },
-      source_kind: { type: 'string' },
+      language: { ...STRING, description: 'Required for file sources. Topics default to auto.' },
+      presentation_type: { ...STRING, description: 'Required for file sources. Topics default to custom.' },
+      source_kind: { type: 'string', enum: ['auto', 'pdf', 'markdown', 'workflow', 'deck_ir', 'topic'] },
       requirements: { type: 'string' },
       queries: { ...ARRAY },
       supplementary_paths: { ...ARRAY },

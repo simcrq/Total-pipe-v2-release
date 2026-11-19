@@ -1,13 +1,25 @@
 # Total-pipe 使用说明
 
-本文对应当前仓库的 PaperWorkflow、Story、RPA、page_design、Scientific Visual Planner 和 Deck Compiler。
+本文涵盖题目入口、PageScene，以及论文入口的 PaperWorkflow、Story、RPA、视觉设计和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
 组件与版本来源见 [AI 工程索引](../../docs/README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
 默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始。在仓库根目录运行
 `python3 install.py --client auto` 检测宿主，也可以通过 `--client` 指定目标。[AI 安装指南与宿主列表](../../INSTALL_FOR_AI.md)
 
-安装后按 `next_action` 读取完整产物提示，模型选择仍来自用户。[推进与恢复](agent-adapter.md)
+安装后按 `next_action` 读取完整产物提示。使用指定子代理时沿用用户选择的模型。[推进与恢复](agent-adapter.md)
+
+## 0. 从题目或问题生成
+
+调用 `totalpipe_start` 时指定 `source_kind="topic"`，在 `source` 中传题目文本，在 `out_dir` 中传绝对输出路径。
+可选 `requirements` 写听众和重点，`slide_count` 定页数。未指定这些参数时，Agent 按题目决定讲法和页数。
+
+题目任务依次交付 `work/page_design.json` 和 `work/page_scene.json`。设计阶段可按讲解关系查示例库，
+PageScene 阶段可细化文案并使用可编辑对象。题目模式跳过 PaperWorkflow、RPA 和论文证据审读，
+仍检查页面几何、字号、素材与 PPTX 包结构。候选位于 `build/candidate.pptx`。
+使用 PowerPoint 做原生导出时，按 `native` 描述调用 `advance.native`。[题目入口的 CLI、MCP 和恢复](agent-adapter.md#从题目开始)
+
+以下的 Story、证据、论文审读和 Deck IR 内容约定适用于论文路径。
 
 四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
 `totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED
@@ -19,7 +31,7 @@ IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_pa
 未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
-显式页面几何可在新任务选择 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
+论文任务也可选择显式页面几何 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
 页面审读后提交 `work/page_scene.json` 或 `work/` 下其他草稿；工具会写入规范化绑定及 recipe 展开结果，
 相对图片路径以草稿所在目录解析并固化，图像变化使检查点失效。全部可见文案须逐项匹配本页批准文本，
 包括 recipe 标签、表格与图表文字；要改文案先回退设计重审。该路径的交付边界是 candidate 与原生验收证据，

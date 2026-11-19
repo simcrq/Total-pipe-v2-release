@@ -1195,6 +1195,9 @@ def execute(stage, job):
             (work/obsolete).unlink(missing_ok=True)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
+        if request.get('source_kind') == 'topic':
+            from .topic import prepare_design
+            return prepare_design(work, request)
         from deck_compiler.design import capabilities as design_capabilities, default_occasion, content_bindings
         workflow = read(work/'evidence_pointer.json')['workflow']
         value = read(workflow)
@@ -1277,6 +1280,9 @@ def execute(stage, job):
         from .content_review import prepare
         return prepare(work)
     if stage == 'page_scene':
+        if request.get('source_kind') == 'topic':
+            from .topic import prepare_scene
+            return prepare_scene(work, request)
         from .page_scene_binding import prepare
         return prepare(work, request)
     if stage == 'scientific_review':

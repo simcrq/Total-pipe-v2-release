@@ -1,7 +1,7 @@
 # PageScene：显式页面场景与原生页面验收
 
-状态：**正式接入 Agent job（`page_mode=page_scene`）**。它仍然不是默认生成路径；默认
-`page_mode=deck_ir` 保留完整 Deck Compiler / OfficeCLI 对象模型。
+PageScene 已接入 Agent job。题目模式默认使用 PageScene，论文模式可在启动时选择。
+论文入口默认的 `page_mode=deck_ir` 保留完整 Deck Compiler / OfficeCLI 对象模型。
 
 ## 为什么加这一层
 
@@ -19,10 +19,27 @@ page_design -> PageScene(显式 bbox) -> python-pptx 原生渲染
             -> 单页 PowerPoint PNG -> 修改/接受 -> candidate -> native QA
 ```
 
-PageScene 不重新决定科学内容。页面文案来自已批准的 `page_design.display_copy`；
-Story 和证据仍然是科学权威。绑定器拒绝改写、遗漏批准文案、越权证据和未登记数字。
+论文模式的页面文案来自已批准的 `page_design.display_copy`。Story 和证据仍然是科学权威。
+绑定器检查批准文案、证据归属和数字。
 
 ## 启动与阶段
+
+### 题目模式
+
+```text
+intake → page_design → page_scene → build → candidate_ready
+```
+
+从 `totalpipe_start(source_kind="topic", source=<题目文本>, out_dir=<绝对路径>)` 开始。
+Agent 自行确定内容与页面设计，按需搜索示例库，提交 [题目页面设计](../agent/schemas/topic-page-design.schema.json)。
+PageScene 保持设计的页 ID 和顺序，文案、表格、图表数据和公式可直接填写或细化，
+也可引用设计中的文案。相对图片路径按草稿目录解析并进入检查点。
+
+题目页可选标题、take 和讲稿。页脚默认关闭，显式启用时只显示页码。保留边界、基本字号、文本碰撞、
+对象与资源校验及 PPTX 包检查。题目模式的 QA 将科研表达门禁标为 `SKIP`，页种、公式、列表和图表由作者按题目选择。
+草稿与候选分别沿用 `scene_preview` 和 `advance.native`。[完整题目入口](agent-adapter.md#从题目开始)
+
+### 论文模式
 
 ```text
 totalpipe_start(page_mode="page_scene", ...)
@@ -38,13 +55,13 @@ intake -> queries -> evidence -> model_selection -> story_prompt -> story
 
 - `page_mode=page_scene` 跳过 `deck_ir`、`design`、`visual_design`。
 - `page_mode=deck_ir`（默认）跳过 `page_scene`，原有流程和全部对象能力不变。
-- `source_kind=deck_ir` 的导入任务不能使用 `page_scene`，否则会在创建任务前拒绝。
+- 导入已有 Deck IR 时使用 `page_mode=deck_ir`。
 
 `page_scene` 是 agent artifact：`next_action` 给出
 `work/page_scene_prompt.json`、`work/page_scene_task.md`、PageScene Schema 和输出路径
 `work/page_scene.json`。最多 4 次不同稿件的修订额度，与旧 IR 的 3 次预算独立。
 
-## 绑定门禁
+## 论文模式的绑定门禁
 
 接受 `page_scene` 时执行 `page_scene_binding.bind()`：
 
@@ -149,7 +166,7 @@ PageScene native 分支用 PowerPoint 导出 PDF，再按 PageScene box 检查�
 正文区域文字、列表完整性和字体替换；生成 `native.pdf`、`native.json` 和逐页 PNG
 contact sheet。`review` / `ingest` 仍要求实际 PowerPoint UI 审阅和显式 slide IDs。
 
-## 密度门禁
+## 论文模式的密度门禁
 
 `pagespec-check` / job 接受时检查：
 

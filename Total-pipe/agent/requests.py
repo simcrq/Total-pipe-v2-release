@@ -4,6 +4,8 @@ import re
 
 PRESENTATION_TYPES = ('group_meeting', 'journal_club', 'proposal', 'progress_report',
                       'defense', 'paper_presentation', 'custom')
+SOURCE_KINDS = ('pdf', 'markdown', 'workflow', 'deck_ir', 'topic')
+PAGE_MODES = ('deck_ir', 'page_scene')
 _ALIASES = {
     'group meeting': 'group_meeting', 'lab meeting': 'group_meeting',
     '组会': 'group_meeting', '研究生组会': 'group_meeting',
@@ -71,8 +73,21 @@ def slide_count(value):
     return value
 
 
+def resolve_page_mode(value, source_kind):
+    if value is None:
+        return 'page_scene' if source_kind == 'topic' else 'deck_ir'
+    if value not in PAGE_MODES:
+        raise ValueError('page_mode must be deck_ir or page_scene')
+    if source_kind == 'topic' and value != 'page_scene':
+        raise ValueError('source_kind=topic uses page_mode=page_scene.')
+    return value
+
+
 def prompt_request(request):
-    """Keep the complete user brief in prompts, including the final paper-page target."""
-    return {key: request.get(key) for key in
-            ('language', 'presentation_type', 'requirements', 'slide_count', 'presentation_context')
-            if key != 'presentation_context' or request.get(key)}
+    """Keep the user brief and requested page count in authoring prompts."""
+    brief = {key: request.get(key) for key in
+             ('language', 'presentation_type', 'requirements', 'slide_count', 'presentation_context')
+             if key != 'presentation_context' or request.get(key)}
+    if request.get('source_kind') == 'topic':
+        brief['topic'] = request['source']
+    return brief

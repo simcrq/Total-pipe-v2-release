@@ -11,8 +11,8 @@ from . import adapters as a
 from .state import (JobError, read, write, sha, digest, dependency, checkpoint, valid_record,
                     locked, save, locate, home, confined, snapshot)
 from .state import validate_job
-from .requests import (presentation_type as normalize_presentation_type, slide_count as validate_slide_count,
-                       prompt_request, request_identity)
+from .requests import (SOURCE_KINDS, presentation_type as normalize_presentation_type, prompt_request,
+                       request_identity, resolve_page_mode, slide_count as validate_slide_count)
 from .telemetry import emit, span
 
 TABLE = read(Path(__file__).with_name('stages.json'))
@@ -93,6 +93,7 @@ def prepare_next(job, stage):
 def envelope(job, stage, failure=None, detail='summary'):
     out = Path(job['request']['out_dir'])
     work = out/'work'
+    topic = job['request']['source_kind'] == 'topic'
     sid, kind = stage['id'], stage['kind']
     action = {'type': 'none', 'reason': 'ADVANCE_REQUIRED', 'tool': 'totalpipe_advance'}
     status = 'running'
@@ -130,15 +131,17 @@ def envelope(job, stage, failure=None, detail='summary'):
                            'schema_path': str(Path(__file__).parent/'schemas/page-scene.schema.json'),
                            'instructions_path': str(work/'page_scene_task.md'),
                            'input_path': str(work/'page_scene_prompt.json'),
-                           'note': 'Implement the approved page design as explicit native boxes. '
-                                   'Preview selected pages natively before acceptance; never paraphrase approved copy.'})
+                           'note': ('Implement the topic design as editable native boxes. Refine copy as needed.'
+                                    if topic else 'Implement the approved page design as explicit native boxes. '
+                                    'Preview selected pages natively before acceptance; never paraphrase approved copy.')})
         if sid == 'page_design':
-            # The design is a judgement call, not a form to fill in: hand it to a subagent with the
-            # capability brief, the same way Story is delegated, instead of having the main agent
-            # design the deck inline while it is also running the pipeline.
+            # Paper design is delegated; a topic author can work directly or opt into delegation.
             task = work/'page_design_task.md'
-            action.update({'type': 'invoke_subagent', 'required_capability': 'independent_subagent',
-                           'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED',
+            delegated = not topic or bool(job.get('inputs'))
+            action.update({'type': 'invoke_subagent' if delegated else 'author_artifact',
+                           'reason': 'PAGE_DESIGN_DELEGATION_REQUIRED' if delegated else 'TOPIC_PAGE_DESIGN_REQUIRED',
+                           **({'required_capability': 'independent_subagent'} if delegated else {}),
+                           **({'delegation': job['inputs']} if topic and delegated else {}),
                            'input_path': str(prompt) if prompt else None,
                            'schema_path': read(prompt).get('schema_path', str(COMPONENT/'schemas/page-design.schema.json')) if prompt and prompt.is_file() else str(COMPONENT/'schemas/page-design.schema.json'),
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
@@ -174,7 +177,8 @@ def envelope(job, stage, failure=None, detail='summary'):
                   'target_stage': failure.target or sid,
                   'feedback_path': failure.log or str(work/'evidence_feedback.json' if failure.code == 'EVIDENCE_NOT_READY'
                                                       else out/'build/layout_feedback.json'),
-                  'constraints': ['Preserve complete scientific terms, figures, equations and font floors.']}
+                  'constraints': (['Keep pages readable, editable and within the slide canvas.'] if topic else
+                                  ['Preserve complete scientific terms, figures, equations and font floors.'])}
         action['max_attempts'] = target_stage.get('max_attempts', 1)
         if failure.action == 'author_artifact':
             target = next((s for s in STAGES if s['id'] == failure.target), stage)
@@ -213,14 +217,14 @@ def envelope(job, stage, failure=None, detail='summary'):
                  for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()]
     repair_info = None
     native_info = None
-    if sid in ('deck_ir', 'build', 'candidate_ready'):
+    if not topic and sid in ('deck_ir', 'build', 'candidate_ready'):
         try:
             from .repair import descriptor
             repair_info = descriptor(out)
         except (OSError, ValueError, KeyError, TypeError):
             pass  # Invalid/incomplete IR still has its ordinary full-authoring action.
     preview_info = None
-    if sid in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
+    if not topic and sid in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
         from .ir_preview import descriptor
         preview_info = descriptor()
     if kind == 'terminal':
@@ -255,12 +259,24 @@ def error_envelope(error, job_id=None):
         'blocking': True, 'retry': {'safe': error.code == 'JOB_BUSY', 'max': 1}}
 
 
-def start(source, out_dir, language, presentation_type, source_kind='auto', requirements='', queries=None,
+def start(source, out_dir, language=None, presentation_type=None, source_kind='auto', requirements='', queries=None,
           slide_count=None, supplementary_paths=None, supplementary_content_included=False, supplement='off',
-          explain_viz_mode='auto', page_mode='deck_ir'):
-    source, out = Path(source).expanduser().resolve(), Path(out_dir).expanduser().resolve()
-    if not source.is_file():
-        return error_envelope(JobError('SOURCE_NOT_FOUND', 'Source must be an existing file.', 'Provide its absolute path.'))
+          explain_viz_mode='auto', page_mode=None):
+    out = Path(out_dir).expanduser().resolve()
+    if source_kind == 'topic':
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError('source must contain a topic or question for source_kind=topic.')
+        if queries or supplementary_paths or supplementary_content_included or supplement != 'off':
+            raise ValueError('Topic jobs take a topic and requirements. Queries and supplementary inputs are for paper jobs.')
+        source = source.strip()
+        if language is None:
+            language = 'auto'
+        if presentation_type is None:
+            presentation_type = 'custom'
+    else:
+        source = Path(source).expanduser().resolve()
+        if not source.is_file():
+            return error_envelope(JobError('SOURCE_NOT_FOUND', 'Source must be an existing file.', 'Provide its absolute path.'))
     if source_kind == 'auto':
         source_kind = {'.pdf': 'pdf', '.md': 'markdown'}.get(source.suffix.lower())
         if source.suffix.lower() == '.json':
@@ -271,7 +287,7 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
             except ValueError:
                 return error_envelope(JobError('SOURCE_INVALID_JSON', 'Source JSON must be an object.', 'Repair the source JSON before starting.'))
             source_kind = 'deck_ir' if value.get('schema_version') == '2.0' else 'workflow'
-    if source_kind not in ('pdf', 'markdown', 'workflow', 'deck_ir'):
+    if source_kind not in SOURCE_KINDS:
         raise ValueError('Unsupported source_kind')
     if not isinstance(language, str) or not language.strip():
         raise ValueError('language and presentation_type are required')
@@ -282,8 +298,7 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
         raise ValueError('supplement must be off, inline, pages or both')
     if explain_viz_mode not in ('auto', 'off', 'prefer'):
         raise ValueError('explain_viz_mode must be auto, off or prefer')
-    if page_mode not in ('deck_ir', 'page_scene'):
-        raise ValueError('page_mode must be deck_ir or page_scene')
+    page_mode = resolve_page_mode(page_mode, source_kind)
     request = {'source': str(source), 'out_dir': str(out), 'language': language,
         'presentation_type': presentation_type, 'source_kind': source_kind, 'requirements': requirements,
         'supplementary_content_included': supplementary_content_included,
@@ -291,8 +306,8 @@ def start(source, out_dir, language, presentation_type, source_kind='auto', requ
         'supplement': supplement, 'explain_viz_mode': explain_viz_mode, 'page_mode': page_mode}
     if page_mode == 'page_scene' and source_kind == 'deck_ir':
         return error_envelope(JobError('PAGE_MODE_SOURCE_MISMATCH',
-            'page_mode=page_scene starts from a paper source, not an imported Deck IR.',
-            'Use page_mode=deck_ir for imported IR or start from the paper PDF/Markdown.'))
+            'An imported Deck IR uses page_mode=deck_ir.',
+            'To author PageScene, start from a topic or a paper source.'))
     if original_type != presentation_type:
         request['presentation_context'] = original_type
     try:
@@ -386,13 +401,20 @@ def _accept(job, stage, upstream, kind, path):
             workflow = read(work/'evidence_pointer.json')['workflow']
             a.check_story(read(work/'story_prompt.json'), value, read(workflow))
         elif kind == 'page_design':
-            workflow = read(work/'evidence_pointer.json')['workflow']
-            flow = read(workflow)
-            evidence = {entry['evidence_id']: entry['text']
-                        for entry in flow['evidence_registry']}
-            a.check_design(value, read(work/'story_plan.json'), evidence,
-                           slide_count=job['request'].get('slide_count'),
-                           figures=(flow.get('artifacts') or {}).get('figure_assets_metadata') or [])
+            if job['request']['source_kind'] == 'topic':
+                from .topic import check_design
+                try:
+                    check_design(value, job['request'].get('slide_count'))
+                except ValueError as error:
+                    raise a.Failure('TOPIC_PAGE_DESIGN_INVALID', str(error), 'author_artifact', 'page_design') from error
+            else:
+                workflow = read(work/'evidence_pointer.json')['workflow']
+                flow = read(workflow)
+                evidence = {entry['evidence_id']: entry['text']
+                            for entry in flow['evidence_registry']}
+                a.check_design(value, read(work/'story_plan.json'), evidence,
+                               slide_count=job['request'].get('slide_count'),
+                               figures=(flow.get('artifacts') or {}).get('figure_assets_metadata') or [])
         elif kind == 'page_design_review':
             from .content_review import validate, ReviewRejected
             try:
@@ -460,7 +482,8 @@ def _accept(job, stage, upstream, kind, path):
         # Scene binding expands recipes and supplies bindings, provenance and
         # absolute image paths even when the author used expected_output.
         write(destination, value)
-    if kind == 'page_design' and value.get('schema_version') not in ('1.2', '1.3'):
+    if (kind == 'page_design' and job['request']['source_kind'] != 'topic'
+            and value.get('schema_version') not in ('1.2', '1.3')):
         # The design is approved; the IR stage must now realize it instead of re-deciding it.
         a.finalize_design(work, value)
     if kind == 'page_design_review':
@@ -765,6 +788,7 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
+            topic = job['request']['source_kind'] == 'topic'
             if scene_preview is not None:
                 if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from,
                                                             acknowledge, native, preview)):
@@ -772,6 +796,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 if stage['id'] != 'page_scene':
                     raise ValueError('scene_preview is available at the page_scene stage.')
                 return _scene_preview(job, stage, scene_preview)
+            if topic and (preview is not None or artifact_kind == 'deck_ir_patch'):
+                raise ValueError('Topic jobs use PageScene. Use scene_preview for drafts or replan_from=page_scene to revise.')
             if preview is not None:
                 if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from, acknowledge, native)):
                     raise ValueError('Submit preview alone; it renders a draft without accepting or advancing it.')
@@ -806,6 +832,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 if replan_from:
                     if replan_from not in NAMES or replan_from in ('intake', 'candidate_ready'):
                         raise ValueError('Invalid replan_from')
+                    if topic and replan_from not in ('page_design', 'page_scene', 'build'):
+                        raise ValueError('Topic jobs can replan from page_design, page_scene or build.')
                     emit(out, 'replan_requested', job_id=job_id, stage=stage['id'],
                          target_stage=replan_from, status='success')
                     invalidate(job, replan_from)
@@ -816,10 +844,13 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                             not isinstance(inputs['model'], str) or not inputs['model'].strip() or
                             inputs['reasoning_effort'] not in ('high', 'xhigh', 'max', 'ultra') or inputs['selected_by_user'] is not True):
                         raise ValueError('Provide explicit user-selected model, high-or-stronger reasoning_effort and selected_by_user=true')
-                    if stage['id'] != 'model_selection' and not job['inputs']:
+                    if topic and stage['id'] != 'page_design':
+                        raise ValueError('Optional topic model input is accepted at page_design.')
+                    if not topic and stage['id'] != 'model_selection' and not job['inputs']:
                         raise ValueError('Model input is only accepted at model_selection')
                     job['inputs'] = inputs
-                    emit(out, 'input_accepted', job_id=job_id, stage='model_selection', status='success')
+                    emit(out, 'input_accepted', job_id=job_id,
+                         stage='page_design' if topic else 'model_selection', status='success')
                     stage, upstream = current(job)
                 if artifact_kind == 'deck_ir_page':
                     if stage['id'] != 'deck_ir' or not artifact_path:

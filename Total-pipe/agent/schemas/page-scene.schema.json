@@ -35,28 +35,22 @@
       "items": {
         "type": "object",
         "required": ["id"],
-        "allOf": [
-          {"anyOf": [{"required": ["objects"]}, {"required": ["recipe"]}]},
-          {"anyOf": [{"required": ["title"]}, {"required": ["title_ref"]},
-                     {"required": ["recipe"]}]},
-          {"anyOf": [{"required": ["take"]}, {"required": ["take_ref"]},
-                     {"required": ["recipe"]}]}
-        ],
+        "anyOf": [{"required": ["objects"]}, {"required": ["recipe"]}],
         "properties": {
           "id": {"type": "string", "pattern": "\\S"},
           "recipe": {"type": "string"},
           "slots": {"type": "object"},
           "svg_import": {"type": "boolean"},
           "section": {"type": "string"},
-          "title": {"type": "string"},
+          "title": {"type": "string", "description": "Optional for topic jobs. Paper jobs require a title or title_ref."},
           "title_ref": {"type": "string"},
           "title_emphasis": {"type": "array", "items": {"type": "string"}},
-          "take": {"type": "string"},
+          "take": {"type": "string", "description": "Optional for topic jobs. Paper jobs require a take or take_ref."},
           "take_ref": {"type": "string"},
           "take_emphasis": {"type": "array", "items": {"type": "string"}},
           "notes": {"type": "string"},
           "evidence_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
-          "footer": {"type": "boolean", "default": true},
+          "footer": {"type": "boolean", "description": "Defaults to false for topic jobs and true for paper jobs."},
           "objects": {
             "type": "array",
             "items": {

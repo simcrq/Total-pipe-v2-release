@@ -102,7 +102,8 @@
       "sources": [
         "pdf",
         "markdown",
-        "workflow"
+        "workflow",
+        "topic"
       ],
       "prepare": "page_design",
       "instructions_ref": "page_design",
@@ -129,7 +130,8 @@
       "sources": [
         "pdf",
         "markdown",
-        "workflow"
+        "workflow",
+        "topic"
       ],
       "prepare": "page_scene",
       "skip_if": "deck_ir_mode",

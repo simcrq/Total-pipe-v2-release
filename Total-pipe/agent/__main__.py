@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from .doctor import doctor
+from .requests import PAGE_MODES, SOURCE_KINDS
 from .runner import start, advance, status
 from .state import read, write
 
@@ -12,13 +13,15 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     p = commands.add_parser('doctor')
     p.add_argument('--deep', action='store_true')
-    p.add_argument('--source-kind')
-    p.add_argument('--page-mode', default='deck_ir', choices=('deck_ir', 'page_scene'))
+    p.add_argument('--source-kind', choices=SOURCE_KINDS)
+    p.add_argument('--page-mode', choices=PAGE_MODES, help='Defaults to PageScene for topic, Deck IR otherwise.')
     p.add_argument('--json', action='store_true')
     p = commands.add_parser('start')
-    for name in ('source', 'out-dir', 'language', 'presentation-type'):
-        p.add_argument('--'+name, required=True)
-    p.add_argument('--source-kind', default='auto')
+    p.add_argument('--source', required=True, help='File path, or topic/question text with --source-kind topic.')
+    p.add_argument('--out-dir', required=True)
+    p.add_argument('--language', help='Required for file sources. Topics default to auto.')
+    p.add_argument('--presentation-type', help='Required for file sources. Topics default to custom.')
+    p.add_argument('--source-kind', choices=('auto', *SOURCE_KINDS), default='auto')
     p.add_argument('--requirements', default='')
     p.add_argument('--queries', type=Path)
     p.add_argument('--slide-count', type=int)
@@ -26,7 +29,7 @@ def main():
     p.add_argument('--supplementary-content-included', action='store_true')
     p.add_argument('--supplement', default='off', choices=('off', 'inline', 'pages', 'both'))
     p.add_argument('--explain-viz-mode', default='auto', choices=('auto', 'off', 'prefer'))
-    p.add_argument('--page-mode', default='deck_ir', choices=('deck_ir', 'page_scene'))
+    p.add_argument('--page-mode', choices=PAGE_MODES, help='Defaults to PageScene for topic, Deck IR otherwise.')
     p = commands.add_parser('status')
     p.add_argument('--job-id', required=True)
     p.add_argument('--detail', choices=('summary', 'full'), default='summary')

@@ -12,7 +12,7 @@ import json
 import shutil
 from pathlib import Path
 
-from .page_scene import Renderer
+from .page_scene import Renderer, is_topic_scene
 from .page_scene_qa import (_flatten_objects, _overlap, expression_gate,
                             expression_report, validate_spec)
 from .state import digest, sha, write
@@ -113,7 +113,7 @@ def build(work, out, request=None):
     from deck_compiler.contracts import issue
     expression = expression_report(scene, source)
     gate = expression_gate(expression['summary'])
-    if len(scene['pages']) >= 6 and gate['status'] != 'PASS':
+    if not is_topic_scene(scene) and len(scene['pages']) >= 6 and gate['status'] != 'PASS':
         items.append(issue('PAGE_SCENE_EXPRESSION_GATE', 'FAIL',
                            '; '.join(gate['failures']),
                            detector='page-scene-expression', renderer='python-pptx'))
@@ -242,7 +242,8 @@ def _write_qa(build_dir, scene, items, *, structural, native, metrics=None,
     qa['page_scene_sha256'] = digest(scene)
     qa['page_scene_metrics'] = metrics or []
     qa['expression'] = expression_report(scene, build_dir / 'page_scene.json')
-    qa['expression_gate'] = expression_gate(qa['expression']['summary'])
+    qa['expression_gate'] = ({'status': 'SKIP', 'failures': []} if is_topic_scene(scene)
+                             else expression_gate(qa['expression']['summary']))
     qa['checks']['expression_gate'] = qa['expression_gate']['status']
     if native_evidence:
         qa['native'] = {key: native_evidence.get(key) for key in

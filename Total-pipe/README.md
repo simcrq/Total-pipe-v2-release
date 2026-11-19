@@ -12,6 +12,7 @@
 
 | 入口 | 用途 |
 | --- | --- |
+| [total-pipe-agent Skill](skills/total-pipe-agent/SKILL.md) | 调度题目、论文或已有产物。题目入口由 Agent 自拟内容与页面，再由 PageScene 生成可编辑 PPTX |
 | [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → page_design → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
 | `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
@@ -19,7 +20,7 @@
 | `python -m deck_compiler.mcp_server` | 低层 Total-pipe stdio MCP，配置为 [.mcp.advanced.json](.mcp.advanced.json)，服务名 `total_pipe_v3` |
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
-编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
+Deck Compiler 负责最终区域、文字与公式尺寸、几何约束和结构化反馈，使用 OfficeCLI 写入 PPTX。PageScene 使用 python-pptx 写入显式页面对象。
 默认 Agent 的 RPA 阶段仅规范化内容，页面方案由独立 page_design 决定；RPA 独立 CLI 仍可做模板规划。
 Story 2.0 将科学断言与叙事段落分开，scientific_review 后由页面设计1.3分别声明所有权和复用；
 页面源文案实际审读后绑定 content_projection，原生caption及论文图号按语义实现；
@@ -35,9 +36,15 @@ IR 草稿可用四工具的 `advance.preview` 选页渲染：实际查看 PNG �
 
 ## 环境
 
-完整流水线使用 Python 3.12+、Node.js 22+；编译依赖见 [requirements.txt](requirements.txt)。
-生成 PPTX 需 OfficeCLI 1.0.152+，正式原生验收需 macOS / Windows 的 Microsoft PowerPoint。
+完整论文流水线使用 Python 3.12+ 和 Node.js 22+。Deck IR 构建需 OfficeCLI 1.0.152+，题目入口的 PageScene 构建使用 Python 3.12+ 和 [requirements.txt](requirements.txt)。
+正式原生验收需 macOS / Windows 的 Microsoft PowerPoint。
 PDF OCR、字体、可选数学度量和安装命令见 [环境清单](环境清单.md)。
+
+## 从题目生成 PPTX
+
+在本目录运行 `python -m agent start --source-kind topic --source "为什么二分查找更快" --out-dir /abs/output`。
+按返回的 `next_action` 自拟页面设计并实现 PageScene。题目入口无需论文、证据包或 RPA。
+[四工具题目入口](docs/agent-adapter.md#从题目开始)
 
 ## 从 Deck IR 编译
 

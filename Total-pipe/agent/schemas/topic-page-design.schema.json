@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Total-pipe topic page design",
+  "type": "object",
+  "required": ["schema_version", "deck_id", "pages"],
+  "properties": {
+    "schema_version": {"const": "topic-1.0"},
+    "deck_id": {"type": "string", "pattern": "\\S"},
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": ["id", "design"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"},
+          "title": {"type": "string"},
+          "take": {"type": "string"},
+          "notes": {"type": "string"},
+          "design": {
+            "anyOf": [
+              {"type": "string", "pattern": "\\S"},
+              {"type": "object", "minProperties": 1}
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,8 @@ description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX
 
 # Total-pipe 研究汇报流水线
 
+从题目或问题创作时，走 [total-pipe-agent 题目入口](../../docs/agent-adapter.md#从题目开始)。以下科研流程用于论文输入。
+
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → RPA
     → page_design（Story 引用 / 绘图 / 排布 / 走读）→ canonical Deck IR

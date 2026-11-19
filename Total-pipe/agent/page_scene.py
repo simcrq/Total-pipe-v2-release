@@ -73,9 +73,15 @@ def section_width(text):
     return min(2.45, max(1.35, 0.115 * len(text) + 0.42))
 
 
+def is_topic_scene(spec):
+    provenance = spec.get('provenance')
+    return isinstance(provenance, dict) and provenance.get('mode') == 'topic'
+
+
 class Renderer:
     def __init__(self, spec, spec_path, bindings=None):
         self.spec = spec
+        self.topic = is_topic_scene(spec)
         self.spec_path = Path(spec_path)
         self.bindings = dict(spec.get('bindings') or {})
         if bindings:
@@ -562,20 +568,23 @@ class Renderer:
         take_h = page.get('take_h', 0.58)
         if page.get('section'):
             self.add_section_chip(slide, page['section'])
-        self.add_text(slide, MARGIN, title_y, PAGE_W - 2 * MARGIN, title_h,
-                      self.page_text(page, 'title'), title_size, self.navy, True, spacing=1.0,
-                      emphasis=page.get('title_emphasis'), emphasis_color=self.accent)
-        self.add_take_band(slide, self.page_text(page, 'take'), take_y, take_h,
-                           page.get('take_emphasis'))
-        self.add_rule(slide, MARGIN, 2.165, PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.008)
+        title, take = self.page_text(page, 'title'), self.page_text(page, 'take')
+        if title or not self.topic:
+            self.add_text(slide, MARGIN, title_y, PAGE_W - 2 * MARGIN, title_h,
+                          title, title_size, self.navy, True, spacing=1.0,
+                          emphasis=page.get('title_emphasis'), emphasis_color=self.accent)
+        if take or not self.topic:
+            self.add_take_band(slide, take, take_y, take_h, page.get('take_emphasis'))
+            self.add_rule(slide, MARGIN, 2.165, PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.008)
         for obj in page['objects']:
             self.render_object(slide, obj)
         # Always materialize a notes part; package-level QA otherwise cannot
         # distinguish "no notes" from a malformed/missing relationship.
         slide.notes_slide.notes_text_frame.text = page.get('notes') or ''
-        if page.get('footer', True):
+        if page.get('footer', not self.topic):
             self.add_rule(slide, MARGIN, FOOTER['rule_y'], PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.01)
-            self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, 'Tian et al. · Nat. Commun. 2026 · AVDG digital–analog multimode circuits', 8.8, self.gray)
+            if not self.topic:
+                self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, 'Tian et al. · Nat. Commun. 2026 · AVDG digital–analog multimode circuits', 8.8, self.gray)
             self.add_text(slide, PAGE_W - 1.0, FOOTER['text_y'], 0.35, 0.18, str(page.get('page_number', index)), 8.8, self.gray, align=PP_ALIGN.RIGHT)
         return slide
 

@@ -10,6 +10,7 @@
 | 浏览项目、看成品或开始使用 | [仓库首页](../README.md)、[快速开始](../QUICKSTART.md) |
 | 了解全流程与阶段产物 | [完整流程与使用说明](../Total-pipe/docs/USAGE.zh-CN.md)、[组件入口](#独立组件) |
 | Agent 端到端生成或修订 | [轻量接入 Skill](../Total-pipe/skills/total-pipe-agent/SKILL.md)、[四工具与恢复](../Total-pipe/docs/agent-adapter.md)；[完整规范](../Total-pipe/skills/total-pipe-deck/SKILL.md) |
+| 从题目或问题生成可编辑 PPTX | [题目入口](../Total-pipe/docs/agent-adapter.md#从题目开始)、[PageScene 实现](../Total-pipe/docs/page-scene.md#题目模式) |
 | Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
 | 原子科学记录、两次源审读与观众表达（Story2.0 / 设计1.3） | [内容契约](../Total-pipe/docs/content-projection.md)、[原设计动机](audience-content-contract-design.md) |
 | 旧内容契约1.2实现与回归（新协议见内容契约） | [验证记录](content-projection-validation.md) |
@@ -74,7 +75,7 @@
 | PaperWorkflow 插件、MCP 服务和 Python 包 | [插件清单](../PaperWorkflow/.codex-plugin/plugin.json)、[MCP 服务](../PaperWorkflow/mcp_server.py)、[pyproject.toml](../PaperWorkflow/pyproject.toml) |
 | pwf2rpa | [模块版本](../Total-pipe/pwf2rpa/pwf2rpa/__init__.py) |
 | Research PPT Assistant | [package.json](../research-ppt-assistant/package.json)、[插件清单](../research-ppt-assistant/.codex-plugin/plugin.json) |
-| 文件协议 | [PWF 产物](../PaperWorkflow/README.md)、[Story 和页面设计](../Total-pipe/docs/content-projection.md)、[Deck IR](../Total-pipe/schemas/deck-ir.schema.json)、[Chart IR](../Total-pipe/schemas/chart-ir.schema.json)、[布局树](../Total-pipe/docs/composite-layouts.md) |
+| 文件协议 | [题目页面设计](../Total-pipe/agent/schemas/topic-page-design.schema.json)、[PWF 产物](../PaperWorkflow/README.md)、[论文 Story 和页面设计](../Total-pipe/docs/content-projection.md)、[Deck IR](../Total-pipe/schemas/deck-ir.schema.json)、[Chart IR](../Total-pipe/schemas/chart-ir.schema.json)、[布局树](../Total-pipe/docs/composite-layouts.md) |
 
 ## 样例和展示图
 
