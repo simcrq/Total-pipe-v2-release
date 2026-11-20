@@ -19,13 +19,19 @@ The rules are deliberately narrow:
 from __future__ import annotations
 
 import hashlib
+import os
 import posixpath
 import re
 import shutil
+import uuid
 import zipfile
 from pathlib import Path
 
 from lxml import etree
+
+from .ooxml import target_part
+
+_SAFE_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
 
 P = 'http://schemas.openxmlformats.org/presentationml/2006/main'
 R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -59,17 +65,19 @@ def _rels_path(part):
     return posixpath.join(directory, '_rels', name + '.rels')
 
 
+def _parse_xml(data):
+    return etree.fromstring(data, _SAFE_XML_PARSER)
+
+
 def _read_rels(parts, part):
     name = _rels_path(part)
     if name not in parts:
         return etree.Element('{%s}Relationships' % REL, nsmap={None: REL})
-    return etree.fromstring(parts[name])
+    return _parse_xml(parts[name])
 
 
 def _target(part, target):
-    if target.startswith('/'):
-        return target.lstrip('/')
-    return posixpath.normpath(posixpath.join(posixpath.dirname(part), target))
+    return target_part(part, target)
 
 
 def _relative(part, absolute):
@@ -97,10 +105,13 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
     with zipfile.ZipFile(deck) as archive:
         source = {name: archive.read(name) for name in archive.namelist()}
 
-    presentation = etree.fromstring(parts['ppt/presentation.xml'])
+    presentation = _parse_xml(parts['ppt/presentation.xml'])
     pres_rels = _read_rels(parts, 'ppt/presentation.xml')
     rel_map = {rel.get('Id'): rel for rel in pres_rels}
     sld_ids = list(presentation.find('p:sldIdLst', NS))
+    sld_sz = presentation.find('p:sldSz', NS)
+    slide_w = int(round(int(sld_sz.get('cx')) / 9525)) if sld_sz is not None and sld_sz.get('cx') else 1280
+    slide_h = int(round(int(sld_sz.get('cy')) / 9525)) if sld_sz is not None and sld_sz.get('cy') else 720
 
     def slide_part_of(element):
         return _target('ppt/presentation.xml', rel_map[element.get('{%s}id' % R)].get('Target'))
@@ -116,11 +127,14 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
                         and ('name="%s"' % layout_name) in parts[name].decode('utf-8', 'ignore')),
                        None)
     if layout_part is None:
-        kept_rels = _read_rels(parts, kept[-1][1] if kept else 'ppt/slides/slide1.xml')
+        fallback_slide = kept[-1][1] if kept else (existing[-1][1] if existing else None)
+        if not fallback_slide:
+            raise ValueError('The template has no slide layout to inherit')
+        kept_rels = _read_rels(parts, fallback_slide)
         layout_rel = next((rel for rel in kept_rels if rel.get('Type') == LAYOUT_TYPE), None)
         if layout_rel is None:
             raise ValueError('The template has no slide layout to inherit')
-        layout_part = _target(kept[-1][1], layout_rel.get('Target'))
+        layout_part = _target(fallback_slide, layout_rel.get('Target'))
 
     media = {}
     for name, data in parts.items():
@@ -141,7 +155,7 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
         media[digest] = name
         return name
 
-    content_types = etree.fromstring(parts['[Content_Types].xml'])
+    content_types = _parse_xml(parts['[Content_Types].xml'])
     defaults = {node.get('Extension').lower() for node in content_types.findall('{%s}Default' % CT)}
     overrides = {node.get('PartName') for node in content_types.findall('{%s}Override' % CT)}
 
@@ -167,13 +181,13 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
     for order, name in enumerate(source_slides, 1):
         number = next_slide + order - 1
         target = 'ppt/slides/slide%d.xml' % number
-        xml = etree.fromstring(source[name])
+        xml = _parse_xml(source[name])
         sp_tree = xml.find('.//p:cSld/p:spTree', NS)
         if sp_tree is None:
             raise ValueError('%s has no shape tree' % name)
         identifiers = [int(node.get('id')) for node in xml.iter('{%s}cNvPr' % P) if node.get('id')]
-        sp_tree.append(etree.fromstring(_slide_number(
-            max(identifiers + [0]) + 1, number, width=int(1280), height=int(720))))
+        sp_tree.append(_parse_xml(_slide_number(
+            max(identifiers + [0]) + 1, number, width=slide_w, height=slide_h).encode('utf-8')))
         parts[target] = etree.tostring(xml, xml_declaration=True, encoding='UTF-8', standalone=True)
         declare_override(target, SLIDE_CT)
 
@@ -227,7 +241,8 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
         inserted.append({'slide': number, 'source': name,
                          'notes': any(rel.get('Type') == NOTES_TYPE for rel in rels)})
 
-    # Drop the template's placeholder content slides, with their notes and relationships.
+    # Drop the template's placeholder content slides, with their notes, relationships, and overrides.
+    removed_parts = set()
     for element, part in dropped:
         rid = element.get('{%s}id' % R)
         sld_list = presentation.find('p:sldIdLst', NS)
@@ -238,11 +253,17 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
         for name in list(parts):
             if name == part or name == _rels_path(part):
                 parts.pop(name, None)
-            elif name.startswith('ppt/notesSlides/notesSlide'):
+                removed_parts.add('/' + part)
+            elif name.startswith('ppt/notesSlides/notesSlide') and not name.endswith('.rels'):
                 rels = _read_rels(parts, name)
                 if any(_target(name, rel.get('Target')) == part for rel in rels):
                     parts.pop(name, None)
                     parts.pop(_rels_path(name), None)
+                    removed_parts.add('/' + name)
+    if removed_parts:
+        for node in list(content_types.findall('{%s}Override' % CT)):
+            if node.get('PartName') in removed_parts:
+                content_types.remove(node)
 
     sld_list = presentation.find('p:sldIdLst', NS)
     closing = sld_list[-1] if len(sld_list) else None
@@ -270,12 +291,15 @@ def merge(template, deck, output, keep=(1, 2, 9), layout_name='2_标题幻灯片
                                                   encoding='UTF-8', standalone=True)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_suffix('.pptx.tmp')
-    with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr('[Content_Types].xml', parts.pop('[Content_Types].xml'))
-        for name, data in parts.items():
-            archive.writestr(name, data)
-    temporary.replace(output)
+    temporary = output.with_name(f'{output.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp')
+    try:
+        with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('[Content_Types].xml', parts.pop('[Content_Types].xml'))
+            for name, data in parts.items():
+                archive.writestr(name, data)
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
     return {'template': str(template), 'deck': str(deck), 'output': str(output),
             'kept_template_slides': [part for _, part in kept],
             'dropped_template_slides': [part for _, part in dropped],

@@ -27,11 +27,12 @@ transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story an
     'Pass the merged IR to totalpipe_compile or totalpipe_build; VISUAL_DESIGN_REQUIRED returns a prompt and missing slides. '
     'Only an explicitly requested legacy build should set skip_visual_design=true. '
     'Displayed equations must use component=formula and LaTeX in block.text with JSON backslashes escaped; '
-    'Native inline math is opt-in: inline_math=true on prose blocks or table text cells; '
+    'Bare symbols such as V_OUT and V_G automatically become native inline math in prose, titles, takeaways, captions and table text cells. '
+    'For explicit inline math, use inline_math=true on prose blocks or table text cells; '
     'semantic.inline_math lists title/takeaway fields. Delimit with $...$ or backslash parentheses; '
-    'unmarked text remains literal. Mixed text uses atomic formula widths and per-line baseline extents, '
+    'mixed text uses atomic formula widths and per-line baseline extents, '
     'not literal LaTeX character counts or uniform prose line heights. Query native_inline_equation capability. '
-    'unmarked ordinary text blocks remain literal. Roots (including indexed roots), grouped powers, fractions, '
+    'Roots (including indexed roots), grouped powers, fractions, '
     'exp/log/ln, common math styles and matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix environments are supported. '
     'Matrix cells use & and rows use a double backslash; retain every cell, blank, fraction and script. '
     'Use equation-derivation for dense mathematical pages. Capacity is measured in actual one/two-column regions, '
@@ -101,6 +102,23 @@ def capability_handler(arguments):
 transport.TOOLS['totalpipe_capabilities'] = {'description': 'Declare compiler region-tree contracts and required native backend capabilities; runtime OfficeCLI support is checked again at build time.',
     'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
     'handler': capability_handler, 'timeout': 10}
+
+# The pwf2rpa transport is reused, but its capacity refresh writes into an arbitrary checkout and
+# executes node from it; a compiler MCP client must not be able to reach that.
+transport.TOOLS.pop('pwf2rpa_refresh_capacity', None)
+
+BUILTIN_PROVIDERS = {'packer', 'compiler', 'deterministic', 'none'}
+
+
+def _check_executables(arguments):
+    """MCP arguments may select built-in behaviour only, never arbitrary code or executables."""
+    provider = arguments.get('layout_provider')
+    if provider is not None and provider not in BUILTIN_PROVIDERS:
+        raise ValueError('layout_provider over MCP must be one of ' + ', '.join(sorted(BUILTIN_PROVIDERS))
+                         + '; external module:factory providers are CLI-only')
+    officecli = arguments.get('officecli')
+    if officecli is not None and Path(officecli).stem.lower() != 'officecli':
+        raise ValueError('officecli must name the OfficeCLI executable (officecli or a path ending in it)')
 
 
 def invoke(command, arguments):
@@ -180,6 +198,7 @@ for name, command, description in (
         for key in ('ir','out','explain_viz_request'):
             if key in arguments and not Path(arguments[key]).is_absolute():
                 raise ValueError(f'{key} must be an absolute path')
+        _check_executables(arguments)
         return invoke(command, arguments)
     transport.TOOLS[name] = {'description':description,
         'inputSchema':{'type':'object','properties':properties,'required':required,'additionalProperties':False},

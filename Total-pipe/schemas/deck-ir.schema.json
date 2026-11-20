@@ -15,7 +15,7 @@
         "academic_design": {"$ref": "#/$defs/academic-design"},
         "text_capacity_policy": {"enum": ["strict", "preserve-terms"],
           "description": "V6 defaults to preserve-terms: title/body budgets and visible text overflow require REVIEW without rewriting terminology. Legacy IR defaults to strict."},
-        "frame_variant": {"enum": ["default", "spacious"]},
+        "frame_variant": {"enum": ["default", "spacious", "template"]},
         "bullet_style": {
           "enum": ["bullet", "square", "open_square", "diamond", "arrow", "check", "dash", "large_square", "large_diamond", "arrowhead"],
           "description": "Default native list marker; a block may override bullet_style."
@@ -776,7 +776,7 @@
                 "required": ["asset_id", "caption"],
                 "properties": {
                   "asset_id": {"type": "string", "minLength": 1},
-                  "caption": {"type": "string", "maxLength": 180},
+                  "caption": {"type": "string", "maxLength": 320},
                   "source_label": {"type": "string", "maxLength": 80,
                     "description": "Where the panel comes from, set as a weakened prefix: 'Xie et al., Fig. 1g'."},
                   "alt": {"type": "string"},

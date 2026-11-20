@@ -1,4 +1,5 @@
 """Deterministic layout compiler. No LLM calls, mutation, or content rewriting."""
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 import re
@@ -8,14 +9,14 @@ from .catalog import ARCHETYPES
 from .capacity import DISPLAY_FORMULA_SIZES, FORMULA_GAP, FORMULA_LABEL_MAX, FORMULA_SIZES
 from .formula_layout import formula_groups, plan_formula_flow, FormulaCapacityError
 from .contracts import TextBoxContract, digest, file_hash, issue
-from .ir import validate
+from .ir import enable_bare_subscripts, validate
 from .layout_tree import walk as walk_regions
 from .graphic_layout import (compile_graphic, graphic_counts, graphic_obstacle_collisions,
                              graphic_texts, intentional_overlap)
 from .text_flow import DISTRIBUTED_ARROW_LIST, EXPLICIT_LISTS, list_min_width, select_text_flow
 from .visual_design import (TITLE_BOX_LINES, header_decoration, header_layout, preserve_scientific_terms,
                             resolve_design, rule, type_sizes)
-from totalpipe_layout.inline_math import has_markup, strip_markup, unmatched_markers
+from totalpipe_layout.inline_math import has_bare_subscript, has_markup, strip_markup, unmatched_markers
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -53,6 +54,8 @@ ANNOTATION_ROLES = {"caption", "caveat", "footer", "badge"}
 def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
     """Height of a caption strip: the wrapped line count at the size it is set in."""
     from .fonts import load_font_file
+    if has_bare_subscript(caption):
+        return caption_measure({'caption': caption, 'caption_font_size': size}, width, font_file)[0]
     lines = break_lines(strip_markup(caption), load_font_file(font_file, size), max(1, width))
     return max(34.0, len(lines) * size * 1.25 + 8)
 
@@ -101,7 +104,7 @@ def caption_measure(ref, width, font_file, design=None):
         size = min(size, native_caption_size(design))
     if not content:
         return 0., 0
-    if has_markup(content):
+    if has_markup(content) or has_bare_subscript(content):
         from totalpipe_layout.inline_math import InlineWidthError, measure_inline
         try:
             plan = measure_inline(content, max(1., width), load_font_file(font_file, int(size)), int(size))
@@ -318,28 +321,33 @@ def break_lines(text, font, width):
     lines = []
     for paragraph in text.split("\n"):
         pieces = []
+        current = ''
         for token in TOKEN.findall(paragraph):
-            current = ''.join(pieces)
             if pieces and font.getlength(current + token) > width:
                 # Kinsoku: a closing mark or unit never starts a line. The token before it travels
                 # down instead, so "2.84×，" does not become "2.84" / "×，".
                 if token[:1] in NO_LINE_START and len(current.strip()) > 2:
                     carried = pieces.pop()
                     lines.append(''.join(pieces).rstrip())
-                    pieces = [carried + token.lstrip()]
+                    current = carried + token.lstrip()
+                    pieces = [current]
                     continue
                 lines.append(current.rstrip())
                 pieces = []
+                current = ''
                 token = token.lstrip()
             if not pieces and font.getlength(token) > width:
                 for char in token:
-                    if pieces and font.getlength(''.join(pieces) + char) > width:
-                        lines.append(''.join(pieces).rstrip())
+                    if pieces and font.getlength(current + char) > width:
+                        lines.append(current.rstrip())
                         pieces = []
+                        current = ''
                     pieces.append(char)
+                    current += char
                 continue
             pieces.append(token)
-        lines.append(''.join(pieces).rstrip())
+            current += token
+        lines.append(current.rstrip())
     return lines
 
 
@@ -705,6 +713,7 @@ def geometry_issues(elements, number):
 
 
 def compile_deck(ir, base, _retry=True, proposals=None):
+    ir = enable_bare_subscripts(deepcopy(ir))
     issues = validate(ir)
     # A REVIEW is something a human confirms later; only a FAIL stops compilation. Treating every
     # finding as fatal meant an equation-only page could not even be laid out to be reviewed.
@@ -857,7 +866,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
             # face, so it is laid out by the same inline engine that already handles a formula in a
             # sentence. Text without markers keeps the plain, cheaper path byte for byte.
             markup = has_markup(content)
-            if inline_math or markup:
+            if inline_math or markup or (role == 'caption' and has_bare_subscript(content)):
                 from .inline_text import fit_inline, text_body
                 from totalpipe_layout.inline_math import InlineWidthError
                 try:
@@ -1442,7 +1451,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         if comp.get('layout_tree'):
             from .layout_tree import LayoutTreeError, attachment_link, compile_regions
             from .container_frames import grow_frame, rectangle, stroke_width
-            checkpoints = [len(elements), len(issues), len(adaptations)]
+            checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
             try:
                 plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
                                        list_gap_ratio, (0, 0) if design else (28, 18), bullet_style,
@@ -1623,8 +1632,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
             except LayoutTreeError as error:
-                del elements[checkpoints[0]:]
-                del adaptations[checkpoints[2]:]
+                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
+                    del values[checkpoint:]
                 issues.append(issue(error.detail['code'], 'FAIL', str(error), n,
                     detector='geometric-preflight', slide_id=slide['id'],
                     **{key: value for key, value in error.detail.items() if key not in ('code', 'message')}))
@@ -1809,7 +1818,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                and e['role'] in ('heading', 'body', 'formula')]
                     if visible:
                         content_top = min(e['bbox'][1] for e in visible)
-                        content_bottom = max(text_visible_bottom(e) for e in visible)
+                        content_bottom = max((e['bbox'][1]+e['bbox'][3] if e['kind'] == 'math'
+                                              else text_visible_bottom(e)) for e in visible)
                         empty = bh-(content_bottom-content_top)
                         if empty > 60:
                             shift = empty/2

@@ -4,7 +4,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from .pdf_api_handler import ApiPDFProcessor
 from .pdf_local_handler import LocalPDFProcessor
 from .pdf_official_handler import OfficialMinerUProcessor
 
@@ -25,6 +24,8 @@ class PDFProcessor:
             self.processor = LocalPDFProcessor(config)
         elif self.mode == "api":
             if mineru_config.get("legacy_http", False):
+                from .pdf_api_handler import ApiPDFProcessor
+
                 logger.warning(
                     "Using the legacy handwritten MinerU HTTP adapter because "
                     "api.mineru.legacy_http=true."

@@ -16,12 +16,13 @@ from pathlib import Path
 
 from PIL import Image, ImageFont
 
-ARCHETYPES = ('cover-hero', 'metric-comparison', 'equation-derivation', 'process-flow', 'figure-parameters',
+ARCHETYPES = ('cover', 'composite-research', 'native-graphic',
+              'cover-hero', 'metric-comparison', 'equation-derivation', 'process-flow', 'figure-parameters',
               'hero-dual-evidence', 'evidence-hypothesis', 'dual-demonstration',
               'three-limitations', 'three-conclusions')
 ROLES = ('body', 'metric', 'parameter', 'process-step', 'direct-evidence', 'hypothesis',
          'limitation', 'conclusion', 'callout', 'comparison', 'definition', 'observation',
-         'method', 'result', 'question', 'source', 'caveat', 'figure', 'formula')
+         'method', 'result', 'question', 'source', 'caveat', 'figure', 'formula', 'caption')
 WIDTHS = (180, 280, 440, 700, 1168)
 MAX_UNITS = 16
 FEATURES = 17
@@ -443,8 +444,10 @@ def check(request, boxes):
     if request.get('compiler_owned') == 'native_graphic_composition':
         return ['NATIVE_GRAPHIC_REQUIRES_COMPILER']
     if request.get('compiler_owned') == 'measured_formula_flow':
-        return [f"{u['id']}:FORMULA_REQUIRES_COMPILER" for u in request['units']
-                if u.get('component') == 'formula']
+        reasons = [f"{u['id']}:{'INLINE_MATH' if u.get('inline_math') else 'FORMULA'}_REQUIRES_COMPILER"
+                   for u in request['units']
+                   if u.get('component') == 'formula' or u.get('inline_math')]
+        return reasons or ['FORMULA_REQUIRES_COMPILER']
     errors = []
     units = request['units']
     if len(boxes) != len(units):
@@ -482,6 +485,8 @@ def check(request, boxes):
                 # A bbox provider cannot size a formula: its height comes from the typeset math, not
                 # from character advances, so formula pages stay with the compiler.
                 errors.append(f'{u["id"]}:FORMULA_REQUIRES_COMPILER')
+            if u.get('inline_math'):
+                errors.append(f'{u["id"]}:INLINE_MATH_REQUIRES_COMPILER')
             if select_text_flow(u['text'], u.get('text_flow','auto'))['mode'] == DISTRIBUTED_ARROW_LIST:
                 errors.append(f'{u["id"]}:TEXT_FLOW_REQUIRES_COMPILER')
             label=u.get('label','')

@@ -14,6 +14,7 @@ import argparse
 import copy
 import json
 import re
+import tempfile
 from pathlib import Path
 
 from lxml import etree
@@ -73,9 +74,15 @@ def section_width(text):
     return min(2.45, max(1.35, 0.115 * len(text) + 0.42))
 
 
+def is_topic_scene(spec):
+    provenance = spec.get('provenance')
+    return isinstance(provenance, dict) and provenance.get('mode') == 'topic'
+
+
 class Renderer:
     def __init__(self, spec, spec_path, bindings=None):
         self.spec = spec
+        self.topic = is_topic_scene(spec)
         self.spec_path = Path(spec_path)
         self.bindings = dict(spec.get('bindings') or {})
         if bindings:
@@ -186,17 +193,15 @@ class Renderer:
         t.text = to_plain(ast)
 
     def add_rich_runs(self, paragraph, text, size, color, bold=False, italic=False,
-                      emphasis=None, emphasis_color=None):
-        """Render opt-in ``$...$`` math inside ordinary prose/list runs."""
-        if '$' not in text and '\\(' not in text:
-            spans = [(text, 'text')]
-        else:
-            from totalpipe_layout.inline_math import parse_inline
-            try:
-                spans = [(span.text, span.kind) for span in parse_inline(text)]
-            except ValueError as error:
-                raise ValueError('inline math: %s' % error) from error
-        for value, kind in spans:
+                      emphasis=None, emphasis_color=None, *, subscripts_only=False):
+        """Render explicit math and inferred subscript symbols inside native paragraphs."""
+        from totalpipe_layout.inline_math import InlineMathError, parse_inline
+        try:
+            spans = parse_inline(text, subscripts_only=subscripts_only or ('$' not in text and '\\(' not in text))
+        except InlineMathError as error:
+            raise ValueError('inline math: %s' % error) from error
+        for span in spans:
+            value, kind = span.text, span.kind
             if not value:
                 continue
             if kind == 'formula':
@@ -311,12 +316,9 @@ class Renderer:
             p = tf.paragraphs[0]
             p.alignment = align_from(obj.get('align', 'center'))
             p.line_spacing = obj.get('line_spacing', 1.0)
-            r = p.add_run()
-            r.text = self.resolve_text(obj)
-            r.font.name = self.font
-            r.font.size = Pt(obj.get('size', 14))
-            r.font.bold = obj.get('bold', False)
-            r.font.color.rgb = rgb(obj.get('color', '#102A43'))
+            self.add_rich_runs(p, self.resolve_text(obj), obj.get('size', 14),
+                               rgb(obj.get('color', '#102A43')), obj.get('bold', False),
+                               subscripts_only=True)
         return sh
 
     def add_line(self, slide, obj):
@@ -333,27 +335,30 @@ class Renderer:
         path = Path(obj['path'])
         if not path.is_absolute():
             path = self.spec_path.parent / path
-        im = Image.open(path)
-        iw, ih = im.size
-        if obj.get('fit', 'contain') == 'cover':
-            target_ratio = w / h
-            src_ratio = iw / ih
-            if src_ratio > target_ratio:
-                new_w = int(ih * target_ratio)
-                left = (iw - new_w) // 2
-                im = im.crop((left, 0, left + new_w, ih))
-            else:
-                new_h = int(iw / target_ratio)
-                top = (ih - new_h) // 2
-                im = im.crop((0, top, iw, top + new_h))
-            tmp = path.with_name(path.stem + '_fit' + path.suffix)
-            im.save(tmp, quality=95)
-            path = tmp
-        scale = min(w / im.width, h / im.height)
-        ww, hh = im.width * scale, im.height * scale
-        xx = x + (w - ww) / 2
-        yy = y + (h - hh) / 2
-        return slide.shapes.add_picture(str(path), Inches(xx), Inches(yy), Inches(ww), Inches(hh))
+        # The cropped copy lives in a private temp dir: writing next to the source would mutate
+        # checkpointed evidence directories and collide when one asset is cropped twice.
+        with tempfile.TemporaryDirectory(prefix='totalpipe-fit-') as scratch, Image.open(path) as source:
+            im = source
+            iw, ih = im.size
+            if obj.get('fit', 'contain') == 'cover':
+                target_ratio = w / h
+                src_ratio = iw / ih
+                if src_ratio > target_ratio:
+                    new_w = int(ih * target_ratio)
+                    left = (iw - new_w) // 2
+                    im = im.crop((left, 0, left + new_w, ih))
+                else:
+                    new_h = int(iw / target_ratio)
+                    top = (ih - new_h) // 2
+                    im = im.crop((0, top, iw, top + new_h))
+                tmp = Path(scratch) / ('fit' + path.suffix)
+                im.save(tmp, quality=95)
+                path = tmp
+            scale = min(w / im.width, h / im.height)
+            ww, hh = im.width * scale, im.height * scale
+            xx = x + (w - ww) / 2
+            yy = y + (h - hh) / 2
+            return slide.shapes.add_picture(str(path), Inches(xx), Inches(yy), Inches(ww), Inches(hh))
 
     def add_table(self, slide, obj):
         rows = obj['rows']
@@ -365,6 +370,8 @@ class Renderer:
         widths = obj.get('col_widths')
         if widths:
             total = sum(widths)
+            if len(widths) != ncols:
+                raise ValueError('col_widths has %d entries for %d columns' % (len(widths), ncols))
             for i, cw in enumerate(widths):
                 table.columns[i].width = Inches(w * cw / total)
         header = obj.get('header', True)
@@ -382,12 +389,9 @@ class Renderer:
                 cell.text = ''
                 p = cell.text_frame.paragraphs[0]
                 p.alignment = align_from('center' if c else 'left')
-                run = p.add_run()
-                run.text = str(rows[r][c])
-                run.font.name = self.font
-                run.font.size = Pt(obj.get('font_size', 15))
-                run.font.bold = (header and r == 0) or (r in accent_rows)
-                run.font.color.rgb = self.white if (header and r == 0) else self.ink
+                self.add_rich_runs(p, str(rows[r][c]), obj.get('font_size', 15),
+                                   self.white if header and r == 0 else self.ink,
+                                   (header and r == 0) or (r in accent_rows), subscripts_only=True)
                 cell.fill.solid()
                 if header and r == 0:
                     cell.fill.fore_color.rgb = header_fill
@@ -570,20 +574,25 @@ class Renderer:
         take_h = page.get('take_h', 0.58)
         if page.get('section'):
             self.add_section_chip(slide, page['section'])
-        self.add_text(slide, MARGIN, title_y, PAGE_W - 2 * MARGIN, title_h,
-                      self.page_text(page, 'title'), title_size, self.navy, True, spacing=1.0,
-                      emphasis=page.get('title_emphasis'), emphasis_color=self.accent)
-        self.add_take_band(slide, self.page_text(page, 'take'), take_y, take_h,
-                           page.get('take_emphasis'))
-        self.add_rule(slide, MARGIN, 2.165, PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.008)
+        title, take = self.page_text(page, 'title'), self.page_text(page, 'take')
+        if title or not self.topic:
+            self.add_text(slide, MARGIN, title_y, PAGE_W - 2 * MARGIN, title_h,
+                          title, title_size, self.navy, True, spacing=1.0,
+                          emphasis=page.get('title_emphasis'), emphasis_color=self.accent)
+        if take or not self.topic:
+            self.add_take_band(slide, take, take_y, take_h, page.get('take_emphasis'))
+            self.add_rule(slide, MARGIN, 2.165, PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.008)
         for obj in page['objects']:
             self.render_object(slide, obj)
         # Always materialize a notes part; package-level QA otherwise cannot
         # distinguish "no notes" from a malformed/missing relationship.
         slide.notes_slide.notes_text_frame.text = page.get('notes') or ''
-        if page.get('footer', True):
+        if page.get('footer', not self.topic):
             self.add_rule(slide, MARGIN, FOOTER['rule_y'], PAGE_W - 2 * MARGIN, rgb('#D7DEE6'), 0.01)
-            self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, 'Tian et al. · Nat. Commun. 2026 · AVDG digital–analog multimode circuits', 8.8, self.gray)
+            # Footer text is per-deck content; never ship a built-in paper citation.
+            footer_text = page.get('footer_text') or self.spec.get('footer_text')
+            if footer_text and not self.topic:
+                self.add_text(slide, MARGIN, FOOTER['text_y'], 8.6, 0.18, str(footer_text), 8.8, self.gray)
             self.add_text(slide, PAGE_W - 1.0, FOOTER['text_y'], 0.35, 0.18, str(page.get('page_number', index)), 8.8, self.gray, align=PP_ALIGN.RIGHT)
         return slide
 

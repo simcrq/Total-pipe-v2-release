@@ -1,4 +1,4 @@
-"""Opt-in mixed prose/math measurement. A formula is one indivisible line-breaking atom."""
+"""Mixed prose/math measurement. A formula is one indivisible line-breaking atom."""
 from dataclasses import dataclass
 from functools import lru_cache
 import re
@@ -22,6 +22,7 @@ class Span:
     kind: str
     text: str
     mark: str = ''      # '' | 'emphasis' | 'highlight' | 'citation'; only text spans carry a mark
+    shorthand: str = ''   # original spelling of an inferred subscript
 
 
 # Emphasis and citations are written in the text, not declared in a parallel array: the author
@@ -30,6 +31,37 @@ class Span:
 MARKERS = (('**', '**', 'emphasis'), ('==', '==', 'highlight'), ('[[', ']]', 'citation'))
 MARK_NAMES = tuple(name for _, _, name in MARKERS)
 ESCAPES = ('\\\\', '\\$', '\\*', '\\=')
+_SUBSCRIPT = re.compile(
+    r'(?<![A-Za-z0-9_\\.@])(?P<base>[A-Za-z\u0370-\u03ff])_'
+    r'(?:\{(?P<group>[A-Za-z0-9\u0370-\u03ff]+(?:-[A-Za-z0-9]+)?)\}'
+    r'|(?P<label>[a-z]-[A-Z]{2,}\d*|[A-Za-z0-9\u0370-\u03ff]+))'
+    r'(?![A-Za-z0-9_\u0370-\u03ff]|\.[A-Za-z0-9]|@[A-Za-z0-9])'
+)
+_LITERAL = re.compile(
+    r'(?P<ticks>`+)[^`]*?(?P=ticks)(?!`)|(?:[a-zA-Z][a-zA-Z0-9+.-]*://|www\.)[^\s<>，。；）]+|'
+    r'(?<![\w/})])(?:[A-Za-z]:[\\/]|[.~]{1,2}/|/)[^\s<>，。；）]+'
+)
+
+
+def _prose_spans(source):
+    """Keep prose and identifier literals, and give each inferred symbol an exact source span."""
+    start = 0
+    literals = iter(_LITERAL.finditer(source))
+    literal = next(literals, None)
+    for match in _SUBSCRIPT.finditer(source):
+        while literal and literal.end() <= match.start():
+            literal = next(literals, None)
+        if literal and literal.start() <= match.start():
+            continue
+        if start < match.start():
+            yield Span('text', source[start:match.start()])
+        label = match['group'] or match['label']
+        if len(label) > 1 and label.isascii() and any(ch.isalpha() for ch in label):
+            label = r'\mathrm{' + label + '}'
+        yield Span('formula', match['base'] + '_{' + label + '}', shorthand=match[0])
+        start = match.end()
+    if start < len(source):
+        yield Span('text', source[start:])
 
 
 def _closing_marker(source, start, closer):
@@ -54,14 +86,19 @@ def _closing_marker(source, start, closer):
 
 
 @lru_cache(maxsize=2048)
-def parse_inline(source):
-    """Recognize $...$ and \\(...\\) only after explicit opt-in; preserve the source elsewhere."""
+def parse_inline(source, *, subscripts_only=False):
+    """Recognize explicit math and bare subscript symbols in prose."""
+    if subscripts_only:
+        return tuple(_prose_spans(source))
     spans, prose, index = [], [], 0
     def flush():
         if prose:
-            spans.append(Span('text', ''.join(prose)))
+            spans.extend(_prose_spans(''.join(prose)))
             prose.clear()
     while index < len(source):
+        literal = _LITERAL.match(source, index)
+        if literal:
+            prose.append(literal[0]); index = literal.end(); continue
         if source.startswith(ESCAPES, index):
             prose.append(source[index+1]); index += 2; continue
         if source.startswith(('$$', '\\[', '\\]'), index):
@@ -102,11 +139,20 @@ def parse_inline(source):
         except FormulaError as error:
             raise InlineMathError(f'Inline formula at char {start}: {error}') from error
         spans.append(Span('formula', expression))
-        if sum(s.kind == 'formula' for s in spans) > 128:
-            raise InlineMathError('At most 128 inline formulas per text field are supported.')
         index += len(closing)
     flush()
+    if sum(s.kind == 'formula' for s in spans) > 128:
+        raise InlineMathError('At most 128 inline formulas per text field are supported.')
     return tuple(spans)
+
+
+def has_bare_subscript(source):
+    if not isinstance(source, str) or not _SUBSCRIPT.search(source):
+        return False
+    try:
+        return any(span.shorthand for span in parse_inline(source))
+    except InlineMathError:
+        return False
 
 
 def plain_text(source):
@@ -156,9 +202,10 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                         'width': 0.0 if piece == '\n' else face.getlength(piece),
                         'ascent': ascent, 'descent': descent})
 
-    lines, current = [], []
+    lines, current, current_width = [], [], 0.0
     base_ascent, base_descent = font.getmetrics()
     def finish():
+        nonlocal current_width
         # Whitespace at a soft line boundary is typographic; source remains byte-for-byte in IR.
         while current and current[-1]['kind'] == 'text' and current[-1]['text'].isspace(): current.pop()
         fragments = []
@@ -175,13 +222,11 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         if leading_marker and not lines:
             above = max(above, leading_marker['ascent'])
             below = max(below, leading_marker['descent'])
-        if leading_marker and not lines:
-            above = max(above, leading_marker['ascent'])
-            below = max(below, leading_marker['descent'])
         lines.append({'fragments': fragments, 'ascent': above, 'descent': below,
             'height': max(size*line_height, above+below),
             'width': sum(a['width'] for a in fragments), 'text': ''.join(a['plain'] for a in fragments)})
         current.clear()
+        current_width = 0.0
 
     for atom in atoms:
         if atom['text'] == '\n' and atom['kind'] == 'text':
@@ -189,9 +234,11 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         if atom['kind'] == 'text' and atom['text'].isspace():
             # Defer trailing spaces until the next visible atom. Otherwise an overflowing
             # space can commit a line before its closing punctuation has a chance to travel.
-            if current: current.append(atom)
+            if current:
+                current.append(atom)
+                current_width += atom['width']
             continue
-        if current and sum(a['width'] for a in current)+atom['width'] > width+.01:
+        if current and current_width+atom['width'] > width+.01:
             if atom['kind'] == 'text' and atom['text'][:1] in NO_LINE_START:
                 while current and current[-1]['kind'] == 'text' and current[-1]['text'].isspace(): current.pop()
                 previous = current.pop()
@@ -199,11 +246,13 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                 if previous['width']+atom['width'] > width+.01:
                     raise InlineWidthError(previous['width']+atom['width'], width)
                 current.append(previous)
+                current_width = previous['width']
             else:
                 finish()
         if atom['width'] > width+.01:
             raise InlineWidthError(atom['width'], width)
         current.append(atom)
+        current_width += atom['width']
     if current or not lines or source.endswith(('\n', '\r')): finish()
     return {'lines': lines, 'height': sum(line['height'] for line in lines),
             'min_width': minimum, 'formula_count': sum(s.kind == 'formula' for s in parse_inline(source)),
@@ -269,6 +318,6 @@ def strip_markup(source):
     if not isinstance(source, str):
         return source
     try:
-        return ''.join(span.text for span in parse_inline(source))
+        return ''.join(span.shorthand or span.text for span in parse_inline(source))
     except InlineMathError:
         return source

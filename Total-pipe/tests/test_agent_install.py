@@ -59,12 +59,14 @@ class InstallTests(AgentCase):
     def test_dry_run_does_not_create_venv_config_or_report(self):
         venv = self.root/'no-venv'
         config = self.root/'no-config/config.toml'
+        skills = self.root/'no-skills'
         result = subprocess.run([sys.executable, ROOT/'install.py', '--client', 'codex', '--venv', venv,
-                                 '--config', config, '--dry-run'], capture_output=True, text=True)
+                                 '--config', config, '--skills-root', skills, '--dry-run'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['status'], 'DRY_RUN')
         self.assertFalse(venv.exists())
         self.assertFalse(config.exists())
+        self.assertFalse(skills.exists())
 
     def test_actual_agent_and_advanced_handshakes_discover_tools(self):
         default = profile_servers('agent', sys.executable)

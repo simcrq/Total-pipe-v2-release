@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from .contracts import digest, file_hash
-from .ooxml import target_part
+from .ooxml import slide_parts, target_part
 
 ACK_FILE = 'qa_acknowledgements.json'
 
@@ -46,10 +46,12 @@ def _artifact_slides(path, count):
                 for dependency in references[part]:
                     visit(dependency, seen)
 
+            parts = slide_parts(package) if 'ppt/presentation.xml' in names else []
             result = {}
             for number in range(1, count+1):
                 seen = set()
-                visit(f'ppt/slides/slide{number}.xml', seen)
+                part_name = parts[number - 1] if number <= len(parts) else f'ppt/slides/slide{number}.xml'
+                visit(part_name, seen)
                 result[number] = digest({part: hashes[part] for part in sorted(seen)}) if seen else file_hash(path)
             return result
     except (zipfile.BadZipFile, ET.ParseError, ValueError, OSError):

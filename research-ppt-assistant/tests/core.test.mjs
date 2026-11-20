@@ -20,6 +20,7 @@ import {
   validateRenderedSlide,
   validateSlide,
 } from "../server/core.mjs";
+import { loadQualityProfile } from "../server/visual-quality/profile.mjs";
 
 async function makeTempDeck(files) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "rpa-deck-"));
@@ -1006,4 +1007,12 @@ test("rendered-slide QA detects shallow body coverage via n-gram overlap", async
   });
   const gap = result.issues.find((i) => i.code === "EVIDENCE_COVERAGE_GAP" && i.field === "declared_body");
   assert.ok(gap, "declared body not covered should flag");
+});
+
+test("searchLayouts hard_constraints advertises visual_slot_capacity and default profile includes composite_figure_region", async () => {
+  const searched = await searchLayouts({ text_chars: 80, image_count: 1, k: 3 });
+  assert.ok(searched.compatibility.hard_constraints.includes("visual_slot_capacity"));
+  const defaultProfile = await loadQualityProfile("default");
+  assert.equal(defaultProfile.legacy_rules.visual_types.composite_figure_region.minimum_width, 0.42);
+  assert.equal(defaultProfile.legacy_rules.visual_types.composite_figure_region.dense, true);
 });

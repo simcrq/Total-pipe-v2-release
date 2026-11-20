@@ -87,14 +87,14 @@ def generate_presentation(
 
         return success, pptx_path, qa
 
-    except Exception as e:
+    except Exception as orig:
         # Convert to structured error
-        if not isinstance(e, RecoverableError):
-            e = RecoverableError(
-                str(e),
+        if not isinstance(orig, RecoverableError):
+            raise RecoverableError(
+                str(orig),
                 suggested_fix="Check error message and input files",
                 can_retry=False
-            )
+            ) from orig
         raise
 
 

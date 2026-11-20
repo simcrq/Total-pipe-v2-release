@@ -51,7 +51,12 @@ class StateTests(AgentCase):
             with self.assertRaises(JobError):
                 confined(path, self.out/'work')
         link = self.out/'work/linked.json'
-        link.symlink_to(outside)
+        try:
+            link.symlink_to(outside)
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                self.skipTest('Windows symlink privilege unavailable')
+            raise
         with self.assertRaises(JobError):
             confined(link, self.out/'work')
 

@@ -1,13 +1,16 @@
 """One candidate, one staging file, one atomically promoted final per workspace."""
 from contextlib import contextmanager
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 import time
+import uuid
 from .contracts import digest, file_hash, issue, report
-from .ir import derive, validate
+from .ir import derive, enable_bare_subscripts, validate
 from .layout import compile_deck
 from .structural import verify
 from . import officecli
@@ -18,10 +21,13 @@ from .layout_feedback import make_feedback
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix+'.tmp')
-    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n',
-                    encoding='utf-8')
-    os.replace(temp, path)
+    temp = path.with_name(f'{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp')
+    try:
+        temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n',
+                        encoding='utf-8')
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def write_qa(out, qa, ir, layout):
@@ -39,17 +45,77 @@ POWERPOINT_REVIEW_CHECKS = [
 ]
 
 
+_ACTIVE_LOCKS: set[str] = set()
+_LOCKS_GUARD = threading.Lock()
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == 'nt':
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            # Error 5 (access denied) means the PID exists under another user/privilege level.
+            return ctypes.windll.kernel32.GetLastError() == 5
+        try:
+            code = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 @contextmanager
 def locked(out):
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     lock = out/'.compiler.lock'
-    fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    lock_key = str(lock.resolve())
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        with _LOCKS_GUARD:
+            in_process = lock_key in _ACTIVE_LOCKS
+        if in_process:
+            raise
+        stale = False
+        try:
+            stat = lock.stat()
+            content = lock.read_text(encoding='utf-8', errors='replace').strip()
+            pid = int(content) if content.isdigit() else None
+            if pid is not None and not _pid_alive(pid):
+                stale = True
+            elif content == '' and (time.time() - stat.st_mtime) > 5:
+                stale = True
+        except OSError:
+            stale = False
+        if not stale:
+            raise
+        lock.unlink(missing_ok=True)
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
         os.write(fd, str(os.getpid()).encode())
-        yield
     finally:
         os.close(fd)
-        lock.unlink()
+    with _LOCKS_GUARD:
+        _ACTIVE_LOCKS.add(lock_key)
+    try:
+        yield
+    finally:
+        with _LOCKS_GUARD:
+            _ACTIVE_LOCKS.discard(lock_key)
+        lock.unlink(missing_ok=True)
 
 
 def _compile_ir(ir, ir_path, layout_options):
@@ -103,8 +169,8 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
                   require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
                   require_visuals=False):
     ir_path, out = Path(ir_path), Path(out)
-    ir = json.loads(ir_path.read_text(encoding='utf-8'))
-    source_ir = ir
+    source_ir = json.loads(ir_path.read_text(encoding='utf-8'))
+    ir = enable_bare_subscripts(deepcopy(source_ir))
     _explain_outputs(ir_path, out, explain_viz_request)
     if require_visual_design and not any(item['severity'] == 'FAIL' for item in validate(ir)):
         from .visual_planner import make_prompt, pending_design
@@ -273,7 +339,7 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
             render_count = 1
             shutil.copyfile(out/'candidate.pptx', out/'staging.pptx')
             items += verify(out/'staging.pptx', layout)
-            officecli_report = officecli.inspect(out/'staging.pptx', officecli_executable)
+            officecli_report = officecli.inspect(out/'staging.pptx', officecli_executable, validated=True)
             write_json(out/'officecli_issues.json', officecli_report)
             items += officecli.qa_findings(officecli_report['issues'])
             structural_complete = True
@@ -519,8 +585,11 @@ def promote(out, acknowledgements=None):
         fresh_reviews = {item['id'] for item in fresh if item['severity'] == 'REVIEW'}
         if fresh_reviews and not fresh_reviews <= set(ack.get('accepted_review_ids', [])):
             raise ValueError('Structural recheck produced unacknowledged REVIEW findings')
-        temp = out/'final.pptx.tmp'
-        shutil.copyfile(out/'staging.pptx', temp)
-        os.replace(temp, out/'final.pptx')
+        temp = out/f'final.pptx.{os.getpid()}.{uuid.uuid4().hex}.tmp'
+        try:
+            shutil.copyfile(out/'staging.pptx', temp)
+            os.replace(temp, out/'final.pptx')
+        finally:
+            temp.unlink(missing_ok=True)
         write_json(out/'state.json', {'phase': 'final', 'artifact_sha256': sha, 'review_acknowledgement': ack})
         return out/'final.pptx'

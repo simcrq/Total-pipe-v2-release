@@ -126,6 +126,20 @@
       "tags": ["收敛阶核算", "双对数误差图", "两点核算", "步长减半", "复合梯形法", "convergence rate", "log-log plot", "step halving"],
       "summary": "对同一积分实算两条误差线，用图内引线指向两点，右栏对照表和原生分式展示步长减半前后的误差比。",
       "script": "trapezoid_convergence_check.py"
+    },
+    {
+      "id": "local-learning-comparison",
+      "title": "双路线架构对比：高亮机制替换并对照更新规则",
+      "tags": ["架构对比", "机制替换", "阶段对齐", "双路线", "上下两条流程", "流程中高亮", "关键步骤", "机制对照表", "更新规则", "局部学习", "反向传播", "平衡传播", "aligned workflows", "mechanism substitution"],
+      "summary": "适合并列讲解两套实现怎样完成同一任务。上下路线逐列对照，暖色指出梯度来源发生替换的步骤，下方读机制对照表和两条原生更新式。",
+      "script": "local_learning_comparison.py"
+    },
+    {
+      "id": "definition-factor-analogy",
+      "title": "先定义再类比：两个中心对象与环绕因素",
+      "tags": ["定义", "类比", "多因素", "概念解释", "跨领域类比", "双中心", "因素环绕", "因素映射", "双向对照", "构造示例", "analogy", "paired radial diagrams"],
+      "summary": "适合用熟悉事物解释陌生概念。先读上方定义与反馈机制，再沿类比标记从左侧中心读到右侧中心，比较各自环绕的多类因素。",
+      "script": "definition_factor_analogy.py"
     }
   ]
 }

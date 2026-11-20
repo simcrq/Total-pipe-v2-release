@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
-from agent.page_scene_qa import check_file, render_spec, validate_spec
+from agent.page_scene_qa import check_file, expression_report, render_spec, validate_spec
 
 
 def spec(objects=None):
@@ -35,6 +35,23 @@ class PageSceneTests(unittest.TestCase):
             out = render_spec(spec(), path, Path(temp)/'out.pptx')
             self.assertTrue(out.is_file())
             self.assertEqual(len(Presentation(str(out)).slides), 1)
+
+    def test_bare_subscripts_render_in_native_title_body_and_table(self):
+        value = spec([
+            {'type': 'text', 'role': 'body', 'box': [0.8, 2.4, 5, 0.5], 'text': '改变 V_G'},
+            {'type': 'table', 'box': [0.8, 3.2, 6, 1.4], 'rows': [['量', '值'], ['I_D', '1 A']]},
+            {'type': 'formula', 'box': [0.8, 5, 6, 0.6], 'latex': 'V_OUT = G V_IN'},
+        ])
+        value['pages'][0]['title'] = '测量 V_OUT'
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'scene.json'
+            pptx = render_spec(value, path, path.with_suffix('.pptx'))
+            slide = Presentation(str(pptx)).slides[0]
+            from agent.page_scene import M_NS
+            subscripts = slide._element.findall(f'.//{{{M_NS}}}sSub/{{{M_NS}}}sub')
+            self.assertEqual([''.join(node.itertext()) for node in subscripts], ['OUT', 'G', 'D', 'OUT', 'IN'])
+            self.assertIsNotNone(slide._element.find(f'.//{{{M_NS}}}oMathPara'))
+            self.assertEqual(expression_report(value, path)['summary']['inline_math'], 3)
 
     def test_overlapping_body_boxes_fail(self):
         objects = [

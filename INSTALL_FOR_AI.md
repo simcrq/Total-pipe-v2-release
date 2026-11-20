@@ -13,6 +13,8 @@
 
 开始制作后按 `next_action` 推进。流程要求独立子代理时，按用户指定的模型和推理力度调用。宿主缺少对应能力时报告阻塞。[四工具与工作循环](Total-pipe/docs/agent-adapter.md#四工具与工作循环)
 
+只使用题目入口可在 Python 3.12+ 环境安装 `Total-pipe/requirements.txt` 后直接使用 CLI，或在宿主配置同一 Python 环境下的 `python -m agent.mcp_server`。工作目录为仓库的 `Total-pipe/`。[题目入口](Total-pipe/docs/agent-adapter.md#从题目开始)
+
 ## 宿主 ID 与默认配置
 
 | 宿主 | ID | 配置位置 |

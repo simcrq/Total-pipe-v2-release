@@ -7,6 +7,25 @@ from agent_fixture import AgentCase
 
 
 class DoctorTests(AgentCase):
+    def test_topic_doctor_skips_research_and_officecli_probes_even_when_deep(self):
+        original = module.probe
+
+        def probe(argv, *args, **kwargs):
+            self.assertEqual(argv[0], module.sys.executable)
+            self.assertEqual(argv[1], '-c')
+            return original(argv, *args, **kwargs)
+
+        with patch.object(module, 'probe', side_effect=probe):
+            result = module.doctor(source_kind='topic', deep=True)
+        self.assertEqual(result['page_mode'], 'page_scene')
+        self.assertTrue(result['can_build_editable'])
+        self.assertEqual(result['blocked_stages'], [])
+        checks = {check['id']: check['status'] for check in result['checks']}
+        self.assertEqual(checks['mineru.auth'], 'SKIP')
+        self.assertEqual(checks['paperworkflow.bridge'], 'SKIP')
+        self.assertEqual(checks['node.rpa_cli'], 'SKIP')
+        self.assertEqual(checks['officecli.present'], 'SKIP')
+
     def test_real_pdf_runtime_import_failure_blocks_evidence_despite_successful_bridge_version(self):
         # Inject a local import failure into the real bridge subprocess. No PDF is opened, no
         # processor is constructed, and no OCR/network request is made.

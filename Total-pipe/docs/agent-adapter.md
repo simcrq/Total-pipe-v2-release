@@ -1,13 +1,13 @@
 # Agent 接入层：安装、推进与恢复
 
-默认入口为 `total_pipe` 四工具服务，完整科学 / 几何规范仍见 [总调度 Skill](../skills/total-pipe-deck/SKILL.md)。
+默认入口为 `total_pipe` 四工具服务，支持题目与论文两类创作流程。完整科学与几何规范见 [总调度 Skill](../skills/total-pipe-deck/SKILL.md)。
 [修订设计 v2](agent-adapter-design.md)记录了对用户 v1 稿的评审与实施取舍。
-接入层不替代 PWF、pwf2rpa、RPA、Deck Compiler；也不自动生成 Story、IR 或视觉提案。
+接入层调度组件并校验阶段产物。内容策划、Story、页面设计、IR 和视觉提案由 Agent 编写。
 
 ## 安装和 profile
 
-完整仓库需包含相邻的 Total-pipe、PaperWorkflow、research-ppt-assistant，使用 Python 3.12+、Node.js 22+，
-生成 PPTX 需 OfficeCLI 1.0.152+。在仓库根目录选择当前宿主运行。
+完整安装包含相邻的 Total-pipe、PaperWorkflow、research-ppt-assistant，使用 Python 3.12+ 和 Node.js 22+。
+Deck IR 构建需 OfficeCLI 1.0.152+。在仓库根目录选择当前宿主运行。
 
 ```bash
 python3 install.py --client codex
@@ -42,8 +42,8 @@ python3 install.py --client codex --profile advanced
 
 | 工具 | 输入与行为 |
 | --- | --- |
-| totalpipe_doctor | 可选 deep / source_kind / page_mode；检查环境、实际 evidence 导入依赖与阶段能力，不运行 OCR；page_scene 不要求 OfficeCLI |
-| totalpipe_start | source、out_dir、language、presentation_type；可选 source_kind、requirements、queries、slide_count、supplementary_paths、supplementary_content_included、supplement、explain_viz_mode、page_mode（deck_ir 默认 / page_scene） |
+| totalpipe_doctor | 可选 deep / source_kind / page_mode。检查当前入口的依赖和阶段能力。指定 topic 时只检查 PageScene 构建及原生预览相关环境 |
+| totalpipe_start | source、out_dir。文件入口另需 language、presentation_type。题目入口使用 source_kind=topic，可选 language、presentation_type、requirements 和 slide_count。文件入口的其他参数见下文 |
 | totalpipe_advance | job_id；提交 artifact_kind / artifact_path（含 page_design_review、page_scene、deck_ir_patch）；deck_ir 可设 preflight=true；可单独传 preview 选页渲染或 scene_preview 选页原生预览；回填 inputs 或指定 replan_from / acknowledge；候选后可单独提交 native 操作 |
 | totalpipe_status | job_id；可选 detail=summary/full，默认紧凑回复；只读，不执行组件或准备提示包 |
 
@@ -56,6 +56,42 @@ artifacts_summary（引用数、去重文件数与阶段名）。完整请求与
 PDF doctor 使用 PWF 的实际 CLI/配置执行 `mineru-open-api auth --verify`，识别环境变量、配置密钥及
 官方 CLI 缓存登录；只校验认证、不上传文档。`authentication_verified=true` 仅表示官方验证成功；
 网络/CLI 不可用与认证拒绝分别报告。Markdown/workflow/IR 的浅检查跳过该网络请求，deep 可显式验证。
+
+### 从题目开始
+
+使用 `source_kind="topic"`，把题目或问题原文放进 `source`。已接入的宿主应先重载服务，以获取更新后的工具 Schema。
+
+```json
+{
+  "source_kind": "topic",
+  "source": "为什么二分查找更快",
+  "out_dir": "/absolute/job",
+  "requirements": "面向初学者，配一个可跟读的例子"
+}
+```
+
+必填的是 `source_kind`、题目文本和输出目录。题目默认 `language="auto"`、`presentation_type="custom"`、`page_mode="page_scene"`。
+可传语言、场合、额外要求和 `slide_count`（1–40）。未指定页数时由 Agent 决定。
+题目可以按需要查资料。管线跳过论文证据检索、PaperWorkflow、科研 Story/RPA 和论文源文案审读，题目页无需 EV、证据包或论文补充材料。
+
+1. `page_design` 返回 `author_artifact`。Agent 读提示，自行决定内容、层次和讲解顺序，按需用 `example_lookup` 参考构图。提交 [topic-1.0 页面设计](../agent/schemas/topic-page-design.schema.json)。
+2. `page_scene` 按设计中的页 ID 和顺序实现。可沿用设计文案或直接细化成稿，写入原生对象及讲稿。可先用 `scene_preview` 检查草稿。
+3. 提交 `page_scene` 后生成 `build/candidate.pptx` 与 `build/qa_report.json`。按 `native` 返回的哈希和 Schema 调用 `advance.native` 的 `render` 操作，导出 PowerPoint PDF 和逐页预览。
+
+如果用户明确选了页面设计子代理的模型，可在 `page_design` 阶段单独提交 `advance.inputs`，包含 `model`、`reasoning_effort` 和 `selected_by_user=true`。下一步会返回 `invoke_subagent`。
+可用 `replan_from="page_design"` 修改整套内容，或用 `replan_from="page_scene"` 仅重做页面实现。任务状态和修订记录的读法与其他入口一致。
+
+在 `Total-pipe/` 中使用相同流程的 CLI。以下命令由 Agent 写好各阶段 JSON 后依次调用。
+
+```bash
+python -m agent doctor --source-kind topic
+python -m agent start --source-kind topic --source "为什么二分查找更快" --out-dir /absolute/job
+python -m agent advance --job-id <job-id> --artifact-kind page_design --artifact-path /absolute/job/work/page_design.json
+python -m agent advance --job-id <job-id> --artifact-kind page_scene --artifact-path /absolute/job/work/page_scene.json
+```
+
+题目模式的候选构建使用 Python 3.12+ 和 [Total-pipe Python 依赖](../requirements.txt)。
+此模式下的 doctor 跳过 Node.js、PaperWorkflow、MinerU 和 OfficeCLI 检查。已有宿主可继续使用同一四工具服务。仅配置题目入口时，可将宿主的 stdio 服务指向该 Python 环境及 `Total-pipe/` 中的 `python -m agent.mcp_server`。
 
 ### 逐页 IR 与来源绑定
 
@@ -80,8 +116,8 @@ figure_refs.asset_id 可直接使用 PWF 图片 inventory 的资产 ID 或路径
 
 ### PageScene 页面模式（page_scene）
 
-`page_mode=page_scene` 是默认 `deck_ir` 之外的显式页面几何路径：page_design 通过
-page_review 后进入 `page_scene`，作者按 Schema 写每页对象 `box`（英寸），接受后由
+`page_mode=page_scene` 使用显式页面几何。论文任务从 page_review 进入，题目任务从 page_design 直接进入。
+作者按 Schema 写每页对象 `box`（英寸），接受后由
 python-pptx 直接渲染 candidate，跳过 `deck_ir`、`design`、`visual_design`。
 原 `deck_ir` 路径完整保留，仍是 Bezier/Path IR、OMML、Chart IR、EViz、完整
 mechanism/funnel/architecture 编译器和 OfficeCLI 对象模型的入口。
@@ -95,10 +131,10 @@ mechanism/funnel/architecture 编译器和 OfficeCLI 对象模型的入口。
 草稿、不推进阶段、不消耗修订额度、不改候选。CLI 对应
 `python -m agent advance --job-id <job_id> --scene-preview request.json`。
 
-接受时 `page_scene_binding` 强制：页序与 page_design 一致；`title_ref`/`take_ref`/
+两种入口都检查页序与 page_design 一致，并固化图片路径。论文任务的 `title_ref`/`take_ref`/
 `copy_ref` 必须解析批准 `display_copy`；可见 carrier 必须出现；`evidence_refs` 不得
 越权；未登记数字被拒绝；图片路径固化为绝对路径并进入 checkpoint。字面标题/结论只有
-逐字等于批准文案才通过。
+逐字等于批准文案才通过。题目任务可直接填写文案、表格值、图表数据及公式。[完整 PageScene 协议](page-scene.md)
 
 PageScene 支持原生 text/list/group/image/shape/line/table/path/formula/chart 和
 `page.notes`；其中 path 是 DrawingML 贝塞尔，formula 是 OMML，chart 是原生可编辑
@@ -175,11 +211,13 @@ lecture / 讲课与 commercial / 路演规范为 custom，同时在 presentation
 同一请求可用等价标签恢复，包括旧 job 的已识别别名；保留原 job 请求及用户模型选择，不从产物重建授权。
 听众/时长说明、requirements 或 lecture/commercial 场合等实质要求改变时仍返回 JOB_OUTPUT_IN_USE。
 
-source_kind 可为 auto、pdf、markdown、workflow、deck_ir。JSON 自动按 schema_version 识别；
+source_kind 可为 auto、pdf、markdown、workflow、deck_ir、topic。题目文本需显式指定 topic。[题目入口](#从题目开始)
+文件 JSON 自动按 schema_version 识别。
 已有 IR 保持语义，在 work 中保存以绝对资源路径重定位的副本，完整设计可直接 build。
 已有 workflow 保留原证据包目录，从 readiness 与模型选择门禁继续。
 PDF / Markdown 首先需要实际主题的 queries。queries 是 `[{"id":"q1","query":"具体检索问题"}]`，
-可附 intent；接入层将 query 字符串交给 PWF，PWF 自行推导检索 intent 和 custom query ID。
+可附 intent。接入层将查询文本和声明的 intent 交给 PWF。PWF 为每条查询生成 custom query ID，
+在缺少有效声明时推导意图。每条不同的查询独立排序，结果共用同一原文片段的证据 ID。
 显式配对 supplementary_paths；内容确已合入分析输入后才确认 supplementary_content_included=true。
 
 `supplement` 取 `off`（默认）/ `inline` / `pages` / `both`，只影响 Deck IR 阶段：允许模型
@@ -224,6 +262,8 @@ Story 决定研究问题、论证顺序、科学结论和证据边界；页面�
 RPA 之后交给独立子代理，完整读取 `work/page_design_task.md`、`work/page_design_prompt.json` 和
 其中 `schema_path` 指向的 [page-design 1.1 Schema](../schemas/page-design.schema.json)。设计提示不提供
 编译器 forms / devices / type_scale 清单；设计者可以选择视觉形式，IR 作者负责翻译为实现能力。
+各版本的页面设计提示均提供 `example_lookup`。设计子代理可用 `command_prefix` 按讲解关系检索，
+按需打开一份匹配的示例脚本，参考构图与走读顺序。逐页自动推荐根据批准的设计生成，供 IR 作者使用。
 
 ```json
 {"schema_version":"1.1","deck_id":"example",

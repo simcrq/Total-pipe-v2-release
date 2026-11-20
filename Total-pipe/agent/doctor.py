@@ -12,6 +12,7 @@ import zipfile
 
 from . import ROOT, COMPONENT
 from .adapters import redact
+from .requests import SOURCE_KINDS, resolve_page_mode
 
 
 def probe(argv, cwd=ROOT, timeout=20):
@@ -24,11 +25,11 @@ def probe(argv, cwd=ROOT, timeout=20):
         return False, str(error)
 
 
-def doctor(deep=False, source_kind=None, page_mode='deck_ir'):
-    if source_kind not in (None, 'pdf', 'markdown', 'workflow', 'deck_ir'):
+def doctor(deep=False, source_kind=None, page_mode=None):
+    if source_kind is not None and source_kind not in SOURCE_KINDS:
         raise ValueError('Unsupported source_kind')
-    if page_mode not in ('deck_ir', 'page_scene'):
-        raise ValueError('Unsupported page_mode')
+    page_mode = resolve_page_mode(page_mode, source_kind)
+    topic = source_kind == 'topic'
     checks = []
     def add(key, ok, detail, remedy, optional=False, skipped=False):
         checks.append({'id': key, 'status': 'SKIP' if skipped else 'PASS' if ok else 'WARNING' if optional else 'FAIL',
@@ -41,85 +42,92 @@ def doctor(deep=False, source_kind=None, page_mode='deck_ir'):
     ok, detail = probe([sys.executable, '-c', 'import pptx; print(pptx.__version__)'], COMPONENT)
     scene_pptx = add('python.import.python_pptx', ok, detail or 'Not installed', 'Install python-pptx>=1.0 from Total-pipe/requirements.txt.',
                      optional=not scene)
-    ok, detail = probe(['node', '--version'])
-    match = re.search(r'v?(\d+)\.', detail)
-    node = add('node.version', ok and bool(match) and int(match.group(1)) >= 22, detail, 'Install Node.js >=22 and add it to PATH.')
-    ok, detail = probe(['node', ROOT/'research-ppt-assistant/server/cli.mjs', '--help'])
-    rpa = add('node.rpa_cli', ok, detail[:120], 'Restore the RPA CLI and use a supported Node.js runtime.')
-    office = shutil.which('officecli')
-    present = add('officecli.present', bool(office), office or 'Not found',
-                  'Install OfficeCLI >=1.0.152 and add it to PATH.', optional=scene)
-    ok, detail = probe([office or 'officecli', '--version'])
-    match = re.search(r'(\d+)\.(\d+)\.(\d+)', detail)
-    version = add('officecli.version', ok and bool(match) and tuple(map(int, match.groups())) >= (1, 0, 152), detail,
-                  'Install OfficeCLI >=1.0.152.', optional=scene)
-    runtime = True
-    if deep and present and version:
-        with tempfile.TemporaryDirectory(prefix='totalpipe-doctor-') as temporary:
-            path = Path(temporary)/'probe.pptx'
-            runtime, detail = probe([office, 'create', path, '--json'])
-            if runtime:
-                runtime, detail = probe([office, 'close', path, '--json'])
-            runtime = runtime and path.is_file() and path.stat().st_size > 0
-            if runtime:
-                runtime, detail = probe([office, 'validate', path, '--json'])
-                try:
-                    from deck_compiler.officecli import schema_error_count
-                    runtime = runtime and schema_error_count(json.loads(detail)) == 0
-                    with zipfile.ZipFile(path) as package:
-                        runtime = runtime and 'ppt/presentation.xml' in package.namelist()
-                except (ValueError, zipfile.BadZipFile):
-                    runtime = False
-            add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.', optional=scene)
+    if topic:
+        for key in ('node.version', 'node.rpa_cli', 'officecli.present', 'officecli.version',
+                    'officecli.runtime', 'mineru.auth', 'paperworkflow.bridge', 'paperworkflow.runtime_imports'):
+            add(key, False, 'Topic jobs build with PageScene.', '', skipped=True)
+        node = rpa = present = version = runtime = False
+        auth = verified = bridge = evidence_ready = markdown_ready = pdf_ready = False
     else:
-        add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.', 'Run deep diagnostics.', optional=True, skipped=True)
-    auth = verified = False
-    auth_skipped = source_kind in ('markdown', 'workflow', 'deck_ir') and not deep
-    auth_status = 'skipped'
-    if not auth_skipped:
-        ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'mineru_auth'])
+        ok, detail = probe(['node', '--version'])
+        match = re.search(r'v?(\d+)\.', detail)
+        node = add('node.version', ok and bool(match) and int(match.group(1)) >= 22, detail, 'Install Node.js >=22 and add it to PATH.')
+        ok, detail = probe(['node', ROOT/'research-ppt-assistant/server/cli.mjs', '--help'])
+        rpa = add('node.rpa_cli', ok, detail[:120], 'Restore the RPA CLI and use a supported Node.js runtime.')
+        office = shutil.which('officecli')
+        present = add('officecli.present', bool(office), office or 'Not found',
+                      'Install OfficeCLI >=1.0.152 and add it to PATH.', optional=scene)
+        ok, detail = probe([office or 'officecli', '--version'])
+        match = re.search(r'(\d+)\.(\d+)\.(\d+)', detail)
+        version = add('officecli.version', ok and bool(match) and tuple(map(int, match.groups())) >= (1, 0, 152), detail,
+                      'Install OfficeCLI >=1.0.152.', optional=scene)
+        runtime = True
+        if deep and present and version:
+            with tempfile.TemporaryDirectory(prefix='totalpipe-doctor-') as temporary:
+                path = Path(temporary)/'probe.pptx'
+                runtime, detail = probe([office, 'create', path, '--json'])
+                if runtime:
+                    runtime, detail = probe([office, 'close', path, '--json'])
+                runtime = runtime and path.is_file() and path.stat().st_size > 0
+                if runtime:
+                    runtime, detail = probe([office, 'validate', path, '--json'])
+                    try:
+                        from deck_compiler.officecli import schema_error_count
+                        runtime = runtime and schema_error_count(json.loads(detail)) == 0
+                        with zipfile.ZipFile(path) as package:
+                            runtime = runtime and 'ppt/presentation.xml' in package.namelist()
+                    except (ValueError, zipfile.BadZipFile):
+                        runtime = False
+                add('officecli.runtime', runtime, detail, 'Inspect OfficeCLI permissions and its runtime installation.', optional=scene)
+        else:
+            add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.', 'Run deep diagnostics.', optional=True, skipped=True)
+        auth = verified = False
+        auth_skipped = source_kind in ('markdown', 'workflow', 'deck_ir') and not deep
+        auth_status = 'skipped'
+        if not auth_skipped:
+            ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'mineru_auth'])
+            try:
+                response = json.loads(detail)
+                result = response['result'] if ok and response.get('ok') else {}
+                auth, verified = result.get('ready') is True, result.get('verified') is True
+                auth_status = result.get('status', 'unavailable')
+            except (ValueError, KeyError, TypeError):
+                auth_status = 'unavailable'
+        descriptions = {'verified': 'Official MinerU CLI auth --verify succeeded (environment, PWF config or cached CLI login); no document uploaded.',
+                        'not_required': 'Configured flash extraction does not require authentication.',
+                        'missing_cli': 'Configured MinerU CLI not found.',
+                        'invalid': 'Official MinerU CLI rejected or could not find its credentials.',
+                        'unavailable': 'MinerU credential verification could not complete; check CLI/network or retry.',
+                        'skipped': 'OCR authentication not needed for this input; use source_kind=pdf or deep to verify.'}
+        add('mineru.auth', auth, descriptions.get(auth_status, descriptions['unavailable']),
+            'Run the configured mineru-open-api auth --verify; authenticate with mineru-open-api auth if needed. Keep credentials outside job files.',
+            optional=source_kind != 'pdf', skipped=auth_skipped)
+        ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'version'])
+        try:
+            bridge = ok and json.loads(detail)['ok']
+        except (ValueError, KeyError):
+            bridge = False
+        required_evidence = source_kind in (None, 'markdown', 'pdf')
+        add('paperworkflow.bridge', bridge, detail[:200], 'Restore PaperWorkflow beside Total-pipe and install its dependencies.',
+            optional=not required_evidence)
+        kind = 'pdf' if source_kind == 'pdf' else 'markdown'
+        ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py',
+                            '--op', 'dependencies', '--source-kind', kind])
+        imports = {}
         try:
             response = json.loads(detail)
-            result = response['result'] if ok and response.get('ok') else {}
-            auth, verified = result.get('ready') is True, result.get('verified') is True
-            auth_status = result.get('status', 'unavailable')
+            if ok and response.get('ok'):
+                imports = response['result']
         except (ValueError, KeyError, TypeError):
-            auth_status = 'unavailable'
-    descriptions = {'verified': 'Official MinerU CLI auth --verify succeeded (environment, PWF config or cached CLI login); no document uploaded.',
-                    'not_required': 'Configured flash extraction does not require authentication.',
-                    'missing_cli': 'Configured MinerU CLI not found.',
-                    'invalid': 'Official MinerU CLI rejected or could not find its credentials.',
-                    'unavailable': 'MinerU credential verification could not complete; check CLI/network or retry.',
-                    'skipped': 'OCR authentication not needed for this input; use source_kind=pdf or deep to verify.'}
-    add('mineru.auth', auth, descriptions.get(auth_status, descriptions['unavailable']),
-        'Run the configured mineru-open-api auth --verify; authenticate with mineru-open-api auth if needed. Keep credentials outside job files.',
-        optional=source_kind != 'pdf', skipped=auth_skipped)
-    ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py', '--op', 'version'])
-    try:
-        bridge = ok and json.loads(detail)['ok']
-    except (ValueError, KeyError):
-        bridge = False
-    required_evidence = source_kind in (None, 'markdown', 'pdf')
-    add('paperworkflow.bridge', bridge, detail[:200], 'Restore PaperWorkflow beside Total-pipe and install its dependencies.',
-        optional=not required_evidence)
-    kind = 'pdf' if source_kind == 'pdf' else 'markdown'
-    ok, detail = probe([sys.executable, COMPONENT/'agent/bridges/paperworkflow_bridge.py',
-                        '--op', 'dependencies', '--source-kind', kind])
-    imports = {}
-    try:
-        response = json.loads(detail)
-        if ok and response.get('ok'):
-            imports = response['result']
-    except (ValueError, KeyError, TypeError):
-        pass
-    markdown_ready = imports.get('markdown_ready') is True
-    pdf_ready = imports.get('pdf_ready') is True
-    evidence_ready = pdf_ready if kind == 'pdf' else markdown_ready
-    missing = [check.get('error', check.get('module')) for check in imports.get('checks', []) if not check.get('ok')]
-    add('paperworkflow.runtime_imports', evidence_ready,
-        '; '.join(missing) if missing else f'{kind} evidence imports loaded; no OCR or upload was run.' if evidence_ready else detail[:200],
-        'Install PaperWorkflow dependencies into this same Python interpreter (including loguru, requests and pyyaml for PDF ingestion).',
-        optional=not required_evidence)
+            pass
+        markdown_ready = imports.get('markdown_ready') is True
+        pdf_ready = imports.get('pdf_ready') is True
+        evidence_ready = pdf_ready if kind == 'pdf' else markdown_ready
+        missing = [check.get('error', check.get('module')) for check in imports.get('checks', []) if not check.get('ok')]
+        add('paperworkflow.runtime_imports', evidence_ready,
+            '; '.join(missing) if missing else f'{kind} evidence imports loaded; no OCR or upload was run.' if evidence_ready else detail[:200],
+            'Install PaperWorkflow dependencies into this same Python interpreter (including loguru, requests and pyyaml for PDF ingestion).',
+            optional=not required_evidence)
     try:
         from deck_compiler.fonts import resolve_theme_fonts, missing_glyphs
         font, _, _ = resolve_theme_fonts({'font_family': 'Noto Sans CJK SC', 'font_file': 'NotoSansCJK-Regular.ttc'}, ROOT, '中文科研')
@@ -144,7 +152,11 @@ def doctor(deep=False, source_kind=None, page_mode='deck_ir'):
     preview = importlib.util.find_spec('pypdfium2') is not None
     add('powerpoint.preview', pdf and preview, 'PowerPoint PDF page preview dependencies available.' if pdf and preview else
         'PDF page preview dependency missing.', 'Install the declared pdfplumber dependencies, including pypdfium2.', optional=True)
-    needs = {'build'} if source_kind == 'deck_ir' else {'rpa', 'build'} if source_kind == 'workflow' else {'evidence', 'rpa', 'build'}
+    needs = {'build'}
+    if source_kind not in ('deck_ir', 'topic'):
+        needs.add('rpa')
+        if source_kind != 'workflow':
+            needs.add('evidence')
     build_ready = py and compiler and (scene_pptx if scene else (present and version and runtime))
     capabilities = {'can_evidence_markdown': py and bridge and markdown_ready,
         'can_evidence_pdf': py and bridge and pdf_ready and auth,

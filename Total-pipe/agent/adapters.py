@@ -269,7 +269,8 @@ def normalize_authoring_ir(value):
     Inline ``$...$`` / ``\\(...\\)`` in a body block or title/takeaway enables
     the existing measured inline-math path.
     """
-    from deck_compiler.text_flow import NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST
+    from deck_compiler.ir import enable_bare_subscripts
+    from deck_compiler.text_flow import EXPLICIT_LISTS
     if not isinstance(value, dict):
         return value
     slides = value.get('slides')
@@ -304,7 +305,7 @@ def normalize_authoring_ir(value):
                 block['text'] = block.pop('latex')
                 block.setdefault('component', 'formula')
             if (block.get('component') not in ('formula', 'caption')
-                    and block.get('text_flow') not in (NATIVE_BULLET_LIST, NATIVE_NUMBERED_LIST)):
+                    and block.get('text_flow') not in EXPLICIT_LISTS):
                 converted, changed = _scientific_math(block.get('text'))
                 if changed:
                     block['text'] = converted
@@ -323,7 +324,7 @@ def normalize_authoring_ir(value):
                     cell['text'] = converted
                 if changed or _has_inline_math(cell.get('text')):
                     cell['inline_math'] = True
-    return value
+    return enable_bare_subscripts(value)
 
 
 def check_design(value, story, evidence, slide_count=None, figures=None):
@@ -437,6 +438,15 @@ def apply_art_direction(value, design):
     return apply(value, design)
 
 
+def example_lookup(instructions):
+    library = COMPONENT/'examples/library'
+    return {
+        'command_prefix': [sys.executable, str(library/'catalog.py')],
+        'index_path': str(library/'index.json'),
+        'instructions': instructions,
+    }
+
+
 def finalize_design(work, design=None):
     """Fold the approved design into the IR prompt so the next stage realizes, not redesigns.
 
@@ -458,14 +468,11 @@ def finalize_design(work, design=None):
     prompt['page_design'] = pages
     prompt['design_forms'] = capabilities()['forms']
     prompt['design_devices'] = capabilities()['art_direction']['devices']
-    library = COMPONENT/'examples/library'
-    prompt['example_lookup'] = {
-        'command_prefix': [sys.executable, str(library/'catalog.py')],
-        'index_path': str(library/'index.json'),
-        'instructions': 'Consider the page-specific suggestions first. To refine the match, use search "<keywords>" --limit 2. '
-                        'Read one selected result with show <id> or open its script. '
-                        'Use its object structure with approved copy and sources. Do not load the whole library.',
-    }
+    prompt['example_lookup'] = example_lookup(
+        'Consider the page-specific suggestions first. To refine the match, use search "<keywords>" --limit 2. '
+        'Read one selected result with show <id> or open its script. '
+        'Use its object structure with approved copy and sources. Do not load the whole library.'
+    )
     instructions = prompt.get('instructions', '').split(DESIGN_MARKER)[0]
     if design.get('schema_version') in ('1.2', '1.3'):
         instructions = PROJECTION_IR_INSTRUCTIONS
@@ -896,6 +903,12 @@ BODY_GUIDES_TASK = (
     '有 display_copy 时指明对应 ID，新增可见标题和标签须进入批准文案。标记服务于实际关系。'
 )
 
+DESIGN_EXAMPLE_TASK = (
+    '需要构思呈现方式时，用 `example_lookup.command_prefix` 执行 `search "<讲解关系>" --limit 2`，'
+    '例如“机制对比 双路线”或“原图导读 条件与结论”。按需打开一份匹配的示例脚本，参考构图、视觉关系和讲解顺序。'
+    '设计交接用自然语言写清如何应用于当前论文。示例中的文案、数据和证据仅用于演示。'
+)
+
 
 LEGACY_DESIGN_INSTRUCTIONS = (
     'Design the visual explanation of the approved Story. Story owns the scientific argument, '
@@ -1021,7 +1034,8 @@ def design_task(prompt=None):
 - design 自由说明用什么原图、画什么元素与关系、如何排布、怎样带着观众看。figures 写精确资产 id，先看图。
   图中数据不能猜点；示意与构造例须可见标识，论文与补充背景来源分开。
 - {BODY_GUIDES_TASK}
-- setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。无需知道编译器能力，不读源码。
+- {DESIGN_EXAMPLE_TASK}
+- setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。无需知道编译器能力，不读编译器源码。
 - 你不填写通过审查的记录。主 Agent 之后逐页对照科学记录审读文案，未通过会退回设计。
 
 输出设计，简述页数和关键视觉选择。不要把这份任务书改写成幻灯片正文。"""
@@ -1038,6 +1052,7 @@ Story 已经决定讲什么以及证据边界。你的任务是把它变成可�
   不规定所有页面用同一套结构。说明**用什么原图、画什么元素与关系、如何排布、怎样带着观众看**。
   可按需写图形、图标、图表、公式标注、对照、局部放大和指示线；不要止于“解释某机制”。
 - {BODY_GUIDES_TASK}
+- {DESIGN_EXAMPLE_TASK}
 - `figures` 列精确资产 id，先实际查看图再选择；相对路径基于 `workflow_root`。`title` 和 `marks`
   都可选，marks 只用于需要强调的现有短语。不需要重写 claim、items、anchor 理由或 rationale。
 - `setting` 简述 audience、occasion（沿用 room.default_occasion 或选合适键）、reading（spoken/read/mixed）。
@@ -1180,6 +1195,9 @@ def execute(stage, job):
             (work/obsolete).unlink(missing_ok=True)
         return [work/name for name in ('rpa_input.json', 'normalized_content.json', 'rpa_validation.json', 'ir_prompt.json')]
     if stage == 'page_design':
+        if request.get('source_kind') == 'topic':
+            from .topic import prepare_design
+            return prepare_design(work, request)
         from deck_compiler.design import capabilities as design_capabilities, default_occasion, content_bindings
         workflow = read(work/'evidence_pointer.json')['workflow']
         value = read(workflow)
@@ -1218,6 +1236,7 @@ def execute(stage, job):
             'evidence': evidence,
             'figures': figures,
             'recipes': recipe_capabilities(),
+            'example_lookup': example_lookup(DESIGN_EXAMPLE_TASK),
             'schema_path': str(COMPONENT/'schemas'/(f'page-design-v{design_version}.schema.json' if projection else 'page-design.schema.json')),
             'workflow_root': str(Path(workflow).parent),
             'content_catalog': {source: {key: binding[key] for key in ('evidence', 'policy') if key in binding}
@@ -1261,6 +1280,9 @@ def execute(stage, job):
         from .content_review import prepare
         return prepare(work)
     if stage == 'page_scene':
+        if request.get('source_kind') == 'topic':
+            from .topic import prepare_scene
+            return prepare_scene(work, request)
         from .page_scene_binding import prepare
         return prepare(work, request)
     if stage == 'scientific_review':

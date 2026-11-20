@@ -4,11 +4,23 @@ on:
   push:
     paths:
       - 'Total-pipe/**'
+      - 'PaperWorkflow/**'
+      - 'research-ppt-assistant/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'QUICKSTART.md'
+      - 'INSTALL_FOR_AI.md'
       - 'install.py'
       - '.github/workflows/deck-compiler.yml'
   pull_request:
     paths:
       - 'Total-pipe/**'
+      - 'PaperWorkflow/**'
+      - 'research-ppt-assistant/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'QUICKSTART.md'
+      - 'INSTALL_FOR_AI.md'
       - 'install.py'
       - '.github/workflows/deck-compiler.yml'
   workflow_dispatch:
@@ -18,13 +30,18 @@ permissions:
 
 jobs:
   compiler-regression:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.12', '3.13']
+        include:
+          - os: ubuntu-latest
+            python-version: '3.12'
+          - os: ubuntu-latest
+            python-version: '3.13'
+          - os: windows-latest
+            python-version: '3.12'
+    runs-on: ${{ matrix.os }}
     env:
-      PYTHONPATH: Total-pipe
       MPLBACKEND: Agg
     steps:
       - uses: actions/checkout@v4
@@ -34,13 +51,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install fonts and current runtime dependencies
+      - name: Install Linux fonts
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y fonts-dejavu-core fonts-noto-cjk
+      - name: Install current runtime and test dependencies
+        shell: bash
+        run: |
           python -m pip install --upgrade pip
-          python -m pip install --only-binary=Pillow -r Total-pipe/requirements.txt jsonschema matplotlib
+          python - <<'PY'
+          import subprocess, sys, tomllib
+          from pathlib import Path
+          pwf_deps = tomllib.loads(Path('PaperWorkflow/pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']
+          subprocess.check_call([
+              sys.executable, '-m', 'pip', 'install', '--only-binary=Pillow',
+              '-r', 'Total-pipe/requirements-dev.txt', *pwf_deps,
+          ])
+          PY
       - name: Confirm Pillow and Raqm coverage
+        if: runner.os == 'Linux'
         run: |
           python - <<'PY'
           import PIL
@@ -48,10 +78,89 @@ jobs:
           print('Pillow:', PIL.__version__, 'Raqm:', features.check('raqm'))
           assert features.check('raqm'), 'Linux regression job must exercise a Raqm-enabled Pillow wheel'
           PY
-      - name: Run compiler regression tests
+      - name: Run Total-pipe tests
+        env:
+          PYTHONPATH: Total-pipe
         run: python -m unittest discover -s Total-pipe/tests -v
+      - name: Run pwf2rpa tests
+        env:
+          PYTHONPATH: Total-pipe
+        run: python -m unittest discover -s Total-pipe/pwf2rpa/tests -v
+      - name: Run PaperWorkflow tests
+        env:
+          PYTHONPATH: PaperWorkflow
+        run: python -m unittest discover -s PaperWorkflow/tests -v
       - name: Record backend check scope
         if: always()
+        shell: bash
         run: |
           echo 'OfficeCLI-dependent tests may skip in this job. Inspect unittest skip reasons.' >> "$GITHUB_STEP_SUMMARY"
           echo 'PowerPoint UI and native PDF acceptance run separately on macOS or Windows.' >> "$GITHUB_STEP_SUMMARY"
+
+  research-ppt-assistant:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: research-ppt-assistant
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run tests, audits, benchmarks and coverage gate
+        run: npm run check
+
+  repo-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python sources and check installer/doc links
+        run: |
+          python -m compileall -q Total-pipe PaperWorkflow install.py
+          python - <<'PY'
+          import json, pathlib, re, subprocess, sys, tempfile
+
+          with tempfile.TemporaryDirectory() as tmp:
+              tmp_path = pathlib.Path(tmp)
+              list_res = subprocess.run([sys.executable, 'install.py', '--list-clients'],
+                                        check=True, capture_output=True, text=True)
+              assert json.loads(list_res.stdout)['status'] == 'PASS'
+              dry_res = subprocess.run([
+                  sys.executable, 'install.py', '--client', 'codex',
+                  '--venv', str(tmp_path / 'venv'),
+                  '--config', str(tmp_path / 'config.toml'),
+                  '--skills-root', str(tmp_path / 'skills'),
+                  '--dry-run',
+              ], check=True, capture_output=True, text=True)
+              dry = json.loads(dry_res.stdout)
+              assert dry['status'] == 'DRY_RUN', dry
+              joined = ' '.join(dry['dependencies']).lower()
+              for unwanted in ('numpy', 'tokenizers', 'openai', 'tqdm'):
+                  assert unwanted not in joined, f'Unexpected heavy dep {unwanted} in {dry["dependencies"]}'
+
+          root = pathlib.Path('.')
+          skip = {'.git', 'node_modules', '__pycache__', '.venv', 'builds', 'archive'}
+          link_re = re.compile(r'\[[^\]]*\]\(([^)]+)\)')
+          broken = []
+          for md in root.rglob('*.md'):
+              if any(x in md.parts for x in skip):
+                  continue
+              text = re.sub(r'```[\s\S]*?```', '', md.read_text(encoding='utf-8', errors='replace'))
+              for m in link_re.finditer(text):
+                  raw = m.group(1).strip().split()[0]
+                  if raw.startswith(('http://', 'https://', 'mailto:', '#', 'file://')):
+                      continue
+                  target_part = raw.split('#', 1)[0]
+                  if not target_part or target_part.startswith(('../build/', 'build/')):
+                      continue
+                  if not (md.parent / target_part).resolve().exists():
+                      broken.append(f'{md} -> {raw}')
+          assert not broken, 'Broken local markdown links:\n' + '\n'.join(broken)
+          PY

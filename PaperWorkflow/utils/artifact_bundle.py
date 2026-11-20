@@ -89,12 +89,20 @@ def _asset_candidates(
         match.group("src") for match in HTML_IMAGE_TARGET_RE.finditer(markdown)
     )
     for raw_target in referenced_targets:
+        # A single ASCII letter before ':' is a Windows drive, not a URL scheme.
+        windows_drive = re.match(r"^[A-Za-z]:[\\/]", raw_target) is not None
         parsed = urlparse(raw_target)
-        if parsed.scheme not in ("", "file") or parsed.netloc or raw_target.startswith(
-            ("#", "data:")
-        ):
-            continue
-        raw_path = Path(unquote(parsed.path))
+        if windows_drive:
+            raw_path = Path(raw_target)
+        else:
+            if parsed.scheme not in ("", "file") or parsed.netloc or raw_target.startswith(
+                ("#", "data:")
+            ):
+                continue
+            path_text = unquote(parsed.path)
+            if parsed.scheme == "file" and re.match(r"^/[A-Za-z]:[\\/]", path_text):
+                path_text = path_text[1:]
+            raw_path = Path(path_text)
         candidate = (raw_path if raw_path.is_absolute() else source_root / raw_path).resolve()
         if not candidate.is_file() or candidate.suffix.casefold() not in IMAGE_SUFFIXES:
             continue

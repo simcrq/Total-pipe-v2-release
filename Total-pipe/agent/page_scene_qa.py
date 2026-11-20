@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from .page_scene import Renderer
+from .page_scene import Renderer, is_topic_scene
 
 PAGE_W, PAGE_H = 13.333, 7.5
 BODY_FLOOR = 18.0
@@ -80,6 +80,7 @@ def validate_spec(spec, spec_path):
         return ['spec.pages must be a non-empty list'], []
     if len(pages) > 40:
         return ['spec.pages supports at most 40 pages'], []
+    topic = is_topic_scene(spec)
     metrics = []
     ids = set()
     for index, page in enumerate(pages, 1):
@@ -94,16 +95,17 @@ def validate_spec(spec, spec_path):
             errors.append('%s: %s' % (pid, problem))
         if take_problem:
             errors.append('%s: %s' % (pid, take_problem))
-        if not title:
-            errors.append('%s: title required' % pid)
-        elif len(title) > 28:
-            errors.append('%s: title is %d chars (max 28)' % (pid, len(title)))
-        if not take:
-            errors.append('%s: take required' % pid)
-        else:
-            take_max = 110 if index == 1 else 68
-            if len(take) > take_max:
-                errors.append('%s: take is %d chars (max %d)' % (pid, len(take), take_max))
+        if not topic:
+            if not title:
+                errors.append('%s: title required' % pid)
+            elif len(title) > 28:
+                errors.append('%s: title is %d chars (max 28)' % (pid, len(title)))
+            if not take:
+                errors.append('%s: take required' % pid)
+            else:
+                take_max = 110 if index == 1 else 68
+                if len(take) > take_max:
+                    errors.append('%s: take is %d chars (max %d)' % (pid, len(take), take_max))
         raw_objects = page.get('objects', [])
         if not isinstance(raw_objects, list):
             errors.append('%s: objects must be a list' % pid)
@@ -115,10 +117,10 @@ def validate_spec(spec, spec_path):
         if unknown:
             errors.append('%s: unknown object type(s): %s' % (pid, ', '.join(unknown)))
         object_limit = 80 if page.get('svg_import') else 14
-        if len(objects) > object_limit:
+        if not topic and len(objects) > object_limit:
             errors.append('%s: %d objects (max %d)' % (pid, len(objects), object_limit))
         body_texts = [o for o in objects if o.get('type') in ('text', 'list') and o.get('role', 'body') == 'body']
-        if len(body_texts) > 4:
+        if not topic and len(body_texts) > 4:
             errors.append('%s: %d body text blocks (max 4)' % (pid, len(body_texts)))
         body_chars = 0
         for o in body_texts:
@@ -126,10 +128,10 @@ def validate_spec(spec, spec_path):
                 body_chars += sum(_text_len(item, bindings) for item in (o.get('items') or []))
             else:
                 body_chars += _text_len(o, bindings)
-        if body_chars > 260:
+        if not topic and body_chars > 260:
             errors.append('%s: %d body chars (max 260)' % (pid, body_chars))
         visuals = [o for o in objects if o.get('type') in ('image', 'table', 'chart')]
-        if len(visuals) > 3:
+        if not topic and len(visuals) > 3:
             errors.append('%s: %d image/table/chart objects (max 3)' % (pid, len(visuals)))
         text_boxes = []
         for oi, obj in enumerate(objects):
@@ -231,7 +233,14 @@ def expression_report(spec, spec_path):
     This is intentionally advisory for the pilot. It measures whether a deck uses the
     renderer's native vocabulary instead of turning every page into a text block.
     """
-    import re
+    from totalpipe_layout.inline_math import InlineMathError, parse_inline
+
+    def count_formulas(value, *, subscripts_only=False):
+        try:
+            return sum(span.kind == 'formula' for span in parse_inline(value, subscripts_only=subscripts_only))
+        except InlineMathError:
+            return 0
+
     spec_path = Path(spec_path)
     bindings = spec.get('bindings') or {}
     rows, styles = [], set()
@@ -239,7 +248,7 @@ def expression_report(spec, spec_path):
         title, _ = _resolve_field(page, 'title', bindings)
         take, _ = _resolve_field(page, 'take', bindings)
         text = [title or '', take or '']
-        formulas = len(re.findall(r'\$[^$]+\$', (title or '') + ' ' + (take or '')))
+        formulas = sum(count_formulas(value) for value in text)
         objects = list(_flatten_objects(page.get('objects') or []))
         native, card_area = 0, 0.0
         lists = 0
@@ -248,7 +257,7 @@ def expression_report(spec, spec_path):
             if kind == 'text':
                 value = _resolve_item(obj, bindings) or ''
                 text.append(value)
-                formulas += len(re.findall(r'\$[^$]+\$', value))
+                formulas += count_formulas(value)
             elif kind == 'list':
                 items = obj.get('items') or []
                 lists += 1
@@ -258,10 +267,14 @@ def expression_report(spec, spec_path):
                 for item in items:
                     value = _resolve_item(item, bindings) or ''
                     text.append(value)
-                    formulas += len(re.findall(r'\$[^$]+\$', value))
+                    formulas += count_formulas(value)
             elif kind in ('image', 'table', 'chart', 'path', 'formula'):
                 native += 1
+                if kind == 'table':
+                    formulas += sum(count_formulas(str(cell), subscripts_only=True)
+                                    for row in obj.get('rows', []) for cell in row)
             elif kind == 'shape':
+                formulas += count_formulas(_resolve_item(obj, bindings) or '', subscripts_only=True)
                 area = float(obj['box'][2]) * float(obj['box'][3])
                 fill = str(obj.get('fill', 'none')).upper()
                 if (area > 0.5 and not page.get('svg_import') and
@@ -311,7 +324,8 @@ def check_file(path):
     if not errors:
         expression = expression_report(spec, path)
         report['expression'] = expression
-        report['expression_gate'] = expression_gate(expression['summary'])
+        report['expression_gate'] = ({'status': 'SKIP', 'failures': []} if is_topic_scene(spec)
+                                     else expression_gate(expression['summary']))
     return report
 
 

@@ -5,6 +5,8 @@ description: 从论文 PDF 或已有研究规划生成可编辑研究汇报 PPTX
 
 # Total-pipe 研究汇报流水线
 
+从题目或问题创作时，走 [total-pipe-agent 题目入口](../../docs/agent-adapter.md#从题目开始)。以下科研流程用于论文输入。
+
 ```text
 PDF → PaperWorkflow → Story Planner → [DesignIntentPlanner] → pwf2rpa → RPA
     → page_design（Story 引用 / 绘图 / 排布 / 走读）→ canonical Deck IR
@@ -229,6 +231,7 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
+页面设计提示中的 `example_lookup.command_prefix` 可执行 `search "<讲解关系>" --limit 2`。按需打开一份匹配示例，参考构图、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
 
 让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
 可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。
@@ -414,20 +417,18 @@ paper 表格 evidence_refs 必须绑定本页。每页最多 4 表、每表最�
 纯文字表格超容量按 preserve-terms 保留 REVIEW；含公式表格尺寸不足需加宽或拆页。
 始终保留 TABLE_CONTENT_REVIEW 与近似公式测量审核，原生 PPTX/PDF 必须检查合并表头、公式及单位。
 
-### 公式：独立公式与显式行内模式
+### 公式：独立公式与行内下标
 
 展示公式用 `component: "formula"`，`text` 保存 LaTeX 子集。组会页面设计把需要讲解且有证据的式子写作独立 `$...$` 投屏文案，另写符号和条件。Deck IR 作者用 `copy_ref` 放入正文块，绑定阶段将其转成原生公式。PageScene 作者用 `type=formula` 加 `copy_ref`，绑定阶段填入已审读的 LaTeX。
 IR 草稿优先用 `advance.preview` 的 `mode="layout"` 检查骨架与单件规格，再看渲染 PNG。独立 CLI 的 `skeleton`、`units` 可用于既有工件诊断，`explain` 可查询具体报错。
-需要行内混排时读 `Total-pipe/docs/inline-math.md`：正文块或表格 text 格加 inline_math=true，
-用 `$…$` 或 `\(…\)` 标记完整数学区域；semantic.inline_math 列出 title/takeaway 可开启相应字段。
-先查询 native_inline_equation 与 native_equation 能力；RPA content_refs 传 block.inline_math /
-table.has_inline_math。图注、图形标签和 panel 标题暂按原有文字处理。
+正文、标题、结论、图注和表格文字格里的 `V_OUT`、`V_G` 等裸写下标自动进入原生行内公式。复杂数学区域用 `$…$` 或 `\(…\)` 界定。显式方式见 [行内公式](../../docs/inline-math.md)。
+查询 native_inline_equation 与 native_equation 能力。RPA content_refs 用 block.inline_math 与 table.has_inline_math 传递显式需求。
 
 混排宽度和高度按逐行片段、基线上下需求测量，不按 LaTeX 命令长度或固定正文行高估算。
 公式保持完整单元；过宽改用独立公式或加宽，不缩到字号下限以下。标题/正文按 preserve-terms
 保留全文及高度溢出 REVIEW；含行内数学的表格按公式表格执行真实容量门禁。
 行内模式不使用 distributed_arrow_list；字面美元符号须转义。保留 INLINE_MATH_MEASUREMENT_REVIEW，
-实际核对 PowerPoint 的基线、换行与表格边界。原有独立公式不变。JSON 必须转义反斜线：
+实际核对 PowerPoint 的基线、换行与表格边界。独立公式可直接写 `V_OUT = G V_IN`，复杂公式按 LaTeX 子集书写。JSON 必须转义反斜线：
 
 ```json
 {"id":"equation","component":"formula","text":"\\sqrt{\\frac{1+e^{-t}}{1+x^{2}}}","anchor":"explanation"}

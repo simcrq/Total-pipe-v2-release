@@ -116,6 +116,50 @@ class LiteratureWorkflowTests(unittest.TestCase):
         self.assertEqual(queries[-1]["query_id"], "custom-01")
         self.assertEqual(queries[-1]["query"], "coercive field")
 
+    def test_same_intent_queries_rank_their_own_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "paper.md"
+            transport = "Electron injection from the source limits current in the thicker region."
+            inverter = "The quinary inverter displays five distinct output voltage plateaus."
+            source.write_text(f"# Results\n\n{transport}\n\n{inverter}\n", encoding="utf-8")
+            workflow = build_literature_workflow(
+                markdown_path=source,
+                source_path=source,
+                project_root=root,
+                output_dir=root / "out",
+                custom_queries=[
+                    {"query": "electron injection source thicker region", "intent": "key_results"},
+                    {"query": "quinary inverter output voltage plateaus", "intent": "key_results"},
+                ],
+                include_default_queries=True,
+            )
+
+            groups = {group["query_id"]: group for group in workflow["evidence"]}
+            registry = {item["evidence_id"]: item for item in workflow["evidence_registry"]}
+            for query_id, sentence in (("custom-01", transport), ("custom-02", inverter)):
+                with self.subTest(query_id=query_id):
+                    group = groups[query_id]
+                    self.assertTrue(group["results"])
+                    first_evidence = registry[group["results"][0]["evidence_ids"][0]]
+                    self.assertEqual(first_evidence["text"], sentence)
+                    self.assertEqual(group["canonical_query_id"], query_id)
+                    self.assertIn(query_id, first_evidence["query_ids"])
+
+    def test_query_deduplication_respects_declared_intent(self):
+        queries = build_evidence_queries(
+            [
+                {"query": "Inverter plateaus", "intent": "key_results"},
+                {"query": " inverter   plateaus ", "intent": "key_results"},
+                {"query": "inverter plateaus", "intent": "general"},
+            ],
+            include_defaults=False,
+        )
+        self.assertEqual(
+            [(query["query_id"], query["intent"]) for query in queries],
+            [("custom-01", "key_results"), ("custom-03", "general")],
+        )
+
     def test_chinese_sample_question_is_expanded_and_ranks_methods(self):
         markdown = (
             "# Methods\n"

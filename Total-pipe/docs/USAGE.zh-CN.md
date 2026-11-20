@@ -1,13 +1,25 @@
 # Total-pipe 使用说明
 
-本文对应当前仓库的 PaperWorkflow、Story、RPA、page_design、Scientific Visual Planner 和 Deck Compiler。
+本文涵盖题目入口、PageScene，以及论文入口的 PaperWorkflow、Story、RPA、视觉设计和 Deck Compiler。
 从已有产物继续相应阶段；不重复提取证据或重写已经通过的科学故事。
 组件与版本来源见 [AI 工程索引](../../docs/README.md)，安装、运行时和平台需求见 [环境清单](../环境清单.md)。
 
 默认从 [total-pipe-agent Skill](../skills/total-pipe-agent/SKILL.md) 和四工具接入层开始。在仓库根目录运行
 `python3 install.py --client auto` 检测宿主，也可以通过 `--client` 指定目标。[AI 安装指南与宿主列表](../../INSTALL_FOR_AI.md)
 
-安装后按 `next_action` 读取完整产物提示，模型选择仍来自用户。[推进与恢复](agent-adapter.md)
+安装后按 `next_action` 读取完整产物提示。使用指定子代理时沿用用户选择的模型。[推进与恢复](agent-adapter.md)
+
+## 0. 从题目或问题生成
+
+调用 `totalpipe_start` 时指定 `source_kind="topic"`，在 `source` 中传题目文本，在 `out_dir` 中传绝对输出路径。
+可选 `requirements` 写听众和重点，`slide_count` 定页数。未指定这些参数时，Agent 按题目决定讲法和页数。
+
+题目任务依次交付 `work/page_design.json` 和 `work/page_scene.json`。设计阶段可按讲解关系查示例库，
+PageScene 阶段可细化文案并使用可编辑对象。题目模式跳过 PaperWorkflow、RPA 和论文证据审读，
+仍检查页面几何、字号、素材与 PPTX 包结构。候选位于 `build/candidate.pptx`。
+使用 PowerPoint 做原生导出时，按 `native` 描述调用 `advance.native`。[题目入口的 CLI、MCP 和恢复](agent-adapter.md#从题目开始)
+
+以下的 Story、证据、论文审读和 Deck IR 内容约定适用于论文路径。
 
 四工具默认返回阶段与 QA 的紧凑摘要；完整 request / artifacts 用
 `totalpipe_status(job_id, detail="full")` 读取。status 不写提示包或事件；缺提示时按 ADVANCE_REQUIRED
@@ -19,7 +31,7 @@ IR 提交前可用 `advance(preflight=true, artifact_kind="deck_ir", artifact_pa
 未变页复用缓存。详见[选页渲染](agent-adapter.md#ir-选页渲染与看图修订)。HTML 预览不代替 PowerPoint 原生验收。
 `presentation_type` 可用规范键或已识别场合别名，详细说明保留在 presentation_context；未知标签在入口拒绝。
 
-显式页面几何可在新任务选择 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
+论文任务也可选择显式页面几何 `page_mode="page_scene"`（CLI 为 `--page-mode page_scene`）。
 页面审读后提交 `work/page_scene.json` 或 `work/` 下其他草稿；工具会写入规范化绑定及 recipe 展开结果，
 相对图片路径以草稿所在目录解析并固化，图像变化使检查点失效。全部可见文案须逐项匹配本页批准文本，
 包括 recipe 标签、表格与图表文字；要改文案先回退设计重审。该路径的交付边界是 candidate 与原生验收证据，
@@ -389,7 +401,7 @@ PWF 新增 `artifacts.figure_assets_metadata`，pwf2rpa 对显式匹配的资源
 ```
 
 anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标签公式默认位于前一说明块下方，
-有 label 时标签与公式并排。普通正文默认不解析 `$…$`；显式开启行内模式后按下节处理。
+有 label 时标签与公式并排。公式块中的 `V_OUT = G V_IN` 可直接写成多字母下标简写。
 
 经 Agent 接入层时还可以只写 `latex`，接入层在校验前补成 `component:"formula"` + `text`：
 
@@ -399,9 +411,11 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
 
 正文、标题或 takeaway 中的 `$…$` / `\\(…\\)` 会自动开启行内公式，不必再手写
 `inline_math:true`。展开后的 canonical IR 会写回 `work/deck_ir.json`；直接调用
-`deck_compiler build` 仍以 canonical 字段为准。
+`deck_compiler build` 的显式公式使用 canonical 字段。
 
 #### 行内公式与混排容量
+
+在 Deck IR 或 PageScene 的正文、标题、结论、图注或表格文字中直接写 `V_OUT`、`V_G`、`I_D` 或 `x_i`，编译时会生成可编辑的原生行内下标公式。输入文本及证据引用仍使用原始拼法。
 
 正文块或表格 text 格加 `inline_math: true`，以 `$…$` 或 `\(…\)` 标记公式：
 
@@ -410,9 +424,9 @@ anchor 可省略；显式 anchor 指向本页前方的非公式 block。无标�
  "text":"当 $x>0$ 时，响应为 $\\sqrt{1+x^{2}}$，完整说明保持可编辑。"}
 ```
 
-标题/结论在 semantic.inline_math 中列出 title/takeaway；未列出的字段保持原样。
+显式公式可在 semantic.inline_math 中列出 title/takeaway 来启用对应字段。
 开启后字面美元符号写 `\$`（JSON：`"\\$"`），不接受显示公式分隔符或分布式项目列表。
-图注、panel 标题和图形标签仍按原有文字处理。
+Deck IR 的 panel 标题和图形标签沿用各自的文字协议。
 
 容量改为逐行测量文字与公式宽度、最大上伸/下伸高度，再累计实际行高；高矩阵只影响所在行。
 数学区域整体换行，不按 LaTeX 字符长度估算，不拆根号和指数。正文、树和表格复用混排测量，
@@ -491,6 +505,8 @@ HTML 截图仅显示 fallback，实际根号、分式线和指数用 PowerPoint 
 
 Story 负责科学内容与证据，独立页面设计子代理负责视觉讲解。完整读取任务书、提示包和
 [1.1 Schema](../schemas/page-design.schema.json) 后，交付 `page_design.json`。
+设计子代理可用提示包中 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 2`，
+按需打开一份匹配的[示例脚本](../examples/library/README.md)，参考构图、视觉关系和讲解顺序。
 
 每页只必填 `id`、`content_refs`（Story 路径）和 `design`（自由文本或自定对象）。内容与证据自动继承，
 不再要求重写 claim/items/anchor 理由/rationale。设计应具体说明选哪张原图、画哪些元素与关系、怎样排布、

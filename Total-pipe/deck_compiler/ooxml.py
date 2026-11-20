@@ -50,8 +50,8 @@ def chain(z, part):
                      if r["type"] in ("slideLayout", "slideMaster") and not r["external"]), None)
 
 
-def theme_colors(z, part):
-    for name, root in chain(z, part):
+def _theme_colors_from_nodes(z, nodes):
+    for name, _root in nodes:
         for rel in relationships(z, name).values():
             if rel["type"] == "theme" and not rel["external"]:
                 theme = ET.fromstring(z.read(rel["target"]))
@@ -66,10 +66,12 @@ def theme_colors(z, part):
     return {}
 
 
-def color_context(z, part):
-    """Resolve the theme palette and effective color map for a slide chain."""
-    nodes = list(chain(z, part))
-    theme = theme_colors(z, part)
+def theme_colors(z, part):
+    return _theme_colors_from_nodes(z, list(chain(z, part)))
+
+
+def _color_context_from_nodes(z, nodes):
+    theme = _theme_colors_from_nodes(z, nodes)
     mapping = {"bg1": "lt1", "tx1": "dk1", "bg2": "lt2", "tx2": "dk2"}
     # Master defaults apply first; closer layout/slide overrides apply later.
     for _, node in reversed(nodes):
@@ -80,6 +82,11 @@ def color_context(z, part):
         if override is not None:
             mapping.update(override.attrib)
     return theme, mapping
+
+
+def color_context(z, part):
+    """Resolve the theme palette and effective color map for a slide chain."""
+    return _color_context_from_nodes(z, list(chain(z, part)))
 
 
 def color(node, theme=None, mapping=None):
@@ -129,7 +136,7 @@ def fill(node, theme=None, mapping=None):
 
 def background(z, part):
     nodes = list(chain(z, part))
-    theme, mapping = color_context(z, part)
+    theme, mapping = _color_context_from_nodes(z, nodes)
     for name, node in nodes:
         bg = node.find("p:cSld/p:bg", NS)
         if bg is not None:

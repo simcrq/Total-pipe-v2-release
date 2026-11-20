@@ -214,22 +214,25 @@ def analyze_readability(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
     line_counts = []
     text_densities = []
 
-    for slide_layout in layout.get('slides', []):
+    for slide_idx, slide_layout in enumerate(layout.get('slides', []), 1):
+        slide_num = slide_layout.get('slide_number') or slide_idx
         for element in slide_layout.get('elements', []):
             if element.get('kind') in ('text', 'list'):
                 contract = element.get('contract', {})
-                font_size = contract.get('font_size', 0)
+                font_size_px = contract.get('font_size', 0)
+                font_size = round(font_size_px * 0.75, 2)
                 if font_size > 0:
                     font_sizes.append(font_size)
 
-                # Check if text is too small
+                shape_id = element.get('id') or element.get('name')
+                # Check if text is too small (layout.json stores CSS px at 96dpi; convert to pt)
                 if font_size < 18:
                     issues.append(QualityIssue(
                         category='readability',
                         severity='HIGH',
-                        slide=slide_layout.get('slide_number'),
-                        shape=element.get('name'),
-                        message=f"Font size {font_size}pt is too small (minimum 18pt for body text)",
+                        slide=slide_num,
+                        shape=shape_id,
+                        message=f"Font size {font_size:g}pt is too small (minimum 18pt for body text)",
                         metric_value=font_size,
                         threshold=18.0,
                         suggested_fix="Increase font size or reduce content to fit larger text"
@@ -238,24 +241,24 @@ def analyze_readability(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
                     issues.append(QualityIssue(
                         category='readability',
                         severity='MEDIUM',
-                        slide=slide_layout.get('slide_number'),
-                        shape=element.get('name'),
-                        message=f"Font size {font_size}pt is small (recommended 20pt+ for body text)",
+                        slide=slide_num,
+                        shape=shape_id,
+                        message=f"Font size {font_size:g}pt is small (recommended 20pt+ for body text)",
                         metric_value=font_size,
                         threshold=20.0
                     ))
 
                 # Check line count
-                text = contract.get('text', '')
-                lines = text.count('\n') + 1
+                text = element.get('text') if 'text' in element else contract.get('text', '')
+                lines = text.count('\n') + 1 if text else 0
                 line_counts.append(lines)
 
                 if lines > 10:
                     issues.append(QualityIssue(
                         category='readability',
                         severity='MEDIUM',
-                        slide=slide_layout.get('slide_number'),
-                        shape=element.get('name'),
+                        slide=slide_num,
+                        shape=shape_id,
                         message=f"{lines} lines of text exceeds recommended maximum (10 lines)",
                         metric_value=lines,
                         threshold=10,
@@ -272,8 +275,8 @@ def analyze_readability(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
                     issues.append(QualityIssue(
                         category='readability',
                         severity='LOW',
-                        slide=slide_layout.get('slide_number'),
-                        shape=element.get('name'),
+                        slide=slide_num,
+                        shape=shape_id,
                         message=f"High text density (may appear cramped)",
                         metric_value=density,
                         threshold=0.5
@@ -329,11 +332,12 @@ def analyze_consistency(qa_report: Dict, layout: Optional[Dict], deck_ir: Option
             if gap > 0:
                 vertical_gaps.append(gap)
 
-        # Collect font sizes by role
+        # Collect font sizes by role (convert CSS px to pt)
         for element in elements:
             if element.get('kind') in ('text', 'list'):
                 role = element.get('role', 'unknown')
-                font_size = element.get('contract', {}).get('font_size', 0)
+                font_size_px = element.get('contract', {}).get('font_size', 0)
+                font_size = round(font_size_px * 0.75, 2)
                 if font_size > 0:
                     if role not in font_sizes_by_role:
                         font_sizes_by_role[role] = []
@@ -496,14 +500,16 @@ def analyze_balance(qa_report: Dict, layout: Optional[Dict], deck_ir: Optional[D
     # Analyze whitespace and coverage per slide
     slide_coverages = []
 
-    for slide_layout in layout.get('slides', []):
-        slide_num = slide_layout.get('slide_number')
+    slide_size = layout.get('slide_size') or [1280, 720]
+    slide_width = slide_size[0] if len(slide_size) >= 2 else 1280
+    slide_height = slide_size[1] if len(slide_size) >= 2 else 720
+
+    for slide_idx, slide_layout in enumerate(layout.get('slides', []), 1):
+        slide_num = slide_layout.get('slide_number') or slide_idx
         elements = slide_layout.get('elements', [])
 
         # Calculate total area covered by elements
         total_area = 0
-        slide_width = 960  # Standard width
-        slide_height = 720  # Standard height
 
         for element in elements:
             bbox = element.get('bbox', [0, 0, 0, 0])
@@ -608,7 +614,7 @@ def analyze_accessibility(qa_report: Dict, layout: Optional[Dict], deck_ir: Opti
         for slide_layout in layout.get('slides', []):
             for element in slide_layout.get('elements', []):
                 if element.get('kind') in ('text', 'list'):
-                    font_size = element.get('contract', {}).get('font_size', 0)
+                    font_size = element.get('contract', {}).get('font_size', 0) * 0.75
                     if font_size < 18:
                         small_fonts += 1
 
@@ -657,7 +663,16 @@ def analyze_scientific_rigor(qa_report: Dict, layout: Optional[Dict], deck_ir: O
         'SCIENTIFIC_PANEL_REVIEW',
         'FIGURE_CAPTION_MISMATCH',
         'FIGURE_SOURCE_MISMATCH',
-        'FIGURE_TOO_SMALL'
+        'FIGURE_TOO_SMALL',
+        'FIGURE_BELOW_MINIMUM',
+        'FIGURE_PROVENANCE_REQUIRED',
+        'FIGURE_PROVENANCE_FORBIDDEN',
+        'SCHEMATIC_REVIEW',
+        'CHART_DATA_REVIEW',
+        'CHART_ILLUSTRATIVE_REVIEW',
+        'TABLE_CONTENT_REVIEW',
+        'SCIENTIFIC_TEXT_OVERFLOW',
+        'SCIENTIFIC_TEXT_CAPACITY_REVIEW',
     ]]
 
     for item in scientific_fails:
@@ -685,7 +700,7 @@ def analyze_scientific_rigor(qa_report: Dict, layout: Optional[Dict], deck_ir: O
     figure_count = 0
     caption_count = 0
 
-    for slide in slides:
+    for slide_idx, slide in enumerate(slides, 1):
         figure_refs = slide.get('composition', {}).get('figure_refs', [])
         figure_count += len(figure_refs)
 
@@ -696,7 +711,7 @@ def analyze_scientific_rigor(qa_report: Dict, layout: Optional[Dict], deck_ir: O
                 issues.append(QualityIssue(
                     category='scientific',
                     severity='MEDIUM',
-                    slide=slide.get('id'),
+                    slide=slide_idx,
                     shape=fig_ref.get('asset_id'),
                     message="Figure missing caption",
                     suggested_fix="Add descriptive caption with figure reference (e.g., Fig.1a)"

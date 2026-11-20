@@ -1,6 +1,6 @@
 # 开发与文档维护
 
-先按[环境清单](../Total-pipe/环境清单.md)安装对应组件依赖。以下命令以仓库根目录为工作目录，
+先按[环境清单](../Total-pipe/环境清单.md)安装对应组件依赖（运行 Total-pipe 测试可安装 `Total-pipe/requirements-dev.txt`）。以下命令以仓库根目录为工作目录，
 选择与本次任务相关的检查；文档整理不要求重新运行完整实现测试。
 
 ## 组件测试入口
@@ -11,15 +11,16 @@ PYTHONPATH=Total-pipe python -m unittest discover -s Total-pipe/pwf2rpa/tests -v
 PYTHONPATH=PaperWorkflow python -m unittest discover -s PaperWorkflow/tests -v
 ```
 
-RPA 在 `research-ppt-assistant/` 中执行 `npm test`，要求 Node.js 22+。
-OfficeCLI、字体和可选素材影响对应检查；缺少素材造成的 skip 要单独报告，不能计作通过。
+RPA 在 `research-ppt-assistant/` 中执行 `npm test`（或完整门禁 `npm run check`），要求 Node.js 22+。
+OfficeCLI、字体和可选素材影响对应检查；缺少素材或系统符号链接权限造成的 skip 要单独报告，不能计作通过。
 测试数量和历史运行时间属于具体提交的记录，不是接口或固定质量承诺。
 
-仓库根目录的 [Deck Compiler CI](../.github/workflows/deck-compiler.yml) 在 Ubuntu 的 Python
-3.12 / 3.13 上安装当前满足依赖声明的 Pillow wheel、确认 Raqm 可用后运行编译器测试。
-该作业不安装 OfficeCLI；相关原生后端测试会按自身条件跳过，需另在本地执行。
-接入层的状态、安装配置与 stdio 握手测试同属该作业，使用 Node.js 22；
-实际 IR / Markdown 到 PPTX 的接入层集成测试需要 OfficeCLI，本地另运行。
+仓库根目录的 [Deck Compiler CI](../.github/workflows/deck-compiler.yml) 在 Ubuntu（Python 3.12 / 3.13）和 Windows（Python 3.12）上运行：
+安装 `Total-pipe/requirements-dev.txt` 与 `PaperWorkflow/pyproject.toml` 声明依赖后，
+依次运行 `Total-pipe/tests`、`Total-pipe/pwf2rpa/tests` 和 `PaperWorkflow/tests`；
+另有独立作业在 Ubuntu 与 Windows 上执行 `research-ppt-assistant` 的 `npm run check`，
+并在 `repo-hygiene` 作业校验 Python 字节码编译、`install.py --dry-run` 依赖与活跃文档本地链接。
+CI 作业不安装 OfficeCLI；相关原生后端测试会按自身条件跳过，需另在本地执行。
 PowerPoint UI / 原生 PDF 验收仍在 macOS 或 Windows 单独完成。
 
 ## 当前验收依据

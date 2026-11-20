@@ -95,6 +95,8 @@ def validate_job(job):
         raise ValueError('Malformed ExplainViz mode')
     if job['request'].get('page_mode', 'deck_ir') not in ('deck_ir', 'page_scene'):
         raise ValueError('Malformed page mode')
+    if job['request']['source_kind'] == 'topic' and job['request'].get('page_mode') != 'page_scene':
+        raise ValueError('Malformed topic page mode')
     if inputs and (set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
                    not isinstance(inputs.get('model'), str) or not inputs['model'].strip() or
                    inputs.get('reasoning_effort') not in ('high','xhigh','max','ultra') or inputs.get('selected_by_user') is not True):
@@ -156,7 +158,7 @@ def resources(path):
     if path.suffix.lower() == '.md' and path.is_file():
         for ref in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', path.read_text(encoding='utf-8')):
             ref = ref.strip('<>').split(' "', 1)[0].split('#', 1)[0]
-            if not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*:', ref):
+            if not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]+:', ref):
                 target = Path(unquote(ref))
                 if not target.is_absolute():
                     target = path.parent/target
@@ -192,13 +194,18 @@ def code_hash():
     return digest([revision, {str(p.relative_to(ROOT)): sha(p) for p in sorted(files)}])
 
 
-def dependency(job, previous):
+def dependency(job, previous, *, code=None, source_inputs=None):
     request = job['request']
-    inputs = resources(request['source'])
-    for path in request.get('supplementary_paths', []):
-        inputs.update(resources(path))
-    return digest({'request': request, 'source_files': inputs,
-                   'code': code_hash(), 'previous': previous})
+    code = code_hash() if code is None else code
+    if request['source_kind'] == 'topic':
+        return digest({'request': request, 'inputs': job.get('inputs', {}),
+                       'code': code, 'previous': previous})
+    if source_inputs is None:
+        source_inputs = resources(request['source'])
+        for path in request.get('supplementary_paths', []):
+            source_inputs.update(resources(path))
+    return digest({'request': request, 'source_files': source_inputs,
+                   'code': code, 'previous': previous})
 
 
 def valid_record(record, upstream):

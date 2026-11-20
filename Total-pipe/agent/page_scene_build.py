@@ -12,7 +12,7 @@ import json
 import shutil
 from pathlib import Path
 
-from .page_scene import Renderer
+from .page_scene import Renderer, is_topic_scene
 from .page_scene_qa import (_flatten_objects, _overlap, expression_gate,
                             expression_report, validate_spec)
 from .state import digest, sha, write
@@ -113,7 +113,7 @@ def build(work, out, request=None):
     from deck_compiler.contracts import issue
     expression = expression_report(scene, source)
     gate = expression_gate(expression['summary'])
-    if len(scene['pages']) >= 6 and gate['status'] != 'PASS':
+    if not is_topic_scene(scene) and len(scene['pages']) >= 6 and gate['status'] != 'PASS':
         items.append(issue('PAGE_SCENE_EXPRESSION_GATE', 'FAIL',
                            '; '.join(gate['failures']),
                            detector='page-scene-expression', renderer='python-pptx'))
@@ -242,7 +242,8 @@ def _write_qa(build_dir, scene, items, *, structural, native, metrics=None,
     qa['page_scene_sha256'] = digest(scene)
     qa['page_scene_metrics'] = metrics or []
     qa['expression'] = expression_report(scene, build_dir / 'page_scene.json')
-    qa['expression_gate'] = expression_gate(qa['expression']['summary'])
+    qa['expression_gate'] = ({'status': 'SKIP', 'failures': []} if is_topic_scene(scene)
+                             else expression_gate(qa['expression']['summary']))
     qa['checks']['expression_gate'] = qa['expression_gate']['status']
     if native_evidence:
         qa['native'] = {key: native_evidence.get(key) for key in
@@ -296,6 +297,11 @@ def refresh_qa(build_dir, *, native=False, review=None, native_evidence=None, me
 def native_items(pdf, scene):
     """Check the actual PowerPoint PDF against PageScene boxes and copy."""
     from deck_compiler.contracts import issue
+    from totalpipe_layout.inline_math import has_bare_subscript, parse_inline
+
+    def prose_fragments(text):
+        return [_normal(span.text) for span in parse_inline(text) if span.kind == 'text']
+
     items = []
     try:
         import pdfplumber
@@ -332,7 +338,8 @@ def native_items(pdf, scene):
                             # PDF extraction of inline OMML does not preserve the
                             # prose/math run order; page bounds are still checked.
                             if text and '$' not in text and '\\(' not in text:
-                                expected_parts.append(_normal(text))
+                                parts = prose_fragments(text) if has_bare_subscript(text) else [_normal(text)]
+                                expected_parts.extend(parts)
                         missing = [text for text in expected_parts if text and text not in actual]
                         if missing:
                             items.append(issue('PAGE_SCENE_NATIVE_LIST_REVIEW', 'REVIEW',
@@ -353,8 +360,11 @@ def native_items(pdf, scene):
                         # still authoritative, while prose remains exact.
                         if obj.get('role') in ('label', 'note'):
                             continue
-                        if (expected and not superscripted
-                                and expected not in actual and actual not in expected):
+                        if has_bare_subscript(text):
+                            missing = any(part and part not in actual for part in prose_fragments(text))
+                        else:
+                            missing = expected and not superscripted and expected not in actual and actual not in expected
+                        if missing:
                             items.append(issue('PAGE_SCENE_NATIVE_TEXT_REVIEW', 'REVIEW',
                                                f'Native text region does not match {obj.get("id", "text")}.',
                                                number, detector='page-scene-native', renderer='powerpoint'))

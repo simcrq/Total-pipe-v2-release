@@ -1,8 +1,25 @@
 import os
 import time
 import json
+import zipfile
 import requests
 from loguru import logger
+
+
+class _TerminalFailure(RuntimeError):
+    """A failure that polling again cannot fix."""
+
+
+def _safe_extract(zip_path, destination):
+    """Extract a downloaded archive, refusing members that escape ``destination`` (Zip Slip)."""
+    root = os.path.realpath(destination)
+    with zipfile.ZipFile(zip_path, 'r') as archive:
+        for member in archive.infolist():
+            target = os.path.realpath(os.path.join(root, member.filename))
+            if target != root and not target.startswith(root + os.sep):
+                raise ValueError(f"Unsafe path in MinerU archive: {member.filename!r}")
+        archive.extractall(root)
+
 
 class ApiPDFProcessor:
     def __init__(self, config):
@@ -111,9 +128,7 @@ class ApiPDFProcessor:
                     logger.warning(f"Polling returned error code: {poll_data.get('msg')}")
                     continue
 
-                if attempt == 0:
-                     with open(os.path.join(output_path, f"{file_name}_poll_debug.json"), 'w', encoding='utf-8') as f:
-                         json.dump(poll_data, f, ensure_ascii=False, indent=4)
+                # The poll response carries signed download URLs; it is never written to disk.
 
                 data = poll_data.get("data", {})
                 extract_results = data.get("extract_result", [])
@@ -128,7 +143,7 @@ class ApiPDFProcessor:
                     if target_result:
                         state = target_result.get("state")
                         if state == "failed":
-                            raise RuntimeError(
+                            raise _TerminalFailure(
                                 f"MinerU extraction failed for {file_name}: "
                                 f"{target_result.get('err_msg', 'unknown error')}"
                             )
@@ -152,13 +167,14 @@ class ApiPDFProcessor:
                                          f.write(dl_res.content)
                                      
                                      logger.info(f"已保存zip结果到 {zip_path}。正在解压...")
-                                     import zipfile
                                      try:
-                                         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                                             zip_ref.extractall(output_path)
+                                         _safe_extract(zip_path, output_path)
                                          succeeded = True
-                                     except Exception as e:
+                                     except zipfile.BadZipFile as e:
                                          logger.error(f"Failed to unzip: {e}")
+                                     except ValueError as e:
+                                         # An unsafe archive is a hard failure, not something to retry.
+                                         raise _TerminalFailure(str(e)) from e
                                 else:
                                      md_file_path = os.path.join(output_path, f"{file_name}.md")
                                      with open(md_file_path, 'wb') as f:
@@ -170,6 +186,8 @@ class ApiPDFProcessor:
                 else:
                      logger.info("Waiting for extract_result...")
 
+            except _TerminalFailure:
+                raise
             except Exception as e:
                 logger.warning(f"Polling exception: {e}")
                 continue

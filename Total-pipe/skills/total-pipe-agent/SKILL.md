@@ -1,14 +1,15 @@
 ---
 name: total-pipe-agent
-description: 从论文 PDF、Markdown、已有证据包或 Deck IR 生成可编辑科研 PPTX；通过四工具接入层推进证据、Story、页面设计、IR、Design 和候选 QA。
+description: 从题目、问题、论文 PDF、Markdown、已有证据包或 Deck IR 生成可编辑 PPTX。用四工具接入层推进页面设计、实现和候选 QA。
 ---
 
 # Total-pipe Agent
 
 默认服务是 `total_pipe`，有 doctor / start / advance / status 四个工具。先用 totalpipe_doctor 确认能力，PDF 输入需核对 OCR 认证与依赖。安装与回切见 [接入层用法](../../docs/agent-adapter.md)。
 
-将 source、out_dir、language、presentation_type 传给 totalpipe_start。slide_count 是最终论文页目标（1–40），独立补充文字页另计。
-source_kind 支持 auto/pdf/markdown/workflow/deck_ir；从已有产物继续，保留用户已有要求。page_mode=page_scene 时 page_review 后写显式 box 的 work/page_scene.json，跳过 deck_ir/design；默认 deck_ir 保留全部高级对象。
+只有题目或问题时，用 source_kind=topic，把题目原文作为 source，提供 out_dir。Agent 在 page_design 自拟内容、按需查示例库，再直接写 PageScene。用户明确要求指定模型时，在 page_design 通过 advance.inputs 选择子代理。按 next_action 推进和导出。[题目入口](../../docs/agent-adapter.md#从题目开始)
+
+文件入口用 source、out_dir、language、presentation_type，source_kind 支持 auto/pdf/markdown/workflow/deck_ir。slide_count 是最终论文页目标（1–40），独立补充文字页另计。论文的 page_mode=page_scene 在 page_review 后写显式 box，默认 deck_ir 保留全部高级对象。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对；只有内容已进入分析输入时，才传 supplementary_content_included=true。
 ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/空白区域，必要时有限重排正文；草稿预览/预检不增强。用户关闭时 start 传 explain_viz_mode=off，保留已有模式。explain_viz.json 记录位置变化；科学原文、字号、来源门槛不降低，生成图须实际人审。
 
@@ -24,11 +25,12 @@ ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/
 | review_required | 读 qa_report / feedback_path；FAIL 需修复，不能签收；修订耗尽时向用户说明 |
 | none | 若 reason=ADVANCE_REQUIRED 则 advance；若 CANDIDATE_READY 则交付候选 |
 
-queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本传入 PWF，PWF 自行确定检索 intent。
+queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本和声明的 intent 传入 PWF。PWF 在缺少有效声明时推导检索意图，各条不同查询独立检索，即使 intent 相同。
 用 delegation 中用户明确选择的模型和 reasoning 调用真实 Story 子代理。选择缺失时询问，保留真实调用记录。
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
 Story 后按 next_action 进入 scientific_review：主 Agent 读完整任务、提示、Schema、原文和实际SI，实际审查单位粒度、来源及遗漏的初始化/对照/负面结果；禁止自动 pass，失败回退 Story。
 RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完成；完整读 work/page_design_task.md、page_design_prompt.json、schema_path。
+页面设计时可用 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 2`，按需打开一份匹配示例。参考构图、视觉关系和讲解顺序，文案和证据来自当前 Story。
 页面设计1.3中 content_refs 将科学单元恰好分配一次；reuse_refs 明确再次展示的主张，只有直接限定这些可见主张的条件随页出现，不能整包继承叙事段落。
 display_copy 是实际投屏文案，content_map 指定可见载体或允许入讲稿的细节；重要条件、对照、负面结果和不确定性不能隐藏。
 选图须实际查看；figures列精确资产ID，figure_sources记录真实图号。来源标签与观众图注分开绑定，图号不是实验数值，不能删图号换PASS。

@@ -3,6 +3,22 @@
 完整操作见 [中文使用说明](Total-pipe/docs/USAGE.zh-CN.md)，安装见 [环境清单](Total-pipe/环境清单.md)。
 组件、接口和版本来源见 [AI 工程索引](docs/README.md)。
 
+## 从题目或问题开始
+
+把题目原文交给四工具入口，使用 `source_kind="topic"`。Agent 自行策划内容和页面，按需检索示例库，再用 PageScene 生成可编辑 PPTX。
+只需题目和输出目录。省略语言时由 Agent 根据题目决定，省略页数时由 Agent 分页。
+
+在 `Total-pipe/` 下也可用 CLI 启动，随后按返回的 `next_action` 写入并提交两份 JSON。
+
+```bash
+python -m agent doctor --source-kind topic
+python -m agent start --source-kind topic --source "为什么二分查找更快" \
+  --out-dir /abs/output
+```
+
+生成的文件位于 `build/candidate.pptx`。按需调用 `advance.native` 导出 PowerPoint PDF 和逐页预览。
+题目模式用 Python 和 PageScene 的依赖构建。[完整题目入口与操作](Total-pipe/docs/agent-adapter.md#从题目开始)
+
 ## 从论文开始
 
 在完整仓库根目录安装并注册默认四工具入口。

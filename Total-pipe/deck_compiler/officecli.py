@@ -4,10 +4,14 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
+import tempfile
 from .contracts import issue
 
 _A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+_PREFLIGHT_CACHE = {}
+_SPILL_MAX_BYTES = 64 * 1024 * 1024
 
 
 def _px(value):
@@ -22,8 +26,23 @@ def _color(value):
     return value.lstrip('#') if value and value != 'none' else 'none'
 
 
+def _preflight_cache_key(executable, connectors, tables):
+    candidate = Path(executable)
+    resolved = candidate if candidate.is_file() else (Path(found) if (found := shutil.which(str(executable))) else None)
+    if resolved is None or not resolved.is_file():
+        return None
+    try:
+        stat = resolved.stat()
+    except OSError:
+        return None
+    return (str(resolved.resolve()), stat.st_mtime_ns, stat.st_size, bool(connectors), bool(tables))
+
+
 def preflight(executable='officecli', connectors=False, tables=False):
     """Pin the minimum tested CLI and verify its schema before writing a deck."""
+    cache_key = _preflight_cache_key(executable, connectors, tables)
+    if cache_key is not None and cache_key in _PREFLIGHT_CACHE:
+        return dict(_PREFLIGHT_CACHE[cache_key])
     version = subprocess.run([executable, '--version'], capture_output=True, text=True,
                              encoding='utf-8', errors='replace', timeout=15)
     match = re.search(r'\b(\d+)\.(\d+)\.(\d+)\b', version.stdout)
@@ -60,12 +79,31 @@ def preflight(executable='officecli', connectors=False, tables=False):
             raise ValueError(f'OfficeCLI pptx {element} lacks required capabilities: {missing}')
         schemas[element] = schema
     fingerprint = hashlib.sha256(json.dumps(schemas, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-    return {'version': match.group(0), 'schema_sha256': fingerprint}
+    result = {'version': match.group(0), 'schema_sha256': fingerprint}
+    if cache_key is not None:
+        _PREFLIGHT_CACHE[cache_key] = dict(result)
+    return result
 
 
 def _xml_attribute(value):
     return (str(value).replace('&', '&amp;').replace('<', '&lt;')
             .replace('>', '&gt;').replace('"', '&quot;'))
+
+
+def _xpath_literal(value):
+    text = str(value)
+    if "'" not in text:
+        return f"'{text}'"
+    if '"' not in text:
+        return f'"{text}"'
+    return 'concat(' + ", \"'\", ".join(f"'{part}'" for part in text.split("'")) + ')'
+
+
+def _safe_dsl_name(value):
+    text = str(value)
+    if not text or any(ch in text for ch in '[]/"\'\r\n\0'):
+        raise ValueError(f'Unsafe OfficeCLI selector name: {value!r}')
+    return text
 
 
 def list_paragraph_properties(contract, bullet, index, count):
@@ -82,15 +120,15 @@ def list_paragraph_properties(contract, bullet, index, count):
     gap = float(bullet.get('space_after') or 0)
     if index < count - 1 and gap > 0:
         parts.append(f'<a:spcAft><a:spcPts val="{round(gap * 75)}" /></a:spcAft>')
-    parts.append(f'<a:buClr><a:srgbClr val="{_color(bullet["color"])}" /></a:buClr>')
+    parts.append(f'<a:buClr><a:srgbClr val="{_xml_attribute(_color(bullet["color"]))}" /></a:buClr>')
     if bullet.get('size_from_text'):
         parts.append('<a:buSzTx />')
     parts.append(f'<a:buFont typeface="{_xml_attribute(bullet["face"])}" />')
     if bullet.get('numbering'):
         # PowerPoint continues a run when every paragraph has the same numbering style.
         # Dropping startAt after the first paragraph restarts that run at one.
-        start = f' startAt="{bullet["start"]}"' if bullet['start'] != 1 else ''
-        parts.append(f'<a:buAutoNum type="{bullet["numbering"]}"{start} />')
+        start = f' startAt="{int(bullet["start"])}"' if bullet['start'] != 1 else ''
+        parts.append(f'<a:buAutoNum type="{_xml_attribute(bullet["numbering"])}"{start} />')
     else:
         parts.append(f'<a:buChar char="{_xml_attribute(bullet["char"])}" />')
     parts.append('</a:pPr>')
@@ -125,7 +163,7 @@ def commands(layout):
                 props.update(name=element['id'], rows=str(element['row_count']), cols=str(element['column_count']))
                 result.append({'command': 'add', 'parent': parent, 'type': 'table', 'props': props})
                 result.append({'command': 'raw-set', 'part': parent,
-                    'xpath': f"//p:graphicFrame[p:nvGraphicFramePr/p:cNvPr[@name='{element['id']}']]/a:graphic/a:graphicData/a:tbl",
+                    'xpath': f"//p:graphicFrame[p:nvGraphicFramePr/p:cNvPr[@name={_xpath_literal(element['id'])}]]/a:graphic/a:graphicData/a:tbl",
                     'action': 'replace', 'xml': element['table_xml']})
                 continue
             if kind == 'image':
@@ -164,12 +202,12 @@ def commands(layout):
             result.append({'command': 'add', 'parent': parent, 'type': typ, 'props': props})
             if kind == 'shape' and element.get('custom_geometry'):
                 result.append({'command': 'raw-set', 'part': parent,
-                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr/a:prstGeom",
+                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]/p:spPr/a:prstGeom",
                     'action': 'replace', 'xml': element['custom_geometry']})
             if kind in ('text', 'list') and any(contract['inset'].values()):
                 inset = contract['inset']
                 margin = ','.join(_px(inset[side]) for side in ('left', 'top', 'right', 'bottom'))
-                result.append({'command': 'set', 'path': f'{parent}/shape[@name={element["id"]}]',
+                result.append({'command': 'set', 'path': f'{parent}/shape[@name={_safe_dsl_name(element["id"])}]',
                                'props': {'margin': margin}})
             if kind == 'list':
                 # The typed API has no bullet colour, so each item's paragraph properties are
@@ -177,7 +215,7 @@ def commands(layout):
                 for number in range(1, len(element['items']) + 1):
                     result.append({
                         'command': 'raw-set', 'part': parent,
-                        'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]"
+                        'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]"
                                   f"/p:txBody/a:p[{number}]/a:pPr"),
                         'action': 'replace',
                         'xml': list_paragraph_properties(contract, element['bullet'],
@@ -187,12 +225,12 @@ def commands(layout):
                 # + a14:m + m:oMathPara, plus the plain fallback the file already carries).
                 result.append({
                     'command': 'raw-set', 'part': parent,
-                    'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]"
+                    'xpath': (f"//p:sp[p:nvSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]"
                               "/p:txBody/a:p[1]"),
                     'action': 'replace', 'xml': element['omml']})
             if element.get('inline_math'):
                 result.append({'command': 'raw-set', 'part': parent,
-                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name='{element['id']}']]/p:txBody",
+                    'xpath': f"//p:sp[p:nvSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]/p:txBody",
                     'action': 'replace', 'xml': element['inline_xml']})
         if has_text:
             # OfficeCLI has typed line spacing and insets, but no typed bodyPr.wrap yet.
@@ -206,14 +244,14 @@ def commands(layout):
             props = {
                 'name': element['id'], 'shape': element['geometry'],
                 'x': _px(x), 'y': _px(y), 'width': _px(w), 'height': _px(h),
-                'from': f"{parent}/shape[@name={element['source_id']}]",
-                'to': f"{parent}/shape[@name={element['target_id']}]",
+                'from': f"{parent}/shape[@name={_safe_dsl_name(element['source_id'])}]",
+                'to': f"{parent}/shape[@name={_safe_dsl_name(element['target_id'])}]",
                 'fromIdx': str(element['start_site']), 'toIdx': str(element['end_site']),
                 'color': _color(element['line']), 'lineWidth': _pt(element['line_width']),
                 'headEnd': element['head_end'], 'tailEnd': element['tail_end']}
             result.append({'command': 'add', 'parent': parent, 'type': 'connector', 'props': props})
             if 'route' in element:
-                selector = f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr"
+                selector = f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]/p:spPr"
                 result.append({'command': 'raw-set', 'part': parent, 'xpath': selector+'/a:xfrm',
                                'action': 'setattr', 'xml': f"flipV={int(element['flip_v'])}"})
                 if 'flip_h' in element:
@@ -221,19 +259,19 @@ def commands(layout):
                                    'action': 'setattr', 'xml': f"flipH={int(element['flip_h'])}"})
                 if element['adjustments']:
                     xml = (f'<a:avLst xmlns:a="{_A_NS}">' + ''.join(
-                        f'<a:gd name="{key}" fmla="val {value}" />'
+                        f'<a:gd name="{_xml_attribute(key)}" fmla="val {_xml_attribute(value)}" />'
                         for key, value in element['adjustments'].items()) + '</a:avLst>')
                     result.append({'command': 'raw-set', 'part': parent,
                                    'xpath': selector+'/a:prstGeom/a:avLst',
                                    'action': 'replace', 'xml': xml})
             if element.get('line_dash'):
                 xml = (f'<a:ln xmlns:a="{_A_NS}" w="{round(element["line_width"]*9525)}">'
-                       f'<a:solidFill><a:srgbClr val="{_color(element["line"])}"/></a:solidFill>'
-                       f'<a:prstDash val="{element["line_dash"]}"/>'
-                       f'<a:headEnd type="{element["head_end"]}"/><a:tailEnd type="{element["tail_end"]}"/>'
+                       f'<a:solidFill><a:srgbClr val="{_xml_attribute(_color(element["line"]))}"/></a:solidFill>'
+                       f'<a:prstDash val="{_xml_attribute(element["line_dash"])}"/>'
+                       f'<a:headEnd type="{_xml_attribute(element["head_end"])}"/><a:tailEnd type="{_xml_attribute(element["tail_end"])}"/>'
                        '</a:ln>')
                 result.append({'command': 'raw-set', 'part': parent,
-                    'xpath': f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name='{element['id']}']]/p:spPr/a:ln",
+                    'xpath': f"//p:cxnSp[p:nvCxnSpPr/p:cNvPr[@name={_xpath_literal(element['id'])}]]/p:spPr/a:ln",
                     'action': 'replace', 'xml': xml})
         result.append({'command': 'add', 'parent': parent, 'type': 'notes',
                        'props': {'text': slide['notes']}})
@@ -253,9 +291,25 @@ def _run(executable, *args, timeout=180):
         raise ValueError(f'OfficeCLI {args[0]} failed: {completed.stderr[:500]} {payload}')
     data = payload.get('data')
     if args[0] == 'batch' and isinstance(data, dict) and data.get('outputFile'):
-        full_path = Path(data['outputFile'])
+        output_size = data.get('outputSize')
+        if isinstance(output_size, bool) or not isinstance(output_size, int) or not 0 <= output_size <= _SPILL_MAX_BYTES:
+            raise ValueError('OfficeCLI batch spill file size is invalid or exceeds limit')
+        raw_spill = Path(data['outputFile'])
+        if not raw_spill.is_absolute():
+            raise ValueError('OfficeCLI batch spill file must be an absolute path')
+        full_path = raw_spill.resolve()
+        allowed_roots = [Path(tempfile.gettempdir()).resolve()]
+        if len(args) > 1:
+            allowed_roots.append(Path(args[1]).resolve().parent)
+        batch_input = next((Path(args[i + 1]).resolve() for i in range(len(args) - 1) if args[i] == '--input'), None)
+        if batch_input is not None:
+            allowed_roots.append(batch_input.parent)
+        if not any(full_path == root or root in full_path.parents for root in allowed_roots):
+            raise ValueError(f'OfficeCLI batch spill file escapes expected directories: {full_path}')
+        if not full_path.is_file():
+            raise ValueError('OfficeCLI batch spill file does not exist')
         full_bytes = full_path.read_bytes()
-        if len(full_bytes) != data.get('outputSize'):
+        if len(full_bytes) != output_size:
             raise ValueError('OfficeCLI batch spill file size differs from its JSON envelope')
         payload['data'] = json.loads(full_bytes)
     return payload
@@ -304,11 +358,12 @@ def schema_error_count(payload):
     raise ValueError(f'OfficeCLI validate returned an unrecognised report: {payload}')
 
 
-def inspect(pptx_path, executable='officecli'):
+def inspect(pptx_path, executable='officecli', *, validated=False):
     """Read OfficeCLI's supplemental issue report from the flushed staging PPTX."""
-    validation = _run(executable, 'validate', pptx_path)
-    if schema_error_count(validation) != 0:
-        raise ValueError(f'OfficeCLI staging schema validation did not pass: {validation.get("data")}')
+    if not validated:
+        validation = _run(executable, 'validate', pptx_path)
+        if schema_error_count(validation) != 0:
+            raise ValueError(f'OfficeCLI staging schema validation did not pass: {validation.get("data")}')
     data = _run(executable, 'view', pptx_path, 'issues').get('data')
     if not isinstance(data, dict) or not isinstance(data.get('issues'), list):
         raise ValueError('OfficeCLI view issues returned an invalid JSON report')

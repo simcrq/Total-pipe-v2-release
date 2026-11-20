@@ -40,6 +40,30 @@ class MCPServerTests(unittest.TestCase):
 
             self.assertEqual(config["api"]["mineru"]["api_key"], "token-from-external-config")
 
+    def test_missing_ocr_deps_tracks_yaml_and_legacy_requests(self):
+        import builtins
+
+        real_import = builtins.__import__
+
+        def missing_yaml(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "yaml":
+                raise ImportError("no yaml")
+            return real_import(name, globals, locals, fromlist, level)
+
+        with patch.object(mcp_server, "load_config", return_value={}), patch("builtins.__import__", side_effect=missing_yaml):
+            self.assertIn("pyyaml", mcp_server.missing_ocr_deps())
+
+        def missing_requests(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "requests":
+                raise ImportError("no requests")
+            return real_import(name, globals, locals, fromlist, level)
+
+        with patch.object(mcp_server, "load_config", return_value={"api": {"mineru": {"mode": "api", "legacy_http": True}}}), patch("builtins.__import__", side_effect=missing_requests):
+            self.assertIn("requests", mcp_server.missing_ocr_deps())
+
+        with patch.object(mcp_server, "load_config", return_value={"api": {"mineru": {"mode": "official_cli"}}}), patch("builtins.__import__", side_effect=missing_requests):
+            self.assertNotIn("requests", mcp_server.missing_ocr_deps())
+
     def test_workflow_accepts_source_and_output_outside_project(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

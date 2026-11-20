@@ -12,6 +12,7 @@
 
 | 入口 | 用途 |
 | --- | --- |
+| [total-pipe-agent Skill](skills/total-pipe-agent/SKILL.md) | 调度题目、论文或已有产物。题目入口由 Agent 自拟内容与页面，再由 PageScene 生成可编辑 PPTX |
 | [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → page_design → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
 | `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
@@ -19,7 +20,7 @@
 | `python -m deck_compiler.mcp_server` | 低层 Total-pipe stdio MCP，配置为 [.mcp.advanced.json](.mcp.advanced.json)，服务名 `total_pipe_v3` |
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |
 
-编译器负责最终区域、文字与公式尺寸、几何约束和结构化反馈；OfficeCLI 是唯一的 PPTX 写入后端。
+Deck Compiler 负责最终区域、文字与公式尺寸、几何约束和结构化反馈，使用 OfficeCLI 写入 PPTX。PageScene 使用 python-pptx 写入显式页面对象。
 默认 Agent 的 RPA 阶段仅规范化内容，页面方案由独立 page_design 决定；RPA 独立 CLI 仍可做模板规划。
 Story 2.0 将科学断言与叙事段落分开，scientific_review 后由页面设计1.3分别声明所有权和复用；
 页面源文案实际审读后绑定 content_projection，原生caption及论文图号按语义实现；
@@ -35,9 +36,15 @@ IR 草稿可用四工具的 `advance.preview` 选页渲染：实际查看 PNG �
 
 ## 环境
 
-完整流水线使用 Python 3.12+、Node.js 22+；编译依赖见 [requirements.txt](requirements.txt)。
-生成 PPTX 需 OfficeCLI 1.0.152+，正式原生验收需 macOS / Windows 的 Microsoft PowerPoint。
+完整论文流水线使用 Python 3.12+ 和 Node.js 22+。Deck IR 构建需 OfficeCLI 1.0.152+，题目入口的 PageScene 构建使用 Python 3.12+ 和 [requirements.txt](requirements.txt)。
+正式原生验收需 macOS / Windows 的 Microsoft PowerPoint。
 PDF OCR、字体、可选数学度量和安装命令见 [环境清单](环境清单.md)。
+
+## 从题目生成 PPTX
+
+在本目录运行 `python -m agent start --source-kind topic --source "为什么二分查找更快" --out-dir /abs/output`。
+按返回的 `next_action` 自拟页面设计并实现 PageScene。题目入口无需论文、证据包或 RPA。
+[四工具题目入口](docs/agent-adapter.md#从题目开始)
 
 ## 从 Deck IR 编译
 
@@ -115,10 +122,10 @@ OfficeCLI `Text overflow` 警告估计记为 INFO，真实效果需看实际页�
 
 - [ExplainViz 自动讲解图](docs/explain-viz.md)：默认 auto；预留槽位、自动空白检测、正文区有限重排与跟随主题的图示着色，源文件不变，审计记录对象位置变化。可用 `--explain-viz-mode off` 禁用；[本轮实现与验证](../docs/explain-viz-auto-layout.md)。
 - [独立公式与矩阵](docs/deck-compiler-v2.md#formulas-component-formula)：原生 OMML、分式、根号、上下标、密集单双栏推导。
-- [显式行内公式](docs/inline-math.md)：正文、标题 / takeaway 和表格文字格；按逐行片段宽度及基线上下需求计算容量。
+- [行内公式与自动下标](docs/inline-math.md)：正文、标题、结论、图注和表格文字格自动排版 `V_OUT`、`V_G` 等下标，混排容量按片段宽度及基线上下需求计算。
 - [原生列表](docs/native-lists.md)：单条和多条正文可使用无序图标或连续编号，支持逐 block 样式、颜色和起始编号。布局按完整条目测量。
 - [四向图注与正文](docs/content-projection.md)：图片、流程图和独立公式可在布局树中绑定上、下、左、右的说明文字。
-- [可检索的脚本示例库](examples/library/README.md)：按版式或 IR 字段搜索、查看单项或编译候选。涵盖独立正文标记、A/B 路线、四向说明、原图导读、误差棒、合并表头、公式讲解和机制假设。
+- [可检索的脚本示例库](examples/library/README.md)：页面设计阶段可按讲解关系查构图，IR 阶段可按批准设计查实现。涵盖 A/B 路线、原图导读、公式讲解和机制假设等。
 - [图片来源](docs/deck-compiler-v2.md#figure-provenance-paper-generated-and-reference-images)：paper / generated / reference；用户参考裁图记录 reference_source，无需伪造论文图号或添加示意图图注。
 - [复合区域](docs/composite-layouts.md)：RPA 子布局检索 / 组合 / 自动选型，Deck IR 递归分配 columns、stack、panel、image_grid。
 - [复杂页 QA 与维护](docs/complex-page-qa.md)：stack 显式对齐、间隙上限 48 px / 居中 56 px、15% 留白反馈、合法相对权重与增量候选签收。

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tomllib
 import uuid
 import stat
@@ -115,7 +116,7 @@ def json_settings(text, jsonc=False):
 def portable_servers(servers):
     """Command-only runtimes can launch the same profiles from any cwd."""
     profile = 'agent' if 'total_pipe' in servers else 'advanced'
-    python = next(server['command'] for name, server in servers.items() if name != 'research_ppt')
+    python = next((server['command'] for name, server in servers.items() if name != 'research_ppt'), sys.executable)
     return {name: {'command': python, 'args': [str(COMPONENT/'agent/launch.py'),
                   '--profile', profile, '--service', name,
                   *(['--node', spec['command']] if name == 'research_ppt' else [])],
@@ -128,10 +129,11 @@ def _managed_entry(name, old):
     command = old.get('command')
     args = command[1:] if isinstance(command, list) else old.get('args', [])
     cwd, direct_args = MANAGED[name]
-    if old.get('cwd') == str(cwd) and args == direct_args:
+    if os.path.normcase(str(old.get('cwd') or '')) == os.path.normcase(str(cwd)) and args == direct_args:
         return True
-    return (isinstance(args, list) and len(args) >= 5 and args[:2] ==
-            [str(COMPONENT/'agent/launch.py'), '--profile'] and args[3:5] == ['--service', name])
+    launcher = os.path.normcase(str(COMPONENT/'agent/launch.py'))
+    return (isinstance(args, list) and len(args) >= 5 and os.path.normcase(str(args[0])) == launcher
+            and args[1] == '--profile' and args[3:5] == ['--service', name])
 
 
 def json_config(text, servers, force=False, *, client='claude', opencode_default='2'):
@@ -204,7 +206,10 @@ def write_config(path, text, updated, dry_run=False):
             stream.write(path.read_bytes())
     temp = path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
-    with os.fdopen(os.open(temp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode), 'w', encoding='utf-8') as stream:
-        stream.write(updated)
-    os.replace(temp, path)
+    try:
+        with os.fdopen(os.open(temp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, mode), 'w', encoding='utf-8') as stream:
+            stream.write(updated)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
     return {'path': str(path), 'changed': True, 'backup': str(backup) if backup else None}

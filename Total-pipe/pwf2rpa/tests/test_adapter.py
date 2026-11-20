@@ -691,6 +691,30 @@ class BodyAndEvidenceTexts(unittest.TestCase):
         briefs, _ = build_briefs(specs, self.workflow)
         self.assertEqual(briefs[0]["evidence_texts"], explicit)
 
+    def test_extended_rpa_fields_forward_without_unknown_warnings(self):
+        specs = [{
+            "slide_id": "SLIDE0007",
+            "category_hint": "figure_text",
+            "title": "扩展字段转发",
+            "secondary_messages": ["补充结论"],
+            "text_flow": "plain",
+            "visual_safety_margin": 0.15,
+            "evidence_ids": ["EV0001"],
+            "visuals": [{
+                "visual_type": "composite_figure_region",
+                "source_id": "SRC0001",
+                "source_visual_id": "fig1",
+                "region_id": "panel_a",
+                "semantic_relation": "parallel_evidence",
+                "visual_safety_margin": 0.15,
+            }],
+        }]
+        briefs, warnings = build_briefs(specs, self.workflow)
+        self.assertEqual([w for w in warnings if w.code in ("BRIEF_UNKNOWN_FIELD", "VISUAL_UNKNOWN_FIELD")], [])
+        self.assertEqual(briefs[0]["slide_id"], "SLIDE0007")
+        self.assertEqual(briefs[0]["visual_safety_margin"], 0.15)
+        self.assertEqual(briefs[0]["visuals"][0]["semantic_relation"], "parallel_evidence")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,7 +1,9 @@
 """Science-record preservation, audience-copy authority, scoped qualifiers and review gates."""
 import copy
+import json
 from pathlib import Path
 import shutil
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -363,7 +365,18 @@ class ProjectionRunnerTests(AgentCase):
         self.assertNotIn('Preserve complete scientific body, key_points', prompt['instructions'])
         lookup = prompt['example_lookup']
         self.assertTrue(Path(lookup['command_prefix'][1]).is_file())
-        self.assertNotIn('example_lookup', read(work/'page_design_prompt.json'))
+        design_prompt = read(work/'page_design_prompt.json')
+        design_lookup = design_prompt['example_lookup']
+        self.assertEqual(design_lookup['command_prefix'], lookup['command_prefix'])
+        self.assertEqual(design_lookup['index_path'], lookup['index_path'])
+        self.assertIn('讲解关系', design_lookup['instructions'])
+        self.assertIn('example_lookup.command_prefix', (work/'page_design_task.md').read_text(encoding='utf-8'))
+        self.assertNotIn('design_forms', design_prompt)
+        matches = json.loads(subprocess.check_output(
+            [*design_lookup['command_prefix'], 'search', '原图导读 图文并排', '--limit', '1'],
+            cwd=work, text=True,
+        ))
+        self.assertEqual([entry['id'] for entry in matches], ['figure-readout'])
         for page in result['next_action']['page_authoring']['pages']:
             page_lookup = read(Path(page['input_path']))['example_lookup']
             self.assertLessEqual(len(page_lookup.pop('suggestions')), 2)

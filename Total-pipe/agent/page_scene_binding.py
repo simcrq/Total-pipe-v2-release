@@ -1,10 +1,7 @@
-"""Bind an authored PageScene to the approved page design and Story evidence.
+"""Bind an authored PageScene to its page design.
 
-PageScene is deliberately a *page geometry* contract, not a second scientific
-authority.  A scene may use literal display copy only when it is byte-for-byte
-the approved copy; otherwise it must use ``copy_ref`` keys from this binder.
-The binder also carries the design's evidence anchors and rejects new numeric
-claims that are absent from the approved design / Story / evidence corpus.
+Paper jobs bind the approved display copy, Story and evidence anchors. Topic
+jobs bind the page sequence, optional copy references and image resources.
 """
 from __future__ import annotations
 
@@ -276,6 +273,71 @@ def _expected_carriers(page):
     return required
 
 
+def _canonical_pages(value, design_pages, bindings, allow_partial, svg_root=None):
+    if not isinstance(value, dict) or value.get('schema_version') != '0.1':
+        raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene must be a 0.1 JSON object.')
+    pages = value.get('pages')
+    if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
+        raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene pages must be a list of objects.')
+    if any(not isinstance(page.get('id'), str) for page in pages):
+        raise SceneBindingError('PAGE_SCENE_INVALID', 'Each PageScene page requires a string id.')
+    if allow_partial:
+        submitted = {page['id'] for page in pages}
+        design_pages = [page for page in design_pages if page['id'] in submitted]
+    if not pages or len(pages) != len(design_pages):
+        raise SceneBindingError(
+            'PAGE_SCENE_PAGE_COUNT',
+            f'PageScene has {len(pages)} pages; page design has {len(design_pages)}.')
+    for index, (page, planned) in enumerate(zip(pages, design_pages), 1):
+        if page['id'] != planned['id']:
+            raise SceneBindingError('PAGE_SCENE_PAGE_ORDER',
+                                    f'Page {index} is {page["id"]!r}; page design expects {planned["id"]!r}.')
+
+    from .page_recipes import expand_page
+    canonical = copy.deepcopy(value)
+    for index, page in enumerate(canonical['pages']):
+        if page.get('recipe'):
+            try:
+                canonical['pages'][index] = expand_page(page, bindings, svg_root)
+            except (KeyError, TypeError, ValueError) as error:
+                raise SceneBindingError(
+                    'PAGE_SCENE_RECIPE_INVALID',
+                    f'{page["id"]}: recipe {page["recipe"]!r} cannot expand: {error}') from error
+    return canonical, design_pages
+
+
+def _bind_topic_scene(value, work, request, source_dir, allow_partial):
+    from .topic import check_design
+
+    try:
+        design = read(work/'page_design.json')
+        check_design(design, request.get('slide_count'))
+    except (OSError, ValueError) as error:
+        raise SceneBindingError('PAGE_SCENE_DESIGN_REQUIRED', str(error)) from error
+
+    bindings = copy_bindings(design)
+    canonical, plans = _canonical_pages(value, design['pages'], bindings, allow_partial, work)
+    canonical.setdefault('deck_id', design['deck_id'])
+    canonical['bindings'] = bindings
+    canonical['provenance'] = {'schema_version': '1.0', 'mode': 'topic', 'design_sha256': digest(design)}
+    report = {**canonical['provenance'], 'pages': []}
+    for page, plan in zip(canonical['pages'], plans):
+        for label, ref in _copy_refs(page):
+            if not isinstance(ref, str) or ref not in bindings:
+                raise SceneBindingError('PAGE_SCENE_COPY_UNRESOLVED',
+                                        f'{page["id"]}/{label}: unresolved copy_ref {ref!r}')
+        for field in ('title', 'take', 'notes'):
+            page.setdefault(field, plan.get(field, ''))
+        page.setdefault('footer', False)
+        for obj in _walk_objects(page.get('objects')):
+            if obj.get('type') == 'image':
+                obj['path'] = _image_path(obj, source_dir or work)
+            if obj.get('type') == 'formula' and obj.get('copy_ref'):
+                obj.setdefault('latex', bindings[obj['copy_ref']])
+        report['pages'].append({'id': page['id'], 'title': _resolve_field(page, 'title', bindings)})
+    return canonical, report
+
+
 def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
     """Validate and canonicalize a PageScene against the approved page design.
 
@@ -283,9 +345,11 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
     against ``source_dir`` (normally the submitted artifact's directory) before
     the canonical scene is written to ``work/page_scene.json`` by the caller.
     """
-    from .adapters import load_design, Failure
-
     work = Path(work)
+    if (request or {}).get('source_kind') == 'topic':
+        return _bind_topic_scene(value, work, request, source_dir, allow_partial)
+
+    from .adapters import load_design, Failure
     try:
         design = load_design(work)
     except Failure as error:
@@ -313,37 +377,10 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
                     'PAGE_SCENE_SUPPLEMENT_NOT_ENABLED',
                     f'{page.get("id")}: the approved design contains supplement copy, '
                     'but this job did not enable supplement content.')
-    if not isinstance(value, dict) or value.get('schema_version') != '0.1':
-        raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene must be a 0.1 JSON object.')
-    pages = value.get('pages')
-    if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
-        raise SceneBindingError('PAGE_SCENE_INVALID', 'PageScene pages must be a list of objects.')
-    from .page_recipes import expand_page
-    expanded = []
-    for page in pages:
-        if not page.get('recipe'):
-            expanded.append(page)
-            continue
-        try:
-            expanded.append(expand_page(page, bindings))
-        except (KeyError, TypeError, ValueError) as error:
-            raise SceneBindingError(
-                'PAGE_SCENE_RECIPE_INVALID',
-                f'{page.get("id", "?")}: recipe {page.get("recipe")!r} cannot expand: {error}') from error
-    pages = expanded
-    value = copy.deepcopy(value)
-    value['pages'] = pages
-    if allow_partial:
-        submitted = {page.get('id') for page in pages}
-        design_pages = [page for page in design_pages if page['id'] in submitted]
-    if not pages or len(pages) != len(design_pages):
-        raise SceneBindingError(
-            'PAGE_SCENE_PAGE_COUNT',
-            f'PageScene has {len(pages)} pages; approved design has {len(design_pages)}.')
+    canonical, design_pages = _canonical_pages(value, design_pages, bindings, allow_partial, work)
     known_numbers = _numbers(_corpus(design, story, evidence))
     report = {'schema_version': '1.0', 'design_sha256': digest(design),
               'copy_refs': len(bindings), 'pages': [], 'issues': []}
-    canonical = copy.deepcopy(value)
     canonical['bindings'] = bindings
     canonical['provenance'] = {
         'schema_version': '1.0',
@@ -352,12 +389,8 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
         'evidence_count': len(evidence),
         'mode': 'page_design_binding',
     }
-    for index, (page, approved) in enumerate(zip(pages, design_pages), 1):
-        pid = approved.get('id') or page.get('id')
-        if page.get('id') != pid:
-            raise SceneBindingError(
-                'PAGE_SCENE_PAGE_ORDER',
-                f'Page {index} is {page.get("id")!r}; approved design expects {pid!r}.')
+    for page, approved in zip(canonical['pages'], design_pages):
+        pid = approved['id']
         copies = _page_copy(approved)
         require = _expected_carriers(approved)
         approved_title, approved_take = _approved_title(approved, copies), _approved_take(approved, copies)
@@ -448,23 +481,20 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
                 'PAGE_SCENE_COPY_DRIFT',
                 f'{pid}: visible copy differs from this page\'s approved text: '
                 f'{unapproved[0]!r}. Revise page_design and review it before changing copy.')
-        canonical_page = canonical['pages'][index - 1]
-        for obj in _walk_objects(canonical_page.get('objects')):
-            if obj.get('type') == 'formula' and obj.get('copy_ref'):
-                obj['latex'] = standalone_math(bindings[obj['copy_ref']])
+        for obj in _walk_objects(page.get('objects')):
             if obj.get('type') == 'image':
                 obj['path'] = _image_path(obj, Path(source_dir) if source_dir else work)
-        canonical_page['title'] = title
-        canonical_page['take'] = take
+        page['title'] = title
+        page['take'] = take
         if approved_title:
-            canonical_page['title_ref'] = f'{pid}.title'
+            page['title_ref'] = f'{pid}.title'
         else:
-            canonical_page.pop('title_ref', None)
+            page.pop('title_ref', None)
         if approved_take:
-            canonical_page['take_ref'] = f'{pid}.take'
+            page['take_ref'] = f'{pid}.take'
         else:
-            canonical_page.pop('take_ref', None)
-        canonical_page['evidence_refs'] = evidence_refs
+            page.pop('take_ref', None)
+        page['evidence_refs'] = evidence_refs
         report['pages'].append({'id': pid, 'title': title, 'take': take,
                                 'required_copy': sorted(require), 'used_copy': sorted(used),
                                 'evidence_refs': evidence_refs})

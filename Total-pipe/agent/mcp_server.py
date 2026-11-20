@@ -1,19 +1,23 @@
 """Four-tool server reusing the existing stdio transport (no MCP client)."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from . import COMPONENT, VERSION
 from .doctor import doctor
+from .requests import PAGE_MODES, SOURCE_KINDS
 from .runner import start, advance, status
 
 spec = importlib.util.spec_from_file_location('agent_transport', COMPONENT/'pwf2rpa/integrations/mcp/server.py')
 transport = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(transport)
 transport.SERVER_NAME, transport.SERVER_VERSION = 'total-pipe-agent', VERSION
-transport.INSTRUCTIONS = ('Drive the evidence-to-candidate workflow using next_action. Read only the indicated full prompt. '
+transport.INSTRUCTIONS = ('Drive the workflow using next_action. Read only the indicated full prompt. '
+    'For a topic or question, start with source_kind=topic and the text as source. Author topic content and page design, '
+    'use the example library as needed, then implement PageScene. Model delegation is optional for topic jobs. '
     'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
-    'Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
+    'Paper Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
     'When status is running, call advance; when blocked, resolve the reported issue. '
     'New atomic Stories use scientific_review before RPA, page design 1.3 and actual source/copy review before IR. '
     'Scientific records are archived; approved audience copy and scoped qualifiers must be visible. Never auto-attest review. '
@@ -22,19 +26,22 @@ transport.INSTRUCTIONS = ('Drive the evidence-to-candidate workflow using next_a
 
 STRING = {'type': 'string', 'minLength': 1}
 DEFINITIONS = {
-    'totalpipe_doctor': (doctor, {'deep': {'type': 'boolean'}, 'source_kind': {'type': 'string', 'enum': ['pdf','markdown','workflow','deck_ir']},
-        'page_mode': {'type': 'string', 'enum': ['deck_ir','page_scene'], 'default': 'deck_ir'}}, []),
-    'totalpipe_start': (start, {'source': STRING, 'out_dir': STRING, 'language': STRING, 'presentation_type': STRING,
-        'source_kind': {'type': 'string', 'enum': ['auto','pdf','markdown','workflow','deck_ir']}, 'requirements': {'type': 'string'},
+    'totalpipe_doctor': (doctor, {'deep': {'type': 'boolean'}, 'source_kind': {'type': 'string', 'enum': list(SOURCE_KINDS)},
+        'page_mode': {'type': 'string', 'enum': list(PAGE_MODES),
+                      'description': 'Defaults to page_scene for topic, deck_ir otherwise.'}}, []),
+    'totalpipe_start': (start, {'source': {**STRING, 'description': 'Absolute file path, or raw topic/question text for source_kind=topic.'},
+        'out_dir': STRING, 'language': {**STRING, 'description': 'Required for file sources. Topics default to auto.'},
+        'presentation_type': {**STRING, 'description': 'Required for file sources. Topics default to custom.'},
+        'source_kind': {'type': 'string', 'enum': ['auto', *SOURCE_KINDS]}, 'requirements': {'type': 'string'},
         'queries': {'type': 'array'}, 'supplementary_paths': {'type': 'array', 'items': STRING},
         'supplementary_content_included': {'type': 'boolean'},
         'supplement': {'type': 'string', 'enum': ['off', 'inline', 'pages', 'both']},
         'explain_viz_mode': {'enum': ['auto', 'off', 'prefer'], 'default': 'auto',
                              'description': 'Automatic native teaching diagrams and bounded body reflow; off disables.'},
-        'page_mode': {'type': 'string', 'enum': ['deck_ir', 'page_scene'], 'default': 'deck_ir',
-                      'description': 'deck_ir preserves the full compiler/OfficeCLI object model; page_scene builds explicit native page boxes with PageScene path/formula/chart support.'},
+        'page_mode': {'type': 'string', 'enum': list(PAGE_MODES),
+                      'description': 'Topics use page_scene. File sources default to deck_ir; page_scene builds explicit native page boxes.'},
         'slide_count': {'type': 'integer', 'minimum': 1, 'maximum': 40,
-                        'description': 'Final paper-page target, independent of Story nodes/briefs; standalone supplement pages are extra.'}}, ['source','out_dir','language','presentation_type']),
+                        'description': 'Optional page target. For paper jobs standalone supplement pages are extra.'}}, ['source','out_dir']),
     'totalpipe_advance': (advance, {'job_id': STRING, 'artifact_kind': {'type': 'string', 'enum': ['queries','story_plan','scientific_review','page_design','page_design_review','page_scene','deck_ir','deck_ir_page','visual_proposal','deck_ir_patch']},
         'artifact_path': STRING, 'preflight': {'type': 'boolean', 'description': 'Validate Deck IR and geometry without acceptance, writes to the job or revision accounting.'}, 'inputs': {'type': 'object', 'properties': {'model': STRING,
             'reasoning_effort': {'type': 'string', 'enum': ['high','xhigh','max','ultra']}, 'selected_by_user': {'const': True}},
@@ -68,15 +75,45 @@ def validate(value, schema):
         for key, item in value.items():
             if key in properties:
                 validate(item, properties[key])
+    elif 'required' in schema and isinstance(value, dict):
+        if any(k not in value for k in schema['required']):
+            raise ValueError('Missing required arguments')
     if expected == 'array':
         if len(value) < schema.get('minItems', 0):
             raise ValueError('Array is empty')
+        if 'maxItems' in schema and len(value) > schema['maxItems']:
+            raise ValueError('Array exceeds maxItems')
+        if schema.get('uniqueItems'):
+            encoded = [json.dumps(item, sort_keys=True, ensure_ascii=False) for item in value]
+            if len(set(encoded)) != len(encoded):
+                raise ValueError('Array items must be unique')
         for item in value:
             validate(item, schema.get('items', {}))
-    if expected == 'string' and len(value.strip()) < schema.get('minLength', 0):
-        raise ValueError('String is empty')
+    if expected == 'string':
+        if len(value.strip()) < schema.get('minLength', 0):
+            raise ValueError('String is empty')
+        if 'pattern' in schema and not re.search(schema['pattern'], value):
+            raise ValueError('String does not match required pattern')
     if expected == 'integer' and not schema.get('minimum', value) <= value <= schema.get('maximum', value):
         raise ValueError('Integer outside supported range')
+    if 'not' in schema:
+        try:
+            validate(value, schema['not'])
+        except ValueError:
+            pass
+        else:
+            raise ValueError('Value matches forbidden schema branch')
+    for branch_key, exact_one in (('anyOf', False), ('oneOf', True)):
+        if branch_key in schema:
+            matched = 0
+            for subschema in schema[branch_key]:
+                try:
+                    validate(value, subschema)
+                    matched += 1
+                except ValueError:
+                    continue
+            if (matched != 1) if exact_one else (matched == 0):
+                raise ValueError(f'Value failed {branch_key} constraint')
 
 
 transport.TOOLS = {}
@@ -84,14 +121,15 @@ for name, (function, properties, required) in DEFINITIONS.items():
     schema = {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}
     def handler(arguments, function=function, schema=schema):
         validate(arguments, schema)
-        for key in ('source', 'out_dir', 'artifact_path'):
+        paths = ('out_dir', 'artifact_path') if arguments.get('source_kind') == 'topic' else ('source', 'out_dir', 'artifact_path')
+        for key in paths:
             if key in arguments and not Path(arguments[key]).is_absolute():
                 raise ValueError(f'{key} must be an absolute path')
         if any(not Path(path).is_absolute() for path in arguments.get('supplementary_paths', [])):
             raise ValueError('supplementary_paths must be absolute')
         return function(**arguments)
     transport.TOOLS[name] = {'description': {'totalpipe_doctor': 'Check prerequisites and candidate/native capabilities.',
-        'totalpipe_start': 'Start or resume a job from PDF, Markdown, workflow or Deck IR; never supplies a model implicitly.',
+        'totalpipe_start': 'Start or resume a job from a topic, PDF, Markdown, workflow or Deck IR.',
         'totalpipe_advance': 'Accept an explicit artifact or user input, then advance until the next decision or candidate. scene_preview renders selected PageScene pages natively without acceptance.',
         'totalpipe_status': 'Read state and QA without writes or running components. Defaults to a compact summary; detail=full adds request and artifact inventory.'}[name],
         'handler': handler, 'inputSchema': schema, 'timeout': 1800}

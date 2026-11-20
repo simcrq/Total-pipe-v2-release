@@ -163,7 +163,7 @@ class EvidenceGraphV4Tests(unittest.TestCase):
             source.write_text(
                 "# Paper title\n\n"
                 "## Methods\nThe sample was prepared by thermal curing.\n\n"
-                "## Results\nThe sample remained stable after testing.\n\n"
+                "## Results\nThe results demonstrate that the sample remained stable after testing.\n\n"
                 "## Conclusion\nThe result supports the mechanism.\n",
                 encoding="utf-8",
             )
@@ -179,6 +179,7 @@ class EvidenceGraphV4Tests(unittest.TestCase):
             )
 
             self.assertEqual(workflow["schema_version"], 4)
+            self.assertTrue(all(item["results"] for item in workflow["evidence"]))
             self.assertEqual(workflow["evidence"][0]["canonical_query_id"], workflow["evidence"][1]["canonical_query_id"])
             texts = [item["text"] for item in workflow["evidence_registry"]]
             self.assertEqual(len(texts), len(set(texts)))
