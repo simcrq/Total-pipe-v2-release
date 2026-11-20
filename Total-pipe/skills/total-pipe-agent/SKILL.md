@@ -7,7 +7,7 @@ description: 从题目、问题、论文 PDF、Markdown、已有证据包或 Dec
 
 默认服务是 `total_pipe`，有 doctor / start / advance / status 四个工具。先用 totalpipe_doctor 确认能力，PDF 输入需核对 OCR 认证与依赖。安装与回切见 [接入层用法](../../docs/agent-adapter.md)。
 
-只有题目或问题时，用 source_kind=topic，把题目原文作为 source，提供 out_dir。Agent 在 page_design 自拟内容、按需查示例库，再直接写 PageScene。用户明确要求指定模型时，在 page_design 通过 advance.inputs 选择子代理。按 next_action 推进和导出。[题目入口](../../docs/agent-adapter.md#从题目开始)
+只有题目或问题时，用 source_kind=topic，把题目原文作为 source，提供 out_dir。Agent 在 page_design 先查看 `example_lookup.recommended`/`catalog` 并打开匹配案例，再直接写 PageScene（同样参考 `example_lookup.per_page_suggestions`，避免单列大留白）。用户明确要求指定模型时，在 page_design 通过 advance.inputs 选择子代理。按 next_action 推进和导出。[题目入口](../../docs/agent-adapter.md#从题目开始)
 
 文件入口用 source、out_dir、language、presentation_type，source_kind 支持 auto/pdf/markdown/workflow/deck_ir。slide_count 是最终论文页目标（1–40），独立补充文字页另计。论文的 page_mode=page_scene 在 page_review 后写显式 box，默认 deck_ir 保留全部高级对象。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对；只有内容已进入分析输入时，才传 supplementary_content_included=true。
@@ -30,7 +30,7 @@ queries 是对象数组，含唯一 id、query，可选 intent。若论文的主
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
 Story 后按 next_action 进入 scientific_review：主 Agent 读完整任务、提示、Schema、原文和实际SI，实际审查单位粒度、来源及遗漏的初始化/对照/负面结果；禁止自动 pass，失败回退 Story。
 RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完成；完整读 work/page_design_task.md、page_design_prompt.json、schema_path。
-页面设计时可用 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 2`，按需打开一份匹配示例。参考构图、视觉关系和讲解顺序，文案和证据来自当前 Story。
+页面设计时先查看 `example_lookup.recommended`/`catalog`，用 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 3` 并 `show <id>` 打开至少 1–2 份匹配示例。参考其多区构图、视觉关系和空间占比（目标覆盖正文带约 45%–75%，避免单列大留白），文案和证据来自当前 Story。PageScene 阶段同样参考 `page_catalog[].example_suggestions` / `example_lookup`，并核对 `PAGE_SCENE_SPARSE_LAYOUT` 留白指标。
 页面设计1.3中 content_refs 将科学单元恰好分配一次；reuse_refs 明确再次展示的主张，只有直接限定这些可见主张的条件随页出现，不能整包继承叙事段落。
 display_copy 是实际投屏文案，content_map 指定可见载体或允许入讲稿的细节；重要条件、对照、负面结果和不确定性不能隐藏。
 选图须实际查看；figures列精确资产ID，figure_sources记录真实图号。来源标签与观众图注分开绑定，图号不是实验数值，不能删图号换PASS。

@@ -956,6 +956,22 @@ def execute(stage, job):
         projection = bool(story.get('content_contract'))
         atomic = (story.get('content_contract') or {}).get('version') == '2.0'
         design_version = '1.3' if atomic else '1.2'
+        design_lookup = example_lookup(DESIGN_EXAMPLE_TASK)
+        try:
+            from deck_compiler.example_index import catalog_brief, inventory, suggest_for_text
+            lib_entries = inventory()
+            story_hints = [
+                str(request.get('requirements') or ''),
+                str(story.get('core_question') or ''),
+                str(story.get('main_message') or ''),
+                *(str(node.get('question') or '') + ' ' + str(node.get('answer') or '')
+                  for node in (story.get('story') or []) if isinstance(node, dict)),
+                '原图导读' if figures else '',
+            ]
+            design_lookup['catalog'] = catalog_brief(lib_entries)
+            design_lookup['recommended'] = suggest_for_text(' '.join(story_hints), lib_entries, limit=5)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
         prompt = {
             'request': prompt_request(request),
             'room': {
@@ -971,7 +987,7 @@ def execute(stage, job):
             'evidence': evidence,
             'figures': figures,
             'recipes': recipe_capabilities(),
-            'example_lookup': example_lookup(DESIGN_EXAMPLE_TASK),
+            'example_lookup': design_lookup,
             'schema_path': str(COMPONENT/'schemas'/(f'page-design-v{design_version}.schema.json' if projection else 'page-design.schema.json')),
             'workflow_root': str(Path(workflow).parent),
             'content_catalog': {source: {key: binding[key] for key in ('evidence', 'policy') if key in binding}

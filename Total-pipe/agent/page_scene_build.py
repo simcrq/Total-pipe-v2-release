@@ -117,6 +117,26 @@ def build(work, out, request=None):
         items.append(issue('PAGE_SCENE_EXPRESSION_GATE', 'FAIL',
                            '; '.join(gate['failures']),
                            detector='page-scene-expression', renderer='python-pptx'))
+    for slide_no, metric in enumerate(metrics, 1):
+        if metric.get('sparse'):
+            items.append(issue(
+                'PAGE_SCENE_SPARSE_LAYOUT',
+                'REVIEW',
+                (
+                    f"{metric['page_id']}: body visible ink covers only {metric['body_coverage']:.0%} "
+                    f"(largest empty zone {metric['largest_empty_ratio']:.0%}, "
+                    f"{metric['empty_quadrants']}/4 empty quadrants). Rebalance with a multi-zone "
+                    "composition or consult examples/library."
+                ),
+                slide_no,
+                detector='page-scene-spatial',
+                renderer='python-pptx',
+                body_coverage=metric['body_coverage'],
+                whitespace_ratio=metric['whitespace_ratio'],
+                largest_empty_box=metric['largest_empty_box'],
+                largest_empty_ratio=metric['largest_empty_ratio'],
+                empty_quadrants=metric['empty_quadrants'],
+            ))
     items.append(issue('PAGE_SCENE_BUILT', 'INFO',
                        f'PageScene rendered {len(scene["pages"])} native slides from explicit boxes.',
                        detector='page-scene-build', renderer='python-pptx'))

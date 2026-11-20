@@ -501,6 +501,40 @@ def bind(value, work, request=None, source_dir=None, *, allow_partial=False):
     return canonical, report
 
 
+def _scene_example_lookup(design, request=None):
+    """Attach example library catalog and per-page matches for PageScene authoring."""
+    from .prompts import example_lookup
+    instructions = (
+        '实现页面几何前，先对照 example_lookup.per_page_suggestions 和 example_lookup.catalog，'
+        '用 example_lookup.command_prefix 执行 `show <id>` 查看匹配的示例脚本，借鉴多区构图、视觉层级和空间占比。'
+        '非封面页主体带 [0.72, 2.20, 11.893, 4.80] 目标可见覆盖率 45%–75%，避免保守的单列稀疏排版或大片空洞留白。'
+    )
+    lookup = example_lookup(instructions)
+    try:
+        from deck_compiler.example_index import catalog_brief, inventory, suggest_for_text
+        entries = inventory()
+        lookup['catalog'] = catalog_brief(entries)
+        per_page = {}
+        req_text = str((request or {}).get('requirements') or '')
+        for page in (design.get('pages') if isinstance(design, dict) else []) or []:
+            pid = page.get('id')
+            if not pid:
+                continue
+            raw_design = page.get('design')
+            design_text = raw_design if isinstance(raw_design, str) else str(raw_design or '')
+            hints = [
+                str(page.get('title') or ''),
+                design_text,
+                '原图导读' if page.get('figures') else '',
+                req_text,
+            ]
+            per_page[pid] = suggest_for_text(' '.join(hints), entries, limit=3)
+        lookup['per_page_suggestions'] = per_page
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return lookup
+
+
 def prepare(work, request):
     """Write the PageScene authoring prompt and task; no scientific content."""
     from .adapters import load_design
@@ -532,10 +566,16 @@ def prepare(work, request):
             pass
     catalog = page_copy_catalog(design)
     bindings = copy_bindings(design)
+    lookup = _scene_example_lookup(design, request)
+    per_page = lookup.get('per_page_suggestions') or {}
+    for entry in catalog:
+        if entry.get('id') in per_page:
+            entry['example_suggestions'] = per_page[entry['id']]
     prompt = {
         'schema_path': str(SCHEMA),
         'request': prompt_request(request or {}),
         'recipes': capabilities(),
+        'example_lookup': lookup,
         'page_design': design,
         'page_catalog': catalog,
         'copy_bindings': bindings,
@@ -563,60 +603,71 @@ PAGE_SCENE_INSTRUCTIONS = (
     'including recipe-generated labels/captions, table cells, formulas and chart titles/axis labels/'
     'categories/series names. A section label must match this page\'s approved section or display_copy. '
     'Revise and review page_design first if a new label or sentence is needed. '
-    'One idea per page: a main visual plus at most three short '
-    'conclusions. Prefer a recipe page when one fits: {"id":"P1","recipe":"cover","slots":{...}}. '
+    'Before writing page geometry, inspect page_catalog[].example_suggestions and example_lookup.catalog, '
+    'and open matching reference scripts via example_lookup.command_prefix (`show <id>`) to see how '
+    'multi-zone layouts (comparison lanes, directional annotations, native charts/tables/formulas, '
+    'paired diagrams) balance the canvas. '
+    'One clear scientific claim per page, realized with purposeful spatial coverage: target 45%-75% '
+    'visible ink utilization across the body band [0.72, 2.20, 11.893, 4.80] in inches, avoiding '
+    'conservative single-column sparse pages or large contiguous blank zones (>=42% empty body). '
+    'Use a recipe page when one genuinely matches the page\'s visual richness: '
+    '{"id":"P1","recipe":"cover","slots":{...}}; when a recipe would leave the page sparse or flatten '
+    'a multi-zone design, author explicit native objects inspired by the matched library examples. '
     'A slot value may be {"copy_ref":"P1.take"} so approved copy is bound by the tool. Available '
     'recipes and slots are in prompt.recipes; recipe mode owns geometry and native affordances. '
     'Every raw object needs an explicit box in inches [x,y,w,h]; no auto-layout. The renderer '
     'draws the section chip, title and highlighted takeaway band automatically; set section as '
     '"NN · LABEL" and use title_ref/take_ref plus optional title_emphasis/take_emphasis. In the body, '
-    'build two to four labelled zones rather than one full-width bullet stack: a visual, a short '
-    'readout, and an implication. Use chips/shapes for subheads and large numbers for key metrics. '
+    'build two to four labelled zones rather than one full-width bullet stack: a main visual/diagram/'
+    'comparison, a structured readout, and an implication or parameter summary. Use chips/shapes for '
+    'subheads and large numbers for key metrics. '
     'On a figure page, name the panels, axes/conditions and feature to look at in the caption or a '
-    'nearby label; do not leave the figure as an unlabelled assertion. Use white space, thin accent '
-    'rules and small labels; avoid card-like filled containers and large dark fill blocks. Prefer '
+    'nearby label; do not leave the figure as an unlabelled assertion. Use clean breathing room, thin '
+    'accent rules and small labels; avoid card-like filled containers and large dark fill blocks. Prefer '
     'native text/list/group/image/shape/line/table/path/formula/chart. Use path with view_box and '
     'absolute M/L/C/Q/Z commands for editable curves. For an approved standalone equation, '
     'use type=formula with copy_ref to the complete marked equation; the binder supplies exact latex for OMML. '
     'Keep explicitly marked inline equations in the approved prose. Use chart with a '
     'native editable chart data object. Group children are relative to the group origin. Put '
     'speaker notes in page.notes. Do not put production notes, review text, audit caveats or deck '
-    'metadata on the slide; limitations belong on one boundary page or in notes. Check density before '
-    'submitting: <=14 objects, <=4 body blocks, <=260 body characters, <=3 images/tables/charts, '
-    'body >=18 pt, label >=11 pt, caption >=8.5 pt. Preview individual pages through scene_preview '
+    'metadata on the slide; limitations belong on one boundary page or in notes. Check density and '
+    'spatial coverage before submitting: <=14 objects, <=4 body blocks, <=260 body characters, '
+    '<=3 images/tables/charts, body >=18 pt, label >=11 pt, caption >=8.5 pt, and no sparse non-cover '
+    'pages flagged by PAGE_SCENE_SPARSE_LAYOUT. Preview individual pages through scene_preview '
     'and inspect the PowerPoint PNG before acceptance.'
 )
 
 
 def scene_task(prompt):
     pages = len(prompt.get('page_catalog') or [])
-    boxes = sum(len(item.get('display_copy') or []) for item in prompt.get('page_catalog') or [])
     return f"""# PageScene 任务（显式页面几何）
 
 完整读取 `work/page_scene_prompt.json` 和 schema_path 指向的 PageScene Schema。输出
 `work/page_scene.json`，共 {pages} 页，对应已批准的 page_design 页面顺序。
 
+- **先参考案例库再排布几何**：查看每页 `page_catalog[].example_suggestions` 和 `example_lookup.catalog`，
+  用 `example_lookup.command_prefix` 执行 `show <id>` 打开匹配示例（如双路线对照、四向读图、公式+参数表、
+  多区综合页），借鉴其视觉分区、比例关系和空间利用，不要保守地退回单列短要点或大块空白页。
 - 页面文案以 `copy_bindings` 为唯一来源。标题/结论用 `title_ref`/`take_ref`；正文、
   标签和图注用对象 `copy_ref`。只有与批准文本逐字相同才允许写字面量。
   所有文字必须属于当前页，包括 recipe 标签/图注、表格单元格、公式和图表文字；section
   使用该页批准的 section 或 display_copy。新增文案先回退设计并重审。
-- 优先用 prompt 里的 `recipes`：提交 `{{"id":"P1","recipe":"cover","slots":{{...}}}}`，
-  slots 文案用 `{{"copy_ref":"P1.take"}}`，几何和原生列表/公式由 recipe 负责。没有合适
-  recipe 时才手写 objects；不要把 recipe 页再包一层手写坐标。
-- 每页给每个对象显式 `box`（英寸）。不要写“左边两张图、右边三条结论”让程序猜几何；
-  不要让对象重叠，不要把说明文字塞进装饰框。
-- 一页只讲一个判断：一个主视觉 + 至多三条短结论。保留原图比例、图号/面板字母和来源；
-  论文图不能重画成示意，示意必须标 schematic。
+- `recipes` 仅在确实匹配该页视觉复杂度时使用（`{{"id":"P1","recipe":"...","slots":{{...}}}}`）；
+  若 recipe 会把多区设计压平或留下大片空白，直接按匹配案例手写显式原生 `objects`。不要把 recipe 页再包一层手写坐标。
+- 每页给每个对象显式 `box`（英寸）。非封面页正文带 `[0.72, 2.20, 11.893, 4.80]` 目标可见覆盖率 **45%–75%**，
+  避免整页单列、角落缩成一团或出现大片连续空白（`PAGE_SCENE_SPARSE_LAYOUT` 会检测并标出最大空白区坐标）。
+  不要让对象重叠，不要把说明文字塞进大面积填充卡片。
+- 一页聚焦一个判断，用 2–4 个有明确分工的区承接（主视觉/原图/图示 + 结构化读图 + 结论/关键数字/条件）；
+  保留原图比例、图号/面板字母和来源；论文图不能重画成示意，示意必须标 schematic。
 - 页眉由渲染器统一画：section 写 `NN · LABEL`，标题/结论用 `title_ref`/`take_ref`，可用
-  `title_emphasis`/`take_emphasis` 强调关键术语。正文组织成 2–4 个带小标题的区，不要整页
-  一排等权重的项目符号；用编号小标题、关键数字、图旁标注建立层级。
+  `title_emphasis`/`take_emphasis` 强调关键术语。用编号小标题、关键数字、图旁标注建立层级。
 - 有图的页面必须有可见读图说明：点名面板、轴/条件、要看的变化和含义；不能只放图加结论。
   不把“作者主张/未验证/仅/不能”等审查口吻写进正文；局限集中到一页边界或 notes。
-- 用留白、细强调线和少量小标签分组；不要整张卡片/整条深色横幅/大面积近黑块。
+- 用有序呼吸感、细强调线和少量小标签分组；不要整张卡片/整条深色横幅/大面积近黑块。
   深色只用于小标签/小徽章，不用于承载大段正文。
 - 原生对象：text / list（0–3 级）/ group（子对象相对组原点）/ image / shape / line /
   table / path（贝塞尔）/ formula（OMML）/ chart（原生数据图）。notes 写讲稿。
-- 提交前运行 `pagespec-check` 或让 totalpipe_advance 校验；用 `scene_preview` 选页，
-  实际打开 PowerPoint PNG 检查截断、重叠、图注和阅读顺序。失败页只改该页。
+- 提交前运行 `pagespec-check` 检查碰撞与空间覆盖率；用 `scene_preview` 选页，
+  实际打开 PowerPoint PNG 检查截断、重叠、大片留白、图注和阅读顺序。失败或稀疏页只改该页。
 
-交付时列出页数、每页主视觉和真实未解决项；不要声称已完成科学审读或 PowerPoint UI 验收。"""
+交付时列出页数、每页主视觉、参考的示例 ID 和真实未解决项；不要声称已完成科学审读或 PowerPoint UI 验收。"""

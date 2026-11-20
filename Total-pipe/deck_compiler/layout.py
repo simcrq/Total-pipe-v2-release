@@ -370,20 +370,24 @@ def intersect(a, b):
 
 
 def text_visible_bottom(element):
-    """Estimate the occupied text edge, not the full reserved textbox edge."""
+    """Estimate the occupied text bottom edge, respecting vertical anchor."""
     _x, y, _w, height = element["bbox"]
     contract = element["contract"]
-    if contract["vertical_anchor"] != "top":
-        return y + height
     if element.get('inline_math'):
-        return min(y+height, y+contract['inset']['top']+element['inline_layout']['height'])
-    if element['kind'] == 'list':
-        occupied = (sum(len(lines) for lines in element['items'])*contract['font_size']*contract['line_height']
-                    +element['bullet'].get('space_after', 0)*max(0, len(element['items'])-1))
-        return min(y+height, y+contract['inset']['top']+occupied)
-    line_count = len(re.split('[\n\v]', element["text"]))
-    return min(y + height, y + contract["inset"]["top"] +
-               line_count * contract["font_size"] * contract["line_height"])
+        occupied = element['inline_layout']['height']
+    elif element['kind'] == 'list':
+        occupied = (sum(len(lines) for lines in element['items']) * contract['font_size'] * contract['line_height']
+                    + element['bullet'].get('space_after', 0) * max(0, len(element['items']) - 1))
+    else:
+        line_count = len(re.split('[\n\v]', element["text"]))
+        occupied = line_count * contract["font_size"] * contract["line_height"]
+    vis_h = min(height, contract["inset"]["top"] + occupied + contract["inset"].get("bottom", 0))
+    anchor = contract.get("vertical_anchor", "top")
+    if anchor == "middle":
+        return min(y + height, y + (height - vis_h) / 2 + vis_h)
+    if anchor == "bottom":
+        return y + height
+    return min(y + height, y + contract["inset"]["top"] + occupied)
 
 
 def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
@@ -408,6 +412,40 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  body_top_px=body_top, body_bottom_px=body_bottom,
                  content_bottom_px=round(content_bottom), empty_lower_px=round(gap),
                  empty_share=round(share, 3))
+
+
+def body_whitespace_issue(elements, slide_number, body_top, body_bottom):
+    """Detect genuinely excessive 2D whitespace across the full body band using exact union ink."""
+    if body_bottom - body_top < 120:
+        return None
+    from .whitespace import analyze_region_whitespace, visible_element_boxes
+
+    body_bounds = [56.0, float(body_top), 1168.0, float(body_bottom - body_top)]
+    visible = visible_element_boxes(elements, body_bounds, include_header=False)
+    if not visible:
+        return None
+    metrics = analyze_region_whitespace(
+        visible, body_bounds, min_empty_size=(360.0, 160.0), margin=0.0
+    )
+    if metrics['coverage_ratio'] >= 0.25 or metrics['largest_empty_ratio'] < 0.45:
+        return None
+    return issue(
+        'BODY_WHITESPACE_EXCESSIVE',
+        'REVIEW',
+        f"Body visible ink covers only {metrics['coverage_ratio']:.0%} of the body band; "
+        f"the largest contiguous empty region covers {metrics['largest_empty_ratio']:.0%} "
+        f"({metrics['empty_quadrants']}/4 quadrants empty). Consider a richer multi-zone layout "
+        "or an example from the library.",
+        slide_number,
+        detector='design-preflight',
+        confidence='MEDIUM',
+        body_coverage_ratio=metrics['coverage_ratio'],
+        whitespace_ratio=metrics['whitespace_ratio'],
+        largest_empty_ratio=metrics['largest_empty_ratio'],
+        largest_empty_rect=metrics['largest_empty_rect'],
+        empty_quadrants=metrics['empty_quadrants'],
+        suggested_actions=['add_supporting_visual', 'consult_example_library', 'rebalance_columns'],
+    )
 
 
 def sparse_text_page(entry, elements):
@@ -1906,6 +1944,15 @@ class _SlideCompiler:
             notice = lower_whitespace_issue(self.elements, self.n, self.top, self.bottom)
             if notice:
                 self.issues.append(notice)
+        if self.family != 'cover' and not any(
+            i.get('slide') == self.n and i.get('rule') in (
+                'TEXT_ONLY_LOWER_WHITESPACE', 'CONTENT_LOWER_WHITESPACE', 'SPARSE_TEXT_PAGE'
+            )
+            for i in self.issues
+        ):
+            ws_notice = body_whitespace_issue(self.elements, self.n, self.top, self.bottom)
+            if ws_notice:
+                self.issues.append(ws_notice)
         page_furniture_elements(self.elements, self.emit_text, self.n, self.slide,
                                 self.ir.get('presentation') or {}, self.design, self.furniture)
         if (self.comp.get('layout_tree') or self.comp.get('graphics') or self.design) and len({e['id'] for e in self.elements}) != len(self.elements):

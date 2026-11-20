@@ -490,64 +490,104 @@ def analyze_completeness(qa_report: Dict, layout: Optional[Dict], deck_ir: Optio
 
 
 def analyze_balance(qa_report: Dict, layout: Optional[Dict], deck_ir: Optional[Dict], detailed: bool) -> QualityScore:
-    """Analyze visual balance: whitespace, figure sizing, alignment."""
+    """Analyze visual balance: union whitespace, largest empty region, and quadrant balance."""
+    from .whitespace import analyze_region_whitespace, visible_element_boxes
+
     issues = []
     details = {}
 
     if not layout:
         return QualityScore(category='balance', score=0, weight=0.15, issues=[], details={'error': 'Missing data'})
 
-    # Analyze whitespace and coverage per slide
     slide_coverages = []
+    body_coverages = []
+    empty_ratios = []
 
     slide_size = layout.get('slide_size') or [1280, 720]
     slide_width = slide_size[0] if len(slide_size) >= 2 else 1280
     slide_height = slide_size[1] if len(slide_size) >= 2 else 720
+    full_bounds = [0.0, 0.0, float(slide_width), float(slide_height)]
 
     for slide_idx, slide_layout in enumerate(layout.get('slides', []), 1):
         slide_num = slide_layout.get('slide_number') or slide_idx
         elements = slide_layout.get('elements', [])
 
-        # Calculate total area covered by elements
-        total_area = 0
-
-        for element in elements:
-            bbox = element.get('bbox', [0, 0, 0, 0])
-            if len(bbox) >= 4:
-                area = bbox[2] * bbox[3]
-                total_area += area
-
-        coverage = total_area / (slide_width * slide_height) if (slide_width * slide_height) > 0 else 0
+        # Whole-slide exact union coverage of visible ink (excludes backgrounds, frames, hairlines).
+        all_visible = visible_element_boxes(elements, full_bounds, include_header=True)
+        full_metrics = analyze_region_whitespace(
+            all_visible, full_bounds, min_empty_size=(slide_width * 0.25, slide_height * 0.25)
+        )
+        coverage = full_metrics['coverage_ratio']
         slide_coverages.append(coverage)
 
-        # Check if too dense
+        # Body-region spatial coverage (below header, above footer).
+        header_bottom = max(
+            (e['bbox'][1] + e['bbox'][3] for e in elements
+             if e.get('role') in ('title', 'takeaway') and len(e.get('bbox') or []) >= 4),
+            default=slide_height * 0.25,
+        )
+        footer_top = min(
+            (e['bbox'][1] for e in elements
+             if (e.get('role') in ('footer', 'page_number') or str(e.get('id', '')).startswith('page:'))
+             and len(e.get('bbox') or []) >= 4),
+            default=slide_height * 0.92,
+        )
+        margin_x = slide_width * (56.0 / 1280.0)
+        body_bounds = [
+            margin_x,
+            min(header_bottom + 12.0, footer_top - 40.0),
+            max(1.0, slide_width - 2 * margin_x),
+            max(1.0, footer_top - min(header_bottom + 12.0, footer_top - 40.0)),
+        ]
+        body_visible = visible_element_boxes(elements, body_bounds, include_header=False)
+        body_metrics = analyze_region_whitespace(
+            body_visible, body_bounds, min_empty_size=(body_bounds[2] * 0.30, body_bounds[3] * 0.35)
+        )
+        body_cov = body_metrics['coverage_ratio']
+        body_coverages.append(body_cov)
+        empty_ratios.append(body_metrics['largest_empty_ratio'])
+
         if coverage > 0.8:
             issues.append(QualityIssue(
                 category='balance',
                 severity='MEDIUM',
                 slide=slide_num,
                 shape=None,
-                message=f"Slide is very dense ({coverage * 100:.0f}% coverage)",
+                message=f"Slide is very dense ({coverage * 100:.0f}% union ink coverage)",
                 metric_value=coverage,
                 threshold=0.8,
                 suggested_fix="Reduce content or increase slide size"
             ))
-
-        # Check if too sparse
-        elif coverage < 0.3:
+        elif body_cov < 0.28 and body_metrics['largest_empty_ratio'] >= 0.40:
+            issues.append(QualityIssue(
+                category='balance',
+                severity='MEDIUM',
+                slide=slide_num,
+                shape=None,
+                message=(
+                    f"Slide body is sparse ({body_cov * 100:.0f}% visible ink coverage; "
+                    f"largest contiguous empty zone covers {body_metrics['largest_empty_ratio'] * 100:.0f}% of body)"
+                ),
+                metric_value=body_cov,
+                threshold=0.28,
+                suggested_fix="Use a richer multi-zone layout (diagram, comparison lanes, or figure readout) from the example library"
+            ))
+        elif coverage < 0.25:
             issues.append(QualityIssue(
                 category='balance',
                 severity='LOW',
                 slide=slide_num,
                 shape=None,
-                message=f"Slide appears sparse ({coverage * 100:.0f}% coverage)",
+                message=f"Slide appears sparse ({coverage * 100:.0f}% union ink coverage)",
                 metric_value=coverage,
-                threshold=0.3
+                threshold=0.25
             ))
 
     details['avg_coverage'] = round(sum(slide_coverages) / len(slide_coverages) * 100, 1) if slide_coverages else 0
     details['min_coverage'] = round(min(slide_coverages) * 100, 1) if slide_coverages else 0
     details['max_coverage'] = round(max(slide_coverages) * 100, 1) if slide_coverages else 0
+    details['avg_body_coverage'] = round(sum(body_coverages) / len(body_coverages) * 100, 1) if body_coverages else 0
+    details['max_empty_region_ratio'] = round(max(empty_ratios) * 100, 1) if empty_ratios else 0
 
     # Score
     score = 100
@@ -556,9 +596,9 @@ def analyze_balance(qa_report: Dict, layout: Optional[Dict], deck_ir: Optional[D
     score -= len([i for i in issues if i.severity == 'MEDIUM']) * 8
     score -= len([i for i in issues if i.severity == 'LOW']) * 3
 
-    # Bonus for good average coverage (40-70% is ideal)
-    avg_cov = details['avg_coverage'] / 100
-    if 0.4 <= avg_cov <= 0.7:
+    # Bonus for good average body coverage (40-75% is ideal)
+    avg_cov = details['avg_body_coverage'] / 100 if body_coverages else details['avg_coverage'] / 100
+    if 0.4 <= avg_cov <= 0.75:
         score += 10
     elif 0.3 <= avg_cov <= 0.8:
         score += 5

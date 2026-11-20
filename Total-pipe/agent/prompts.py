@@ -80,8 +80,11 @@ BODY_GUIDES_TASK = (
 )
 
 DESIGN_EXAMPLE_TASK = (
-    '需要构思呈现方式时，用 `example_lookup.command_prefix` 执行 `search "<讲解关系>" --limit 2`，'
-    '例如“机制对比 双路线”或“原图导读 条件与结论”。按需打开一份匹配的示例脚本，参考构图、视觉关系和讲解顺序。'
+    '先查看 `example_lookup.recommended` 和完整目录 `example_lookup.catalog`，再按讲解关系用 '
+    '`example_lookup.command_prefix` 执行 `search "<讲解关系>" --limit 3` 与 `show <id>`，'
+    '至少打开 1–2 份匹配的示例脚本（如机制对比双路线、原图导读、多区综合页、概念类比或公式拆解），'
+    '参考其多区构图、空间占比、视觉关系和讲解顺序。'
+    '避免把非封面页做成单列几条文字或大面积空洞留白的保守版面；主体区优先规划 2–3 个互补视觉区（覆盖约 45%–75% 正文带）。'
     '设计交接用自然语言写清如何应用于当前论文。示例中的文案、数据和证据仅用于演示。'
 )
 
@@ -151,7 +154,10 @@ DESIGN_INSTRUCTIONS = (
     + BODY_GUIDES + ' '
     'Separate the visual, its reading cue and the implication where that helps the audience follow the claim. '
     'Use short subheads, key-number callouts and emphasis for the terms a speaker would point to; a page of equally '
-    'weighted sentences is not a visual explanation. Prefer light panels, thin accent rules and small labels. '
+    'weighted sentences is not a visual explanation. Review example_lookup.recommended and example_lookup.catalog '
+    'before finalizing key pages, open matching example scripts with show <id>, and avoid conservative single-column '
+    'sparse layouts that leave over 40% of the body band blank; plan 2-3 complementary visual zones filling roughly '
+    '45%-75% of the body area. Prefer light panels, thin accent rules and small labels. '
     'Do not use large dark fill blocks, full-width dark banners or near-black cards behind body text; reserve '
     'dark fill for small tags/chips only. '
     'Paper copy cites source_refs and inherits their evidence. Organizational copy uses basis=organization and no '

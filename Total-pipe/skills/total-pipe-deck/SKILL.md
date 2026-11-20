@@ -231,7 +231,7 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
-页面设计提示中的 `example_lookup.command_prefix` 可执行 `search "<讲解关系>" --limit 2`。按需打开一份匹配示例，参考构图、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
+页面设计提示中的 `example_lookup` 自带 `recommended` 和完整 `catalog`，先用 `example_lookup.command_prefix` 执行 `search "<讲解关系>" --limit 3` 与 `show <id>` 打开至少 1–2 份匹配示例，参考其多区构图、空间占比（目标覆盖正文带约 45%–75%，避免保守单列大留白）、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
 
 让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
 可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。
@@ -245,9 +245,10 @@ IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 conten
 数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
 
 若任务显式选择 `page_mode=page_scene`，审读后按 [PageScene](../../docs/page-scene.md) 提交场景。
+先参考 `page_scene_prompt.json` 中的 `page_catalog[].example_suggestions` 与 `example_lookup.catalog`（`show <id>`），避免仅用保守单列或过简 recipe 造成大片留白（正文带目标覆盖率 45%–75%，`PAGE_SCENE_SPARSE_LAYOUT` 会标注最大空白区）。
 包括 recipe 展开结果在内，所有可见文案须逐项匹配本页批准文本；新增标签、图注、公式或图表文字先回退
 设计重审。可直接提交 `work/page_scene.json`；相对图片路径以提交文件目录为基准，工具保存规范化绑定和
-绝对路径，并跟踪图片变化。预览 PNG 后再接受，候选与原生验收按该路径的协议执行。
+绝对路径，并跟踪图片变化。预览 PNG 并核对留白与空间占比后再接受，候选与原生验收按该路径的协议执行。
 
 恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
 设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。

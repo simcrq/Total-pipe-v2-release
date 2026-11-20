@@ -106,10 +106,16 @@ def slot_candidates(deck_ir, slide_id, slot, baseline, options, adapter):
     if options.slot_policy == 'reserved_only':
         return
     from .adapter import placeholder
+    from ..whitespace import element_visible_box
     region = body_region(deck_ir, slide, baseline)
     page = next(p for p in baseline['slides'] if p['id'] == slide_id)
-    occupied = [e['bbox'] for e in page['elements'] if e.get('graphic_id') != slot['graphic_id']
-                and e.get('role') != 'background' and not e.get('frame_members')]
+    occupied = []
+    for e in page['elements']:
+        if e.get('graphic_id') == slot['graphic_id'] or e.get('role') == 'background' or e.get('frame_members'):
+            continue
+        box = element_visible_box(e, include_header=False)
+        if box is not None:
+            occupied.append(box)
     free = empty_rectangles(region, occupied)
     prefix = 'evz_layout_'+digest([slide_id, slot['graphic_id']])[:10]+'_'
     content = _content_tree(slide['composition'], slot['graphic_id'], prefix)
