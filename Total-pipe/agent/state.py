@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import shutil
+import time
 from urllib.parse import unquote
 import uuid
 
@@ -53,7 +54,14 @@ def write(path, value):
     temp = path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
     try:
         temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)+'\n', encoding='utf-8')
-        os.replace(temp, path)
+        for attempt in range(5):
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.01 * (2 ** attempt))
     finally:
         temp.unlink(missing_ok=True)
 

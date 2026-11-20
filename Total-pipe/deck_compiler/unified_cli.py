@@ -407,6 +407,10 @@ Examples:
     ver.add_argument('--build', type=Path, required=True, help='Build directory with qa_report.json')
     ver.add_argument('--json', action='store_true', help='Output as JSON')
 
+    # Discover-fonts command
+    df = subparsers.add_parser('discover-fonts', help='List available system font families and files')
+    df.add_argument('--json', action='store_true', help='Output as JSON')
+
     args = parser.parse_args()
 
     try:
@@ -540,6 +544,30 @@ Examples:
                 print(f"    QA/staging {str(result['qa_artifact_sha256'])[:16]}")
                 print(f"    {result['advice']}")
             return 0 if result.get('match') else 1
+
+        elif args.command == 'discover-fonts':
+            from .fonts import discover_fonts, font_search_dirs, get_default_font
+            fonts = discover_fonts()
+            default_regular, default_bold = get_default_font()
+            payload = {
+                'fonts': fonts,
+                'default': {'regular': default_regular, 'bold': default_bold},
+                'search_directories': [str(d) for d in font_search_dirs()],
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                if fonts:
+                    print(f'Discovered {len(fonts)} font family(ies):')
+                    for family, variants in sorted(fonts.items()):
+                        print(f'  {family}:')
+                        for variant, path in sorted(variants.items()):
+                            print(f'    {variant}: {path}')
+                else:
+                    print('No fonts discovered on this platform.')
+                print(f'Default regular: {default_regular}')
+                print(f'Default bold: {default_bold}')
+            return 0
 
     except RecoverableError as e:
         print(f"\n[ERROR] {e.message}", file=sys.stderr)

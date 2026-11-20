@@ -1,28 +1,30 @@
-"""Four-tool server reusing the existing stdio transport (no MCP client)."""
-import importlib.util
+"""Four-tool server using the shared Total-pipe stdio MCP transport."""
 import json
 import re
 from pathlib import Path
 
-from . import COMPONENT, VERSION
+from deck_compiler.mcp_transport import StdioMcpServer
+from . import VERSION
 from .doctor import doctor
 from .requests import PAGE_MODES, SOURCE_KINDS
 from .runner import start, advance, status
 
-spec = importlib.util.spec_from_file_location('agent_transport', COMPONENT/'pwf2rpa/integrations/mcp/server.py')
-transport = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(transport)
-transport.SERVER_NAME, transport.SERVER_VERSION = 'total-pipe-agent', VERSION
-transport.INSTRUCTIONS = ('Drive the workflow using next_action. Read only the indicated full prompt. '
-    'For a topic or question, start with source_kind=topic and the text as source. Author topic content and page design, '
-    'use the example library as needed, then implement PageScene. Model delegation is optional for topic jobs. '
-    'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
-    'Paper Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
-    'When status is running, call advance; when blocked, resolve the reported issue. '
-    'New atomic Stories use scientific_review before RPA, page design 1.3 and actual source/copy review before IR. '
-    'Scientific records are archived; approved audience copy and scoped qualifiers must be visible. Never auto-attest review. '
-    'Native render/review/ingest are explicit advance operations after candidate. Never auto-attest UI review. '
-    'Candidate REVIEW notes do not satisfy PowerPoint final promotion; final remains CLI-only.')
+transport = StdioMcpServer(
+    server_name='total-pipe-agent',
+    server_version=VERSION,
+    instructions=(
+        'Drive the workflow using next_action. Read only the indicated full prompt. '
+        'For a topic or question, start with source_kind=topic and the text as source. Author topic content and page design, '
+        'use the example library as needed, then implement PageScene. Model delegation is optional for topic jobs. '
+        'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
+        'Paper Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
+        'When status is running, call advance; when blocked, resolve the reported issue. '
+        'New atomic Stories use scientific_review before RPA, page design 1.3 and actual source/copy review before IR. '
+        'Scientific records are archived; approved audience copy and scoped qualifiers must be visible. Never auto-attest review. '
+        'Native render/review/ingest are explicit advance operations after candidate. Never auto-attest UI review. '
+        'Candidate REVIEW notes do not satisfy PowerPoint final promotion; final remains CLI-only.'
+    ),
+)
 
 STRING = {'type': 'string', 'minLength': 1}
 DEFINITIONS = {

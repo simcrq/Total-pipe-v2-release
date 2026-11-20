@@ -1,92 +1,46 @@
-"""Total-pipe v3 tools, reusing the bundled pwf2rpa MCP transport."""
+"""Total-pipe v3 low-level compiler MCP server (advanced profile)."""
 import importlib.util
 import json
 from pathlib import Path
 import subprocess
 import sys
 
+from .mcp_transport import StdioMcpServer
+
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('totalpipe_transport', ROOT/'pwf2rpa/integrations/mcp/server.py')
-transport = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(transport)
-transport.SERVER_NAME = 'total-pipe-v3'
-transport.SERVER_VERSION = '3.2.0'
-transport.INSTRUCTIONS = ('Total-pipe v3.2: use existing PaperWorkflow, Story and RPA planning; '
-    'Prepare topic-specific PaperWorkflow queries before OCR, explicitly pair oddly named supplements, '
-    'and confirm supplementary_content_included only after its text joins the evidence input. '
-    'Gate on synthesis_readiness rather than quality_audit alone. '
-    'Story nodes may carry optional key_points; pwf2rpa passes them to RPA briefs, '
-    'counts their capacity, preserves body paragraph breaks, and matches the ending title to Story language. '
-    'Optional DesignIntentPlanner follows Story: only a four-key_points vertical process, no bbox. '
-    'Pass design_intent_path with story_path to pwf2rpa_check or pwf2rpa_convert; a hard group cannot auto-split. '
-    'On RPA revisions, compare slides with the original content model; do not compress or drop body or key_points. '
-    'SOURCE_TEXT_NOT_BOUND blocks delivery; character limits are coarse, so inspect SLOT_WRAP_RISK. '
-    'RPA layout_contract must bind the full ordered group; map its members to actual Deck IR block ids in composition.visual_intent. '
-    'Design is a required stage after canonical IR: call totalpipe_visual_prompt, read the full prompt, '
-    'author one academic_design and visual plans for every eligible slide, then totalpipe_apply_visual_plan. '
-    'Pass the merged IR to totalpipe_compile or totalpipe_build; VISUAL_DESIGN_REQUIRED returns a prompt and missing slides. '
-    'Only an explicitly requested legacy build should set skip_visual_design=true. '
-    'Displayed equations must use component=formula and LaTeX in block.text with JSON backslashes escaped; '
-    'Bare symbols such as V_OUT and V_G automatically become native inline math in prose, titles, takeaways, captions and table text cells. '
-    'For explicit inline math, use inline_math=true on prose blocks or table text cells; '
-    'semantic.inline_math lists title/takeaway fields. Delimit with $...$ or backslash parentheses; '
-    'mixed text uses atomic formula widths and per-line baseline extents, '
-    'not literal LaTeX character counts or uniform prose line heights. Query native_inline_equation capability. '
-    'Roots (including indexed roots), grouped powers, fractions, '
-    'exp/log/ln, common math styles and matrix/pmatrix/bmatrix/Bmatrix/vmatrix/Vmatrix environments are supported. '
-    'Matrix cells use & and rows use a double backslash; retain every cell, blank, fraction and script. '
-    'Use equation-derivation for dense mathematical pages. Capacity is measured in actual one/two-column regions, '
-    'not by a two-equation cap or the sum of heights across independent columns. Explicit anchors keep '
-    'equations with preceding explanation blocks. Never replace an unsupported equation with a wrong expression. '
-    'Editable native graphics use composition.graphics: optional on process-flow and '
-    'figure-parameters with context and source figures, or standalone on native-graphic. '
-    'Declare every relationship explicitly; do not infer edges or replace source evidence with a schematic. '
-    'The compiler allocates graphic regions and reports capacity failures without truncation; SCHEMATIC_REVIEW remains required. '
-    'Types include process/dag, mechanism, architecture, funnel, path and composite. '
-    'Mechanism edges require explicit activate/inhibit/associate kind and evidence/hypothesis basis; '
-    'evidence refs must bind to semantic.evidence_refs, and feedback must be explicit. '
-    'Path IR accepts local view_box and absolute M/L/C/Q/Z only, compiling to native custom geometry; it is not SVG import. '
-    'totalpipe_visual_prompt prepares the full-deck agent prompt, '
-    'then totalpipe_apply_visual_plan validates a SHA-bound presentation-only proposal. '
-    'Use one academic_design and source-bound visual_plan; VISUAL_PLAN_UNSATISFIABLE requires replanning. '
-    'Use one deck frame; ordered figure-parameters blocks are a peer column with 24 px gaps. '
-    'An explicit four-step process must pass compiler member validation; legacy method-to-result inference remains compatible. '
-    'The compiler draws its numbered sequence rail and preserves original scientific text. '
-    'The packer proposes layouts for eligible flat body content; measured tree/design/math/list/graphic pages remain COMPILER_OWNED and are not provider failures. '
-    'The compiler enforces geometric gates and writes the frame, OfficeCLI writes the PPTX. '
-    'A provider that fails or is rejected loses that page to the compiler templates; check layout_provider.json for per-slide provenance. '
-    'Build returns a candidate and QA, not automatic final approval. '
-    'totalpipe_review inspects builds and exports OfficeCLI screenshots on demand. '
-    'Native lists retain complete rows under preserve-terms; never remove bullets to satisfy capacity. '
-    'Deck presentation.bullet_style/bullet_color provide defaults; prose blocks may override bullet_style/bullet_color. '
-    'Markers are optional; large_square, large_diamond and arrowhead select full native glyphs without bullet scaling. '
-    'Slide presentation.takeaway_marker={style,color?} adds one independent leading marker, including on mixed inline math; '
-    'Marker colors do not recolor prose. Explicit native_bullet_list and native_numbered_list support one to six rows at 240 px minimum width; '
-    'legacy distributed_arrow_list retains the 520 px minimum. Use bullet_icon for a single symbol or list_start for continued numbers. '
-    'In layout_tree, caption_for.position or text_for.position binds approved copy on any side of a figure, graphic, independent formula, table or chart. '
-    'Insufficient space requires replanning. '
-    'Image origins are paper, generated or reference; reference crops require nonblank reference_source, '
-    'forbid paper source_figure and retain source/readability REVIEW without requiring a schematic caption. '
-    'OfficeCLI Text overflow warning estimates are INFO; keep original issues and verify actual slide appearance. '
-    'Candidate totalpipe_qa hides acknowledged REVIEW notes by default. '
-    'Use totalpipe_ack_review only after actual review, with explicit ids, reviewer and note; '
-    'notes survive unchanged page evidence and never replace artifact-bound final approval.')
-transport.INSTRUCTIONS += (' Query totalpipe_capabilities before region-tree composition. '
-    'ExplainViz defaults to auto: source-bound templates use reserved or detected empty regions, '
-    'then bounded local body reflow. Set explain_viz_mode=off to disable. Never bypass Design or scientific review. '
-    'composition.layout_tree versions 1.0/1.1/1.2 reuse the compiler body frame; columns/stack/panel/image_grid '
-    'contain block/figure/graphic references exactly once, with no page coordinates. Version 1.1 adds '
-    'native table references to composition.tables, including merged headers and formula/matrix cells. '
-    'Version 1.2 adds optional panel.frame with border/fill/title band and measured padding. '
-    'Slide presentation.takeaway_frame independently boxes complete prose or inline math; takeaway_marker remains optional. '
-    'Frames follow compiled content and never grant page-coordinate control. '
-    'RPA search_sublayouts/compose_sublayout and automatic plan_sublayout propose structure; the compiler measures every child. '
-    'Read layout_feedback.json for component paths, required/available sizes and replan actions. '
-    'Default stacks hug content at start; align=center or distribute is explicit, and weights fill proportionally. '
-    'PAGE_UNDERFILL reports stack whitespace above 15% with legal relative suggested_weights. '
-    'Keep deck academic_design; tree pages do not also carry a flat visual_plan. '
-    'Native tables enforce logical grid coverage, source evidence and an 18 pt font floor; '
-    'pure-text overflow preserves terms as REVIEW, formula tables must fit.')
+SAFE_PWF2RPA_TOOLS = (
+    'pwf2rpa_story_prompt',
+    'pwf2rpa_check',
+    'pwf2rpa_convert',
+    'pwf2rpa_list_categories',
+)
+
+
+def _load_pwf2rpa_tools():
+    """Import only read-only/conversion pwf2rpa tools; never expose capacity refresh over MCP."""
+    spec = importlib.util.spec_from_file_location('pwf2rpa_mcp_tools', ROOT/'pwf2rpa/integrations/mcp/server.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return {name: module.TOOLS[name] for name in SAFE_PWF2RPA_TOOLS if name in module.TOOLS}
+
+
+transport = StdioMcpServer(
+    server_name='total-pipe-v3',
+    server_version='3.2.0',
+    instructions=(
+        'Total-pipe v3.2 low-level compiler tools (advanced profile). '
+        'Query totalpipe_capabilities for layout_tree, ExplainViz, math, table, graphic and backend contracts. '
+        'Author canonical Deck IR v2.0 (see schemas/deck-ir.schema.json) without page coordinates; '
+        'keep complete scientific terminology (preserve-terms emits REVIEW rather than truncating). '
+        'Run totalpipe_visual_prompt -> totalpipe_apply_visual_plan before totalpipe_compile/totalpipe_build '
+        '(use skip_visual_design=true only for explicitly requested legacy builds). '
+        'ExplainViz defaults to auto (mode=off disables). '
+        'totalpipe_build produces an OfficeCLI candidate PPTX + QA report, not final approval. '
+        'Use totalpipe_review for on-demand screenshots, totalpipe_qa to inspect pending REVIEW items, '
+        'and totalpipe_ack_review only after actual inspection; final promotion remains CLI-only.'
+    ),
+    tools=_load_pwf2rpa_tools(),
+)
 
 
 def capability_handler(arguments):
@@ -102,10 +56,6 @@ def capability_handler(arguments):
 transport.TOOLS['totalpipe_capabilities'] = {'description': 'Declare compiler region-tree contracts and required native backend capabilities; runtime OfficeCLI support is checked again at build time.',
     'inputSchema': {'type': 'object', 'properties': {}, 'additionalProperties': False},
     'handler': capability_handler, 'timeout': 10}
-
-# The pwf2rpa transport is reused, but its capacity refresh writes into an arbitrary checkout and
-# executes node from it; a compiler MCP client must not be able to reach that.
-transport.TOOLS.pop('pwf2rpa_refresh_capacity', None)
 
 BUILTIN_PROVIDERS = {'packer', 'compiler', 'deterministic', 'none'}
 

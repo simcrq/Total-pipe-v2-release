@@ -34,6 +34,13 @@
 
 | `Total-pipe/docs/inline-math.md` | [记录](Total-pipe/docs/inline-math.md) | [当前文档](../../Total-pipe/docs/inline-math.md) |
 | `Total-pipe/docs/layout-provider.md` | [记录](Total-pipe/docs/layout-provider.md) | [当前文档](../../Total-pipe/docs/layout-provider.md) |
+| `CHANGES-2026-10-25.md` | [记录](CHANGES-2026-10-25.md) | [当前文档索引](../README.md) |
+| `EVALUATION-2026-10-27-teaching-provenance.md` | [记录](EVALUATION-2026-10-27-teaching-provenance.md) | [当前文档索引](../README.md) |
+| `PLAN-2026-10-27-supplement-lane.md` | [记录](PLAN-2026-10-27-supplement-lane.md) | [当前文档索引](../README.md) |
+| `PLAN-2026-10-27-teaching-provenance.md` | [记录](PLAN-2026-10-27-teaching-provenance.md) | [当前文档索引](../README.md) |
+| `Total-pipe/test_priority_features.py` | [记录](Total-pipe/test_priority_features.py) | [当前测试套件](../../Total-pipe/tests) |
+| `Total-pipe/test_deck_ir.json` | [记录](Total-pipe/test_deck_ir.json) | [当前示例目录](../../Total-pipe/examples) |
+| `Total-pipe/test_quality_analysis/` | [目录](Total-pipe/test_quality_analysis) | [质量指标文档](../../Total-pipe/docs/QUALITY_METRICS.md) |
 
 ## 追溯与清单
 

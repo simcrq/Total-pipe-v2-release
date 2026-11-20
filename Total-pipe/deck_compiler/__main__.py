@@ -30,6 +30,8 @@ def main():
     parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('capabilities', help='Print supported region-tree and backend contracts')
+    p = commands.add_parser('discover-fonts', help='List discovered system font families and default faces')
+    p.add_argument('--json', action='store_true', help='Machine-readable JSON output')
     p = commands.add_parser('listify', help='Merge a page of prose blocks into one native list')
     p.add_argument('--ir', required=True, type=Path)
     p.add_argument('--out', required=True, type=Path, help='Output Deck IR (write beside its source)')
@@ -235,6 +237,22 @@ def main():
             print(json.dumps({'status': 'PASS', 'pages': sorted(attempt),
                               'dropped': sorted(set(dropped)), 'output': str(out_path)},
                              ensure_ascii=False))
+            return 0
+        if args.command == 'discover-fonts':
+            from .fonts import discover_fonts, font_search_dirs, get_default_font
+            fonts = discover_fonts()
+            default_regular, default_bold = get_default_font()
+            payload = {
+                'fonts': fonts,
+                'default': {'regular': default_regular, 'bold': default_bold},
+                'search_directories': [str(d) for d in font_search_dirs()],
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                for family, variants in sorted(fonts.items()):
+                    print(f'{family}: {variants}')
+                print(f'Default: regular={default_regular}, bold={default_bold}')
             return 0
         if args.command == 'capabilities':
             from .layout_tree import capabilities

@@ -72,15 +72,15 @@ RPA 的 316 tests 和 pwf2rpa 的 96 tests 沿用此前通过记录；本轮未�
 与上述 mock 导出回归分开：
 
 - 用户提供的 22 页候选通过 PowerPoint 菜单导出 PDF：
-  [candidate-native-ui.pdf](../build/benchmark-20261105/native-probe/candidate-native-ui.pdf)，22 页、
+  `build/benchmark-20261105/native-probe/candidate-native-ui.pdf`（本地构建产物，未入库），22 页、
   1,506,290 字节，SHA-256 `c6221b18037bcb9205de5d53e54edeaaf4bb027815730279b5ab0df1c4cb2d54`；源 PPTX
   SHA-256 `e869b208ed06c96c580e61a05fa507437f673865717d034652edbb0452b8a562` 未变。该 subagent 只看了
   1 页，没有对这份 22 页候选提交逐页 UI review 或签收。
 - 当前代码的 `native-bullets` 两页 fixture 经 Agent native API 由 PowerPoint 实际导出：
-  [native.pdf](../build/benchmark-20261105/native-api-current/job/build/native.pdf)；候选未变，QA 为
+  `build/benchmark-20261105/native-api-current/job/build/native.pdf`（本地构建产物，未入库）；候选未变，QA 为
   0 FAIL / 0 WARNING、8 REVIEW 未签收。随后该 subagent 在 PowerPoint 中检查两个 slide ID 并提交四项
   UI 检查；job 状态为 `awaiting_review_acknowledgements`，8 个 REVIEW 仍待处理。记录见
-  [powerpoint_review.json](../build/benchmark-20261105/native-api-current/job/build/powerpoint_review.json)。
+  `build/benchmark-20261105/native-api-current/job/build/powerpoint_review.json`。
   **未解决视觉项：第二页根号前可见小点方框。** UI review 只记录检查已发生，未把该视觉问题或八条
   REVIEW 签收为通过，也没有将简单样例当作论文的科学验收。
 
@@ -107,10 +107,10 @@ SHA-256 保持 `c2854e39a71d4df74dfdae533b4d538ca06c0af8d45353e6eece64b7ab83ae94
 最终 QA 为 0 FAIL / 0 WARNING / 8 REVIEW（全部未签收），`native=true`、`visual_review=false`，
 状态 `awaiting_powerpoint_review`，没有生成 review / acknowledgement / final。
 
-证据：[追加事件日志](../build/native-cache-final/job/logs/events.jsonl)、
-[native.json](../build/native-cache-final/job/build/native.json)、
-[预览清单](../build/native-cache-final/job/build/native_preview.json)、
-[QA](../build/native-cache-final/job/build/qa_report.json)。这是同一未改候选的原生导出/预览恢复实测，
+证据（本地构建产物，未入库）：`build/native-cache-final/job/logs/events.jsonl`、
+`build/native-cache-final/job/build/native.json`、
+`build/native-cache-final/job/build/native_preview.json`、
+`build/native-cache-final/job/build/qa_report.json`。这是同一未改候选的原生导出/预览恢复实测，
 不是论文 OCR→Story→设计→PPTX 的整链加速比；首次启动、缓存热度和样例仅两页也限制其推广。
 
 ## 变更文件与协议入口
