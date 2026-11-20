@@ -7,10 +7,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from loguru import logger
-from tqdm import tqdm
 
 from utils.pdf_handler import PDFProcessor
-from utils.llm_handler import LLMHandler
 from utils.prompt_builder import PromptBuilder
 from utils.workflow_utils import find_pdf_files, determine_mode
 from utils.md_merger import merge_markdown_files
@@ -151,8 +149,14 @@ def main(config_path="config.yaml", dry_run=False):
 
     # Initialize network/local handlers only after dry-run validation.
     try:
+        from tqdm import tqdm
+        from utils.llm_handler import LLMHandler
+
         pdf_processor = PDFProcessor(config)
         llm_handler = LLMHandler(config)
+    except ImportError as e:
+        logger.error(f"Batch mode requires optional dependencies (pip install openai tqdm): {e}")
+        return
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         return

@@ -244,10 +244,17 @@ def input_root(source_dir: str | None = None) -> Path:
 
 def missing_ocr_deps() -> list[str]:
     missing = []
-    try:
-        import loguru  # noqa: F401
-    except ImportError:
-        missing.append("loguru")
+    for pkg, module_name in (("loguru", "loguru"), ("pyyaml", "yaml")):
+        try:
+            __import__(module_name)
+        except ImportError:
+            missing.append(pkg)
+    mineru = (load_config().get("api") or {}).get("mineru") or {}
+    if mineru.get("mode") == "api" and mineru.get("legacy_http"):
+        try:
+            import requests  # noqa: F401
+        except ImportError:
+            missing.append("requests")
     return missing
 
 

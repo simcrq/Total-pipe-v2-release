@@ -56,7 +56,7 @@ python3 main.py --dry-run
 python3 main.py
 ~~~
 
-传统 `main.py` 批处理仍从配置的 `paths.input_dir` 读取任务目录；这个限制只属于旧批处理模式，不适用于 MCP 工具。
+传统 `main.py` 批处理仍从配置的 `paths.input_dir` 读取任务目录；完整运行其 LLM 摘要步骤需额外安装可选 `batch` 依赖（`openai`、`tqdm`，如 `pip install -e ".[batch]"`）。这个限制和额外依赖只属于旧批处理模式，不适用于 MCP 工具。
 
 ## DeepSeek Harness 插件
 
