@@ -194,16 +194,18 @@ def code_hash():
     return digest([revision, {str(p.relative_to(ROOT)): sha(p) for p in sorted(files)}])
 
 
-def dependency(job, previous):
+def dependency(job, previous, *, code=None, source_inputs=None):
     request = job['request']
+    code = code_hash() if code is None else code
     if request['source_kind'] == 'topic':
         return digest({'request': request, 'inputs': job.get('inputs', {}),
-                       'code': code_hash(), 'previous': previous})
-    inputs = resources(request['source'])
-    for path in request.get('supplementary_paths', []):
-        inputs.update(resources(path))
-    return digest({'request': request, 'source_files': inputs,
-                   'code': code_hash(), 'previous': previous})
+                       'code': code, 'previous': previous})
+    if source_inputs is None:
+        source_inputs = resources(request['source'])
+        for path in request.get('supplementary_paths', []):
+            source_inputs.update(resources(path))
+    return digest({'request': request, 'source_files': source_inputs,
+                   'code': code, 'previous': previous})
 
 
 def valid_record(record, upstream):

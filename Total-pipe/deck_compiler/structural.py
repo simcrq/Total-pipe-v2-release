@@ -16,6 +16,13 @@ MATH_NS = {**NS, 'm': 'http://schemas.openxmlformats.org/officeDocument/2006/mat
            'a14': 'http://schemas.microsoft.com/office/drawing/2010/main'}
 
 
+_SAFE_XML_PARSER = ET.XMLParser(resolve_entities=False, no_network=True)
+
+
+def _parse_xml(data):
+    return ET.fromstring(data, _SAFE_XML_PARSER)
+
+
 def _math_signature(node):
     """Compare expanded names and values, independently of namespace prefixes/pretty printing."""
     return (node.tag, tuple(sorted(node.attrib.items())),
@@ -32,41 +39,42 @@ def verify(path, layout):
         with zipfile.ZipFile(path) as z:
             if z.testzip():
                 raise ValueError('ZIP CRC failure')
-            for name in z.namelist():
+            names = set(z.namelist())
+            for name in names:
                 if name.endswith('.xml') or name.endswith('.rels'):
-                    ET.fromstring(z.read(name))
+                    _parse_xml(z.read(name))
                 if name.endswith('.rels'):
                     source = name.replace('/_rels/', '/').removesuffix('.rels')
                     if name == '_rels/.rels':
                         source = ''
                     for rel in relationships(z, source).values():
-                        if not rel['external'] and rel['target'] not in z.namelist():
+                        if not rel['external'] and rel['target'] not in names:
                             add('BROKEN_RELATIONSHIP', f"{name}: {rel['target']}")
             if layout.get('background_image'):
                 # The picture is one part on the slide master; check the bytes actually landed.
                 expected = layout['assets'].get('@background', {}).get('sha256')
-                master = next((name for name in z.namelist()
+                master = next((name for name in names
                                if name.startswith('ppt/slideMasters/slideMaster')
                                and name.endswith('.xml')), None)
                 target = None
                 if master:
-                    blip = ET.fromstring(z.read(master)).find('.//p:bg//a:blip', NS)
+                    blip = _parse_xml(z.read(master)).find('.//p:bg//a:blip', NS)
                     if blip is not None:
                         target = relationships(z, master).get(
                             blip.get('{' + NS['r'] + '}embed'), {}).get('target')
-                if not target or target not in z.namelist() or hashlib.sha256(
+                if not target or target not in names or hashlib.sha256(
                         z.read(target)).hexdigest() != expected:
                     add('BACKGROUND_IMAGE_MISSING',
                         'The declared background picture is not on the slide master')
             parts = slide_parts(z)
             if len(parts) != len(layout['slides']):
                 add('SLIDE_COUNT_MISMATCH', 'Slide count differs from IR')
-            presentation = ET.fromstring(z.read('ppt/presentation.xml'))
+            presentation = _parse_xml(z.read('ppt/presentation.xml'))
             size = presentation.find('p:sldSz', NS)
-            if any(abs(int(size.get(k))/EMU-v) > .1 for k, v in zip(('cx', 'cy'), layout['slide_size'])):
+            if size is None or any(abs(int(size.get(k))/EMU-v) > .1 for k, v in zip(('cx', 'cy'), layout['slide_size'])):
                 add('CANVAS_MISMATCH', 'Canvas differs from compiled layout')
             for n, (part, slide) in enumerate(zip(parts, layout['slides']), 1):
-                root = ET.fromstring(z.read(part))
+                root = _parse_xml(z.read(part))
                 # A full-bleed picture lives on the master, once, so every slide inherits it
                 # without carrying a copy of the image. The colour comparison does not apply.
                 if not layout.get('background_image'):
@@ -77,10 +85,10 @@ def verify(path, layout):
                         add('BACKGROUND_MISMATCH', f'{bg} != {slide["background"]}', n)
                 notes_part = next((rel['target'] for rel in relationships(z, part).values()
                                    if rel['type'] == 'notesSlide' and not rel['external']), None)
-                if notes_part not in z.namelist():
+                if notes_part not in names:
                     add('MISSING_NOTES', 'Speaker notes part absent', n)
                 else:
-                    notes_root = ET.fromstring(z.read(notes_part))
+                    notes_root = _parse_xml(z.read(notes_part))
                     body = next((shape for shape in notes_root.findall('.//p:sp', NS)
                                  if (shape.find('p:nvSpPr/p:nvPr/p:ph', NS) is not None and
                                      shape.find('p:nvSpPr/p:nvPr/p:ph', NS).get('type') == 'body')), None)
@@ -127,7 +135,7 @@ def verify(path, layout):
                         if any(abs(a-b) > .2 for a, b in zip(box, e['bbox'])):
                             add('TABLE_GEOMETRY_MISMATCH', 'Native table bounds differ from layout', n, e['id'])
                         table = frame.find('a:graphic/a:graphicData/a:tbl', NS)
-                        if _math_signature(table) != _math_signature(ET.fromstring(e['table_xml'])):
+                        if _math_signature(table) != _math_signature(_parse_xml(e['table_xml'])):
                             add('TABLE_CONTENT_MISMATCH', 'Native table cells, merges, text, math or style differ from layout', n, e['id'])
                         boxes.append((e['id'], box))
                         continue
@@ -259,7 +267,7 @@ def verify(path, layout):
                                 or choice is None or 'a14' not in choice.get('Requires', '').split()):
                             add('FORMULA_MISSING', 'Equation shape carries no OMML payload', n, e['id'])
                         else:
-                            expected = ET.fromstring(e['omml']).find('.//m:oMathPara', MATH_NS)
+                            expected = _parse_xml(e['omml']).find('.//m:oMathPara', MATH_NS)
                             if _math_signature(math_para) != _math_signature(expected):
                                 add('FORMULA_CONTENT_MISMATCH',
                                     'Native math structure differs from the parsed equation', n, e['id'])
@@ -285,7 +293,7 @@ def verify(path, layout):
                         add('GEOMETRY_MISMATCH', 'Exported box differs from compiled layout', n, e['id'])
                     boxes.append((e['id'], box))
                     if e.get('inline_math'):
-                        if _math_signature(tx) != _math_signature(ET.fromstring(e['inline_xml'])):
+                        if _math_signature(tx) != _math_signature(_parse_xml(e['inline_xml'])):
                             add('INLINE_CONTENT_MISMATCH', 'Inline prose, formulas, line breaks or measured line heights differ from layout', n, e['id'])
                         continue
                     paragraphs = []
@@ -371,7 +379,7 @@ def verify(path, layout):
                 for pic, e in zip(pics, planned_pics):
                     blip = pic.find('.//a:blip', NS)
                     target = relationships(z, part).get(blip.get('{'+NS['r']+'}embed'), {}).get('target')
-                    if target not in z.namelist() or hashlib.sha256(z.read(target)).hexdigest() != layout['assets'][e['asset_id']]['sha256']:
+                    if target not in names or hashlib.sha256(z.read(target)).hexdigest() != layout['assets'][e['asset_id']]['sha256']:
                         add('IMAGE_CONTENT_MISMATCH', 'Evidence image bytes differ from source', n, e['id'])
                     xf = pic.find('p:spPr/a:xfrm', NS)
                     off, ext = xf.find('a:off', NS), xf.find('a:ext', NS)
@@ -414,9 +422,10 @@ def verify(path, layout):
                 for edge_id, obstacle_id in graphic_obstacle_collisions(native_paths, actual_elements):
                     add('GRAPHIC_ROUTE_THROUGH_CONTENT', f'Connector crosses page content {obstacle_id}', n, edge_id,
                         severity='REVIEW' if planned.get(obstacle_id, {}).get('scientific_text_overflow') else 'FAIL')
+                slide_w, slide_h = layout['slide_size']
                 for idx, (name, box) in enumerate(boxes):
                     x,y,w,h = box
-                    if x < -.1 or y < -.1 or x+w > 1280.1 or y+h > 720.1:
+                    if x < -.1 or y < -.1 or x+w > slide_w + .1 or y+h > slide_h + .1:
                         add('SHAPE_OUT_OF_BOUNDS', 'Actual shape outside slide', n, name,
                             severity='REVIEW' if planned.get(name, {}).get('scientific_text_overflow') else 'FAIL')
                     for other, obox in boxes[:idx]:

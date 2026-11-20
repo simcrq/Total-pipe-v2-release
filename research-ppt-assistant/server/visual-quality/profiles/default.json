@@ -213,6 +213,10 @@
         "minimum_width": 0.55,
         "dense": true
       },
+      "composite_figure_region": {
+        "minimum_width": 0.42,
+        "dense": true
+      },
       "table_screenshot": {
         "minimum_width": 0.55,
         "dense": true

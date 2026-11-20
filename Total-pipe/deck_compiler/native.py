@@ -106,25 +106,36 @@ def inspect_pdf(pdf, layout):
                         if normalize(cell['text']) != normalize(region.extract_text() or ''):
                             add('NATIVE_TABLE_CELL_REVIEW', f"Native cell differs from {e['id']}.{cell['id']}", n, 'REVIEW', 'MEDIUM')
                     continue
-                if e['kind'] != 'text':
+                if e['kind'] not in ('text', 'list'):
                     continue
                 if (e.get('inline_layout') or {}).get('formula_count'):
                     # A PDF text layer does not preserve an OMML superscript's order (10⁸ extracts
                     # as "8…10"), so comparing characters here reports a defect that is not there.
                     # The inline-math REVIEW already asks for a human look at the baseline.
                     continue
-                expected = normalize(e['text'])
                 x, y, width, height = e['bbox']
                 region = page.crop((x * scale_x, y * scale_y,
                                     (x + width) * scale_x, (y + height) * scale_y), strict=False)
                 actual = normalize(region.extract_text() or '')
-                if expected and expected != actual:
-                    add('NATIVE_TEXT_REVIEW',
-                        f"Native text region does not match {e['id']}",
-                        n, 'REVIEW', 'MEDIUM')
+                if e['kind'] == 'list':
+                    item_texts = [normalize(''.join(lines)) for lines in e.get('items', []) if lines]
+                    if item_texts and any(item and item not in actual for item in item_texts):
+                        add('NATIVE_TEXT_REVIEW',
+                            f"Native list region does not match {e['id']}",
+                            n, 'REVIEW', 'MEDIUM')
+                else:
+                    expected = normalize(e['text'])
+                    if expected and expected != actual:
+                        add('NATIVE_TEXT_REVIEW',
+                            f"Native text region does not match {e['id']}",
+                            n, 'REVIEW', 'MEDIUM')
             spans = page.chars
             requested = {e['contract']['font_family'].replace(' ', '').lower()
-                         for e in slide['elements'] if e['kind'] == 'text'}
+                         for e in slide['elements'] if e['kind'] in ('text', 'list') and e.get('contract')}
+            requested |= {e['bullet']['face'].replace(' ', '').lower()
+                          for e in slide['elements'] if e['kind'] == 'list' and e.get('bullet', {}).get('face')}
+            if any(e['kind'] == 'table' for e in slide['elements']) and layout.get('resolved_font_family'):
+                requested.add(layout['resolved_font_family'].replace(' ', '').lower())
             for span in spans:
                 box = (span['x0'], span['top'], span['x1'], span['bottom'])
                 if box[0] < -1 or box[1] < -1 or box[2] > page.width+1 or box[3] > page.height+1:

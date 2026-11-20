@@ -9,7 +9,7 @@ import uuid
 from . import COMPONENT
 from . import adapters as a
 from .state import (JobError, read, write, sha, digest, dependency, checkpoint, valid_record,
-                    locked, save, locate, home, confined, snapshot)
+                    locked, save, locate, home, confined, snapshot, code_hash, resources)
 from .state import validate_job
 from .requests import (SOURCE_KINDS, presentation_type as normalize_presentation_type, prompt_request,
                        request_identity, resolve_page_mode, slide_count as validate_slide_count)
@@ -40,6 +40,12 @@ def design_complete(job):
 def current(job):
     previous = []
     mode = job['request'].get('page_mode', 'deck_ir')
+    code = code_hash()
+    source_inputs = None
+    if job['request']['source_kind'] != 'topic':
+        source_inputs = resources(job['request']['source'])
+        for path in job['request'].get('supplementary_paths', []):
+            source_inputs.update(resources(path))
     for stage in STAGES:
         if job['request']['source_kind'] not in stage.get('sources', [job['request']['source_kind']]):
             continue
@@ -57,7 +63,7 @@ def current(job):
             path = Path(job['request']['out_dir'])/'work/page_design.json'
             if path.is_file() and read(path).get('schema_version') not in ('1.2', '1.3'):
                 continue
-        upstream = dependency(job, previous)
+        upstream = dependency(job, previous, code=code, source_inputs=source_inputs)
         if stage['kind'] == 'input':
             values = job['request'] if stage['id'] == 'intake' else job.get('inputs', {})
             if not all(values.get(key) for key in stage['requires']):
@@ -90,7 +96,7 @@ def prepare_next(job, stage):
             a.finalize_design(work)
 
 
-def envelope(job, stage, failure=None, detail='summary'):
+def envelope(job, stage, failure=None, detail='summary', upstream=None):
     out = Path(job['request']['out_dir'])
     work = out/'work'
     topic = job['request']['source_kind'] == 'topic'
@@ -159,7 +165,7 @@ def envelope(job, stage, failure=None, detail='summary'):
             action['schema_path'] = read(prompt)['schema_path']
         if sid == 'deck_ir':
             from .ir_pages import descriptor
-            paging = descriptor(job, current(job)[1])
+            paging = descriptor(job, upstream if upstream is not None else current(job)[1])
             if paging:
                 action['page_authoring'] = paging
         if prompt and not prompt.is_file() and (stage.get('prepare') or sid == 'deck_ir'):
@@ -312,63 +318,65 @@ def start(source, out_dir, language=None, presentation_type=None, source_kind='a
         request['presentation_context'] = original_type
     try:
         with locked(out):
-            path = out/'.totalpipe/job.json'
-            if path.exists():
-                try:
-                    job = read(path)
-                    validate_job(job)
-                    if request_identity(job['request']) != request_identity(request):
-                        return error_envelope(JobError('JOB_OUTPUT_IN_USE', 'Output belongs to a different request.', 'Use a new output directory.'))
-                    emit(out, 'job_resumed', job_id=job['job_id'], status='success')
+            job = None
+            try:
+                path = out/'.totalpipe/job.json'
+                if path.exists():
+                    try:
+                        job = read(path)
+                        validate_job(job)
+                        if request_identity(job['request']) != request_identity(request):
+                            return error_envelope(JobError('JOB_OUTPUT_IN_USE', 'Output belongs to a different request.', 'Use a new output directory.'))
+                        emit(out, 'job_resumed', job_id=job['job_id'], status='success')
+                        if queries is not None and source_kind in ('pdf', 'markdown'):
+                            a.check_queries(queries)
+                            query_path = out/'work/queries.json'
+                            if not query_path.is_file() or read(query_path) != queries:
+                                invalidate(job, 'queries')
+                                write(query_path, queries)
+                                stage, upstream = current(job)
+                                checkpoint(job, 'queries', [query_path], upstream)
+                    except a.Failure:
+                        raise
+                    except (ValueError, KeyError, TypeError):
+                        return error_envelope(JobError('JOB_STATE_INVALID', 'Existing job cannot be reconstructed safely.'))
+                else:
+                    (out/'work').mkdir(parents=True, exist_ok=True)
+                    job = {'schema_version': 1, 'job_id': uuid.uuid4().hex, 'created_at': datetime.now(timezone.utc).isoformat(),
+                           'request': request, 'checkpoints': {}, 'inputs': {}, 'attempts': {}}
+                    save(job)
+                    emit(out, 'job_created', job_id=job['job_id'], status='success')
+                    write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
                     if queries is not None and source_kind in ('pdf', 'markdown'):
                         a.check_queries(queries)
-                        query_path = out/'work/queries.json'
-                        if not query_path.is_file() or read(query_path) != queries:
-                            invalidate(job, 'queries')
-                            write(query_path, queries)
-                            stage, upstream = current(job)
-                            checkpoint(job, 'queries', [query_path], upstream)
-                except a.Failure:
-                    raise
-                except (ValueError, KeyError, TypeError):
-                    return error_envelope(JobError('JOB_STATE_INVALID', 'Existing job cannot be reconstructed safely.'))
-            else:
-                (out/'work').mkdir(parents=True, exist_ok=True)
-                job = {'schema_version': 1, 'job_id': uuid.uuid4().hex, 'created_at': datetime.now(timezone.utc).isoformat(),
-                       'request': request, 'checkpoints': {}, 'inputs': {}, 'attempts': {}}
-                save(job)
-                emit(out, 'job_created', job_id=job['job_id'], status='success')
+                        write(out/'work/queries.json', queries)
+                        stage, upstream = current(job)
+                        checkpoint(job, stage['id'], [out/'work/queries.json'], upstream)
+                    if source_kind == 'deck_ir':
+                        write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}, supplement),
+                            'imported_deck_ir': read(source), 'source_base': str(source.parent),
+                            'request': {**prompt_request(request),
+                                        'supplement': supplement}})
+                        with span(out, job_id=job['job_id'], stage='deck_ir', operation='import'):
+                            a.import_ir(source, out/'work/deck_ir.json', supplement, slide_count=slide_count)
+                        stage, upstream = current(job)
+                        checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(out/'work/deck_ir.json').items() if hashed is not None], upstream)
                 write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
-                if queries is not None and source_kind in ('pdf', 'markdown'):
-                    a.check_queries(queries)
-                    write(out/'work/queries.json', queries)
-                    stage, upstream = current(job)
-                    checkpoint(job, stage['id'], [out/'work/queries.json'], upstream)
-                if source_kind == 'deck_ir':
-                    write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}, supplement),
-                        'imported_deck_ir': read(source), 'source_base': str(source.parent),
-                        'request': {**prompt_request(request),
-                                    'supplement': supplement}})
-                    with span(out, job_id=job['job_id'], stage='deck_ir', operation='import'):
-                        a.import_ir(source, out/'work/deck_ir.json', supplement, slide_count=slide_count)
-                    stage, upstream = current(job)
-                    checkpoint(job, 'deck_ir', [Path(p) for p, hashed in a.resources(out/'work/deck_ir.json').items() if hashed is not None], upstream)
-            write(home()/'jobs'/(job['job_id']+'.json'), {'out_dir': str(out)})
+            except a.Failure as error:
+                stage, upstream = current(job)
+                if not error.log:
+                    feedback = out/'work/submission_feedback.json'
+                    write(feedback, {'code': error.code, 'message': a.redact(str(error)),
+                                     'stage': stage['id'], 'target_stage': error.target})
+                    error.log = str(feedback)
+                job['last_error'] = {'code': error.code, 'message': a.redact(str(error)),
+                                     'action': error.action, 'target': error.target, 'log': error.log,
+                                     'stage': stage['id'], 'at_stage': stage['id'], 'upstream': upstream}
+                save(job)
+                emit(out, 'blocked', job_id=job['job_id'], stage=stage['id'], status='failure', code=error.code)
+                return envelope(job, stage, error, upstream=upstream)
     except (JobError, OSError) as error:
         return error_envelope(error if isinstance(error, JobError) else JobError('OUTPUT_UNWRITABLE', str(error)))
-    except a.Failure as error:
-        stage, upstream = current(job)
-        if not error.log:
-            feedback = out/'work/submission_feedback.json'
-            write(feedback, {'code': error.code, 'message': a.redact(str(error)),
-                             'stage': stage['id'], 'target_stage': error.target})
-            error.log = str(feedback)
-        job['last_error'] = {'code': error.code, 'message': a.redact(str(error)),
-                             'action': error.action, 'target': error.target, 'log': error.log,
-                             'stage': stage['id'], 'at_stage': stage['id'], 'upstream': upstream}
-        save(job)
-        emit(out, 'blocked', job_id=job['job_id'], stage=stage['id'], status='failure', code=error.code)
-        return envelope(job, stage, error)
     return advance(job['job_id'])
 
 
@@ -837,7 +845,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                     emit(out, 'replan_requested', job_id=job_id, stage=stage['id'],
                          target_stage=replan_from, status='success')
                     invalidate(job, replan_from)
-                    if replan_from == 'deck_ir': job.pop('ir_pages', None)
+                    if NAMES.index(replan_from) <= NAMES.index('deck_ir'):
+                        job.pop('ir_pages', None)
                     stage, upstream = current(job)
                 if inputs is not None:
                     if (not isinstance(inputs, dict) or set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
@@ -875,28 +884,37 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                         raise ValueError('Only a built candidate can be acknowledged')
                     from deck_compiler.qa_review import acknowledge_reviews
                     with span(out, job_id=job_id, stage='candidate_ready', operation='acknowledge'):
+                        record = job['checkpoints'].get('build')
+                        owned = {str((out/'build'/name).resolve()) for name in ('qa_report.json', 'layout_feedback.json')}
+                        if not record or any(str(Path(path).resolve()) not in owned and snapshot(path) != hashed
+                                             for path, hashed in record['files'].items()):
+                            raise ValueError('Built candidate files changed since build; rebuild before acknowledging REVIEW.')
                         acknowledge_reviews(out/'build', acknowledge['reviewer'], acknowledge['note'], acknowledge['review_ids'])
-                        record = job['checkpoints']['build']
                         checkpoint(job, 'build', record['files'], record['upstream'])
                 save(job)
-                for _ in range(len(STAGES)):
-                    stage, upstream = current(job)
-                    if stage['kind'] != 'component':
-                        prepare_next(job, stage)
-                        result = envelope(job, stage)
-                        if repair_result:
-                            result['repair_result'] = repair_result
-                        if page_result:
-                            result['page_result'] = page_result
-                        emit(out, 'candidate_ready' if stage['kind'] == 'terminal' else 'waiting',
-                             job_id=job_id, stage=stage['id'],
-                             status='success' if stage['kind'] == 'terminal' else 'waiting',
-                             wait_type=result['next_action']['type'])
-                        return result
-                    with span(out, job_id=job_id, stage=stage['id'], operation='execute'):
-                        paths = a.execute(stage['adapter'], job)
-                        job.pop('last_error', None)
-                        checkpoint(job, stage['id'], paths, upstream)
+                try:
+                    for _ in range(len(STAGES)):
+                        stage, upstream = current(job)
+                        if stage['kind'] != 'component':
+                            prepare_next(job, stage)
+                            result = envelope(job, stage, upstream=upstream)
+                            if repair_result:
+                                result['repair_result'] = repair_result
+                            if page_result:
+                                result['page_result'] = page_result
+                            emit(out, 'candidate_ready' if stage['kind'] == 'terminal' else 'waiting',
+                                 job_id=job_id, stage=stage['id'],
+                                 status='success' if stage['kind'] == 'terminal' else 'waiting',
+                                 wait_type=result['next_action']['type'])
+                            return result
+                        with span(out, job_id=job_id, stage=stage['id'], operation='execute'):
+                            paths = a.execute(stage['adapter'], job)
+                            job.pop('last_error', None)
+                            checkpoint(job, stage['id'], paths, upstream)
+                except (ValueError, TypeError) as error:
+                    if isinstance(error, a.Failure):
+                        raise
+                    raise a.Failure(getattr(error, 'code', 'COMPONENT_FAILED'), a.redact(str(error))) from error
                 raise a.Failure('STAGE_LOOP', 'Stage did not reach a decision; inspect checkpoints.')
             except a.Failure as failure:
                 if not failure.log:
@@ -931,7 +949,7 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 save(job)
                 emit(out, 'blocked', job_id=job_id, stage=stage['id'], status='failure',
                      code=failure.code, target_stage=failure.target)
-                return envelope(job, stage, failure)
+                return envelope(job, pending, failure, upstream=pending_upstream)
             except (OSError, KeyError) as error:
                 failure = a.Failure('COMPONENT_FAILED', a.redact(str(error)))
                 pending, pending_upstream = current(job)
@@ -940,7 +958,7 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                                      'at_stage': pending['id'], 'upstream': pending_upstream}
                 save(job)
                 emit(out, 'blocked', job_id=job_id, stage=stage['id'], status='failure', code=failure.code)
-                return envelope(job, stage, failure)
+                return envelope(job, pending, failure, upstream=pending_upstream)
     except JobError as error:
         return error_envelope(error, job_id)
 
@@ -949,14 +967,14 @@ def status(job_id, detail='summary'):
     if detail not in ('summary', 'full'):
         raise ValueError('detail must be summary or full')
     try:
-        out, _ = locate(job_id)
-        with locked(out):
-            _, job = locate(job_id)
-            stage, upstream = current(job)
-            old = job.get('last_error')
-            if old and (old.get('at_stage') != stage['id'] or old.get('upstream') != upstream):
-                old = None
-            failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
-            return envelope(job, stage, failure, detail=detail)
+        # Read-only poll: job.json is replaced atomically via write(), so status never blocks on
+        # exclusive stage execution locks during long evidence or build runs.
+        _, job = locate(job_id)
+        stage, upstream = current(job)
+        old = job.get('last_error')
+        if old and (old.get('at_stage') != stage['id'] or old.get('upstream') != upstream):
+            old = None
+        failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+        return envelope(job, stage, failure, detail=detail, upstream=upstream)
     except JobError as error:
         return error_envelope(error, job_id)

@@ -68,6 +68,78 @@ test("MCP stdio server initializes, lists tools, and calls content/layout tools"
   );
   assert.ok(listed.result.tools.every((tool) => tool.inputSchema.properties.detail_level.enum.includes("compact")));
 
+  const evTextsNormalized = await request("tools/call", {
+    name: "normalize_content",
+    arguments: {
+      slide_briefs: [{
+        slide_id: "SLIDE0099",
+        slide_type: "result",
+        title: "Result",
+        goal: "Show result",
+        evidence_ids: [],
+        citation_ids: [],
+        evidence_texts: { EV0001: { text: "Measured shift." } },
+        visuals: [{
+          visual_id: "VIS01",
+          visual_type: "simple_plot",
+          caption: "Fig 1",
+          visual_safety_margin: 0.12,
+        }],
+      }],
+    },
+  });
+  assert.equal(evTextsNormalized.result.isError, false);
+  assert.equal(evTextsNormalized.result.structuredContent.slide_briefs[0].visuals[0].visual_safety_margin, 0.12);
+
+  const richSearch = await request("tools/call", {
+    name: "search_layouts",
+    arguments: {
+      detail_level: "standard",
+      text_chars: 80,
+      image_count: 1,
+      visuals: [{
+        visual_id: "VIS01",
+        visual_type: "simple_plot",
+        title: "Plot",
+        caption: "Measured plot",
+        visual_safety_margin: 0.12,
+        must_keep: true,
+        evidence_ids: ["EV0001"],
+      }],
+      k: 1,
+    },
+  });
+  assert.equal(richSearch.result.isError, false);
+  assert.ok(richSearch.result.structuredContent.compatibility.hard_constraints.includes("visual_slot_capacity"));
+
+  const styledPlan = await request("tools/call", {
+    name: "create_deck_plan",
+    arguments: {
+      presentation_type: "custom",
+      deck_style: { tone: "scientific_modern", accent_strength: "low" },
+      slide_briefs: [{ slide_id: "SLIDE0001", title: "Styled slide", category_hint: "summary" }],
+    },
+  });
+  assert.equal(styledPlan.result.isError, false);
+
+  const renderedWithNewArgs = await request("tools/call", {
+    name: "validate_rendered_slide",
+    arguments: {
+      category: "theory",
+      enforce_typography: true,
+      declared_body: "完整科学论述文本。",
+      declared_evidence: [{ evidence_id: "EV0001", text: "实测峰位红移" }],
+      renderer_output: {
+        renderer: "slidep",
+        slide_id: "S1",
+        width: 13.333,
+        height: 7.5,
+        elements: [{ id: "t1", type: "text", bbox: { x: 0.5, y: 1.0, width: 10, height: 2 }, text: { content: "实测峰位红移 完整科学论述文本。" } }],
+      },
+    },
+  });
+  assert.equal(renderedWithNewArgs.result.isError, false);
+
   const bodyRequest = {
     consumer_capabilities: { layout_tree: { contract: 'totalpipe.layout-tree', version: '1.0', regions: ['body'],
       containers: ['columns', 'stack', 'panel', 'image_grid'], leaves: ['block', 'figure', 'graphic'],

@@ -83,8 +83,8 @@ async function readJson(fileName) {
 
 export async function loadCatalog() {
   if (!catalogPromise) {
-    catalogPromise = Promise.all([readJson("layouts.json"), readJson("themes.json")]).then(
-      ([layoutPayload, themePayload]) => {
+    catalogPromise = Promise.all([readJson("layouts.json"), readJson("themes.json")])
+      .then(([layoutPayload, themePayload]) => {
         const layouts = layoutPayload.layouts ?? [];
         const themes = themePayload.themes ?? [];
         const byId = new Map(layouts.map((layout) => [layout.id, layout]));
@@ -97,8 +97,11 @@ export async function loadCatalog() {
           themes,
           themesById,
         };
-      },
-    );
+      })
+      .catch((error) => {
+        catalogPromise = null;
+        throw error;
+      });
   }
   return catalogPromise;
 }
@@ -449,6 +452,7 @@ export async function searchLayouts(input = {}) {
         "table_capacity",
         "chart_capacity",
         "process_step_count",
+        "visual_slot_capacity",
       ],
       excluded_candidate_count: excludedLayouts.length,
       excluded_layouts: excludedLayouts,
@@ -950,7 +954,7 @@ export async function createDeckPlan(input = {}) {
     if (semanticSignals.conflict) {
       warnings.push(
         `第 ${index + 1} 页正文含「${semanticSignals.label_zh}」信号，与类别提示「${semanticSignals.hinted_category}」冲突；`
-        + `已按语义优先检索 ${semanticSignals.category} 类版面。如确需原类别，请用 --layout-override 指定。`,
+        + `已按语义优先检索 ${semanticSignals.category} 类版面。如确需原类别，请调整 slide_briefs[].category_hint 或补充显式内容信号。`,
       );
     }
     if (["failed", "needs_replan"].includes(planning.status)) {

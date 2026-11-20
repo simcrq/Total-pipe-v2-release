@@ -74,7 +74,7 @@ CAPABILITY_CARD = {
         {"kind": "parallel_items", "reader_task": "distinguish",
          "carriers": ["native_list", "table"],
          "requires": "2-6 peer items whose order does not carry meaning",
-         "limit": "native list needs at least 520 px width",
+         "limit": "native_bullet_list/native_numbered_list need at least 240 px width (distributed_arrow_list needs 520 px)",
          "fallback": "table or measured prose"},
         {"kind": "grouped_panels", "reader_task": "locate",
          "carriers": ["layout_tree"],
@@ -951,7 +951,7 @@ def build_story_prompt(
         "core_question": "string",
         "main_message": "string",
         "story": [
-            {"title": "string, required; declarative slide title, not a question", "question": "string", "answer": "string",
+            {"title": "string, recommended; declarative slide title, not a question (defaults to question if omitted)", "question": "string", "answer": "string",
              "evidence": ["EV0001"], "next": "string, optional on the last node",
              "form": "sequence|compare|branch|relation|evidence, optional; derived from explain when omitted",
              "process_steps": ["one step per item, required when form=sequence"],
@@ -988,7 +988,7 @@ def build_story_prompt(
         "节点数量由论证需要决定，不要为凑页数增加节点。\n"
         "2. 每个 node 有 question 和 answer。question 是你这一步要回答的科学问题，"
         "answer 是回答，只能由列出的 Evidence id 支撑；不得创造事实、因果关系或确定性。\n"
-        "3. title 必填，是这一页给听众看的陈述句或名词短语，不以 ?/？ 结尾；"
+        "3. title 建议填写，是这一页给听众看的陈述句或名词短语，不以 ?/？ 结尾（未填时回退到 question）；"
         "question 只是内部推理问题，不要直接拿它当标题。标题可以比 question 短，"
         "但必须保留科学含义。不要把标题写成“主题：结论”的拼接，那通常是硬塞字数的结果。\n"
         "4. 原文的 may/likely/suggest/possibly/可能/提示/推测必须保留其不确定性。\n"

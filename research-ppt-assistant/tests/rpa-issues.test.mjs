@@ -266,5 +266,5 @@ test("RPA-5: 计划阶段对语义冲突给出显式 warning", async () => {
   const joined = (plan.warnings ?? []).join("\n");
   assert.match(joined, /理论 \/ 机制推导/);
   assert.match(joined, /decision/);
-  assert.match(joined, /layout-override/);
+  assert.match(joined, /category_hint/);
 });

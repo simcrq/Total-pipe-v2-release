@@ -1,6 +1,7 @@
 """Four-tool server reusing the existing stdio transport (no MCP client)."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from . import COMPONENT, VERSION
@@ -74,15 +75,45 @@ def validate(value, schema):
         for key, item in value.items():
             if key in properties:
                 validate(item, properties[key])
+    elif 'required' in schema and isinstance(value, dict):
+        if any(k not in value for k in schema['required']):
+            raise ValueError('Missing required arguments')
     if expected == 'array':
         if len(value) < schema.get('minItems', 0):
             raise ValueError('Array is empty')
+        if 'maxItems' in schema and len(value) > schema['maxItems']:
+            raise ValueError('Array exceeds maxItems')
+        if schema.get('uniqueItems'):
+            encoded = [json.dumps(item, sort_keys=True, ensure_ascii=False) for item in value]
+            if len(set(encoded)) != len(encoded):
+                raise ValueError('Array items must be unique')
         for item in value:
             validate(item, schema.get('items', {}))
-    if expected == 'string' and len(value.strip()) < schema.get('minLength', 0):
-        raise ValueError('String is empty')
+    if expected == 'string':
+        if len(value.strip()) < schema.get('minLength', 0):
+            raise ValueError('String is empty')
+        if 'pattern' in schema and not re.search(schema['pattern'], value):
+            raise ValueError('String does not match required pattern')
     if expected == 'integer' and not schema.get('minimum', value) <= value <= schema.get('maximum', value):
         raise ValueError('Integer outside supported range')
+    if 'not' in schema:
+        try:
+            validate(value, schema['not'])
+        except ValueError:
+            pass
+        else:
+            raise ValueError('Value matches forbidden schema branch')
+    for branch_key, exact_one in (('anyOf', False), ('oneOf', True)):
+        if branch_key in schema:
+            matched = 0
+            for subschema in schema[branch_key]:
+                try:
+                    validate(value, subschema)
+                    matched += 1
+                except ValueError:
+                    continue
+            if (matched != 1) if exact_one else (matched == 0):
+                raise ValueError(f'Value failed {branch_key} constraint')
 
 
 transport.TOOLS = {}

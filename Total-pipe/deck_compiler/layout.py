@@ -321,28 +321,33 @@ def break_lines(text, font, width):
     lines = []
     for paragraph in text.split("\n"):
         pieces = []
+        current = ''
         for token in TOKEN.findall(paragraph):
-            current = ''.join(pieces)
             if pieces and font.getlength(current + token) > width:
                 # Kinsoku: a closing mark or unit never starts a line. The token before it travels
                 # down instead, so "2.84×，" does not become "2.84" / "×，".
                 if token[:1] in NO_LINE_START and len(current.strip()) > 2:
                     carried = pieces.pop()
                     lines.append(''.join(pieces).rstrip())
-                    pieces = [carried + token.lstrip()]
+                    current = carried + token.lstrip()
+                    pieces = [current]
                     continue
                 lines.append(current.rstrip())
                 pieces = []
+                current = ''
                 token = token.lstrip()
             if not pieces and font.getlength(token) > width:
                 for char in token:
-                    if pieces and font.getlength(''.join(pieces) + char) > width:
-                        lines.append(''.join(pieces).rstrip())
+                    if pieces and font.getlength(current + char) > width:
+                        lines.append(current.rstrip())
                         pieces = []
+                        current = ''
                     pieces.append(char)
+                    current += char
                 continue
             pieces.append(token)
-        lines.append(''.join(pieces).rstrip())
+            current += token
+        lines.append(current.rstrip())
     return lines
 
 
@@ -1446,7 +1451,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         if comp.get('layout_tree'):
             from .layout_tree import LayoutTreeError, attachment_link, compile_regions
             from .container_frames import grow_frame, rectangle, stroke_width
-            checkpoints = [len(elements), len(issues), len(adaptations)]
+            checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
             try:
                 plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
                                        list_gap_ratio, (0, 0) if design else (28, 18), bullet_style,
@@ -1627,8 +1632,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                 adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
             except LayoutTreeError as error:
-                del elements[checkpoints[0]:]
-                del adaptations[checkpoints[2]:]
+                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
+                    del values[checkpoint:]
                 issues.append(issue(error.detail['code'], 'FAIL', str(error), n,
                     detector='geometric-preflight', slide_id=slide['id'],
                     **{key: value for key, value in error.detail.items() if key not in ('code', 'message')}))
@@ -1813,7 +1818,8 @@ def compile_deck(ir, base, _retry=True, proposals=None):
                                and e['role'] in ('heading', 'body', 'formula')]
                     if visible:
                         content_top = min(e['bbox'][1] for e in visible)
-                        content_bottom = max(text_visible_bottom(e) for e in visible)
+                        content_bottom = max((e['bbox'][1]+e['bbox'][3] if e['kind'] == 'math'
+                                              else text_visible_bottom(e)) for e in visible)
                         empty = bh-(content_bottom-content_top)
                         if empty > 60:
                             shift = empty/2

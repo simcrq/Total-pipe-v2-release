@@ -701,7 +701,7 @@ const VISUAL_KEYS = new Set([
   "source_id", "source_width_px", "source_height_px", "figure_table_ref", "evidence_ids", "citation_ids", "panel_count", "has_embedded_text",
   "min_display_width", "display_width_norm", "display_height_norm", "rendered_embedded_text_px", "importance",
   "must_keep", "recommended_crop", "data", "metadata",
-  "source_visual_id", "region_id", "semantic_relation", "semantic_regions", "visual_aspect_ratio",
+  "source_visual_id", "region_id", "semantic_relation", "semantic_regions", "visual_aspect_ratio", "visual_safety_margin",
   "embedded_text_density", "caption_chars",
   "source_asset_id", "image_kind", "image_format", "crop_allowed",
 ]);
@@ -740,7 +740,7 @@ function normalizeVisual(value, context, contentId, index, path) {
     } else if (key === "min_display_width" || key === "visual_aspect_ratio") {
       const normalized = normalizePositiveNumber(child, context, `visuals.${key}`, `${path}.${key}`, undefined);
       if (normalized !== undefined) out[key] = normalized;
-    } else if (["display_width_norm", "display_height_norm", "rendered_embedded_text_px", "embedded_text_density"].includes(key)) {
+    } else if (["display_width_norm", "display_height_norm", "rendered_embedded_text_px", "embedded_text_density", "visual_safety_margin"].includes(key)) {
       const normalized = normalizeNonnegativeNumber(child, context, `visuals.${key}`, `${path}.${key}`, undefined);
       if (normalized !== undefined) out[key] = normalized;
     } else if (["source_id", "visual_id", "source_visual_id", "region_id", "semantic_relation"].includes(key)) {
@@ -1499,7 +1499,12 @@ export const SLIDE_BRIEF_SCHEMA = deepFreeze({
     key_points: STRING_ARRAY_SCHEMA,
     secondary_messages: STRING_ARRAY_SCHEMA,
     text_flow: { enum: ["auto", "plain", "distributed_arrow_list"] },
-    evidence_texts: { type: "array", items: { type: "object", additionalProperties: true } },
+    evidence_texts: {
+      anyOf: [
+        { type: "array", items: { type: "object", additionalProperties: true } },
+        { type: "object", additionalProperties: true },
+      ],
+    },
     text_chars: { type: "integer", minimum: 0 },
     text_chars_by_role: { type: "object", additionalProperties: { type: "integer", minimum: 0 } },
     title_chars: { type: "integer", minimum: 0 },

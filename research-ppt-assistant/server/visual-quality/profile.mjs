@@ -27,7 +27,14 @@ function mergeProfile(base, override) {
 async function readProfile(profileId) {
   if (!PROFILE_FILES[profileId]) throw new RangeError(`Unknown visual quality profile: ${profileId}`);
   if (!cache.has(profileId)) {
-    cache.set(profileId, fs.readFile(path.join(PROFILE_DIR, PROFILE_FILES[profileId]), "utf8").then(JSON.parse));
+    const pending = fs
+      .readFile(path.join(PROFILE_DIR, PROFILE_FILES[profileId]), "utf8")
+      .then(JSON.parse)
+      .catch((error) => {
+        cache.delete(profileId);
+        throw error;
+      });
+    cache.set(profileId, pending);
   }
   return cache.get(profileId);
 }

@@ -202,9 +202,10 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                         'width': 0.0 if piece == '\n' else face.getlength(piece),
                         'ascent': ascent, 'descent': descent})
 
-    lines, current = [], []
+    lines, current, current_width = [], [], 0.0
     base_ascent, base_descent = font.getmetrics()
     def finish():
+        nonlocal current_width
         # Whitespace at a soft line boundary is typographic; source remains byte-for-byte in IR.
         while current and current[-1]['kind'] == 'text' and current[-1]['text'].isspace(): current.pop()
         fragments = []
@@ -221,13 +222,11 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         if leading_marker and not lines:
             above = max(above, leading_marker['ascent'])
             below = max(below, leading_marker['descent'])
-        if leading_marker and not lines:
-            above = max(above, leading_marker['ascent'])
-            below = max(below, leading_marker['descent'])
         lines.append({'fragments': fragments, 'ascent': above, 'descent': below,
             'height': max(size*line_height, above+below),
             'width': sum(a['width'] for a in fragments), 'text': ''.join(a['plain'] for a in fragments)})
         current.clear()
+        current_width = 0.0
 
     for atom in atoms:
         if atom['text'] == '\n' and atom['kind'] == 'text':
@@ -235,9 +234,11 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         if atom['kind'] == 'text' and atom['text'].isspace():
             # Defer trailing spaces until the next visible atom. Otherwise an overflowing
             # space can commit a line before its closing punctuation has a chance to travel.
-            if current: current.append(atom)
+            if current:
+                current.append(atom)
+                current_width += atom['width']
             continue
-        if current and sum(a['width'] for a in current)+atom['width'] > width+.01:
+        if current and current_width+atom['width'] > width+.01:
             if atom['kind'] == 'text' and atom['text'][:1] in NO_LINE_START:
                 while current and current[-1]['kind'] == 'text' and current[-1]['text'].isspace(): current.pop()
                 previous = current.pop()
@@ -245,11 +246,13 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                 if previous['width']+atom['width'] > width+.01:
                     raise InlineWidthError(previous['width']+atom['width'], width)
                 current.append(previous)
+                current_width = previous['width']
             else:
                 finish()
         if atom['width'] > width+.01:
             raise InlineWidthError(atom['width'], width)
         current.append(atom)
+        current_width += atom['width']
     if current or not lines or source.endswith(('\n', '\r')): finish()
     return {'lines': lines, 'height': sum(line['height'] for line in lines),
             'min_width': minimum, 'formula_count': sum(s.kind == 'formula' for s in parse_inline(source)),

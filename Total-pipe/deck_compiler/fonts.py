@@ -15,11 +15,13 @@ separated by ``os.pathsep``), so a machine can point the pipeline at a font fold
 deck.
 """
 
+from functools import lru_cache
 import os
 import platform
 import sys
+import unicodedata
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 from PIL import ImageFont
 
 FONT_DIRECTORY_VARIABLE = 'TOTALPIPE_FONT_DIR'
@@ -27,6 +29,12 @@ FONT_DIRECTORY_VARIABLE = 'TOTALPIPE_FONT_DIR'
 # The list prefers a face that covers Latin and CJK, because these decks mix both.
 FALLBACK_FAMILIES = ('Microsoft YaHei', 'Noto Sans CJK SC', 'Heiti TC', 'Arial Unicode MS', 'Arial', 'Liberation Sans',
                      'DejaVu Sans', 'Helvetica')
+
+
+@lru_cache(maxsize=64)
+def _cached_font_subdirs(directory_str: str, mtime_ns: int) -> Tuple[Path, ...]:
+    directory = Path(directory_str)
+    return tuple(child for child in sorted(directory.rglob('*')) if child.is_dir())
 
 
 def font_search_dirs() -> List[Path]:
@@ -53,14 +61,36 @@ def font_search_dirs() -> List[Path]:
             if system not in ('Windows', 'Darwin'):
                 # Linux distributions install families below truetype/ and opentype/,
                 # including Noto CJK collections that are absent from the old flat scan.
-                unique.extend(child for child in sorted(directory.rglob('*'))
-                              if child.is_dir() and child not in unique)
+                try:
+                    mtime_ns = directory.stat().st_mtime_ns
+                except OSError:
+                    mtime_ns = 0
+                for child in _cached_font_subdirs(str(directory), mtime_ns):
+                    if child not in unique:
+                        unique.append(child)
     return unique
+
+
+def _font_stamp(path: Path) -> Tuple[str, int, int]:
+    stat = path.stat()
+    return (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=128)
+def _truetype_cached(resolved: str, size: int, encoding: str, mtime_ns: int, file_size: int):
+    kwargs = {'encoding': encoding} if encoding else {}
+    return ImageFont.truetype(resolved, int(size), **kwargs)
+
+
+def _cached_truetype(path_or_str, size: int, encoding: str = ''):
+    path = Path(path_or_str)
+    resolved, mtime_ns, file_size = _font_stamp(path)
+    return _truetype_cached(resolved, int(size), encoding, mtime_ns, file_size)
 
 
 def _loadable(path: Path) -> bool:
     try:
-        ImageFont.truetype(str(path), 12)
+        _cached_truetype(path, 12)
         return True
     except (OSError, ValueError):
         return False
@@ -101,33 +131,43 @@ def load_font_file(value, size):
         return ImageFont.truetype(resolved, size)
 
 
+@lru_cache(maxsize=4096)
+def _char_missing_in_font(resolved: str, mtime_ns: int, file_size: int, character: str) -> bool:
+    face = _truetype_cached(resolved, 24, '', mtime_ns, file_size)
+    try:
+        mask = bytes(face.getmask(character))
+    except Exception:
+        return True
+    try:
+        reference = bytes(face.getmask('\U0010FFFF'))
+    except Exception:
+        reference = None
+    if reference is not None and mask == reference:
+        return True
+    if not mask and unicodedata.category(character) != 'Cf':
+        return True
+    return False
+
+
 def missing_glyphs(font_path, text) -> set:
     """Characters in ``text`` that the face cannot draw.
 
     Comparing a character's mask with the mask of a code point no font defines is the same heuristic
-    the compiler already uses; it is conservative (a font may draw a notdef box the same way) but it
-    catches the real case here: Latin-only Arial asked to set Chinese headings.
+    the compiler already uses; it handles empty ``.notdef`` bitmaps cleanly and catches the real
+    case here: Latin-only faces asked to draw CJK or symbol characters.
     """
+    if not font_path:
+        return set(text)
     try:
-        face = ImageFont.truetype(str(font_path), 24)
+        resolved, mtime_ns, file_size = _font_stamp(Path(font_path))
+        _truetype_cached(resolved, 24, '', mtime_ns, file_size)
     except (OSError, ValueError):
         return set(text)
-    reference = None
     missing = set()
     for character in sorted(set(text)):
         if character.isspace():
             continue
-        try:
-            mask = bytes(face.getmask(character))
-        except Exception:
-            missing.add(character)
-            continue
-        if reference is None:
-            try:
-                reference = bytes(face.getmask('\U0010FFFF'))
-            except Exception:
-                reference = b''
-        if reference and mask == reference:
+        if _char_missing_in_font(resolved, mtime_ns, file_size, character):
             missing.add(character)
     return missing
 
@@ -197,8 +237,12 @@ def bullet_metrics(style, family, font_file, size, *, icon=None):
     path = font_file
     encoding = ''
     if face == 'Wingdings' and style in NATIVE_BULLET_FACES:
-        path = find_font_file(NATIVE_BULLET_FACES[style][1])
-        encoding = 'symb'
+        candidate = find_font_file(NATIVE_BULLET_FACES[style][1])
+        if candidate:
+            path = candidate
+            encoding = 'symb'
+        else:
+            face = family
     elif face != family:
         for candidate_face, names in BULLET_SYMBOL_FACES:
             if candidate_face != face:
@@ -211,7 +255,9 @@ def bullet_metrics(style, family, font_file, size, *, icon=None):
             else:
                 continue
             break
-    font = ImageFont.truetype(path, int(size), encoding=encoding)
+    if not path:
+        raise FileNotFoundError(f'Font file not found for bullet style {style!r}')
+    font = _cached_truetype(path, int(size), encoding)
     left, top, right, bottom = font.getbbox(glyph, anchor='ls')
     return {'style': style, 'char': glyph, 'face': face, 'size_from_text': True,
             'native_font_fallback': (glyph != icon if icon else
@@ -225,8 +271,8 @@ def list_marker_metrics(block, default_style, family, font_file, size, count):
     from .text_flow import NATIVE_NUMBERED_LIST
     if block.get('text_flow') == NATIVE_NUMBERED_LIST:
         start = block.get('list_start', 1)
-        face = ImageFont.truetype(font_file, int(size))
-        width = max(face.getlength(f'{n}.') for n in range(start, start+count))
+        face = _cached_truetype(font_file, int(size))
+        width = max((face.getlength(f'{n}.') for n in range(start, start+count)), default=0.0)
         return {'style': 'number', 'numbering': 'arabicPeriod', 'start': start,
                 'face': family, 'gutter': round(max(42., width+12.), 2),
                 'size_from_text': True, 'native_font_fallback': False, 'line_height_px': size*1.25}
@@ -279,7 +325,7 @@ def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
                 best = (score, name, candidate, missing)
         if best is not None:
             _, name, candidate, missing = best
-            declared_missing = missing_glyphs(regular, text_sample) if regular else set(text_sample)
+            declared_missing = declared_gap
             if len(missing) < len(declared_missing):
                 notes.append({'rule': 'FONT_SUBSTITUTED', 'severity': 'REVIEW',
                               'message': f"theme font {Path(regular).name if regular else theme.get('font_file')!r} "
@@ -595,11 +641,17 @@ def resolve_font_for_platform(
         path = Path(font_path)
         if path.exists():
             # Try to find bold variant
-            bold_path = path.parent / path.name.replace('.ttf', 'bd.ttf').replace('.TTF', 'BD.TTF')
-            if not bold_path.exists():
-                bold_path = path.parent / path.name.replace('.ttf', '-Bold.ttf')
-            if not bold_path.exists():
-                bold_path = path  # Fallback to regular
+            stem, suffix = path.stem, path.suffix
+            bold_candidates = [
+                f'{stem}bd{suffix}', f'{stem}b{suffix}', f'{stem}BD{suffix}',
+                f'{stem}-Bold{suffix}', f'{stem} Bold{suffix}',
+            ]
+            if stem.endswith('-Regular'):
+                bold_candidates.append(f'{stem[:-len("-Regular")]}-Bold{suffix}')
+            elif stem.endswith(' Regular'):
+                bold_candidates.append(f'{stem[:-len(" Regular")]} Bold{suffix}')
+            bold_path = next((path.parent / name for name in bold_candidates
+                              if (path.parent / name).exists()), path)
 
             return str(path), str(bold_path)
 
@@ -628,7 +680,7 @@ def list_available_fonts() -> List[str]:
     return sorted(fonts.keys())
 
 
-def get_font_info(font_path: str) -> Dict[str, any]:
+def get_font_info(font_path: str) -> Dict[str, Any]:
     """
     Get information about a font file.
 
@@ -667,7 +719,7 @@ def get_font_info(font_path: str) -> Dict[str, any]:
         # Try to get font name
         try:
             info['family_name'] = font.getname()[0]
-        except:
+        except (OSError, AttributeError, IndexError):
             pass
     except Exception as e:
         info['error'] = str(e)

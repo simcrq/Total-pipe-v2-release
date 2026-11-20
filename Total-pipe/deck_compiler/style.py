@@ -90,10 +90,11 @@ def _merge(base, override, path=''):
     return result
 
 
-def _color(value, path):
+def _color(value, path, *, allow_fill=False):
     if not isinstance(value, str):
         raise StyleError(f'{path}: colour or token name expected')
-    if value in STROKES or value in FILLS or value in ('accent', 'foreground', 'muted', 'tint'):
+    allowed_tokens = set(FILLS) | {'accent', 'foreground', 'muted'} if allow_fill else set(STROKES)
+    if value in allowed_tokens:
         return value
     if not COLOR.fullmatch(value):
         raise StyleError(f'{path}: colour must be #RRGGBB or a token name')
@@ -141,9 +142,13 @@ def validate_style(value):
         elif name.endswith(('width', 'radius', 'size')):
             if isinstance(token, bool) or not isinstance(token, (int, float)) or not math.isfinite(token):
                 errors.append(f'{path}: number expected')
+            elif name.endswith('radius') and token < 0:
+                errors.append(f'{path}: non-negative number expected')
+            elif not name.endswith('radius') and token <= 0:
+                errors.append(f'{path}: positive number expected')
         else:
             try:
-                _color(token, path)
+                _color(token, path, allow_fill=name in ('fill', 'title_fill'))
             except StyleError as error:
                 errors.append(str(error))
     return errors

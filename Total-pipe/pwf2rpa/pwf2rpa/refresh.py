@@ -22,7 +22,11 @@ __all__ = ["refresh", "EXTRACTOR_JS"]
 #: text slots already sorted into slot-binding order so the Python side only
 #: has to render them.
 EXTRACTOR_JS = r"""
-import { getViewingProfile, enrichLayoutReadability } from "./server/readability.mjs";
+import {
+  enrichLayoutReadability,
+  resolvePlanningThresholds,
+} from "./server/visual-quality/legacy-planning.mjs";
+import { CONTENT_ROLES } from "./server/content-model.mjs";
 import fs from "node:fs/promises";
 
 const TEXT_SLOT_TYPES = new Set([
@@ -32,11 +36,11 @@ const TEXT_SLOT_TYPES = new Set([
 const VISUAL_SLOT_TYPES = new Set(["figure", "image", "visual"]);
 
 const library = JSON.parse(await fs.readFile("assets/layout-library/layouts.json", "utf8"));
-const profile = getViewingProfile("projector");
+const thresholds = resolvePlanningThresholds();
 const categories = {};
 
 for (const layout of library.layouts) {
-  const enriched = enrichLayoutReadability(layout, profile);
+  const enriched = enrichLayoutReadability(layout, "projector");
   const slots = enriched.slots ?? layout.slots;
   const readingOrder = new Map((layout.reading_order ?? []).map((id, index) => [id, index]));
 
@@ -100,6 +104,8 @@ process.stdout.write(JSON.stringify({
   roles: Object.fromEntries(ids.map((id) => [id, [...new Set(
     library.layouts.filter((layout) => layout.category === id)
       .flatMap((layout) => layout.content_roles ?? []))].sort()])),
+  visual_type_min_width: thresholds.type_min_width,
+  content_roles: [...CONTENT_ROLES],
 }));
 """
 
@@ -186,25 +192,12 @@ class Category(NamedTuple):
 #: Minimum display width (fraction of slide width) per visual_type, mirroring
 #: RPA's VISUAL_TYPE_RULES. A multi-panel figure needs more room than a photo.
 VISUAL_TYPE_MIN_WIDTH: dict[str, float] = {{
-    "photo": 0.25,
-    "schematic": 0.36,
-    "simple_plot": 0.36,
-    "dense_plot": 0.5,
-    "multi_panel_figure": 0.55,
-    "composite_figure_region": 0.42,
-    "table_screenshot": 0.55,
-    "microscopy": 0.36,
-    "visual_evidence": 0.34,
+{visual_type_min_width}
 }}
 
 #: content_role values RPA's content model recognises.
 CONTENT_ROLES: tuple[str, ...] = (
-    "primary_claim",
-    "primary_evidence",
-    "supporting_evidence",
-    "caption",
-    "context",
-    "optional_visual",
+{content_roles}
 )
 
 CATEGORIES: dict[str, Category] = {{
@@ -238,10 +231,28 @@ def _render(data: dict[str, Any]) -> str:
         lines.append("        ),")
         lines.append("    ),")
 
+    width_lines = [
+        f"    {k!r}: {v!r},"
+        for k, v in data.get("visual_type_min_width", {
+            "photo": 0.25, "schematic": 0.36, "simple_plot": 0.36,
+            "dense_plot": 0.5, "multi_panel_figure": 0.55,
+            "composite_figure_region": 0.42, "table_screenshot": 0.55,
+            "microscopy": 0.36, "visual_evidence": 0.34,
+        }).items()
+    ]
+    role_lines = [
+        f"    {role!r},"
+        for role in data.get("content_roles", (
+            "primary_claim", "primary_evidence", "supporting_evidence",
+            "caption", "context", "optional_visual",
+        ))
+    ]
     header = _HEADER.format(
         library_version=data["library_version"],
         category_count=len(data["categories"]),
         layout_count=layout_count,
+        visual_type_min_width="\n".join(width_lines),
+        content_roles="\n".join(role_lines),
     )
     return header + "\n".join(lines) + "\n}\n"
 

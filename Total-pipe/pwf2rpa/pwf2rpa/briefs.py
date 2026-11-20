@@ -33,13 +33,14 @@ DEFAULT_VISUAL_TYPE = "visual_evidence"
 #: silently drops unknown keys and the author never learns their hint was lost.
 SPEC_FIELDS = frozenset(
     {
-        "slide_type", "category_hint", "title", "goal", "claims", "takeaway",
+        "slide_id", "slide_type", "category", "category_hint", "title", "goal", "claims", "takeaway",
         "question", "notes", "narrative_job", "evidence_ids", "citation_ids",
-        "body", "key_points", "evidence_texts",
+        "body", "key_points", "secondary_messages", "text_flow", "evidence_texts",
         "visuals", "comparison_dimensions", "process_steps", "timeline_events",
         "experiment_groups", "data_series", "content_roles", "image_count",
-        "text_chars", "title_chars", "table_count", "chart_count",
-        "process_step_count", "duration_weight", "viewing_mode",
+        "text_chars", "text_chars_by_role", "title_chars", "table_count", "chart_count",
+        "process_step_count", "visual_aspect_ratio", "visual_safety_margin",
+        "slot_metrics", "duration_weight", "viewing_mode",
         "density_preference", "allow_auto_split", "metadata",
     }
 )
@@ -60,8 +61,11 @@ _VISUAL_KEYS = frozenset(
     {
         "visual_type", "panel_count", "has_embedded_text", "caption", "title",
         "description", "alt_text", "label", "figure_table_ref", "importance",
-        "must_keep", "asset_uri", "uri", "visual_id", "evidence_ids",
-        "citation_ids", "min_display_width", "visual_aspect_ratio",
+        "must_keep", "asset_uri", "uri", "visual_id", "source_id", "evidence_ids",
+        "citation_ids", "min_display_width", "display_width_norm", "display_height_norm",
+        "rendered_embedded_text_px", "visual_aspect_ratio", "visual_safety_margin",
+        "embedded_text_density", "caption_chars", "recommended_crop", "data", "metadata",
+        "source_visual_id", "region_id", "semantic_relation", "semantic_regions",
         "source_width_px", "source_height_px", "source_asset_id", "image_kind", "image_format", "crop_allowed",
     }
 )
@@ -131,7 +135,7 @@ def _normalize_visual(raw: Any, path: str, problems: list[Problem]) -> dict[str,
     visual["panel_count"] = panel_count
     visual["has_embedded_text"] = bool(raw.get("has_embedded_text", False))
 
-    for key in ("caption", "title", "description", "alt_text", "label", "figure_table_ref", "asset_uri", "uri", "visual_id"):
+    for key in ("caption", "title", "description", "alt_text", "label", "figure_table_ref", "asset_uri", "uri", "visual_id", "source_id", "source_visual_id", "region_id", "semantic_relation"):
         text = _text(raw.get(key))
         if text:
             visual[key] = text
@@ -147,6 +151,20 @@ def _normalize_visual(raw: Any, path: str, problems: list[Problem]) -> dict[str,
         value = raw.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             visual[key] = value
+    for key in ("display_width_norm", "display_height_norm", "rendered_embedded_text_px", "embedded_text_density", "visual_safety_margin"):
+        value = raw.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+            visual[key] = value
+    if isinstance(raw.get("caption_chars"), int) and not isinstance(raw.get("caption_chars"), bool) and raw["caption_chars"] >= 0:
+        visual["caption_chars"] = raw["caption_chars"]
+    if isinstance(raw.get("semantic_regions"), Sequence) and not isinstance(raw.get("semantic_regions"), (str, bytes)):
+        visual["semantic_regions"] = [dict(item) if isinstance(item, Mapping) else item for item in raw["semantic_regions"]]
+    if "recommended_crop" in raw and raw["recommended_crop"] is not None:
+        visual["recommended_crop"] = raw["recommended_crop"]
+    if "data" in raw and raw["data"] is not None:
+        visual["data"] = raw["data"]
+    if isinstance(raw.get("metadata"), Mapping):
+        visual["metadata"] = dict(raw["metadata"])
     for key in ('source_width_px', 'source_height_px'):
         if key in raw:
             value = raw[key]
@@ -298,8 +316,12 @@ def _build_one(
         "evidence_ids": evidence_ids,
         "duration_weight": spec.get("duration_weight", 1),
     }
+    if _text(spec.get("slide_id")):
+        brief["slide_id"] = _text(spec.get("slide_id"))
     if category:
         brief["category_hint"] = category
+    if _text(spec.get("category")):
+        brief["category"] = _text(spec.get("category"))
 
     for field in ("takeaway", "question", "notes", "narrative_job"):
         text = _text(spec.get(field))
@@ -311,6 +333,11 @@ def _build_one(
     key_points = _string_list(spec.get("key_points"))
     if key_points:
         brief["key_points"] = key_points
+    secondary_messages = _string_list(spec.get("secondary_messages"))
+    if secondary_messages:
+        brief["secondary_messages"] = secondary_messages
+    if spec.get("text_flow") in ("auto", "plain", "distributed_arrow_list"):
+        brief["text_flow"] = spec["text_flow"]
 
     # P0: carry the referenced evidence source text alongside the brief so a
     # downstream drafting role can expand it into full prose without
@@ -357,6 +384,17 @@ def _build_one(
         text = _text(spec.get(field))
         if text:
             brief[field] = text
+    if isinstance(spec.get("visual_aspect_ratio"), (int, float)) and not isinstance(spec.get("visual_aspect_ratio"), bool) and spec["visual_aspect_ratio"] > 0:
+        brief["visual_aspect_ratio"] = spec["visual_aspect_ratio"]
+    if isinstance(spec.get("visual_safety_margin"), (int, float)) and not isinstance(spec.get("visual_safety_margin"), bool) and 0 <= spec["visual_safety_margin"] <= 0.5:
+        brief["visual_safety_margin"] = spec["visual_safety_margin"]
+    if isinstance(spec.get("text_chars_by_role"), Mapping):
+        brief["text_chars_by_role"] = {
+            str(k): int(v) for k, v in spec["text_chars_by_role"].items()
+            if isinstance(v, int) and not isinstance(v, bool) and v >= 0
+        }
+    if isinstance(spec.get("slot_metrics"), Sequence) and not isinstance(spec.get("slot_metrics"), (str, bytes)):
+        brief["slot_metrics"] = [dict(item) if isinstance(item, Mapping) else item for item in spec["slot_metrics"]]
     if "allow_auto_split" in spec:
         brief["allow_auto_split"] = bool(spec["allow_auto_split"])
     if isinstance(spec.get("metadata"), Mapping):
