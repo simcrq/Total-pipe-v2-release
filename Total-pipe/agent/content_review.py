@@ -72,13 +72,15 @@ def validate(work, value):
 
 
 def prepare(work):
-    from deck_compiler.design import content_bindings
+    from deck_compiler.design import audit_design_quality, content_bindings
     work = Path(work)
     source = read(work/'page_design_prompt.json')
     design, story = read(work/'page_design.json'), read(work/'story_plan.json')
+    audit = audit_design_quality(design, story)
     prompt = {'schema_path': str(SCHEMA), 'story_sha256': sha(work/'story_plan.json'),
               'design_sha256': sha(work/'page_design.json'), 'request': source.get('request', {}),
               'scientific_records': content_bindings(story), 'pages': design['pages'],
+              'design_audit': audit,
               'evidence': source.get('evidence', {}), 'figures': source.get('figures', []),
               'workflow_root': source.get('workflow_root'),
               'checks': list(CHECKS),

@@ -195,6 +195,114 @@ def bind_design(design, story):
     return bound
 
 
+_VAGUE_DESIGN_RE = re.compile(
+    r'^(?:tbd|todo|placeholder|explain(?:\s+the)?\s+mechanism|default\s+layout|'
+    r'解释(?:一下|某?机制)|放文字|常规排版|默认排版|待定|略)[\s.。!！]*$',
+    re.I,
+)
+_VISUAL_PLAN_CUE_RE = re.compile(
+    r'图|表|公式|方程|流程|机制|对照|对比|路线|泳道|剖面|曲线|折线|散点|矩阵|类比|双栏|两栏|多区|示意|结构|'
+    r'\b(?:figure|diagram|chart|table|formula|equation|workflow|lane|comparison|mechanism|schematic|columns?|panel|plot|matrix|analogy|visual)\b',
+    re.I,
+)
+
+
+def _validate_design_gates(page, version, pid):
+    """Concrete design quality gates for 1.2/1.3 page designs."""
+    problems = []
+    if version not in ('1.2', '1.3'):
+        return problems
+    instruction = page.get('design')
+    if isinstance(instruction, str):
+        compact = re.sub(r'\s+', '', instruction)
+        if _VAGUE_DESIGN_RE.fullmatch(instruction.strip()) or len(compact) < 12:
+            problems.append(
+                f'{pid}: DESIGN_TOO_VAGUE — design brief is too vague; describe concrete visual '
+                'elements, relative arrangement, and presenter reading order.'
+            )
+    copy_items = [item for item in (page.get('display_copy') or []) if isinstance(item, dict)]
+    title = next((str(item.get('text') or '') for item in copy_items if item.get('role') == 'title'), '')
+    takeaway = next((str(item.get('text') or '') for item in copy_items if item.get('role') == 'takeaway'), '')
+    if title and takeaway and _squash(title) == _squash(takeaway):
+        problems.append(
+            f'{pid}: DESIGN_TITLE_TAKEAWAY_DUPLICATE — title and takeaway cannot be identical; '
+            'title states the finding and takeaway states its implication or condition.'
+        )
+    bodies = [item for item in copy_items if item.get('role') == 'body']
+    if len(bodies) > 6:
+        problems.append(
+            f'{pid}: DESIGN_BODY_OVERLOADED — {len(bodies)} body display_copy entries on one page '
+            '(max 6); group into a visual/table or split the page.'
+        )
+    for item in bodies:
+        body_text = str(item.get('text') or '').strip()
+        is_math = body_text.startswith('$') and body_text.endswith('$')
+        if not is_math and len(body_text) > 320:
+            problems.append(
+                f'{pid}/{item.get("id")}: DESIGN_BODY_OVERLOADED — body copy is {len(body_text)} chars '
+                '(max 320); condense audience copy while keeping full scientific records in Story/notes.'
+            )
+    if page.get('figures'):
+        has_readout = any(
+            item.get('role') in ('caption', 'label') and str(item.get('text') or '').strip()
+            for item in copy_items
+        )
+        if not has_readout:
+            problems.append(
+                f'{pid}: DESIGN_FIGURE_READOUT_MISSING — every page with paper figures requires '
+                'at least one visible caption or label in display_copy explaining what to inspect.'
+            )
+    return problems
+
+
+def audit_design_quality(design, story=None):
+    """Non-blocking structured design audit surfaced to page_review and diagnostics."""
+    pages = (design or {}).get('pages') or []
+    content_pages = [p for idx, p in enumerate(pages) if not (idx == 0 and not p.get('content_refs'))]
+    visual_pages = 0
+    sparse_risk_pages = []
+    for page in content_pages:
+        pid = page.get('id', '?')
+        raw_design = page.get('design')
+        design_text = raw_design if isinstance(raw_design, str) else str(raw_design or '')
+        carriers = {
+            c.get('kind')
+            for route in (page.get('content_map') or {}).values()
+            if isinstance(route, dict) and route.get('destination') == 'visible'
+            for c in (route.get('carriers') or [])
+            if isinstance(c, dict)
+        }
+        has_visual = bool(
+            page.get('figures')
+            or carriers.intersection({'figure', 'graphic', 'chart', 'table', 'formula'})
+            or _VISUAL_PLAN_CUE_RE.search(design_text)
+        )
+        if has_visual:
+            visual_pages += 1
+        else:
+            sparse_risk_pages.append(pid)
+    total = len(content_pages) or 1
+    visual_ratio = round(visual_pages / total, 3)
+    warnings = []
+    if len(content_pages) >= 3 and visual_ratio < 0.5:
+        warnings.append({
+            'code': 'DESIGN_LOW_VISUAL_DIVERSITY',
+            'message': (
+                f'Only {visual_pages}/{len(content_pages)} content pages ({visual_ratio:.0%}) plan '
+                'a concrete visual, diagram, table, chart or equation. Consult examples/library to '
+                'avoid conservative text-only slides.'
+            ),
+            'pages': sparse_risk_pages,
+        })
+    return {
+        'content_pages': len(content_pages),
+        'visual_pages': visual_pages,
+        'visual_ratio': visual_ratio,
+        'text_only_risk_pages': sparse_risk_pages,
+        'warnings': warnings,
+    }
+
+
 def _validate_reference_design(design, story, evidence, slide_count):
     """Validate only the stable handoff envelope; design prose is deliberately unconstrained."""
     def text(value):
@@ -254,6 +362,7 @@ def _validate_reference_design(design, story, evidence, slide_count):
         if design.get('schema_version') in ('1.2', '1.3'):
             from .content_projection import validate_page
             problems += [f'{pid}: {message}' for message in validate_page(page, story, evidence, _numbers)]
+            problems += _validate_design_gates(page, design.get('schema_version'), pid)
             copy_items = page.get('display_copy')
             copy_items = copy_items if isinstance(copy_items, list) else []
             text = ' '.join(str(item.get('text', '')) for item in copy_items if isinstance(item, dict))

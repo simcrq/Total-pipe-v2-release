@@ -2,7 +2,12 @@ import hashlib
 import os
 from pathlib import Path
 
-from loguru import logger
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
 
 from .pdf_local_handler import LocalPDFProcessor
 from .pdf_official_handler import OfficialMinerUProcessor

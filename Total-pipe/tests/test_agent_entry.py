@@ -109,21 +109,23 @@ class EntryTests(AgentCase):
 
     def test_capacity_replan_rejects_same_input_without_rebuilding_and_has_finite_budget(self):
         from agent.adapters import Failure
+        budget = runner.BY_ARTIFACT['deck_ir']['max_attempts']
+        self.assertEqual(budget, 6)
         with patch('agent.runner.a.execute', side_effect=Failure('INSUFFICIENT_DRAWING_SPACE', 'Need more room.', 'replan', 'deck_ir')) as execute:
             result = runner.start(str(self.fixture_ir()), str(self.out), 'zh', 'group_meeting')
             self.assertEqual(result['next_action']['type'], 'replan')
-            self.assertEqual(result['retry']['max'], 3)
+            self.assertEqual(result['retry']['max'], budget)
             self.assert_action(result)
             path = self.out/'work/deck_ir.json'
             runner.advance(result['job_id'], artifact_kind='deck_ir', artifact_path=str(path))
             self.assertEqual(execute.call_count, 1)
-            for i in range(3):
+            for i in range(budget):
                 value = read(path)
                 value['slides'][0]['semantic']['speaker_notes'] += f'\nTest revision {i}.'
                 write(path, value)
                 result = runner.advance(result['job_id'], artifact_kind='deck_ir', artifact_path=str(path))
             self.assertEqual(result['next_action']['reason'], 'REPLAN_LIMIT_REACHED')
-            self.assertEqual(execute.call_count, 3)
+            self.assertEqual(execute.call_count, budget)
 
     def test_missing_officecli_and_corrupt_initial_ir_return_recoverable_envelopes(self):
         with patch('agent.adapters.shutil.which', return_value=None):

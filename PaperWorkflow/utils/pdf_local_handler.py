@@ -1,6 +1,11 @@
 import os
 import subprocess
-from loguru import logger
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
 
 class LocalPDFProcessor:
     def __init__(self, config):

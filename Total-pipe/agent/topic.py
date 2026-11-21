@@ -34,6 +34,10 @@ def check_design(value, slide_count=None):
         design = page.get('design')
         if not ((isinstance(design, str) and design.strip()) or (isinstance(design, dict) and design)):
             raise ValueError(f'{pid}: provide a non-empty visual design or walkthrough.')
+        if isinstance(design, str):
+            compact = re.sub(r'\s+', '', design)
+            if len(compact) < 8 or re.fullmatch(r'(?:tbd|todo|placeholder|待定|略|放文字|默认排版)[\s.。!！]*', design.strip(), re.I):
+                raise ValueError(f'{pid}: DESIGN_TOO_VAGUE — design brief is too vague; describe concrete visual elements and reading order.')
         for field in ('title', 'take', 'notes'):
             if field in page and not isinstance(page[field], str):
                 raise ValueError(f'{pid}: {field} must be a string.')

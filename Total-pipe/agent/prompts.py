@@ -217,7 +217,15 @@ def design_task(prompt=None):
   图中数据不能猜点；示意与构造例须可见标识，论文与补充背景来源分开。
 - {BODY_GUIDES_TASK}
 - {DESIGN_EXAMPLE_TASK}
-- setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。无需知道编译器能力，不读编译器源码。
+- **设计门禁与边设计边调试**：每页 `design` 须写清具体视觉对象、空间分区与读图顺序（禁止空泛占位句）；
+  标题与结论不能逐字重复；单页正文条目 ≤ 6 条（单条非公式 ≤ 320 字）；有论文原图的页面必须在 `display_copy`
+  中写出可见 `caption` 或 `label` 读图说明。
+  `page_design` 与 `deck_ir` 已打通单页联调：设计关键页/复杂页时，可先读 `co_design.syntax_reference_path`
+  （Deck IR 全功能实现与语法手册，无需翻项目源码；但示例库 `example_lookup` 仍须检索查看），直接在 `work/pages/<id>.json`
+  写单页 Deck IR 草稿并调用 `totalpipe_advance(preview={{artifact_path, slide_ids, mode:"layout"|"render"}})`
+  实时查看骨架、留白占比和渲染 PNG（不消耗修订预算），边设计边调好单页版面；后续进入 `deck_ir` 时可直接复用
+  `work/pages/` 下已调试的草稿，且 IR 阶段最多分出 **2** 个并行子代理。
+- setting 复用用户场合，不展开第二次听众分析。讲解顺序指向具体对象。
 - 你不填写通过审查的记录。主 Agent 之后逐页对照科学记录审读文案，未通过会退回设计。
 
 输出设计，简述页数和关键视觉选择。不要把这份任务书改写成幻灯片正文。"""
@@ -253,7 +261,9 @@ def ir_task(prompt=None):
     if ((prompt or {}).get('page_design') or {}).get('schema_version') in ('1.2', '1.3'):
         return f"""# Deck IR 实现任务（页面表达契约 1.2）
 
-源文案已由主 Agent 审读。完整读取 `work/ir_prompt_designed.json` 或指定逐页提示包及完整 IR Schema。
+源文案已由主 Agent 审读。完整读取 `work/ir_prompt_designed.json` 或指定逐页提示包、完整 IR Schema 以及
+`syntax_reference_path`（`docs/deck-ir-syntax-reference.md` 全功能实现与代码语法手册——**无需再翻阅项目源代码**；
+但**示例库 `example_lookup` 仍须检索查看**以借鉴成熟构图与空间占比）。
 实现 {len(pages)} 页的 display_copy、content_map 和视觉设计，保持页序、分配、选图和科学含义。
 
 - display_copy 是投屏文案权威；Story 是科学记录。可在文本字段写 {{"copy_ref":"文案 id"}}，提交时自动绑定。
@@ -266,6 +276,9 @@ def ir_task(prompt=None):
 - 保持每条独立正文各自的 block、文案引用与来源。先查逐页 `example_lookup.suggestions`，需要时细化检索，只读选中的示例。
 - 写完草稿后，按 `next_action.page_authoring.pages[].preview_plan` 调用骨架预览。检查反馈后按
   `next_action.preview_follow_up` 渲染并打开实际 PNG。其他页可按需预览。
+  若设计阶段已在 `work/pages/` 联调并留下草稿（`draft_exists: true`），核对绑定后可直接复用并提交。
+  并行拆页时，严格按 `page_authoring.parallel_authoring.batches` 分配，**整个 IR 阶段最多分出 2 个子代理**
+  （每批一个，共享相同的顶层 Deck IR header），不要按每页单独起代理。
   已审读的独立公式用 copy_ref 进入原生公式块，混排保留原有数学标记。渲染与 QA 分开检查。
 
 交付实现选择与真实未解决项。"""
@@ -273,7 +286,7 @@ def ir_task(prompt=None):
 
 页面设计已经批准。逐页实现视觉设计；Story 保持科学内容权威。
 
-- 完整读取 `work/ir_prompt_designed.json` 及 IR Schema。其中有 {len(pages)} 页设计、Story、证据和实现能力。
+- 完整读取 `work/ir_prompt_designed.json`、IR Schema 及 `syntax_reference_path`（Deck IR 全功能语法手册，无需翻项目源码；但示例库 `example_lookup` 仍须检索查看）。其中有 {len(pages)} 页设计、Story、证据和实现能力。
 - 输出符合 canonical Schema 的 `work/deck_ir.json`。资产 path 基于 workflow_root，IR assets 用绝对路径。
 - 1.1 设计的 content_refs 指向 Story 原文；content_catalog 给出自动继承的 evidence，含 ending 的汇总来源。
   设计里的 design 是绘图、构图与讲解交代，

@@ -772,11 +772,16 @@ def ir_prompt(workflow, rpa_input, normalized, plan, supplement='off'):
     from deck_compiler.layout_tree import capabilities
     from deck_compiler.type_scale import constraints
     from deck_compiler.style import capabilities as style_capabilities
+    syntax_ref = str(COMPONENT/'docs/deck-ir-syntax-reference.md')
     prompt = {'workflow': workflow, 'rpa_input': rpa_input, 'content_model': normalized, 'deck_plan': plan,
         'archetypes': ARCHETYPES, 'components': sorted(COMPONENTS), 'capabilities': capabilities(),
         'type_scale': constraints(), 'visual_style': style_capabilities(),
+        'syntax_reference_path': syntax_ref,
         'schema': read(COMPONENT/'schemas/deck-ir.schema.json'),
-        'instructions': 'Write canonical Deck IR. Preserve complete scientific body, key_points, figures, equations, '
+        'instructions': 'Write canonical Deck IR. Read syntax_reference_path (docs/deck-ir-syntax-reference.md) for '
+        'all supported Deck IR features, enums, layout_tree/graphic/chart/table/formula/list/device syntax and '
+        'shorthands—no need to browse compiler source code—while still consulting example_lookup (examples/library) '
+        'for multi-zone layout patterns and visual density. Preserve complete scientific body, key_points, figures, equations, '
         'units and uncertainty. Semantic titles are declarative phrases, not questions: do not copy a Story '
         'question and do not end a title with ? or ？. '
         'Choose the page structure first: composite-research + layout_tree is a first-class option, not only '
@@ -846,6 +851,39 @@ def execute(stage, job):
     out = Path(job['request']['out_dir'])
     work = out/'work'
     request = job['request']
+    if stage == 'ocr':
+        from .mineru_cli import MinerUError, extract_pdf
+        ocr_root = out/'ocr'
+        try:
+            primary = extract_pdf(request['source'], ocr_root)
+            supplementary = []
+            for idx, sup_path in enumerate(request.get('supplementary_paths') or [], 1):
+                sup = Path(sup_path)
+                if sup.is_file() and sup.suffix.lower() == '.pdf':
+                    sup_res = extract_pdf(sup, ocr_root/'supplementary'/f'si_{idx}')
+                    supplementary.append({
+                        'source_pdf': sup_res['source_pdf'],
+                        'markdown_path': sup_res['markdown_path'],
+                        'images_dir': sup_res['images_dir'],
+                        'cache_hit': sup_res['cache_hit'],
+                        'char_count': sup_res['char_count'],
+                    })
+        except MinerUError as error:
+            raise Failure(error.code, redact(str(error)), 'resolve_dependency', 'ocr') from error
+        payload = {
+            **primary,
+            'ingestion': {
+                'mode': primary['mode'],
+                'engine': primary['engine'],
+                'extract_mode': primary['extract_mode'],
+                'model': primary['model'],
+                'ocr_flag': primary['ocr_flag'],
+                'cache_hit': primary['cache_hit'],
+            },
+            'supplementary': supplementary,
+        }
+        write(work/'ocr_result.json', payload)
+        return [ocr_root, work/'ocr_result.json']
     if stage == 'evidence':
         if request['source_kind'] == 'workflow':
             workflow = Path(request['source'])
@@ -857,10 +895,17 @@ def execute(stage, job):
             # instead of re-inferring from the wording.
             queries = [{'query': q['query'], **({'intent': q['intent']} if q.get('intent') else {})}
                        for q in read(work/'queries.json')]
-            write(args, {'source_path': request['source'], 'output_dir': str(out/'evidence'),
-                         'queries': queries,
-                         'supplementary_paths': request.get('supplementary_paths', []),
-                         'supplementary_content_included': request.get('supplementary_content_included', False)})
+            ev_args = {'source_path': request['source'], 'output_dir': str(out/'evidence'),
+                       'queries': queries,
+                       'supplementary_paths': request.get('supplementary_paths', []),
+                       'supplementary_content_included': request.get('supplementary_content_included', False)}
+            ocr_path = work/'ocr_result.json'
+            if request['source_kind'] == 'pdf' and ocr_path.is_file():
+                ocr_data = read(ocr_path)
+                if ocr_data.get('markdown_path') and Path(ocr_data['markdown_path']).is_file():
+                    ev_args['ocr_markdown_path'] = ocr_data['markdown_path']
+                    ev_args['ingestion'] = ocr_data.get('ingestion') or {'mode': 'direct_cli', 'engine': 'mineru-open-api'}
+            write(args, ev_args)
             result = run([sys.executable, Path(__file__).parent/'bridges/paperworkflow_bridge.py',
                           '--op', 'literature_workflow', '--args', args], ROOT, out, 'evidence', 1200)
             if not result.get('ok') or result['result'].get('status') == 'blocked':
@@ -900,8 +945,19 @@ def execute(stage, job):
                 '--story-reasoning', selection['reasoning_effort'], '--model-selected-by-user')
         prompt = read(work/'story_prompt.json')
         prompt['request'] = prompt_request(request)
-        prompt['instructions'] += ('\n\nPresentation request: '+json.dumps(prompt['request'], ensure_ascii=False)+
-                                   '\nUse the requested presentation language while preserving scientific terms and uncertainty.')
+        try:
+            from .evidence_search import lookup_descriptor
+            prompt['evidence_lookup'] = lookup_descriptor(workflow, job_id=job.get('job_id'))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        prompt['instructions'] += (
+            '\n\nPresentation request: '+json.dumps(prompt['request'], ensure_ascii=False)+
+            '\nUse the requested presentation language while preserving scientific terms and uncertainty.'
+            '\nEvidence retrieval: use evidence_lookup.command_prefix (search/outline/read-lines) or '
+            'advance.evidence_query whenever you need to verify formulas, controls, initialization/methods, '
+            'negative findings, or supplementary details beyond the initial evidence_store. Cite exact EVxxxx '
+            'IDs returned by registry_hits/nearest_ev_ids; never fabricate EV IDs.'
+        )
         write(work/'story_prompt.json', prompt)
         return [work/'story_prompt.json']
     if stage == 'rpa':
@@ -988,6 +1044,27 @@ def execute(stage, job):
             'figures': figures,
             'recipes': recipe_capabilities(),
             'example_lookup': design_lookup,
+            'co_design': {
+                'enabled': request.get('page_mode', 'deck_ir') == 'deck_ir',
+                'merged_with': 'deck_ir',
+                'live_preview_enabled': True,
+                'draft_pages_dir': str(work/'pages'),
+                'deck_ir_schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
+                'syntax_reference_path': str(COMPONENT/'docs/deck-ir-syntax-reference.md'),
+                'ir_prompt_path': str(work/'ir_prompt.json'),
+                'max_ir_subagents': 2,
+                'preview_example': {
+                    'tool': 'totalpipe_advance',
+                    'arguments': {
+                        'job_id': job.get('job_id'),
+                        'preview': {
+                            'artifact_path': str(work/'pages/P1.json'),
+                            'slide_ids': ['P1'],
+                            'mode': 'layout',
+                        },
+                    },
+                },
+            },
             'schema_path': str(COMPONENT/'schemas'/(f'page-design-v{design_version}.schema.json' if projection else 'page-design.schema.json')),
             'workflow_root': str(Path(workflow).parent),
             'content_catalog': {source: {key: binding[key] for key in ('evidence', 'policy') if key in binding}

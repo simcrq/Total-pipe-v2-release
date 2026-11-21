@@ -36,6 +36,7 @@
 
 | 能力 | 文档 |
 | --- | --- |
+| **Deck IR 全设计功能实现与代码语法速查（Agent 免翻源码手册）** | [Deck IR 语法与全功能手册](../Total-pipe/docs/deck-ir-syntax-reference.md)（仍须配合[示例库](../Total-pipe/examples/library/README.md)检索） |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
 | PageScene：显式页面场景、job 接入、绑定门禁与页级原生预览 | [PageScene 集成](../Total-pipe/docs/page-scene.md) |
 | 页面 recipe 最小闭环：无卡片、原生列表、行内公式 | [Page recipes pilot](../Total-pipe/docs/page-recipes.md) |

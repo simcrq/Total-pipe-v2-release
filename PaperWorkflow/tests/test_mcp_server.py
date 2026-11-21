@@ -103,6 +103,32 @@ class MCPServerTests(unittest.TestCase):
             self.assertEqual(result["source_dependency_readiness"], "review")
             self.assertEqual(next(g["status"] for g in workflow["gates"] if g["gate"] == "supplementary_dependencies"), "review")
 
+    def test_workflow_reuses_pre_ocr_markdown_without_re_running_ocr(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF-1.4 synthetic")
+            ocr_md = root / "ocr" / "full.md"
+            ocr_md.parent.mkdir(parents=True)
+            ocr_md.write_text(
+                "# Pre-OCR Paper\n\n# Methods\nMeasured at 300 K.\n\n# Results\nResponse doubled.\n",
+                encoding="utf-8",
+            )
+            out = root / "bundle"
+            with patch.object(mcp_server, "_ocr_to_markdown", side_effect=AssertionError("must not re-OCR")):
+                result = mcp_server.tool_literature_workflow(
+                    {
+                        "source_path": str(pdf),
+                        "ocr_markdown_path": str(ocr_md),
+                        "ingestion": {"mode": "direct_cli", "engine": "mineru-open-api"},
+                        "output_dir": str(out),
+                        "queries": ["measured response 300 K"],
+                    }
+                )
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["source"]["input_type"], "pdf")
+            self.assertTrue((out / "workflow.json").is_file())
+
     def test_prompt_builder_indexes_arbitrary_source_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             source_dir = Path(temporary) / "papers"

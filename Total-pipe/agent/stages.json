@@ -12,6 +12,15 @@
       ]
     },
     {
+      "id": "ocr",
+      "kind": "component",
+      "adapter": "ocr",
+      "sources": [
+        "pdf"
+      ],
+      "timeout_sec": 1800
+    },
+    {
       "id": "queries",
       "kind": "agent",
       "artifact": "queries",
@@ -20,7 +29,7 @@
         "markdown"
       ],
       "instructions_ref": "queries",
-      "max_attempts": 3
+      "max_attempts": 5
     },
     {
       "id": "evidence",
@@ -68,7 +77,7 @@
         "workflow"
       ],
       "instructions_ref": "story",
-      "max_attempts": 2
+      "max_attempts": 5
     },
     {
       "id": "scientific_review",
@@ -82,7 +91,7 @@
       "prepare": "scientific_review",
       "skip_if": "legacy_story",
       "instructions_ref": "scientific_review",
-      "max_attempts": 2
+      "max_attempts": 4
     },
     {
       "id": "rpa",
@@ -107,7 +116,7 @@
       ],
       "prepare": "page_design",
       "instructions_ref": "page_design",
-      "max_attempts": 2
+      "max_attempts": 6
     },
     {
       "id": "page_review",
@@ -121,7 +130,7 @@
       "prepare": "page_review",
       "skip_if": "legacy_page_design",
       "instructions_ref": "page_review",
-      "max_attempts": 2
+      "max_attempts": 4
     },
     {
       "id": "page_scene",
@@ -136,7 +145,7 @@
       "prepare": "page_scene",
       "skip_if": "deck_ir_mode",
       "instructions_ref": "page_scene",
-      "max_attempts": 4
+      "max_attempts": 6
     },
     {
       "id": "deck_ir",
@@ -144,7 +153,7 @@
       "artifact": "deck_ir",
       "skip_if": "page_scene_mode",
       "instructions_ref": "ir",
-      "max_attempts": 3
+      "max_attempts": 6
     },
     {
       "id": "design",
@@ -159,7 +168,7 @@
       "artifact": "visual_proposal",
       "skip_if": "design_complete",
       "instructions_ref": "design",
-      "max_attempts": 3
+      "max_attempts": 5
     },
     {
       "id": "build",

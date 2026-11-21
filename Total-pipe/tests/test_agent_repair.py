@@ -543,11 +543,11 @@ class PatchRunnerTests(RepairCase):
         self.assertEqual(recovered['repair_result']['status'], 'preflight_passed')
         self.assertFalse(read(self.out/'.totalpipe/job.json').get('repair_attempts'))
 
-    def test_three_distinct_rejections_require_full_replan_without_removing_candidate(self):
+    def test_distinct_rejections_hit_budget_and_require_full_replan_without_removing_candidate(self):
         result = self.start_fast()
         protected = self.protected_snapshot()
         good = self.patch_value()
-        for index in range(3):
+        for index in range(runner.MAX_REPAIR_ATTEMPTS):
             rejected = self.submit_patch(result['job_id'], {**good, f'forbidden-{index}': 'scientific edit'})
             self.assertEqual(rejected['repair_result']['code'], 'PATCH_INVALID')
         limited = self.submit_patch(result['job_id'], good)

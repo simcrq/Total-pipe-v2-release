@@ -21,7 +21,27 @@ MARKER_RE = re.compile(
     r"(?m)^(?:#{1,6})[ \t]+.+?$|!\[[^\]]*\]\([^)]+\)|\$\$(?:.|\n)*?\$\$|\\\[(?:.|\n)*?\\\]"
 )
 ENGLISH_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+NUMERIC_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_.])\d+(?:\.\d+)?(?:%|(?:nm|um|μm|mm|cm|ms|ns|ps|fs|ev|mev|gev|mv|ma|μa|khz|mhz|ghz|hz|db|k|v|a)\b)?(?![A-Za-z0-9_])",
+    re.I,
+)
+REF_TOKEN_RE = re.compile(r"\b(?:fig(?:ure)?\.?\s*(s?\d+[a-z]?)|eq(?:uation)?\.?\s*(\d+)|table\.?\s*(s?\d+))\b", re.I)
 CJK_TOKEN_RE = re.compile(r"[\u3400-\u9fff]+")
+
+# Lightweight bilingual scientific synonyms so Chinese queries hit English papers (and vice versa).
+_BILINGUAL_QUERY_EXPANSIONS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
+    (re.compile(r"公式|方程|推导|表达式|equation|formula", re.I), ("equation", "equations", "formula", "formulas", "eq", "model", "derived", "relation", "公式", "方程")),
+    (re.compile(r"对照|基线|比较|对比|control|baseline|comparison", re.I), ("control", "controls", "baseline", "comparison", "compared", "versus", "对照", "基线")),
+    (re.compile(r"消融|ablation", re.I), ("ablation", "without", "removed", "消融")),
+    (re.compile(r"误差|不确定|标准差|方差|波动|error|uncertainty|std|deviation", re.I), ("error", "errors", "uncertainty", "standard", "deviation", "variance", "sd", "sem", "误差", "不确定")),
+    (re.compile(r"局限|边界|限制|条件|适用|limitation|boundary|scope|condition", re.I), ("limitation", "limitations", "limit", "limits", "boundary", "scope", "condition", "conditions", "temperature", "degrades", "局限", "条件")),
+    (re.compile(r"方法|制备|合成|初始化|前处理|实验|method|fabricat|prepar|synthesi|initializ", re.I), ("method", "methods", "fabrication", "preparation", "synthesis", "initialization", "experimental", "方法", "制备")),
+    (re.compile(r"性能|准确率|精度|开关比|效率|响应|performance|accuracy|efficiency|ratio", re.I), ("performance", "accuracy", "efficiency", "ratio", "responsivity", "gain", "性能", "准确率")),
+    (re.compile(r"机制|原理|物理|mechanism|principle|physics", re.I), ("mechanism", "mechanisms", "principle", "principles", "physical", "transport", "injection", "机制", "原理")),
+    (re.compile(r"负面|失败|反例|未证实|negative|failure|fail|exception", re.I), ("negative", "failure", "failed", "exception", "cannot", "unresolved", "负面", "反例")),
+    (re.compile(r"补充材料|附录|supplementary|extended\s+data", re.I), ("supplementary", "extended", "supporting", "appendix", "补充材料")),
+)
+_FORMULA_QUERY_RE = re.compile(r"公式|方程|推导|表达式|\b(?:eq(?:uation)?|formula|latex|math)\b", re.I)
 SENTENCE_BOUNDARY_RE = re.compile(
     r"(?<!Fig\.)(?<!fig\.)(?<!Eq\.)(?<!eq\.)(?<!e\.g\.)(?<!i\.e\.)(?<=[.!?。！？])\s+(?=(?:[A-Z0-9（(]|[\u3400-\u9fff]))"
 )
@@ -110,13 +130,27 @@ def _normalise_title(title: str) -> str:
 
 
 def terms(value: str) -> list[str]:
-    """Tokenize English and CJK text for deterministic multilingual retrieval."""
+    """Tokenize English, numeric quantities, figure/equation refs, and CJK text."""
 
     result = [
         token.lower()
         for token in ENGLISH_TOKEN_RE.findall(value)
         if len(token) > 1 and token.lower() not in SEARCH_STOPWORDS
     ]
+    for num in NUMERIC_TOKEN_RE.findall(value):
+        cleaned = num.lower().strip()
+        if cleaned:
+            result.append(cleaned)
+            stem = re.match(r"\d+(?:\.\d+)?", cleaned)
+            if stem and stem.group(0) != cleaned and (len(stem.group(0)) >= 2 or "." in stem.group(0)):
+                result.append(stem.group(0))
+    for fig_id, eq_id, tab_id in REF_TOKEN_RE.findall(value):
+        if fig_id:
+            result.append(f"fig:{fig_id.lower()}")
+        if eq_id:
+            result.append(f"eq:{eq_id.lower()}")
+        if tab_id:
+            result.append(f"table:{tab_id.lower()}")
     for sequence in CJK_TOKEN_RE.findall(value):
         if sequence in SEARCH_STOPWORDS:
             continue
@@ -129,6 +163,21 @@ def terms(value: str) -> list[str]:
                 if sequence[index:index + 2] not in SEARCH_STOPWORDS
             )
     return result
+
+
+def expand_query_terms(query: str) -> list[str]:
+    """Return original query terms plus lightweight bilingual scientific synonyms."""
+    base = terms(query)
+    seen = set(base)
+    expanded = list(base)
+    for pattern, synonyms in _BILINGUAL_QUERY_EXPANSIONS:
+        if pattern.search(query):
+            for syn in synonyms:
+                for tok in terms(syn):
+                    if tok not in seen:
+                        expanded.append(tok)
+                        seen.add(tok)
+    return expanded
 
 
 def split_chunks(markdown: str, max_chars: int = 6000) -> list[dict[str, Any]]:
@@ -381,6 +430,9 @@ def search_graph(
     top_k: int = 5,
     *,
     intent: str | None = None,
+    modality: str | None = None,
+    section: str | None = None,
+    include_formulas: bool = False,
 ) -> list[dict[str, Any]]:
     """Rank atomic spans from an already-built document graph.
 
@@ -391,23 +443,68 @@ def search_graph(
 
     if top_k < 1:
         raise ValueError("top_k must be at least 1")
-    query_terms = terms(query)
-    if not query_terms:
+    raw_query_terms = terms(query)
+    if not raw_query_terms:
         raise ValueError("query must contain at least one searchable term")
-    candidates = [
-        span for span in graph["spans"]
-        if span["modality"] not in {"heading", "image_ref", "formula", "bibliography", "boilerplate"}
-        and len(terms(span["text"])) >= 2
-    ]
+    query_terms = expand_query_terms(query)
+    raw_term_set = set(raw_query_terms)
+    want_formula = include_formulas or modality == "formula" or bool(_FORMULA_QUERY_RE.search(query))
+    excluded = {"heading", "image_ref", "bibliography", "boilerplate"}
+    if not want_formula:
+        excluded.add("formula")
+    section_needle = (section or "").strip().casefold()
+    candidates = []
+    for span in graph["spans"]:
+        span_mod = span["modality"]
+        if span_mod in excluded:
+            continue
+        if modality:
+            if modality == "figure" and span_mod not in {"figure_caption", "figure"}:
+                continue
+            elif modality != "figure" and span_mod != modality:
+                continue
+        if section_needle:
+            h_text = f"{span.get('semantic_heading', '')} {span.get('heading', '')}".casefold()
+            if section_needle not in h_text:
+                continue
+        min_terms = 1 if span_mod == "formula" else 2
+        if len(terms(span["text"])) >= min_terms:
+            candidates.append(span)
+    if not candidates:
+        return []
     token_counts = [Counter(terms(span["text"])) for span in candidates]
     frequency = Counter(token for counts in token_counts for token in counts)
     average_length = sum(sum(counts.values()) for counts in token_counts) / max(1, len(candidates))
     preferred_heading = INTENT_HEADING_PATTERNS.get(intent or "")
     ranked: list[tuple[float, dict[str, Any]]] = []
 
+    all_spans = graph.get("spans", [])
+    span_pos = {s["span_id"]: idx for idx, s in enumerate(all_spans)}
+
+    def _formula_context_terms(span: dict[str, Any]) -> set[str]:
+        idx = span_pos.get(span["span_id"])
+        if idx is None:
+            return set()
+        ctx: set[str] = set()
+        for neighbor_idx in (idx - 1, idx + 1):
+            if 0 <= neighbor_idx < len(all_spans):
+                nb = all_spans[neighbor_idx]
+                if nb.get("chunk_id") == span.get("chunk_id"):
+                    ctx.update(terms(nb.get("text", "")))
+        return ctx
+
     for span, counts in zip(candidates, token_counts):
+        heading = span["semantic_heading"]
+        heading_terms = set(terms(heading))
         matched = sorted({term for term in query_terms if counts.get(term, 0)})
-        if not matched:
+        heading_matched = sorted(heading_terms.intersection(query_terms))
+        context_matched: list[str] = []
+        if span["modality"] == "formula":
+            context_matched = sorted(_formula_context_terms(span).intersection(query_terms))
+        formula_modality_hit = bool(
+            span["modality"] == "formula" and (modality == "formula" or want_formula)
+        )
+        if not matched and not heading_matched and not context_matched and not formula_modality_hit:
             continue
         document_length = max(1, sum(counts.values()))
         score = 0.0
@@ -415,11 +512,19 @@ def search_graph(
             count = counts.get(term, 0)
             if not count:
                 continue
+            weight = 1.0 if term in raw_term_set else 0.55
             inverse = math.log(1.0 + (len(candidates) - frequency[term] + 0.5) / (frequency[term] + 0.5))
             denominator = count + 1.5 * (0.25 + 0.75 * document_length / max(1.0, average_length))
-            score += inverse * (count * 2.5) / denominator
+            score += weight * inverse * (count * 2.5) / denominator
+        if context_matched:
+            score += 0.9 * len(context_matched)
+        if formula_modality_hit:
+            score += 1.5
+            if not matched:
+                matched = sorted(set(context_matched + heading_matched + ["formula"]))
+        elif not matched:
+            matched = sorted(set(heading_matched))
 
-        heading = span["semantic_heading"]
         if intent == "sample_preparation" and not re.search(
             r"prepar|fabricat|synthesi|polymer|material|reagent|ink|formamide|substrate|"
             r"plasma|hydrophobic|print|nozzle|droplet|coat|blade|embed|cur|peel|transfer|"
@@ -517,9 +622,20 @@ def search_spans(
     top_k: int = 5,
     *,
     intent: str | None = None,
+    modality: str | None = None,
+    section: str | None = None,
+    include_formulas: bool = False,
     max_chars: int = 6000,
 ) -> list[dict[str, Any]]:
     """Rank atomic text spans and return the matching passage, never a chunk prefix."""
     markdown = _load_markdown(markdown_or_path)
     graph = build_document_graph(markdown, max_chars=max_chars)
-    return search_graph(graph, query, top_k=top_k, intent=intent)
+    return search_graph(
+        graph,
+        query,
+        top_k=top_k,
+        intent=intent,
+        modality=modality,
+        section=section,
+        include_formulas=include_formulas,
+    )

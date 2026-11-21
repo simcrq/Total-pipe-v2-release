@@ -15,11 +15,14 @@ transport = StdioMcpServer(
     instructions=(
         'Drive the workflow using next_action. Read only the indicated full prompt. '
         'For a topic or question, start with source_kind=topic and the text as source. Author topic content and page design, '
-        'use the example library as needed, then implement PageScene. Model delegation is optional for topic jobs. '
+        'use the example library, then implement PageScene. Model delegation is optional for topic jobs. '
         'Agent-authored queries, Story, canonical IR and visual proposal retain scientific content. '
-        'Paper Story requires a real independent subagent and the user’s explicit model choice. Never invent provenance. '
+        'Paper Story requires a real independent subagent and the user’s explicit model choice; use advance.evidence_query '
+        'or story_prompt.evidence_lookup to search the evidence registry, full paper Markdown, and SI on demand. Never invent EV IDs. '
         'When status is running, call advance; when blocked, resolve the reported issue. '
         'New atomic Stories use scientific_review before RPA, page design 1.3 and actual source/copy review before IR. '
+        'During page_design, you may co-design and live-debug single-page Deck IR drafts via advance.preview before submission. '
+        'At deck_ir, dispatch at most 2 parallel IR subagents (one per batch in page_authoring.parallel_authoring.batches). '
         'Scientific records are archived; approved audience copy and scoped qualifiers must be visible. Never auto-attest review. '
         'Native render/review/ingest are explicit advance operations after candidate. Never auto-attest UI review. '
         'Candidate REVIEW notes do not satisfy PowerPoint final promotion; final remains CLI-only.'
@@ -52,8 +55,10 @@ DEFINITIONS = {
             'review_ids': {'type': 'array', 'minItems': 1, 'items': STRING}},
             'required': ['reviewer','note','review_ids'], 'additionalProperties': False},
         'preview': {**json.loads((Path(__file__).parent/'schemas/ir-preview.schema.json').read_text(encoding='utf-8')),
-                    'description': 'Render selected draft IR pages to cached HTML PNGs without acceptance, revision use or candidate changes. Open PNGs, edit IR, repeat.'},
+                    'description': 'Render selected draft IR pages to cached skeleton/HTML PNGs without acceptance, revision use or candidate changes. Available from page_design onward.'},
         'scene_preview': json.loads((Path(__file__).parent/'schemas/page-scene-preview.schema.json').read_text(encoding='utf-8')),
+        'evidence_query': {**json.loads((Path(__file__).parent/'schemas/evidence-query.schema.json').read_text(encoding='utf-8')),
+                           'description': 'Read-only evidence retrieval across evidence_registry (exact EV IDs), full paper Markdown, and paired SI during story/review/design.'},
         'native': json.loads((Path(__file__).parent/'schemas/native-acceptance.schema.json').read_text(encoding='utf-8'))}, ['job_id']),
     'totalpipe_status': (status, {'job_id': STRING,
         'detail': {'type': 'string', 'enum': ['summary', 'full'], 'default': 'summary'}}, ['job_id']),

@@ -9,7 +9,7 @@ description: 从题目、问题、论文 PDF、Markdown、已有证据包或 Dec
 
 只有题目或问题时，用 source_kind=topic，把题目原文作为 source，提供 out_dir。Agent 在 page_design 先查看 `example_lookup.recommended`/`catalog` 并打开匹配案例，再直接写 PageScene（同样参考 `example_lookup.per_page_suggestions`，避免单列大留白）。用户明确要求指定模型时，在 page_design 通过 advance.inputs 选择子代理。按 next_action 推进和导出。[题目入口](../../docs/agent-adapter.md#从题目开始)
 
-文件入口用 source、out_dir、language、presentation_type，source_kind 支持 auto/pdf/markdown/workflow/deck_ir。slide_count 是最终论文页目标（1–40），独立补充文字页另计。论文的 page_mode=page_scene 在 page_review 后写显式 box，默认 deck_ir 保留全部高级对象。
+文件入口用 source、out_dir、language、presentation_type，source_kind 支持 auto/pdf/markdown/workflow/deck_ir。PDF 论文进入独立 `ocr` 阶段，直接调用 MinerU CLI（`mineru-open-api`，支持缓存与 Windows `.CMD` 解析）提取 Markdown 与图片并向 `queries` 透出目录大纲，下游证据构建复用 OCR 产物不重复 OCR。slide_count 是最终论文页目标（1–40），独立补充文字页另计。论文的 page_mode=page_scene 在 page_review 后写显式 box，默认 deck_ir 保留全部高级对象。
 queries 可先写入或在暂停点提交；必须围绕实际论文。补充材料按真实路径显式配对；只有内容已进入分析输入时，才传 supplementary_content_included=true。
 ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/空白区域，必要时有限重排正文；草稿预览/预检不增强。用户关闭时 start 传 explain_viz_mode=off，保留已有模式。explain_viz.json 记录位置变化；科学原文、字号、来源门槛不降低，生成图须实际人审。
 
@@ -26,10 +26,10 @@ ExplainViz 最终候选默认 auto：按明确事实绘原生图，优先预留/
 | none | 若 reason=ADVANCE_REQUIRED 则 advance；若 CANDIDATE_READY 则交付候选 |
 
 queries 是对象数组，含唯一 id、query，可选 intent。若论文的主要方法依赖方程，检索式子原文、变量定义和适用条件。适配器把 query 文本和声明的 intent 传入 PWF。PWF 在缺少有效声明时推导检索意图，各条不同查询独立检索，即使 intent 相同。
-用 delegation 中用户明确选择的模型和 reasoning 调用真实 Story 子代理。选择缺失时询问，保留真实调用记录。
+用 delegation 中用户明确选择的模型和 reasoning 调用真实 Story 子代理，保留真实调用记录。Story/scientific_review/page_design 阶段均可随时用 `story_prompt.json` 的 `evidence_lookup`（CLI `search`/`outline`/`read-lines`）或 `totalpipe_advance(evidence_query={...})` 检索 `evidence_registry`（返回精确 EVxxxx）、论文全文 Markdown（含公式/图注/章节过滤）及配对 SI，不占修订次数；缺漏如实报告或 `replan_from=queries`，不得虚构 EV ID。
 新 Story 使用 content_contract 2.0：units 是独立可限定的科学断言/条件，含精确EV与 epistemic；narrative_map 只组织论证，不把整段 answer 当投屏原子。
 Story 后按 next_action 进入 scientific_review：主 Agent 读完整任务、提示、Schema、原文和实际SI，实际审查单位粒度、来源及遗漏的初始化/对照/负面结果；禁止自动 pass，失败回退 Story。
-RPA 之后的 page_design 必须由用户指定模型的真实独立子代理完成；完整读 work/page_design_task.md、page_design_prompt.json、schema_path。
+RPA 之后的 page_design 由用户指定模型的真实独立子代理完成，完整读 work/page_design_task.md、page_design_prompt.json 与 schema_path。支持与 `deck_ir` 边设计边联调：设计阶段即可将关键页草稿写到 `work/pages/<id>.json` 并调用 `advance.preview(mode="layout"|"render")` / `preflight=true` 实时测骨架留白与 PNG（不占修订预算）。设计门禁校验 `design` 具体性、标题/结论去重、正文条数与字数上限及论文图读图说明，`design_audit` 送入 `page_review`；修订预算已提高（`page_design`/`deck_ir`/`page_scene` 及单页修订上限 6 次，`story`/`queries`/`visual_design`/局部修补 5 次）。
 页面设计时先查看 `example_lookup.recommended`/`catalog`，用 `example_lookup.command_prefix` 按讲解关系执行 `search "<关键词>" --limit 3` 并 `show <id>` 打开至少 1–2 份匹配示例。参考其多区构图、视觉关系和空间占比（目标覆盖正文带约 45%–75%，避免单列大留白），文案和证据来自当前 Story。PageScene 阶段同样参考 `page_catalog[].example_suggestions` / `example_lookup`，并核对 `PAGE_SCENE_SPARSE_LAYOUT` 留白指标。
 页面设计1.3中 content_refs 将科学单元恰好分配一次；reuse_refs 明确再次展示的主张，只有直接限定这些可见主张的条件随页出现，不能整包继承叙事段落。
 display_copy 是实际投屏文案，content_map 指定可见载体或允许入讲稿的细节；重要条件、对照、负面结果和不确定性不能隐藏。
@@ -38,7 +38,7 @@ display_copy 是实际投屏文案，content_map 指定可见载体或允许入�
 在 `design` 指明独立正文块的分组、阅读顺序与对照关系，引用对应的 `display_copy`。短标题可分组，箭头或编号引导正文。对照路线可共用标题并分行对齐，动作标签进入批准文案。
 设计后主 Agent 按 page_review 完整提示实际逐页审读科学忠实性、限定范围和观众语言，提交当前哈希及具体说明；不复用设计者自评，不代表看过渲染或完成原生验收。
 旧Story/页面设计1.0、1.1和段落契约1.0/页面设计1.2按原版本恢复；新提示不能降级绕过审读。版本与完整协议见[内容契约](../../docs/content-projection.md)。
-IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
+IR只实现批准文案/视觉；编写前直接读提示包里的 `syntax_reference_path`（`docs/deck-ir-syntax-reference.md` 全功能代码语法手册，无需翻项目源码），同时仍须用 `example_lookup` 检索并查看匹配示例。{copy_ref:id}可引用文本，科学记录、来源、审读哈希和完整讲稿由程序绑定，notes/元数据不能充当可见证据。
 图注用 `component=caption` 和 `caption_for`。用 `caption_for.position` 或 `text_for.position` 将说明放在目标的上下左右，布局树引用目标。论文图的可见来源标签自动绑定。
 每条独立正文用自己的 block、`copy_ref` 和来源。无序用 `native_bullet_list` 和可选 `bullet_icon`，有序用 `native_numbered_list` 和 `list_start`。保留批准的圆角标签、流程节点和对照路线。
 先看 `example_lookup.suggestions`，需要时用其 `command_prefix` 执行 `search "<关键词>" --limit 2`。按需打开一份脚本，复用结构和当前任务批准内容。
@@ -47,7 +47,7 @@ IR只实现批准文案/视觉；{copy_ref:id}可引用文本，科学记录、�
 有证据且需要读公式时，设计者批准独立 `$...$` 文案及符号说明。Deck IR 通过 `copy_ref` 绑定原生公式。PageScene 用 `type=formula` 加 `copy_ref` 并通过 `advance.scene_preview` 查看 PowerPoint PNG。完整协议见回复 schema_path。
 实际打开 preview_result.pages 的 PNG，再修改源 IR 并重新 preview；未变页复用渲染缓存。预览不接受 IR、不计修订、不改候选或正式 QA。
 officecli-html 预览可能与 PowerPoint 的字体/公式不同，不能代替篇级 Design、完整构建或原生验收；FAIL 原样保留，不能凭生成图片签收。
-有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页，齐全后整套复验。
+有 next_action.page_authoring 时逐页读完整 input_path 和 Schema，交一页 canonical IR（deck_ir_page）；若设计联调阶段已在 `work/pages/` 留有草稿（`draft_exists: true`）可直接复用。IR 阶段并行拆批严格遵循 `page_authoring.parallel_authoring.batches`，**最多分出 2 个 IR 子代理**（不要每页单起代理），共享一致顶层 header；程序绑定省略的引用/讲稿及已知素材、测量并缓存通过页，只修失败页（每页最多 6 次失败修订），齐全后整套复验。
 空间不足回退重规划，不删图、缩写术语或降低字号门槛；保留 source_figure 和原图比例。
 同一阶段仅对被拒绝的新提交计次；读取 status 和依赖失败不计次。达到预算后请求人工处理。
 status 只读，重复 advance 可继续未完成阶段。局部布局或裁图修复按 repair Schema 预检并提交 deck_ir_patch，科学文字、数据与分组变更走重规划。
@@ -55,5 +55,4 @@ status 只读，重复 advance 可继续未完成阶段。局部布局或裁图�
 候选 REVIEW 如实报告；仅真实复核后用 advance.acknowledge 传 reviewer、note、review_ids。
 原生验收按 native.schema_path 完整协议，用 advance.native 单独提交 render / review / ingest；复用候选，不重跑上游。
 自动 PDF/PNG 导出不等于直接 PowerPoint 眼检；review 只在实际逐页检查后提交当前哈希、全部页 ID、检查项和说明。候选笔记不能替代 final 审核；promote 仍仅用原 CLI，原生接入与预览说明见接入层用法。
-
 按需读 [完整 Story 规范](../total-pipe-deck/SKILL.md#2-科学故事story-planner) 和 [复杂页、公式及原生对象协议](../../../docs/README.md)。

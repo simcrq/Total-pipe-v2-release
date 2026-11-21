@@ -90,8 +90,18 @@ def execute(job, request):
     work = Path(job['request']['out_dir'])/'work'
     path = confined(request['artifact_path'], work)
     source_sha = sha(path)
-    design = a.load_design(work)
-    value = bind_sources(read(path), design, work, path)
+    design_draft_mode = False
+    try:
+        design = a.load_design(work)
+    except a.Failure:
+        # During merged page_design/page_review co-design, allow single-page IR prototyping
+        # and layout/PNG debugging before final source/copy review is signed off.
+        design_draft_mode = True
+        raw_design = work/'page_design.json'
+        design = read(raw_design) if raw_design.is_file() else None
+    if design is None and not (work/'page_design.json').is_file():
+        design_draft_mode = True
+    value = bind_sources(read(path), None if design_draft_mode else design, work, path)
     slides = value.get('slides')
     if not isinstance(slides, list) or not slides or any(not isinstance(s, dict) for s in slides):
         raise ValueError('Preview input must be canonical Deck IR with slides.')
@@ -111,12 +121,17 @@ def execute(job, request):
         if slide['id'] not in selected:
             continue
         sid = slide['id']
-        partial = copy.deepcopy(design)
-        if partial:
+        partial = None
+        if design and not design_draft_mode:
+            partial = copy.deepcopy(design)
             partial['pages'] = [p for p in partial['pages'] if p['id'] == sid]
             partial['_partial'] = True
             if not partial['pages']:
                 raise ValueError(f'Preview slide {sid} is not in the approved page design.')
+        elif design and design_draft_mode:
+            matched = [p for p in (design.get('pages') or []) if isinstance(p, dict) and p.get('id') == sid]
+            if matched and design.get('schema_version') not in ('1.2', '1.3'):
+                partial = {**copy.deepcopy(design), 'pages': matched, '_partial': True}
         page = {**copy.deepcopy(value), 'slides': [copy.deepcopy(slide)]}
         used = {ref.get('asset_id') for ref in slide.get('composition', {}).get('figure_refs', [])}
         page['assets'] = {aid: asset for aid, asset in value.get('assets', {}).items() if aid in used}
@@ -207,6 +222,7 @@ def execute(job, request):
         raise ValueError('Preview source changed during rendering; retry.')
     return {'status': 'FAIL' if any(p['status'] == 'FAIL' for p in pages) else 'PASS',
             'source_sha256': source_sha, 'renderer': renderer, 'pages': pages,
+            'design_draft_mode': design_draft_mode,
             'job_unchanged': True, 'candidate_unchanged': True, 'powerpoint_ui_review': False,
             'note': 'Inspect the skeleton and unit diagnostics when planning, then open the actual rendered PNG. HTML previews can differ from PowerPoint '
                     'in fonts, equations and shapes; isolated page numbers restart and generated agenda pages are omitted. '

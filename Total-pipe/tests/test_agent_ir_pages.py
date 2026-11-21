@@ -69,12 +69,13 @@ class PageIRTests(AgentCase):
         self.assertEqual(before, (cached.read_bytes(), cached.stat().st_mtime_ns))
 
     def test_page_preflight_is_read_only_and_failure_budgets_are_per_page(self):
+        from agent.ir_pages import MAX_REJECTED_REVISIONS_PER_PAGE
         work = self.prepare()
         path = self.page(work, 'P1', broken=True)
         before = (self.out/'.totalpipe/job.json').read_bytes()
         self.assertEqual(self.submit(path, preflight=True)['page_result']['status'], 'FAIL')
         self.assertEqual(before, (self.out/'.totalpipe/job.json').read_bytes())
-        for i in range(3):
+        for i in range(MAX_REJECTED_REVISIONS_PER_PAGE):
             value = read(path)
             value['slides'][0]['semantic']['speaker_notes'] = f'Synthetic revision {i}.'
             write(path, value)

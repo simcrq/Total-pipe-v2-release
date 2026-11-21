@@ -45,3 +45,22 @@ class OfficialAuthenticationTests(unittest.TestCase):
         run.assert_not_called()
         self.assertTrue(result['ready'])
         self.assertFalse(result['verified'])
+
+    def test_windows_cmd_shim_fallback_resolves_mineru_cli(self):
+        calls = []
+
+        def fake_run(argv, **kwargs):
+            calls.append(argv)
+            if argv[0] == 'mineru-open-api':
+                raise FileNotFoundError('Windows bare .CMD lookup fails without extension')
+            return subprocess.CompletedProcess(argv, 0, 'Token is valid', '')
+
+        with (
+            patch('utils.pdf_official_handler.os.name', 'nt'),
+            patch('utils.pdf_official_handler.shutil.which', return_value=r'C:\npm\mineru-open-api.CMD'),
+            patch('utils.pdf_official_handler.subprocess.run', side_effect=fake_run),
+        ):
+            result = OfficialMinerUProcessor({}).authentication()
+        self.assertTrue(result['verified'])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1], [r'C:\npm\mineru-open-api.CMD', 'auth', '--verify'])
