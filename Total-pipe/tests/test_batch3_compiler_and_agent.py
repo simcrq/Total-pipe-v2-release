@@ -273,7 +273,10 @@ class CompilerBatch3Tests(unittest.TestCase):
         self.assertFalse(any(i.severity == 'HIGH' for i in r.issues))
         qm_layout['slides'][0]['elements'][0]['contract']['font_size'] = 28
         self.assertEqual(analyze_readability({}, qm_layout, {'slides': [{}]}, False).issues, [])
-        b = analyze_balance({}, qm_layout, {}, False)
+        img_layout = {'slide_size': [1280, 720], 'slides': [{'elements': [
+            {'id': 'fig1', 'kind': 'image', 'role': 'evidence', 'bbox': [56, 220, 400, 100]},
+        ]}]}
+        b = analyze_balance({}, img_layout, {}, False)
         self.assertAlmostEqual(b.details['avg_coverage'], 400 * 100 / (1280 * 720) * 100, places=1)
 
     def test_flat_column_math_and_break_lines_and_schema_caption_sync(self):

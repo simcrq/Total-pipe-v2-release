@@ -43,6 +43,8 @@ def main():
     p.add_argument('--native', type=Path, help='Artifact-bound PowerPoint render/review/ingest operation JSON')
     p.add_argument('--preview', type=Path, help='Isolated IR preview request JSON: artifact_path and optional slide_ids')
     p.add_argument('--scene-preview', type=Path, help='PageScene native preview request JSON: artifact_path and optional page_ids')
+    p.add_argument('--evidence-query', type=Path, help='Read-only evidence query request JSON')
+    p.add_argument('--figure-crop', type=Path, help='Lossless multi-panel figure inspect/crop request JSON')
     p.add_argument('--replan-from')
     commands.add_parser('serve')
     commands.add_parser('setup', help='Print the installer, guide and next command')
@@ -96,7 +98,7 @@ def main():
             result = {'status': 'PASS', 'output': str(args['out'].resolve())}
         else:
             args.pop('json', None)
-            for key in ('queries', 'inputs', 'acknowledge', 'native', 'preview', 'scene_preview'):
+            for key in ('queries', 'inputs', 'acknowledge', 'native', 'preview', 'scene_preview', 'evidence_query', 'figure_crop'):
                 if args.get(key) is not None:
                     args[key] = read(args[key])
             result = {'doctor': doctor, 'start': start, 'advance': advance, 'status': status}[command](**args)

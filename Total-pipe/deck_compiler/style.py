@@ -219,7 +219,7 @@ def _mix(first, second, share):
 
 
 def tint(accent, background, mix):
-    return _mix(accent, background, mix)
+    return _mix(background, accent, mix)
 
 
 def node_style(theme, tone='default'):

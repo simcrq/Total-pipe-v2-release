@@ -165,6 +165,8 @@ def prose_only(source):
 
 TOKEN = re.compile(r'[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u00c0-\u02af\u0370-\u03ff\u1d2c-\u1d6a\u2070-\u209f¹²³]*|[^\S\n]+|\n|.')
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
+NO_LINE_END = set('（([【《「『“‘')
+_CJK_ORPHAN_RE = re.compile(r'^[\u3400-\u9fff][，。、；：？！）】》」』”’,.!?;:)]*$')
 
 
 def measure_inline(source, width, font, size, line_height=1.25, leading_marker=None, strong_font=None):
@@ -247,6 +249,17 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
                     raise InlineWidthError(previous['width']+atom['width'], width)
                 current.append(previous)
                 current_width = previous['width']
+            elif (current and current[-1]['kind'] == 'text'
+                  and current[-1]['text'].strip() in NO_LINE_END and len(current) > 1):
+                opener = current.pop()
+                finish()
+                if opener['width'] + atom['width'] <= width + .01:
+                    current.append(opener)
+                    current_width = opener['width']
+                else:
+                    lines[-1]['fragments'].append(dict(opener))
+                    lines[-1]['width'] += opener['width']
+                    lines[-1]['text'] += opener['plain']
             else:
                 finish()
         if atom['width'] > width+.01:
@@ -254,6 +267,35 @@ def measure_inline(source, width, font, size, line_height=1.25, leading_marker=N
         current.append(atom)
         current_width += atom['width']
     if current or not lines or source.endswith(('\n', '\r')): finish()
+    # Prevent lone CJK char (+ closing punctuation) on the final line when borrowing 1 CJK char fits.
+    if (len(lines) >= 2
+            and _CJK_ORPHAN_RE.fullmatch(lines[-1]['text'].strip())
+            and lines[-2]['fragments']
+            and lines[-2]['fragments'][-1]['kind'] == 'text'
+            and len(lines[-2]['fragments'][-1]['text']) >= 3):
+        prev_frag = lines[-2]['fragments'][-1]
+        borrowed = prev_frag['text'][-1]
+        if '\u3400' <= borrowed <= '\u9fff':
+            b_face = strong_font if (prev_frag.get('mark') == 'emphasis' and strong_font is not None) else font
+            b_w = b_face.getlength(borrowed)
+            if lines[-1]['width'] + b_w <= width + .01:
+                prev_frag['text'] = prev_frag['text'][:-1]
+                prev_frag['plain'] = prev_frag['plain'][:-1]
+                prev_frag['width'] = b_face.getlength(prev_frag['text'])
+                lines[-2]['width'] = sum(f['width'] for f in lines[-2]['fragments'])
+                lines[-2]['text'] = ''.join(f['plain'] for f in lines[-2]['fragments'])
+                first_frag = lines[-1]['fragments'][0] if lines[-1]['fragments'] else None
+                if first_frag and first_frag['kind'] == 'text' and first_frag.get('mark', '') == prev_frag.get('mark', ''):
+                    first_frag['text'] = borrowed + first_frag['text']
+                    first_frag['plain'] = borrowed + first_frag['plain']
+                    first_frag['width'] = b_face.getlength(first_frag['text'])
+                else:
+                    lines[-1]['fragments'].insert(0, {
+                        'kind': 'text', 'text': borrowed, 'plain': borrowed, 'mark': prev_frag.get('mark', ''),
+                        'width': b_w, 'ascent': prev_frag['ascent'], 'descent': prev_frag['descent'],
+                    })
+                lines[-1]['width'] = sum(f['width'] for f in lines[-1]['fragments'])
+                lines[-1]['text'] = ''.join(f['plain'] for f in lines[-1]['fragments'])
     return {'lines': lines, 'height': sum(line['height'] for line in lines),
             'min_width': minimum, 'formula_count': sum(s.kind == 'formula' for s in parse_inline(source)),
             'marks': sorted({f.get('mark') for line in lines for f in line['fragments'] if f.get('mark')}),

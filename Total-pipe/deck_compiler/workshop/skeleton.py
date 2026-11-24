@@ -180,24 +180,28 @@ def is_furniture(element):
 
 
 def capacity(slide, issues):
+    from deck_compiler.whitespace import analyze_region_whitespace, visible_element_boxes
+
     elements = slide.get('elements', [])
     body = [e for e in elements if not is_furniture(e) and e.get('role') not in ('title', 'takeaway')]
     prose = [e for e in body if e['kind'] in ('text', 'list', 'image')]
-    boxes = [e['bbox'] for e in body]
-    body_bottom = max((b[1] + b[3] for b in boxes), default=0)
-    body_top = min((b[1] for b in boxes), default=0)
+    header_bottom = max(
+        (e['bbox'][1] + e['bbox'][3] for e in elements
+         if e.get('role') in ('title', 'takeaway') and len(e.get('bbox') or []) >= 4),
+        default=180.0,
+    )
     footer = [e['bbox'][1] for e in elements
               if str(e.get('id', '')).startswith('page:') and e['kind'] == 'text']
-    footer_top = min(footer) if footer else 672.
-    height = max(1., footer_top - body_top)
-    # 纵向延伸只说明「最下面那个框到哪儿」，一列 372 px 的空卡片能把整页算成满。
-    # 覆盖率按框的投影面积算，才对应「版面被用掉了多少」。
-    ink = 0.
-    for x, y, w, h in boxes:
-        top, bottom = max(y, body_top), min(y + h, footer_top)
-        if bottom > top:
-            ink += w * (bottom - top)
-    band_area = 1168. * height
+    footer_top = min(footer) if footer else 664.0
+    band_top = min(header_bottom + 16.0, footer_top - 40.0)
+    band_height = max(1.0, footer_top - band_top)
+    body_bounds = [56.0, band_top, 1168.0, band_height]
+    # 使用真实可见墨迹框（剔除容器外框、装饰线、文本框下方未用留白）并按二维并集面积计算，
+    # 避免重叠元素或空容器卡片把稀疏页误报为高覆盖率。
+    visible = visible_element_boxes(elements, body_bounds, include_header=False)
+    spatial = analyze_region_whitespace(visible, body_bounds, min_empty_size=(340.0, 160.0))
+    body_top = min((b[1] for b in visible), default=band_top)
+    body_bottom = max((b[1] + b[3] for b in visible), default=band_top)
     text_boxes = [e['bbox'][3] for e in prose if e['kind'] == 'text']
     images = [e for e in prose if e['kind'] == 'image']
     graphic_marks = {e['graphic_id'] for e in elements if e.get('graphic_id')}
@@ -208,9 +212,13 @@ def capacity(slide, issues):
             'text_only': not images and not graphic_marks and all(e['kind'] in ('text', 'list') for e in body),
             'body_top_px': round(body_top, 1),
             'body_bottom_px': round(body_bottom, 1),
-            'gap_to_footer_px': round(footer_top - body_bottom, 1),
-            'band_fill': round((body_bottom - body_top) / height, 2),
-            'ink_ratio': round(min(1., ink / band_area), 2),
+            'gap_to_footer_px': round(max(0.0, footer_top - body_bottom), 1),
+            'band_fill': round(min(1.0, max(0.0, (body_bottom - band_top) / band_height)), 2),
+            'ink_ratio': round(spatial['coverage_ratio'], 2),
+            'whitespace_ratio': round(spatial['whitespace_ratio'], 2),
+            'largest_empty_ratio': round(spatial['largest_empty_ratio'], 2),
+            'largest_empty_rect': spatial['largest_empty_rect'],
+            'empty_quadrants': spatial['empty_quadrants'],
             'min_text_height_px': round(min(text_boxes, default=0), 1),
             'boxes_under_24px': [e['id'] for e in prose
                                  if e['kind'] == 'text' and e['bbox'][3] < 24],

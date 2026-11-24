@@ -195,6 +195,169 @@ def bind_design(design, story):
     return bound
 
 
+_VAGUE_DESIGN_RE = re.compile(
+    r'^(?:tbd|todo|placeholder|explain(?:\s+the)?\s+mechanism|default\s+layout|'
+    r'解释(?:一下|某?机制)|放文字|常规排版|默认排版|待定|略)[\s.。!！]*$',
+    re.I,
+)
+_VISUAL_PLAN_CUE_RE = re.compile(
+    r'图|表|公式|方程|流程|机制|对照|对比|路线|泳道|剖面|曲线|折线|散点|矩阵|类比|双栏|两栏|多区|示意|结构|'
+    r'\b(?:figure|diagram|chart|table|formula|equation|workflow|lane|comparison|mechanism|schematic|columns?|panel|plot|matrix|analogy|visual)\b',
+    re.I,
+)
+
+
+def _validate_design_gates(page, version, pid):
+    """Concrete design quality gates for 1.2/1.3 page designs."""
+    problems = []
+    if version not in ('1.2', '1.3'):
+        return problems
+    instruction = page.get('design')
+    if isinstance(instruction, str):
+        compact = re.sub(r'\s+', '', instruction)
+        if _VAGUE_DESIGN_RE.fullmatch(instruction.strip()) or len(compact) < 12:
+            problems.append(
+                f'{pid}: DESIGN_TOO_VAGUE — design brief is too vague; describe concrete visual '
+                'elements, relative arrangement, and presenter reading order.'
+            )
+    copy_items = [item for item in (page.get('display_copy') or []) if isinstance(item, dict)]
+    title = next((str(item.get('text') or '') for item in copy_items if item.get('role') == 'title'), '')
+    takeaway = next((str(item.get('text') or '') for item in copy_items if item.get('role') == 'takeaway'), '')
+    if title and takeaway and _squash(title) == _squash(takeaway):
+        problems.append(
+            f'{pid}: DESIGN_TITLE_TAKEAWAY_DUPLICATE — title and takeaway cannot be identical; '
+            'title states the finding and takeaway states its implication or condition.'
+        )
+    bodies = [item for item in copy_items if item.get('role') == 'body']
+    if len(bodies) > 6:
+        problems.append(
+            f'{pid}: DESIGN_BODY_OVERLOADED — {len(bodies)} body display_copy entries on one page '
+            '(max 6); group into a visual/table or split the page.'
+        )
+    for item in bodies:
+        body_text = str(item.get('text') or '').strip()
+        is_math = body_text.startswith('$') and body_text.endswith('$')
+        if not is_math and len(body_text) > 320:
+            problems.append(
+                f'{pid}/{item.get("id")}: DESIGN_BODY_OVERLOADED — body copy is {len(body_text)} chars '
+                '(max 320); condense audience copy while keeping full scientific records in Story/notes.'
+            )
+    if page.get('figures'):
+        has_readout = any(
+            item.get('role') in ('caption', 'label') and str(item.get('text') or '').strip()
+            for item in copy_items
+        )
+        if not has_readout:
+            problems.append(
+                f'{pid}: DESIGN_FIGURE_READOUT_MISSING — every page with paper figures requires '
+                'at least one visible caption or label in display_copy explaining what to inspect.'
+            )
+    return problems
+
+
+def _classify_page_layout_family(page):
+    """Classify a content page's structural layout family to detect consecutive monotony."""
+    raw_design = page.get('design')
+    design_text = raw_design if isinstance(raw_design, str) else json.dumps(raw_design or {}, ensure_ascii=False)
+    carriers = {
+        c.get('kind')
+        for route in (page.get('content_map') or {}).values()
+        if isinstance(route, dict) and route.get('destination') == 'visible'
+        for c in (route.get('carriers') or [])
+        if isinstance(c, dict)
+    }
+    figs = page.get('figures') or []
+    if len(figs) >= 2 or re.search(r'2\s*[×xX]\s*2|image_grid|拼版|多子图|四宫格|\bgrid\b', design_text, re.I):
+        return 'multi-panel'
+    if figs or 'figure' in carriers or re.search(r'原图|读图|\bfigure\b', design_text, re.I):
+        return 'figure-readout'
+    if 'chart' in carriers or re.search(r'折线|柱状|条形|散点|误差棒|曲线图|\b(?:chart|hbar|bar|scatter|plot)\b', design_text, re.I):
+        if carriers.intersection({'table', 'formula', 'graphic'}) or re.search(r'公式|表|架构|流程', design_text):
+            return 'chart-composite'
+        return 'chart-analysis'
+    if 'table' in carriers or re.search(r'对照表|表格|矩阵|\b(?:table|matrix)\b', design_text, re.I):
+        return 'table-matrix'
+    if 'graphic' in carriers or re.search(r'流程|机制|架构|漏斗|泳道|路径|\b(?:diagram|mechanism|architecture|funnel|workflow|dag)\b', design_text, re.I):
+        return 'flow-mechanism'
+    if 'formula' in carriers or re.search(r'公式|方程|推导|\b(?:formula|equation)\b', design_text, re.I):
+        return 'equation-derivation'
+    bodies = [item for item in (page.get('display_copy') or []) if isinstance(item, dict) and item.get('role') == 'body']
+    if len(bodies) >= 2 or re.search(r'双栏|两栏|三栏|并列|对照|\bcolumns?\b', design_text, re.I):
+        return 'text-columns'
+    return 'prose-stack'
+
+
+def audit_design_quality(design, story=None):
+    """Non-blocking structured design audit surfaced to page_review and diagnostics."""
+    pages = (design or {}).get('pages') or []
+    content_pages = [p for idx, p in enumerate(pages) if not (idx == 0 and not p.get('content_refs'))]
+    visual_pages = 0
+    sparse_risk_pages = []
+    layout_families = []
+    for page in content_pages:
+        pid = page.get('id', '?')
+        raw_design = page.get('design')
+        design_text = raw_design if isinstance(raw_design, str) else str(raw_design or '')
+        carriers = {
+            c.get('kind')
+            for route in (page.get('content_map') or {}).values()
+            if isinstance(route, dict) and route.get('destination') == 'visible'
+            for c in (route.get('carriers') or [])
+            if isinstance(c, dict)
+        }
+        has_visual = bool(
+            page.get('figures')
+            or carriers.intersection({'figure', 'graphic', 'chart', 'table', 'formula'})
+            or _VISUAL_PLAN_CUE_RE.search(design_text)
+        )
+        if has_visual:
+            visual_pages += 1
+        else:
+            sparse_risk_pages.append(pid)
+        layout_families.append({'id': pid, 'family': _classify_page_layout_family(page)})
+    total = len(content_pages) or 1
+    visual_ratio = round(visual_pages / total, 3)
+    warnings = []
+    if len(content_pages) >= 3 and visual_ratio < 0.5:
+        warnings.append({
+            'code': 'DESIGN_LOW_VISUAL_DIVERSITY',
+            'message': (
+                f'Only {visual_pages}/{len(content_pages)} content pages ({visual_ratio:.0%}) plan '
+                'a concrete visual, diagram, table, chart or equation. Consult examples/library to '
+                'avoid conservative text-only slides.'
+            ),
+            'pages': sparse_risk_pages,
+        })
+    run_start = 0
+    while run_start < len(layout_families):
+        fam = layout_families[run_start]['family']
+        run_end = run_start + 1
+        while run_end < len(layout_families) and layout_families[run_end]['family'] == fam:
+            run_end += 1
+        if run_end - run_start >= 3:
+            run_ids = [item['id'] for item in layout_families[run_start:run_end]]
+            warnings.append({
+                'code': 'DECK_MONOTONOUS_LAYOUT',
+                'message': (
+                    f'Consecutive slides {run_ids} share the same "{fam}" layout family '
+                    f'({len(run_ids)} pages in a row). Alternate visual carriers or spatial '
+                    'organization (e.g. figure-readout, flow-mechanism, table-matrix, chart-composite) '
+                    'to avoid monotonous deck pacing.'
+                ),
+                'pages': run_ids,
+                'family': fam,
+            })
+        run_start = run_end
+    return {
+        'content_pages': len(content_pages),
+        'visual_pages': visual_pages,
+        'visual_ratio': visual_ratio,
+        'text_only_risk_pages': sparse_risk_pages,
+        'layout_families': layout_families,
+        'warnings': warnings,
+    }
+
+
 def _validate_reference_design(design, story, evidence, slide_count):
     """Validate only the stable handoff envelope; design prose is deliberately unconstrained."""
     def text(value):
@@ -254,6 +417,7 @@ def _validate_reference_design(design, story, evidence, slide_count):
         if design.get('schema_version') in ('1.2', '1.3'):
             from .content_projection import validate_page
             problems += [f'{pid}: {message}' for message in validate_page(page, story, evidence, _numbers)]
+            problems += _validate_design_gates(page, design.get('schema_version'), pid)
             copy_items = page.get('display_copy')
             copy_items = copy_items if isinstance(copy_items, list) else []
             text = ' '.join(str(item.get('text', '')) for item in copy_items if isinstance(item, dict))

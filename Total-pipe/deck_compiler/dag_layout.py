@@ -229,7 +229,7 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
                 f'{nid}: text needs {len(title_lines)} title / {len(body_lines)} body lines at 18 pt; widen or split the diagram')
         th, bh = len(title_lines)*title_size*1.25, len(body_lines)*body_size*1.25
         text_heights[nid] = th, bh
-        minimum = 96.0 if bh else 72.0
+        minimum = 88.0 if bh else 56.0
         heights[nid] = max(minimum, math.ceil((th+bh+(8 if bh else 0))/sy/8)*8)
     boxes = {}
     left = x+(width-(node_width*columns+gap*(columns-1)))/2
@@ -311,7 +311,7 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
     for node in graphic['nodes']:
         elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme,
                                       text_heights[node['id']], title_size=title_size,
-                                      body_size=body_size))
+                                      body_size=body_size, font_paths=font_paths))
     nodes = [e for e in elements if e['kind'] == 'shape']
     native_nodes = {n['node_id']: n for n in nodes}
     routes = []

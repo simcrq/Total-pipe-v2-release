@@ -574,6 +574,8 @@ python -m deck_compiler apply-visual-plan --ir <deck_ir.json> \
 python -m deck_compiler compile --ir <designed.deck_ir.json> --out <build-dir>
 python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> \
   --officecli <officecli-path> --skip-native
+# 若需在 PowerPoint 原生导出后一步生成每页高分辨率 PNG 预览（<build-dir>/slides_png/）：
+python -m deck_compiler build --ir <designed.deck_ir.json> --out <build-dir> --render-png
 ```
 
 统一入口 `python totalpipe.py generate <designed.deck_ir.json> --out <build-dir>` 使用同一构建流程，

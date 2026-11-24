@@ -15,6 +15,9 @@ MAX_NODES = 64
 CONTAINERS = ('columns', 'stack', 'panel', 'image_grid')
 LEAVES = ('block', 'figure', 'graphic', 'table', 'chart')
 GAPS = {'compact': 12., 'standard': 24., 'spacious': 32.}
+_INTERNAL_GAPS = {**GAPS, '_tight': 6.}
+ELASTIC_MAX_EXCESS_PX = 24.
+ELASTIC_MAX_RATIO = .06
 STACK_ALIGNMENTS = ('start', 'center', 'distribute')
 # A column row may either fill the region (stretch, the historical behaviour) or stop at the
 # tallest child's natural height (hug). Panels of short text stretched to the full body height are
@@ -48,9 +51,9 @@ def capabilities():
             'native': ['native_equation', 'native_inline_equation', 'native_flowchart', 'native_bezier',
                        'native_table', 'native_bullets', 'native_numbered_lists'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
-            'chart': {'types': ['line', 'bar', 'scatter'], 'bases': ['evidence', 'explain'],
-                      'min_size_px': [420, 260], 'max_series': 4, 'error_bars': True,
-                      'annotations': 6},
+            'chart': {'types': ['line', 'bar', 'hbar', 'scatter'], 'bases': ['evidence', 'explain'],
+                      'min_size_px': [380, 220], 'max_series': 4, 'error_bars': True,
+                      'annotations': 6, 'reference_lines': 4, 'shaded_zones': 3},
             'legacy_flat_ir': True}
 
 
@@ -290,7 +293,7 @@ def validate_tree(tree, composition):
 
 
 class LayoutTreeError(ValueError):
-    def __init__(self, path, code, message, required, available, actions=None, cause=None):
+    def __init__(self, path, code, message, required, available, actions=None, cause=None, subtree_breakdown=None):
         super().__init__(message)
         self.detail = {'component': path, 'code': code, 'message': message,
                        'required_size_px': [round(x, 2) for x in required],
@@ -299,6 +302,8 @@ class LayoutTreeError(ValueError):
                        'suggested_actions': actions or ['switch_to_two_columns', 'split_slide']}
         if cause:
             self.detail['cause'] = cause
+        if subtree_breakdown:
+            self.detail['subtree_breakdown'] = subtree_breakdown
 
 
 @dataclass
@@ -370,7 +375,9 @@ class RegionCompiler:
             weights = graphic.get('weights', [1]*len(sizes))
             return (max(size/weight for size, weight in zip(sizes, weights))*sum(weights)
                     +24*(len(sizes)-1)) if graphic.get('arrangement', 'columns') == 'columns' else max(sizes)
-        return 96. if kind == 'path' else 176.
+        if kind == 'path':
+            return 56. if not graphic.get('labels') else 96.
+        return 176.
 
     def graphic_height(self, graphic, width, path, available):
         from .graphic_layout import compile_graphic
@@ -380,7 +387,7 @@ class RegionCompiler:
                 'Native graphic cannot reach its readable minimum width in this region.',
                 [minimum, 272 if graphic['type'] == 'process' else 120], available)
         last_error = None
-        for height in (96, 128, 160, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
+        for height in (56, 72, 80, 96, 128, 160, 176, 184, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
             try:
                 elements = compile_graphic(graphic, [0, 0, width, height], self.theme, self.fonts)
                 # Path labels also have fixed font floors; a vector's ability to scale is not a
@@ -401,7 +408,7 @@ class RegionCompiler:
         if key in self.cache:
             return self.cache[key]
         kind = node['type']
-        gap = GAPS[node.get('gap', 'standard')]
+        gap = _INTERNAL_GAPS[node.get('gap', 'standard')]
         if width <= 0:
             raise LayoutTreeError(path, 'INSUFFICIENT_DRAWING_SPACE', 'No positive content width.', [1, 1], available)
         if kind == 'block':
@@ -564,10 +571,86 @@ class RegionCompiler:
         self.cache[key] = need
         return need
 
+    def _subtree_breakdown(self, node, width, path, available, depth=0):
+        """Return per-child required heights so agents know immediately which subtree overflowed."""
+        if depth > 2 or node['type'] in LEAVES:
+            return []
+        kind = node['type']
+        gap = _INTERNAL_GAPS[node.get('gap', 'standard')]
+        out = []
+        try:
+            if kind == 'panel':
+                from .container_frames import panel_metrics
+                pad, stroke, overhead = panel_metrics(node)
+                inner_w = max(1., width - 2 * (pad + stroke))
+                title_h = self.text_height(node['title'], inner_w, True)
+                child = self.measure(node['body'], inner_w, path + '.body', [inner_w, max(0, available[1] - title_h - gap - overhead)])
+                entry = {
+                    'id': node['body']['id'],
+                    'type': node['body']['type'],
+                    'path': path + '.body',
+                    'width_px': round(inner_w, 1),
+                    'required_height_px': round(child.hard, 1),
+                    'panel_chrome_px': round((30 if self.preserve else title_h) + gap + overhead, 1),
+                }
+                if node['body']['type'] in LEAVES:
+                    entry['ref'] = node['body']['ref']
+                else:
+                    sub = self._subtree_breakdown(node['body'], inner_w, path + '.body', [inner_w, available[1]], depth + 1)
+                    if sub:
+                        entry['children'] = sub
+                out.append(entry)
+            elif kind == 'columns':
+                children = node['children']
+                weights = node.get('weights', [1] * len(children))
+                usable = max(1., width - gap * (len(children) - 1))
+                for i, (c, w) in enumerate(zip(children, weights)):
+                    cw = usable * w / sum(weights)
+                    cpath = f'{path}.children[{i}]'
+                    cn = self.measure(c, cw, cpath, [cw, available[1]])
+                    entry = {
+                        'id': c['id'],
+                        'type': c['type'],
+                        'path': cpath,
+                        'width_px': round(cw, 1),
+                        'required_height_px': round(cn.hard, 1),
+                    }
+                    if c['type'] in LEAVES:
+                        entry['ref'] = c['ref']
+                    else:
+                        sub = self._subtree_breakdown(c, cw, cpath, [cw, available[1]], depth + 1)
+                        if sub:
+                            entry['children'] = sub
+                    out.append(entry)
+            else:
+                children = node['children']
+                columns = min(node['columns'], len(children)) if kind == 'image_grid' else 1
+                cell_w = max(1., (width - gap * (columns - 1)) / columns)
+                for i, c in enumerate(children):
+                    cpath = f'{path}.children[{i}]'
+                    cn = self.measure(c, cell_w, cpath, [cell_w, available[1]])
+                    entry = {
+                        'id': c['id'],
+                        'type': c['type'],
+                        'path': cpath,
+                        'width_px': round(cell_w, 1),
+                        'required_height_px': round(cn.hard, 1),
+                    }
+                    if c['type'] in LEAVES:
+                        entry['ref'] = c['ref']
+                    else:
+                        sub = self._subtree_breakdown(c, cell_w, cpath, [cell_w, available[1]], depth + 1)
+                        if sub:
+                            entry['children'] = sub
+                    out.append(entry)
+        except Exception:
+            return out
+        return out
+
     def allocate(self, node, box, path):
         x, y, width, height = box
         need = self.measure(node, width, path, [width, height])
-        kind, gap = node['type'], GAPS[node.get('gap', 'standard')]
+        kind, gap = node['type'], _INTERNAL_GAPS[node.get('gap', 'standard')]
         if height < need.hard-.1:
             if kind == 'block':
                 code = ('INSUFFICIENT_FORMULA_SPACE' if self.blocks[node['ref']]['component'] == 'formula'
@@ -576,8 +659,9 @@ class RegionCompiler:
                 code = {'figure': 'INSUFFICIENT_FIGURE_SPACE', 'table': 'INSUFFICIENT_TABLE_SPACE',
                         'chart': 'INSUFFICIENT_CHART_SPACE'}.get(
                     kind, 'INSUFFICIENT_DRAWING_SPACE')
+            breakdown = self._subtree_breakdown(node, width, path, [width, height])
             raise LayoutTreeError(path, code, 'Region is shorter than its measured readable minimum.',
-                                  [width, need.hard], [width, height])
+                                  [width, need.hard], [width, height], subtree_breakdown=breakdown)
         entry = {'component': path, 'node_id': node['id'], 'type': kind, 'bbox': list(box),
             'requirements': {'min_height_px': need.hard, 'preferred_height_px': need.preferred,
                              'min_width_px': need.min_width, 'measured_at_width_px': width,
@@ -637,11 +721,24 @@ class RegionCompiler:
         if weights:
             heights = [usable*w/sum(weights) for w in weights]
         else:
-            # Hug measured content. Extra space is only consumed towards a child's preferred
-            # height, so derivation rows never spread to fill an arbitrarily tall panel.
-            extra, demand = max(0, usable-sum(minimums)), sum(max(0, p-m) for p, m in zip(preferred, minimums))
-            heights = [m+(min(1., extra/demand)*(p-m) if demand else 0)
-                       for m, p in zip(minimums, preferred)]
+            # Hug measured content. Satisfy measured wrapped text-block heights first so CJK/bold
+            # prose never gets starved below its natural line count and overflows onto sibling charts.
+            extra = max(0., usable - sum(minimums))
+            heights = list(minimums)
+            if kind == 'stack':
+                is_text_row = [c['type'] == 'block' for c in children]
+                text_demand = sum(max(0., p - m) for m, p, is_txt in zip(minimums, preferred, is_text_row) if is_txt)
+                if extra > 0 and text_demand > 0:
+                    ratio = min(1., extra / text_demand)
+                    for idx, (m, p, is_txt) in enumerate(zip(minimums, preferred, is_text_row)):
+                        if is_txt and p > m:
+                            add = ratio * (p - m)
+                            heights[idx] += add
+                            extra -= add
+            rem_demand = sum(max(0., p - h) for h, p in zip(heights, preferred))
+            if extra > 0 and rem_demand > 0:
+                ratio = min(1., extra / rem_demand)
+                heights = [h + ratio * max(0., p - h) for h, p in zip(heights, preferred)]
             if (len(rows) == 1 and (kind == 'image_grid' or children[0]['type'] != 'block')
                     and node.get('align', 'start') == 'start'):
                 heights = [usable]
@@ -745,6 +842,36 @@ def balance_plan(plan, region, theme):
     return plan, shift
 
 
+def _tighten_tree_spacing(node, stage):
+    """Deterministically tighten container gaps/padding without shrinking fonts or dropping content."""
+    mutated = deepcopy(node)
+    changes = []
+
+    def visit(cur, path):
+        kind = cur.get('type')
+        if kind in ('stack', 'panel'):
+            gap = cur.get('gap', 'standard')
+            if stage >= 1 and gap in ('spacious', 'standard'):
+                cur['gap'] = 'compact'
+                changes.append(f'{path}.gap:{gap}->compact')
+            elif stage >= 3 and cur.get('gap', 'compact') == 'compact':
+                cur['gap'] = '_tight'
+                changes.append(f'{path}.gap:compact->tight(6px)')
+        if kind == 'panel' and stage >= 2:
+            pad = cur.get('padding', 'none')
+            if pad in ('standard', 'compact'):
+                cur['padding'] = 'none'
+                changes.append(f'{path}.padding:{pad}->none')
+        if kind == 'panel':
+            visit(cur['body'], path + '.body')
+        else:
+            for idx, child in enumerate(cur.get('children', [])):
+                visit(child, f'{path}.children[{idx}]')
+
+    visit(mutated, 'body')
+    return mutated, changes
+
+
 def compile_regions(composition, region, assets, fonts, theme, preserve_terms=False,
                     list_gap_ratio=.45, list_padding=(0, 0), bullet_style='large_square', design=None,
                     formula_sizes=None):
@@ -752,12 +879,51 @@ def compile_regions(composition, region, assets, fonts, theme, preserve_terms=Fa
                               bullet_style, design=design, formula_sizes=formula_sizes)
     root = expand_attachments(composition['layout_tree'], composition)['regions']['body']
     original = list(region)
-    region = balanced_region(root, compiler, list(region), theme)
-    compiler.allocate(root, list(region), 'body')
-    result = {'version': composition['layout_tree']['version'], 'regions': {'body': list(region)},
+    target_region = balanced_region(root, compiler, list(region), theme)
+    elastic_info = None
+    try:
+        compiler.allocate(root, list(target_region), 'body')
+    except LayoutTreeError as initial_error:
+        req_w, req_h = initial_error.detail['required_size_px']
+        avail_w, avail_h = initial_error.detail['available_size_px']
+        excess_h = req_h - avail_h
+        max_elastic = max(ELASTIC_MAX_EXCESS_PX, original[3] * ELASTIC_MAX_RATIO)
+        if req_w <= avail_w + 0.1 and 0 < excess_h <= max_elastic:
+            recovered = False
+            for stage in (1, 2, 3):
+                tight_root, adjustments = _tighten_tree_spacing(root, stage)
+                if not adjustments:
+                    continue
+                probe = RegionCompiler(composition, assets, fonts, theme, preserve_terms, list_gap_ratio, list_padding,
+                                       bullet_style, design=design, formula_sizes=formula_sizes)
+                probe_region = balanced_region(tight_root, probe, list(original), theme)
+                try:
+                    probe.allocate(tight_root, list(probe_region), 'body')
+                except LayoutTreeError:
+                    continue
+                new_need = probe.entries[0]['requirements']['min_height_px']
+                compiler = probe
+                target_region = probe_region
+                elastic_info = {
+                    'stage': stage,
+                    'initial_required_height_px': round(req_h, 2),
+                    'fitted_required_height_px': round(new_need, 2),
+                    'available_height_px': round(avail_h, 2),
+                    'saved_px': round(req_h - new_need, 2),
+                    'adjustments': adjustments,
+                }
+                recovered = True
+                break
+            if not recovered:
+                raise
+        else:
+            raise
+    result = {'version': composition['layout_tree']['version'], 'regions': {'body': list(target_region)},
               'nodes': compiler.entries,
               'reading_order': [e['node_id'] for e in compiler.entries if e['type'] in LEAVES]}
-    if abs(region[1]-original[1]) > .5:
-        result['balanced'] = {'policy': 'sparse_balance', 'shift_px': round(region[1]-original[1], 1),
+    if abs(target_region[1]-original[1]) > .5:
+        result['balanced'] = {'policy': 'sparse_balance', 'shift_px': round(target_region[1]-original[1], 1),
                               'reason': 'composition is much shorter than the body region'}
+    if elastic_info:
+        result['elastic_micro_fit'] = elastic_info
     return result

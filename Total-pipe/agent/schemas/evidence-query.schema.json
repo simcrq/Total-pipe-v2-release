@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Total-pipe Evidence Query",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "type": "string",
+      "enum": ["search", "outline", "read_lines"],
+      "default": "search"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 25
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["all", "registry", "source", "supplementary"]
+    },
+    "modality": {
+      "type": "string",
+      "minLength": 1
+    },
+    "section": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "end": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "file": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

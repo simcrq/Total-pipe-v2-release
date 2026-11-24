@@ -15,7 +15,7 @@
 | [total-pipe-agent Skill](skills/total-pipe-agent/SKILL.md) | 调度题目、论文或已有产物。题目入口由 Agent 自拟内容与页面，再由 PageScene 生成可编辑 PPTX |
 | [total-pipe-deck Skill](skills/total-pipe-deck/SKILL.md) | 由 Agent 调度 PWF → Story → pwf2rpa → RPA → page_design → Deck IR → Design → 编译 / 验收 |
 | `python -m deck_compiler …` | 从已有 canonical Deck IR 开始，执行设计提案校验、布局编译、PPTX 构建及验收门禁 |
-| `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify |
+| `python totalpipe.py …` | 编译阶段的简化 CLI：generate、validate、preview、quality、template-merge、verify、discover-fonts |
 | `python -m agent.mcp_server` | 默认四工具入口 [.mcp.json](.mcp.json)，服务名 `total_pipe`；[用法](docs/agent-adapter.md) |
 | `python -m deck_compiler.mcp_server` | 低层 Total-pipe stdio MCP，配置为 [.mcp.advanced.json](.mcp.advanced.json)，服务名 `total_pipe_v3` |
 | `python -m pwf2rpa …` | 在 `pwf2rpa/` 中运行，转换已有 workflow / Story；详见 [适配器说明](pwf2rpa/README.md) |

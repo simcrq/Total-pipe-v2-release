@@ -14,7 +14,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
 
 
 class OfficialMinerUProcessor:
@@ -48,6 +53,35 @@ class OfficialMinerUProcessor:
             child_env["MINERU_TOKEN"] = self.api_key
         return child_env
 
+    def _run_cli(self, args: list[str], *, timeout: int, env: dict[str, str]):
+        argv = [*self.command, *args]
+        try:
+            return subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                env=env,
+                check=False,
+            )
+        except FileNotFoundError:
+            if os.name == "nt":
+                resolved = shutil.which(self.command[0])
+                if resolved and resolved != self.command[0]:
+                    return subprocess.run(
+                        [resolved, *self.command[1:], *args],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=timeout,
+                        env=env,
+                        check=False,
+                    )
+            raise
+
     def authentication(self, timeout=15):
         """Ask the official CLI to verify its own credentials, without uploading a document.
 
@@ -59,9 +93,7 @@ class OfficialMinerUProcessor:
             return {"ready": present, "verified": False, "required": False,
                     "status": "not_required" if present else "missing_cli"}
         try:
-            result = subprocess.run([*self.command, "auth", "--verify"], capture_output=True,
-                                    text=True, encoding="utf-8", errors="replace",
-                                    timeout=timeout, env=self._environment(), check=False)
+            result = self._run_cli(["auth", "--verify"], timeout=timeout, env=self._environment())
         except FileNotFoundError:
             status = "missing_cli"
         except (OSError, subprocess.SubprocessError):
@@ -84,11 +116,12 @@ class OfficialMinerUProcessor:
             raise FileNotFoundError(source)
 
         subcommand = "flash-extract" if self.extract_mode == "flash" else "extract"
-        command = [*self.command, subcommand, str(source), "-o", str(output)]
+        args = [subcommand, str(source), "-o", str(output)]
         if self.extract_mode == "precision":
-            command.extend(["-f", "md", "--model", self.model, "--timeout", str(self.timeout)])
+            args.extend(["-f", "md", "--model", self.model, "--timeout", str(self.timeout)])
         if self.ocr:
-            command.append("--ocr")
+            args.append("--ocr")
+        command = [*self.command, *args]
 
         # The official CLI resolves MINERU_TOKEN itself. Passing the config
         # value via the child environment keeps it out of logs and process
@@ -99,16 +132,7 @@ class OfficialMinerUProcessor:
         safe_command = " ".join(shlex.quote(part) for part in command if part != str(source))
         logger.info(f"Running official MinerU CLI: {safe_command} <pdf>")
         try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.timeout,
-                env=child_env,
-                check=False,
-            )
+            result = self._run_cli(args, timeout=self.timeout, env=child_env)
         except FileNotFoundError as exc:
             raise RuntimeError(
                 "mineru-open-api was not found. Install the official CLI or set "

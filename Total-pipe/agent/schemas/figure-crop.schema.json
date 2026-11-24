@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Total-pipe Lossless Figure Inspection and Crop Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "source"],
+  "properties": {
+    "operation": {
+      "type": "string",
+      "enum": ["inspect", "crop"],
+      "description": "inspect renders a 100px pixel-ruler grid and auto-detected sub-panel candidate boxes; crop extracts an exact lossless [left, top, right, bottom] sub-rectangle."
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Inventory asset_id (e.g. fig_03) or figure path inside the workflow/job workspace."
+    },
+    "box": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "integer", "minimum": 0 },
+      "description": "Required for operation=crop: integer pixel rectangle [left, top, right, bottom]."
+    },
+    "output_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,80}\\.png$",
+      "description": "Optional filename under work/crops/ for operation=crop."
+    },
+    "source_figure": {
+      "type": "string",
+      "pattern": "^S?[1-9][0-9]*[a-z]?$",
+      "description": "Optional paper figure/sub-panel identifier (e.g. 3a, 2c, S4b) pre-populated into the returned Deck IR asset_entry."
+    }
+  }
+}

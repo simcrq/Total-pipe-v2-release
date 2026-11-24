@@ -31,6 +31,27 @@
           "description": "Set true or false: continuous page numbers in the footer of every designed page (default true)."},
         "agenda": {"oneOf": [{"const": true}, {"type": "object", "additionalProperties": false,
           "properties": {"title": {"type": "string", "maxLength": 20}}}]},
+        "hide_takeaway": {"type": "boolean",
+          "description": "When true, omits the top takeaway subtitle row to reclaim vertical space for body content."},
+        "section_nav": {
+          "description": "Top full-width section progress bar rendered above the slide title.",
+          "oneOf": [
+            {"type": "boolean"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "items": {"type": "array", "minItems": 2, "maxItems": 8,
+                  "items": {"type": "string", "minLength": 1, "maxLength": 24}},
+                "active_fill": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+                "active_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+                "fill": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+                "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+                "divider_color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+              }
+            }
+          ]
+        },
         "footer": {"type": "string", "maxLength": 120,
           "description": "One line of page furniture set at the left of the footer, e.g. the deck title or lab name."}
       }
@@ -251,7 +272,7 @@
       "required": ["id", "kind", "basis", "x", "y", "series"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "kind": {"enum": ["line", "bar", "scatter"]},
+        "kind": {"enum": ["line", "bar", "hbar", "scatter"]},
         "basis": {"enum": ["evidence", "explain"]},
         "illustrative": {"type": "boolean", "default": false},
         "x": {
@@ -259,7 +280,11 @@
           "properties": {
             "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
             "scale": {"enum": ["linear", "log"], "default": "linear"},
-            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}}
+            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}},
+            "categories": {"type": "array", "minItems": 2, "maxItems": 24,
+                           "items": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"}},
+            "min": {"type": "number"},
+            "max": {"type": "number"}
           }
         },
         "y": {
@@ -267,7 +292,9 @@
           "properties": {
             "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
             "scale": {"enum": ["linear", "log"], "default": "linear"},
-            "unit": {"type": "string", "maxLength": 24}
+            "unit": {"type": "string", "maxLength": 24},
+            "min": {"type": "number"},
+            "max": {"type": "number"}
           }
         },
         "series": {
@@ -300,12 +327,40 @@
             }
           }
         },
+        "reference_lines": {
+          "type": "array", "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["axis", "value"],
+            "properties": {
+              "axis": {"enum": ["x", "y"]},
+              "value": {"type": "number"},
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+              "style": {"enum": ["dashed", "solid"], "default": "dashed"}
+            }
+          }
+        },
+        "shaded_zones": {
+          "type": "array", "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["axis", "low", "high"],
+            "properties": {
+              "axis": {"enum": ["x", "y"]},
+              "low": {"type": "number"},
+              "high": {"type": "number"},
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"}
+            }
+          }
+        },
         "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
         "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
       },
       "allOf": [
-        {"if": {"properties": {"kind": {"enum": ["line", "bar"]}}},
+        {"if": {"properties": {"kind": {"const": "line"}}},
          "then": {"properties": {"x": {"required": ["values"]}}}},
+        {"if": {"properties": {"kind": {"enum": ["bar", "hbar"]}}},
+         "then": {"properties": {"x": {"anyOf": [{"required": ["values"]}, {"required": ["categories"]}]}}}},
         {"if": {"properties": {"basis": {"const": "explain"}}},
          "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
         {"if": {"properties": {"basis": {"const": "evidence"}}},
@@ -317,7 +372,7 @@
       "required": ["style", "title_treatment", "density", "figure_treatment", "decoration_policy"],
       "properties": {
         "style": {"const": "research-seminar"},
-        "title_treatment": {"enum": ["plain", "thin-rule"]},
+        "title_treatment": {"enum": ["plain", "thin-rule", "accent-bar"]},
         "density": {"enum": ["balanced", "compact"]},
         "figure_treatment": {"enum": ["unframed", "ruled-caption"]},
         "decoration_policy": {"enum": ["minimal", "none"]},
@@ -786,7 +841,28 @@
                   "min_panel_extent": {"type": "number", "minimum": 140, "maximum": 500},
                   "caption_height": {"type": "number", "minimum": 24, "maximum": 96},
                   "caption_font_size": {"type": "number", "minimum": 12, "maximum": 28},
-                  "caption_font_floor": {"type": "number", "minimum": 10, "maximum": 28}
+                  "caption_font_floor": {"type": "number", "minimum": 10, "maximum": 28},
+                  "highlights": {
+                    "type": "array",
+                    "maxItems": 6,
+                    "description": "Normalized [0..1] image-relative callout rectangles drawn natively on top of the figure.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["box"],
+                      "properties": {
+                        "box": {
+                          "type": "array",
+                          "minItems": 4,
+                          "maxItems": 4,
+                          "items": {"type": "number", "minimum": 0, "maximum": 1},
+                          "description": "Normalized [rx, ry, rw, rh] relative to the rendered image dimensions."
+                        },
+                        "label": {"type": "string", "minLength": 1, "maxLength": 36},
+                        "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -833,6 +909,10 @@
               "description": "Per-page override of presentation.page_numbers; false hides the number only."},
             "section": {"type": "string", "maxLength": 24,
               "description": "Marks the first page of a section. The compiler numbers the section and, with presentation.agenda, lists it on the contents page."},
+            "hide_takeaway": {"type": "boolean",
+              "description": "Per-page override of presentation.hide_takeaway; omits the top takeaway row."},
+            "section_nav_index": {"type": "integer", "minimum": 0, "maximum": 7,
+              "description": "Explicit 0-based active index for presentation.section_nav on this slide."},
             "theme_tokens": {"type": "object"},
             "component_variants": {"type": "object"},
             "optional_overrides": {"type": "object", "maxProperties": 0}

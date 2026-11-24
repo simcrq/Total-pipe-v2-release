@@ -25,8 +25,49 @@ PROCESS_LAYOUTS = ('chain', 'staggered', 'compact')
 NODE_PAD_X, NODE_PAD_Y = 18., 12.
 
 
+_CJK_RE = re.compile(r'[\u3400-\u9fff]')
+_SYMBOL_NORMALIZATIONS = (
+    ('\\rightarrow', '→'),
+    ('\\leftarrow', '←'),
+    ('\\times', '×'),
+    ('\\pm', '±'),
+    ('\\geq', '≥'),
+    ('\\leq', '≤'),
+    ('\\approx', '≈'),
+    ('\\Delta', 'Δ'),
+    ('\\Phi', 'Φ'),
+    ('\\alpha', 'α'),
+    ('\\beta', 'β'),
+    ('\\gamma', 'γ'),
+    ('\\lambda', 'λ'),
+    ('\\mu', 'μ'),
+    ('\\tau', 'τ'),
+    ('\\sigma', 'σ'),
+    ('\\omega', 'ω'),
+    ('->', '→'),
+    ('>=', '≥'),
+    ('<=', '≤'),
+)
+
+
+def normalize_graphic_label(text):
+    """Replace raw LaTeX/ASCII symbol macros in plain-text graphic nodes without altering numbers."""
+    if not isinstance(text, str) or not text:
+        return text
+    out = text
+    for raw, sym in _SYMBOL_NORMALIZATIONS:
+        if raw in out:
+            out = out.replace(raw, sym)
+    return out
+
+
 def _wrap(text, face, max_width):
-    """Greedy wrap that works for CJK, where there are no spaces to break on."""
+    """Balanced wrap for CJK/mixed text that avoids 1-character CJK orphan last lines."""
+    if '\n' in text:
+        out = []
+        for para in text.split('\n'):
+            out.extend(_wrap(para, face, max_width))
+        return out or ['']
     lines, current = [], ''
     for char in text:
         if face.getlength(current+char) <= max_width or not current:
@@ -36,6 +77,16 @@ def _wrap(text, face, max_width):
             current = char
     if current:
         lines.append(current)
+    # Prevent CJK single-character orphan on the final line (e.g. "有效势垒降\n低" -> "有效势垒\n降低").
+    if (len(lines) >= 2
+            and len(lines[-1].strip()) == 1
+            and _CJK_RE.fullmatch(lines[-1].strip())
+            and len(lines[-2]) >= 3
+            and _CJK_RE.search(lines[-2][-1])):
+        candidate_prev = lines[-2][:-1]
+        candidate_last = lines[-2][-1] + lines[-1]
+        if face.getlength(candidate_last) <= max_width:
+            lines[-2], lines[-1] = candidate_prev, candidate_last
     return lines or ['']
 
 
@@ -224,10 +275,11 @@ def intentional_overlap(first, second):
     for container, child in ((first, second), (second, first)):
         if child.get('id') in container.get('frame_members', []):
             return True
+    if (first.get('overlap_group') and first.get('overlap_group') == second.get('overlap_group')
+            and first.get('graphic_id') == second.get('graphic_id')):
+        return True
     same_graphic = bool(first.get('graphic_id')) and first.get('graphic_id') == second.get('graphic_id')
     if same_graphic:
-        if first.get('overlap_group') and first.get('overlap_group') == second.get('overlap_group'):
-            return True  # Explicit paths/labels in one authored local coordinate scene.
         for container, child in ((first, second), (second, first)):
             if container.get('role') == 'graphic-container' and child.get('container_id') == container['id']:
                 return True
@@ -311,8 +363,9 @@ def graphic_obstacle_collisions(connectors, elements):
 
 
 def node_elements(graphic_id, node, bbox, theme, text_heights=None, shape_override=None,
-                  title_size=None, body_size=None):
+                  title_size=None, body_size=None, font_paths=None):
     """The v2 node/label renderer, also used by measured DAG nodes."""
+    from .fonts import load_font_file
     from .style import node_style
     nx, node_y, node_width, node_height = bbox
     foreground = theme.get('foreground', '#142735')
@@ -338,18 +391,21 @@ def node_elements(graphic_id, node, bbox, theme, text_heights=None, shape_overri
               'hexagon': (.66, .76)}.get(geometry, (.94, .78))
     inner_w, inner_h = node_width*sx, node_height*sy
     inner_x, inner_y = nx+(node_width-inner_w)/2, node_y+(node_height-inner_h)/2
-    body = node.get('body', '')
-    title_h = inner_h*.45 if body.strip() else inner_h
-    if text_heights and body.strip():
+    raw_title = normalize_graphic_label(node['title'])
+    raw_body = normalize_graphic_label(node.get('body', ''))
+    title_h = inner_h*.45 if raw_body.strip() else inner_h
+    if text_heights and raw_body.strip():
         title_need, body_need = text_heights
         title_h = (inner_h-8)*title_need/(title_need+body_need)
     elements.append({'id': prefix+':title', 'kind': 'text',
                      'role': 'heading' if style.get('bold', True) else 'body',
-                     'text': node['title'], 'bbox': [inner_x, inner_y, inner_w, title_h],
+                     'text': raw_title, 'source_text': node['title'],
+                     'bbox': [inner_x, inner_y, inner_w, title_h],
                      'font_size': title_size, 'max_lines': 2, 'color': foreground, **metadata})
-    if body.strip():
+    if raw_body.strip():
         elements.append({'id': prefix+':body', 'kind': 'text', 'role': 'body',
-                         'text': body, 'bbox': [inner_x, inner_y+title_h+8, inner_w,
+                         'text': raw_body, 'source_text': node.get('body', ''),
+                         'bbox': [inner_x, inner_y+title_h+8, inner_w,
                                                inner_h-title_h-8],
                          'font_size': body_size, 'max_lines': 4, 'color': foreground, **metadata})
     return elements
@@ -386,7 +442,7 @@ def compile_graphic(graphic, region, theme, font_paths=None):
         start_y = y+max(0., (height-total)/2)
         for index, node in enumerate(graphic['nodes']):
             ny = start_y+index*(node_height+gap)
-            elements.extend(node_elements(graphic['id'], node, [node_x, ny, node_width, node_height], theme))
+            elements.extend(node_elements(graphic['id'], node, [node_x, ny, node_width, node_height], theme, font_paths=font_paths))
         nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
         for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
             start, end = nodes[source['id']], nodes[target['id']]
@@ -414,16 +470,19 @@ def compile_graphic(graphic, region, theme, font_paths=None):
 
     if layout == 'compact':
         gap = 16.0
-        node_size = min(180.0, (width-gap*(count-1))/count, height-32)
-        if node_size < 96:
-            raise ValueError('Compact process needs at least 96 px per square node')
+        has_body = any(str(node.get('body') or '').strip() for node in graphic['nodes'])
+        pad_v = 32.0 if has_body else 16.0
+        min_square = 96.0 if has_body else 64.0
+        node_size = min(180.0, (width-gap*(count-1))/count, height-pad_v)
+        if node_size < min_square:
+            raise ValueError(f'Compact process needs at least {int(min_square)} px per square node')
         total = node_size*count+gap*(count-1)
         start_x = x+(width-total)/2
         node_y = y+(height-node_size)/2
         for index, node in enumerate(graphic['nodes']):
             nx = start_x+index*(node_size+gap)
             elements.extend(node_elements(graphic['id'], node, [nx, node_y, node_size, node_size],
-                                          theme, shape_override='rect', title_size=24, body_size=24))
+                                          theme, shape_override='rect', title_size=24, body_size=24, font_paths=font_paths))
         nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
         for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):
             start, end = nodes[source['id']], nodes[target['id']]
@@ -460,7 +519,7 @@ def compile_graphic(graphic, region, theme, font_paths=None):
     for index, node in enumerate(graphic['nodes']):
         nx = start_x + index*(node_width+gap)
         ny = base_y + (-offset if index % 2 == 0 else offset) if layout == 'staggered' else base_y
-        elements.extend(node_elements(graphic['id'], node, [nx, ny, node_width, node_height], theme))
+        elements.extend(node_elements(graphic['id'], node, [nx, ny, node_width, node_height], theme, font_paths=font_paths))
     nodes = {e['node_id']: e for e in elements if e['kind'] == 'shape'}
     # Emit after the nodes, in visual order even if the IR edge list is permuted.
     for source, target in zip(graphic['nodes'], graphic['nodes'][1:]):

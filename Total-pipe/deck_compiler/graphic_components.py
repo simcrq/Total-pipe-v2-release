@@ -232,24 +232,65 @@ def render_process_graph(data, theme, bounds, font_paths=None):
 
 def render_layered_architecture(data, theme, bounds, font_paths=None):
     x, y, w, h = bounds
+    font_paths = _fonts(theme, font_paths)
+    from .style import DEFAULT_PACK, PACKS, named_color, tint
+    pack = (theme or {}).get('_visual_style') or PACKS[DEFAULT_PACK]
+    panel_cfg = pack.get('panel') or PACKS[DEFAULT_PACK]['panel']
+    is_rounded = float(panel_cfg.get('radius', 0.0)) > 0.0
     graph = {'id': data['id'], 'nodes': [n for layer in data['layers'] for n in layer['nodes']],
              'edges': data['edges']}
     groups = [[n['id'] for n in layer['nodes']] for layer in data['layers']]
-    elements = compile_dag(graph, [x+16, y+64, w-32, h-80], theme, font_paths, layers_override=groups)
-    containers = []
+    pad_x = 10.0
+    header_h = 38.0 if not is_rounded else 42.0
+    elements = compile_dag(graph, [x+pad_x, y+header_h, w-2*pad_x, h-header_h-6.0], theme, font_paths, layers_override=groups)
+    # Use one shared header font size across all layers so peer layer titles match visually.
+    layer_spans = []
     for layer in data['layers']:
         members = {node['id'] for node in layer['nodes']}
         nodes = [e for e in elements if e.get('role') == 'graphic-node' and e['node_id'] in members]
-        left, width = nodes[0]['bbox'][0]-16, nodes[0]['bbox'][2]+32
+        left, width = nodes[0]['bbox'][0] - pad_x, nodes[0]['bbox'][2] + 2*pad_x
+        layer_spans.append((layer, members, left, width))
+    # Prevent adjacent containers from touching when horizontal gap is tight.
+    for idx in range(len(layer_spans) - 1):
+        l1, m1, left1, w1 = layer_spans[idx]
+        l2, m2, left2, w2 = layer_spans[idx + 1]
+        overlap_or_touch = (left1 + w1 + 10.0) - left2
+        if overlap_or_touch > 0:
+            trim = min(pad_x - 3.0, overlap_or_touch / 2.0)
+            layer_spans[idx] = (l1, m1, left1, w1 - trim)
+            layer_spans[idx + 1] = (l2, m2, left2 + trim, w2 - trim)
+    max_title = 21 if not is_rounded else 26
+    shared_title_size = 20
+    for candidate in range(max_title, 19, -1):
+        face = ImageFont.truetype(str(font_paths['bold_font_file']), candidate)
+        if all(face.getlength(layer['title']) <= max(24.0, width - 16.0) for layer, _, _, width in layer_spans):
+            shared_title_size = candidate
+            break
+    if is_rounded:
+        container_geom = 'roundRect'
+        container_fill = theme.get('background', '#FFFFFF')
+        border_col = tint(theme.get('accent', '#C2410C'), theme.get('background', '#FFFFFF'), 0.42)
+        border_w = 1.25
+        title_col = theme.get('foreground', '#142735')
+        title_box_h = 34
+    else:
+        container_geom = 'rect'
+        container_fill = '#F8FAFC'
+        border_col = panel_cfg.get('border', '#CBD5E1')
+        border_w = float(panel_cfg.get('border_width', 1.0))
+        title_col = named_color('muted', theme or {})
+        title_box_h = 32
+    containers = []
+    for layer, members, left, width in layer_spans:
         cid = f"graphic:{data['id']}:container:{layer['id']}"
         containers.append({'id': cid, 'kind': 'shape', 'role': 'graphic-container',
             'graphic_id': data['id'], 'node_id': 'container:'+layer['id'],
-            'bbox': [left, y, width, h], 'geometry': 'roundRect',
-            'fill': theme.get('background', '#FFFFFF'), 'line': theme.get('accent', '#C2410C'), 'line_width': 1})
+            'bbox': [left, y, width, h], 'geometry': container_geom,
+            'fill': container_fill, 'line': border_col, 'line_width': border_w})
         containers.append({'id': cid+':title', 'kind': 'text', 'role': 'heading',
             'graphic_id': data['id'], 'node_id': 'container:'+layer['id'], 'container_id': cid,
-            'text': layer['title'], 'bbox': [left+12, y+10, width-24, 40],
-            'font_size': 28, 'max_lines': 1, 'color': theme.get('foreground', '#142735')})
+            'text': layer['title'], 'bbox': [left+8, y+6, width-16, title_box_h],
+            'font_size': shared_title_size, 'max_lines': 1, 'color': title_col})
         for e in elements:
             if e.get('node_id') in members:
                 e['container_id'] = cid
@@ -299,7 +340,7 @@ def render_funnel(data, theme, bounds, font_paths=None):
                     ['L', (outer_w+bottom_w)/2, height], ['L', (outer_w-bottom_w)/2, height], ['Z']]
         label_w = bottom_w*.5 if apex else inner_w
         label_y, label_h = (cursor+height/2, height/2) if apex else (cursor, height)
-        parts = node_elements(data['id'], level, [x+(w-label_w)/2, label_y, label_w, label_h], theme, (th, bh))
+        parts = node_elements(data['id'], level, [x+(w-label_w)/2, label_y, label_w, label_h], theme, (th, bh), font_paths=font_paths)
         parts[0]['bbox'] = [left, cursor, outer_w, height]
         parts[0].pop('geometry')
         parts[0]['custom_geometry'] = custom_geometry(commands, [0, 0, outer_w, height])

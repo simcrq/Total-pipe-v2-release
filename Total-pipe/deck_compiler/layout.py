@@ -61,7 +61,7 @@ def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
 
 
 CAPTION_FIGURE_PREFIX = re.compile(
-    r'^(?:原文\s*)?[Ff]ig(?:ure)?\.?\s*([0-9]+[a-z]?)\s*[|｜·•:：\-–]\s*')
+    r'^(?:原文\s*)?(?:[Ff]ig(?:ure)?\.?|图)\s*(S?[0-9]+[a-z]?)(?:\s*[|｜·•:：\-–]\s*|\s+)')
 
 
 def caption_with_source(ref):
@@ -115,20 +115,23 @@ def caption_measure(ref, width, font_file, design=None):
     return max(34.0, len(lines)*size*1.25+8), len(lines)
 
 
-def body_bottom(slide, family, spacious):
+def body_bottom(slide, family, spacious, deck_presentation=None):
     """Where the body region ends on this page.
 
     The dual-figure template has always used the strip between the body bottom and the compact caveat
     row at y=622; the packer's requests said 588, so the two disagreed by 30 px and no two-up figure
     could ever satisfy the panel floor. One function now answers for both.
     """
-    bottom = 588 if audience.visible_caveats(slide) else 640
-    if family == "dual" and audience.visible_caveats(slide):
-        bottom = 618
-    return bottom
+    if audience.visible_caveats(slide):
+        return 618 if family == "dual" else 588
+    pres = deck_presentation or {}
+    numbering = slide.get('presentation', {}).get('page_number', pres.get('page_numbers', True))
+    if numbering is False and not pres.get('footer'):
+        return 672
+    return 640
 
 
-def body_region(slide, family, frame, design=None, font_paths=None, preserve_terms=False):
+def body_region(slide, family, frame, design=None, font_paths=None, preserve_terms=False, deck_presentation=None):
     """The body rectangle's vertical bounds for a frame variant, in the compiler's own units.
 
     The lab-template frame is tighter above (a 40 pt title and a one-line takeaway instead of the
@@ -136,12 +139,13 @@ def body_region(slide, family, frame, design=None, font_paths=None, preserve_ter
     y=686), so a content page gains about 150 px of body height.
     """
     if design:
-        return header_layout(design, slide, font_paths, preserve_terms)['body_top'], body_bottom(slide, family, False)
+        return (header_layout(design, slide, font_paths, preserve_terms, deck_presentation)['body_top'],
+                body_bottom(slide, family, False, deck_presentation))
     if frame == "template":
         top, bottom = 132, (632 if audience.visible_caveats(slide) else 672)
     else:
         spacious = frame == "spacious"
-        top, bottom = (236 if spacious else 260), body_bottom(slide, family, spacious)
+        top, bottom = (236 if spacious else 260), body_bottom(slide, family, spacious, deck_presentation)
     if slide.get('presentation', {}).get('takeaway_frame') and font_paths:
         from .container_frames import measure_takeaway, legacy_takeaway_box
         box = measure_takeaway(slide, font_paths, legacy_takeaway_box(slide, frame))['bbox']
@@ -314,12 +318,17 @@ TOKEN = re.compile(r"[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u0
 # land there, the previous character travels down with it instead. Two real review findings drove
 # this: a wrapped "1." / "19×" (the DECIMAL_SPLIT rule) and a line that consisted of "。" alone.
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
+NO_LINE_END = set('（([【《「『“‘')
+
+
+_CJK_ORPHAN_RE = re.compile(r'^[\u3400-\u9fff][，。、；：？！）】》」』”’,.!?;:)]*$')
 
 
 def break_lines(text, font, width):
-    """Preserve paragraphs, break at words/CJK glyphs; long tokens split safely."""
+    """Preserve paragraphs, break at words/CJK glyphs, and prevent orphan lines/brackets."""
     lines = []
     for paragraph in text.split("\n"):
+        para_start = len(lines)
         pieces = []
         current = ''
         for token in TOKEN.findall(paragraph):
@@ -327,6 +336,13 @@ def break_lines(text, font, width):
                 # Kinsoku: a closing mark or unit never starts a line. The token before it travels
                 # down instead, so "2.84×，" does not become "2.84" / "×，".
                 if token[:1] in NO_LINE_START and len(current.strip()) > 2:
+                    carried = pieces.pop()
+                    lines.append(''.join(pieces).rstrip())
+                    current = carried + token.lstrip()
+                    pieces = [current]
+                    continue
+                # Opening bracket/quote never stays stranded at the end of a line.
+                if pieces and pieces[-1].strip() in NO_LINE_END and len(pieces) > 1:
                     carried = pieces.pop()
                     lines.append(''.join(pieces).rstrip())
                     current = carried + token.lstrip()
@@ -348,6 +364,15 @@ def break_lines(text, font, width):
             pieces.append(token)
             current += token
         lines.append(current.rstrip())
+        # CJK orphan guard: avoid leaving a lone CJK character (+ optional punctuation) on the final line.
+        if (len(lines) - para_start >= 2
+                and _CJK_ORPHAN_RE.fullmatch(lines[-1].strip())
+                and len(lines[-2]) >= 3
+                and '\u3400' <= lines[-2][-1] <= '\u9fff'):
+            cand_prev = lines[-2][:-1].rstrip()
+            cand_last = lines[-2][-1] + lines[-1]
+            if cand_prev and font.getlength(cand_last) <= width:
+                lines[-2], lines[-1] = cand_prev, cand_last
     return lines
 
 
@@ -370,20 +395,24 @@ def intersect(a, b):
 
 
 def text_visible_bottom(element):
-    """Estimate the occupied text edge, not the full reserved textbox edge."""
+    """Estimate the occupied text bottom edge, respecting vertical anchor."""
     _x, y, _w, height = element["bbox"]
     contract = element["contract"]
-    if contract["vertical_anchor"] != "top":
-        return y + height
     if element.get('inline_math'):
-        return min(y+height, y+contract['inset']['top']+element['inline_layout']['height'])
-    if element['kind'] == 'list':
-        occupied = (sum(len(lines) for lines in element['items'])*contract['font_size']*contract['line_height']
-                    +element['bullet'].get('space_after', 0)*max(0, len(element['items'])-1))
-        return min(y+height, y+contract['inset']['top']+occupied)
-    line_count = len(re.split('[\n\v]', element["text"]))
-    return min(y + height, y + contract["inset"]["top"] +
-               line_count * contract["font_size"] * contract["line_height"])
+        occupied = element['inline_layout']['height']
+    elif element['kind'] == 'list':
+        occupied = (sum(len(lines) for lines in element['items']) * contract['font_size'] * contract['line_height']
+                    + element['bullet'].get('space_after', 0) * max(0, len(element['items']) - 1))
+    else:
+        line_count = len(re.split('[\n\v]', element["text"]))
+        occupied = line_count * contract["font_size"] * contract["line_height"]
+    vis_h = min(height, contract["inset"]["top"] + occupied + contract["inset"].get("bottom", 0))
+    anchor = contract.get("vertical_anchor", "top")
+    if anchor == "middle":
+        return min(y + height, y + (height - vis_h) / 2 + vis_h)
+    if anchor == "bottom":
+        return y + height
+    return min(y + height, y + contract["inset"]["top"] + occupied)
 
 
 def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
@@ -408,6 +437,40 @@ def lower_whitespace_issue(elements, slide_number, body_top, body_bottom):
                  body_top_px=body_top, body_bottom_px=body_bottom,
                  content_bottom_px=round(content_bottom), empty_lower_px=round(gap),
                  empty_share=round(share, 3))
+
+
+def body_whitespace_issue(elements, slide_number, body_top, body_bottom):
+    """Detect genuinely excessive 2D whitespace across the full body band using exact union ink."""
+    if body_bottom - body_top < 120:
+        return None
+    from .whitespace import analyze_region_whitespace, visible_element_boxes
+
+    body_bounds = [56.0, float(body_top), 1168.0, float(body_bottom - body_top)]
+    visible = visible_element_boxes(elements, body_bounds, include_header=False)
+    if not visible:
+        return None
+    metrics = analyze_region_whitespace(
+        visible, body_bounds, min_empty_size=(360.0, 160.0), margin=0.0
+    )
+    if metrics['coverage_ratio'] >= 0.25 or metrics['largest_empty_ratio'] < 0.45:
+        return None
+    return issue(
+        'BODY_WHITESPACE_EXCESSIVE',
+        'REVIEW',
+        f"Body visible ink covers only {metrics['coverage_ratio']:.0%} of the body band; "
+        f"the largest contiguous empty region covers {metrics['largest_empty_ratio']:.0%} "
+        f"({metrics['empty_quadrants']}/4 quadrants empty). Consider a richer multi-zone layout "
+        "or an example from the library.",
+        slide_number,
+        detector='design-preflight',
+        confidence='MEDIUM',
+        body_coverage_ratio=metrics['coverage_ratio'],
+        whitespace_ratio=metrics['whitespace_ratio'],
+        largest_empty_ratio=metrics['largest_empty_ratio'],
+        largest_empty_rect=metrics['largest_empty_rect'],
+        empty_quadrants=metrics['empty_quadrants'],
+        suggested_actions=['add_supporting_visual', 'consult_example_library', 'rebalance_columns'],
+    )
 
 
 def sparse_text_page(entry, elements):
@@ -551,6 +614,95 @@ FOOTER_TEXT_Y = 672.0
 FOOTER_TEXT_H = 28.0
 FOOTER_NUMBER_BOX = [1160, FOOTER_TEXT_Y, 64, FOOTER_TEXT_H]
 FOOTER_TEXT_BOX = [56, FOOTER_TEXT_Y, 880, FOOTER_TEXT_H]
+
+
+def section_nav_items(ir):
+    """Resolve the ordered top navigation labels declared via presentation.section_nav."""
+    nav = (ir.get('presentation') or {}).get('section_nav')
+    if not nav:
+        return []
+    if isinstance(nav, dict) and nav.get('items'):
+        return list(nav['items'])
+    return [label for label, _ in agenda_sections(ir)]
+
+
+def section_nav_elements(elements, emit_text, slide, ir, design):
+    """Full-bleed top section progress bar above the slide title."""
+    nav = (ir.get('presentation') or {}).get('section_nav')
+    if not nav:
+        return
+    if (slide.get('composition') or {}).get('archetype') == 'cover':
+        return
+    items = section_nav_items(ir)
+    if len(items) < 2:
+        return
+    cfg = nav if isinstance(nav, dict) else {}
+    accent = (design or {}).get('accent_color') or (ir.get('theme') or {}).get('accent', '#B85D3B')
+    bar_fill = cfg.get('fill', '#F3F4F6')
+    text_color = cfg.get('color', '#475569')
+    active_fill = cfg.get('active_fill', accent)
+    active_color = cfg.get('active_color', '#FFFFFF')
+    divider_color = cfg.get('divider_color', '#CBD5E1')
+    bar_h = 48.0
+
+    # Determine active section index: explicit section_nav_index -> slide/preceding section match -> None
+    active_idx = None
+    slide_pres = slide.get('presentation') or {}
+    if isinstance(slide_pres.get('section_nav_index'), int) and 0 <= slide_pres['section_nav_index'] < len(items):
+        active_idx = slide_pres['section_nav_index']
+    else:
+        current_sec = str(slide_pres.get('section') or '').strip()
+        if not current_sec:
+            for s in ir.get('slides') or []:
+                sec = str((s.get('presentation') or {}).get('section') or '').strip()
+                if sec:
+                    current_sec = sec
+                if s is slide or s.get('id') == slide.get('id'):
+                    break
+        if current_sec and current_sec in items:
+            active_idx = items.index(current_sec)
+
+    elements.append({
+        'id': 'header:nav-rule', 'kind': 'shape', 'role': 'decoration',
+        'bbox': [0.0, bar_h, float(WIDTH), 1.5], 'geometry': 'rect',
+        'fill': active_fill, 'line': 'none', 'line_width': 0,
+        'visual_decoration': True,
+    })
+    cell_w = float(WIDTH) / len(items)
+    for idx, label in enumerate(items):
+        cx = round(idx * cell_w, 2)
+        cw = round(float(WIDTH) - cx if idx == len(items) - 1 else cell_w, 2)
+        is_active = idx == active_idx
+        has_div = not is_active and idx > 0 and idx - 1 != active_idx
+        members = [f'header:nav-label:{idx}']
+        if has_div:
+            members.append(f'header:nav-div:{idx}')
+        elements.append({
+            'id': f'header:nav-cell:{idx}', 'kind': 'shape', 'role': 'decoration',
+            'bbox': [cx, 0.0, cw, bar_h], 'geometry': 'rect',
+            'fill': active_fill if is_active else bar_fill, 'line': 'none', 'line_width': 0,
+            'frame_members': members, 'visual_decoration': True,
+        })
+        if has_div:
+            elements.append({
+                'id': f'header:nav-div:{idx}', 'kind': 'shape', 'role': 'decoration',
+                'bbox': [round(cx + 0.5, 2), 13.0, 1.2, 22.0], 'geometry': 'rect',
+                'fill': divider_color, 'line': 'none', 'line_width': 0,
+                'visual_decoration': True,
+            })
+        emit_text(
+            f'header:nav-label:{idx}',
+            label,
+            [round(cx + 8.0, 2), 6.0, round(max(24.0, cw - 16.0), 2), 36.0],
+            'badge',
+            22,
+            20,
+            1,
+            'middle',
+            active_color if is_active else text_color,
+            align='center',
+            bold=is_active,
+        )
 
 
 def page_furniture_elements(elements, text, number, slide, presentation, design, furniture):
@@ -712,24 +864,17 @@ def geometry_issues(elements, number):
     return findings
 
 
-def compile_deck(ir, base, _retry=True, proposals=None):
-    ir = enable_bare_subscripts(deepcopy(ir))
-    issues = validate(ir)
-    # A REVIEW is something a human confirms later; only a FAIL stops compilation. Treating every
-    # finding as fatal meant an equation-only page could not even be laid out to be reviewed.
-    if any(issue["severity"] == "FAIL" for issue in issues):
-        return None, issues
+def _resolve_deck_context(ir, base, issues):
     base = Path(base)
     design = resolve_design(ir)
     preserve_terms = preserve_scientific_terms(ir)
     theme = {**ir['theme'], **({'accent': design['accent_color']} if design else {})}
-    from .style import StyleError, resolve as resolve_style
+    from .style import StyleError, page_furniture, resolve as resolve_style, text_styles
     try:
         theme['_visual_style'] = resolve_style(ir.get('presentation'))
     except StyleError as error:
         issues.append(issue('VISUAL_STYLE_INVALID', 'FAIL', str(error), detector='geometric-preflight'))
-        return None, issues
-    from .style import page_furniture, text_styles
+        return None
     text_inks = text_styles(theme)
     furniture = page_furniture(theme)
     # Fonts are resolved by the platform, not by the deck's author: a theme may name a file from
@@ -749,9 +894,11 @@ def compile_deck(ir, base, _retry=True, proposals=None):
     text_sample = compiler_strings + "".join(
         [font_sample(slide['semantic'].get(field, ''), field in slide['semantic'].get('inline_math', []))
          for slide in ir['slides'] for field in ('title', 'purpose', 'takeaway', 'speaker_notes')]
-        + [font_sample(block.get("text", ""), block.get('inline_math', False))+block.get("label", "") for slide in ir["slides"]
+        + [font_sample(block.get("text", ""), block.get('inline_math', False)) + block.get("label", "") for slide in ir["slides"]
            for block in slide["composition"]["blocks"]]
-        + [figure.get("caption", "") for slide in ir["slides"]
+        + [figure.get("caption", "") + "".join(
+               h.get("label", "") for h in figure.get("highlights", []) if isinstance(h, dict))
+           for slide in ir["slides"]
            for figure in slide["composition"]["figure_refs"]]
         + [value for slide in ir["slides"] for graphic in slide["composition"].get("graphics", [])
            for _, value in graphic_texts(graphic)]
@@ -759,12 +906,13 @@ def compile_deck(ir, base, _retry=True, proposals=None):
            for _, node in walk_regions(
                slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel']
         + [font_sample(cell['text'], cell.get('inline_math', False)) for slide in ir['slides'] for table in slide['composition'].get('tables', [])
-           for cell in table['cells'] if cell.get('kind', 'text') == 'text'])
+           for cell in table['cells'] if cell.get('kind', 'text') == 'text']
+        + section_nav_items(ir))
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
         issues.append(issue("FONT_UNAVAILABLE", "FAIL", str(error), detector="geometric-preflight"))
-        return None, issues
+        return None
     font_paths = {"font_file": regular_font, "bold_font_file": bold_font}
     # The measured fallback must also be the native typeface. Keeping the authored Arial family
     # after measuring a CJK fallback lets PowerPoint choose different advances and overrun a panel.
@@ -797,7 +945,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         except (OSError, ValueError, KeyError) as e:
             issues.append(issue("ASSET_INVALID", "FAIL", f"{key}: {e}", detector="geometric-preflight"))
     if any(i["severity"] == "FAIL" for i in issues):
-        return None, issues
+        return None
     # A full-bleed background is declared by the theme and drawn by the compiler beneath every
     # element. It used to be stamped into the slide master by a script that ran after QA, which is
     # how a delivered deck ended up with bytes no report had inspected.
@@ -807,7 +955,7 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         from . import background as background_layer
         path = (base / background_image).resolve()
         try:
-            stats, findings = background_layer.review(
+            _, findings = background_layer.review(
                 path, theme.get("foreground", "#142735"), path.stat().st_size)
             issues += findings
             assets["@background"] = {"path": str(path), "width": WIDTH, "height": HEIGHT,
@@ -816,1083 +964,1226 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         except (OSError, ValueError) as error:
             issues.append(issue("BACKGROUND_INVALID", "FAIL", f"{background_image}: {error}",
                                 detector="geometric-preflight"))
-            return None, issues
-    deck_frame = frame_variant(ir)
-    slides = []
-    for n, slide in enumerate(ir["slides"], 1):
-        sem, comp = slide["semantic"], slide["composition"]
-        visual_plan = slide['presentation'].get('visual_plan')
+            return None
+    return {
+        "ir": ir, "design": design, "preserve_terms": preserve_terms, "theme": theme,
+        "text_inks": text_inks, "furniture": furniture, "regular_font": regular_font,
+        "font_paths": font_paths, "deck_gap": deck_gap, "bullet_style": bullet_style,
+        "bullet_color": bullet_color, "list_gap_ratio": list_gap_ratio,
+        "assets": assets, "background_key": background_key, "deck_frame": frame_variant(ir),
+    }
+
+
+class _SlideCompiler:
+    def __init__(self, ctx, n, slide, issues):
+        self.ctx = ctx
+        self.ir = ctx["ir"]
+        self.design = ctx["design"]
+        self.preserve_terms = ctx["preserve_terms"]
+        self.theme = ctx["theme"]
+        self.text_inks = ctx["text_inks"]
+        self.furniture = ctx["furniture"]
+        self.regular_font = ctx["regular_font"]
+        self.font_paths = ctx["font_paths"]
+        self.deck_gap = ctx["deck_gap"]
+        self.bullet_style = ctx["bullet_style"]
+        self.bullet_color = ctx["bullet_color"]
+        self.list_gap_ratio = ctx["list_gap_ratio"]
+        self.assets = ctx["assets"]
+        self.deck_frame = ctx["deck_frame"]
+        self.issues = issues
+        self.n = n
+        self.slide = slide
+        self.sem = slide["semantic"]
+        self.visual_plan = slide['presentation'].get('visual_plan')
         # Deck IR fallback: a block whose text is several paragraphs is a list, even when the author
         # forgot to say so. The copy keeps the caller's IR untouched.
         from .text_flow import fallback_list
-        blocks = [fallback_list(block) for block in comp["blocks"]]
-        comp = {**comp, "blocks": blocks}
-        figs = comp["figure_refs"]
+        comp = slide["composition"]
+        self.blocks = [fallback_list(block) for block in comp["blocks"]]
+        self.comp = {**comp, "blocks": self.blocks}
+        self.figs = self.comp["figure_refs"]
         # A page whose only object is one equation is an equation page: let it use the display
         # ladder, so the formula is the anchor instead of a body-sized line. Long equations fall
         # back down the ladder on their own when the measured width does not fit.
-        formula_sizes = FORMULA_SIZES
-        equation_page = (len([b for b in blocks if b.get('component') == 'formula']) == 1
-                         and not figs and not comp.get('tables') and not comp.get('graphics')
-                         and len(blocks) <= 4)
-        if equation_page:
-            formula_sizes = DISPLAY_FORMULA_SIZES+FORMULA_SIZES
-        show_sequence = sequence_flow(comp)
-        visual_intent = comp.get("visual_intent") or {}
-        family = ARCHETYPES[comp["archetype"]]["layout"]
-        elements = []
-        adaptations = []
-        slide_formulas = []
-        scientific_text_ids = {'title', 'takeaway', *(b['id'] for b in blocks), *(b['id']+':label' for b in blocks)}
-        if comp.get('layout_tree'):
+        self.equation_page = (len([b for b in self.blocks if b.get('component') == 'formula']) == 1
+                              and not self.figs and not self.comp.get('tables') and not self.comp.get('graphics')
+                              and len(self.blocks) <= 4)
+        self.formula_sizes = DISPLAY_FORMULA_SIZES + FORMULA_SIZES if self.equation_page else FORMULA_SIZES
+        self.show_sequence = sequence_flow(self.comp)
+        self.visual_intent = self.comp.get("visual_intent") or {}
+        self.family = ARCHETYPES[self.comp["archetype"]]["layout"]
+        self.elements = []
+        self.adaptations = []
+        self.slide_formulas = []
+        self.scientific_text_ids = {'title', 'takeaway', *(b['id'] for b in self.blocks), *(b['id'] + ':label' for b in self.blocks)}
+        if self.comp.get('layout_tree'):
             from .layout_tree import walk
-            scientific_text_ids.update('region:'+node['id']+':title'
-                                       for _, node in walk(comp['layout_tree']) if node['type'] == 'panel')
-        def text(eid, content, bbox, role="body", size=28, floor=24, lines=10,
-                 anchor="top", color=None, flow=None, align=None, inline_math=False, marker=None):
-            if not content:
-                return
-            if design and role in type_sizes(design) and not eid.startswith('graphic:'):
-                size = min(size, type_sizes(design)[role])
-            contract = TextBoxContract(theme["font_family"], size,
-                font_paths["bold_font_file" if role in ("title", "heading") else "font_file"],
-                font_weight=700 if role in ("title", "heading") else 400,
-                font_floor=floor, max_lines=lines, vertical_anchor=anchor)
-            if marker:
-                contract = replace(contract, line_height=max(contract.line_height, marker['line_height_px']/size))
-            measure_box = [*bbox[:2], bbox[2]-(marker['gutter'] if marker else 0), bbox[3]]
-            overflow = None
-            # Authored emphasis is a measured run, not a decoration: the phrase is set in the bold
-            # face, so it is laid out by the same inline engine that already handles a formula in a
-            # sentence. Text without markers keeps the plain, cheaper path byte for byte.
-            markup = has_markup(content)
-            if inline_math or markup or (role == 'caption' and has_bare_subscript(content)):
-                from .inline_text import fit_inline, text_body
-                from totalpipe_layout.inline_math import InlineWidthError
-                try:
-                    plan, fitted, overflowed = fit_inline(content, measure_box, contract, preserve_terms and eid in scientific_text_ids, marker,
-                                                          font_paths['bold_font_file'])
-                except InlineWidthError as error:
-                    issues.append(issue('INLINE_FORMULA_SPACE', 'FAIL', str(error), n, eid,
-                        detector='geometric-preflight', required_size_px=[error.required_width, 0],
-                        available_size_px=bbox[2:], suggested_actions=['widen_region', 'use_display_formula', 'split_slide']))
-                    return
-                except ValueError as error:
-                    issues.append(issue('INLINE_TEXT_CAPACITY', 'FAIL', str(error), n, eid, detector='geometric-preflight'))
-                    return
-                if overflowed:
-                    overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
-                    bbox = [*bbox[:3], max(bbox[3], plan['height']+contract.inset['top']+contract.inset['bottom'])]
-                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
-                        f'{eid}: complete mixed text and formulas retained beyond the nominal slot.', n, eid, detector='geometric-preflight'))
-                unpaired = unmatched_markers(content)
-                if unpaired:
-                    # A marker pair that was never closed stays visible. Refusing the page would be
-                    # worse than showing the author what to fix, so the phrase is set literally and
-                    # the page is reported.
-                    issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
-                        f"{eid}: {', '.join(unpaired)} is set literally; close the marker or escape it.",
-                        n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
-                colour = color or theme.get('foreground', '#142735')
-                elements.append({'id': eid, 'kind': 'text', 'role': role, 'text': plan['text'], 'source_text': content,
-                    'bbox': bbox, 'contract': fitted.to_dict(), 'color': colour, 'inline_math': True,
-                    'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left', marker=marker,
-                                                                   styles=text_inks),
-                    **({'bullet': marker, 'leading_marker': True} if marker else {}),
-                    **({'align': align} if align else {}), **({'scientific_text_overflow': overflow} if overflow else {})})
-                if plan['marks']:
-                    adaptations.append({'action': 'inline_emphasis', 'element': eid, 'marks': plan['marks']})
-                if plan['formula_count']:
-                    issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
-                        f'{eid}: verify native inline baseline, line spacing and formula bounds in PowerPoint.',
-                        n, eid, detector='geometric-preflight', confidence='LOW'))
-                return
+            self.scientific_text_ids.update('region:' + node['id'] + ':title'
+                                            for _, node in walk(self.comp['layout_tree']) if node['type'] == 'panel')
+        self.takeaway_marker = None
+        self.takeaway_outer = None
+        self.spacious = self.deck_frame == "spacious"
+        self.templated = self.deck_frame == "template"
+        self.footer = " · ".join(self.sem["evidence_refs"])
+        self.visible_caveats, self.moved_caveats = audience.split_caveats(self.sem["caveats"])
+        self.top = 0
+        self.bottom = 0
+        self.bh = 0
+
+    def emit_text(self, eid, content, bbox, role="body", size=28, floor=24, lines=10,
+                  anchor="top", color=None, flow=None, align=None, inline_math=False, marker=None, bold=False):
+        if not content:
+            return
+        if self.design and role in type_sizes(self.design) and not eid.startswith('graphic:'):
+            size = min(size, type_sizes(self.design)[role])
+        use_bold = bold or role in ("title", "heading")
+        contract = TextBoxContract(self.theme["font_family"], size,
+            self.font_paths["bold_font_file" if use_bold else "font_file"],
+            font_weight=700 if use_bold else 400,
+            font_floor=floor, max_lines=lines, vertical_anchor=anchor)
+        if marker:
+            contract = replace(contract, line_height=max(contract.line_height, marker['line_height_px'] / size))
+        measure_box = [*bbox[:2], bbox[2] - (marker['gutter'] if marker else 0), bbox[3]]
+        overflow = None
+        # Authored emphasis is a measured run, not a decoration: the phrase is set in the bold
+        # face, so it is laid out by the same inline engine that already handles a formula in a
+        # sentence. Text without markers keeps the plain, cheaper path byte for byte.
+        markup = has_markup(content)
+        if inline_math or markup or (role == 'caption' and has_bare_subscript(content)):
+            from .inline_text import fit_inline, text_body
+            from totalpipe_layout.inline_math import InlineWidthError
             try:
-                output, fitted = fit_text(content, measure_box, contract)
-            except ValueError:
-                if preserve_terms and eid in scientific_text_ids and min(bbox[2:]) > 0 and role != 'title':
-                    wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), measure_box[2])
-                    output = '\n'.join(wrapped)
-                    overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
-                    bbox = [*bbox[:3], max(bbox[3], len(wrapped)*floor*contract.line_height)]
-                    fitted = replace(contract, font_size=floor, max_lines=max(lines, len(wrapped)),
-                                     overflow_policy='preserve_terms_review')
-                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
-                        f'{eid}: full scientific text retained beyond its nominal slot; inspect the candidate without abbreviating terminology.',
-                        n, eid, detector='geometric-preflight', original_bbox=overflow['original_bbox']))
-                else:
-                    issues.append(issue("SPLIT_REQUIRED", "FAIL", f"{eid} cannot fit above its font floor",
-                                        n, eid, detector="geometric-preflight", textbox_contract="deck_ir"))
-                    return
-            # Missing-glyph comparison is a conservative signal, not full shaping coverage.
-            font = ImageFont.truetype(fitted.font_file, int(fitted.font_size))
-            missing = bytes(font.getmask(chr(0x10FFFF)))
-            gaps = {c for c in set(content) if not c.isspace() and bytes(font.getmask(c)) == missing}
-            if gaps and not gaps <= deck_gap:
-                issues.append(issue("FONT_COVERAGE_REVIEW", "REVIEW", "Possible missing glyphs; verify in PowerPoint",
-                                    n, eid, detector="geometric-preflight", confidence="LOW",
-                                    font_metrics="pillow", characters=''.join(sorted(gaps))[:20]))
-            # The declared scale, checked on the fitted size: an annotation may be 15 pt, body copy
-            # may not. This is the rule the old code implied with two different floors and never
-            # stated, which is how a 13.5 pt footer shipped beside 18 pt body text. A diagram label
-            # is annotation: a node body is a caption inside a shape, not running copy.
-            annotation = role in ANNOTATION_ROLES or eid.startswith('graphic:')
-            minimum_pt = ANNOTATION_MIN_PT if annotation else BODY_MIN_PT
-            if fitted.font_size * .75 < minimum_pt - .01:
-                issues.append(issue("TYPOGRAPHY_FLOOR", "FAIL",
-                                    f"{eid} is set at {fitted.font_size*.75:.1f} pt; the {role} "
-                                    f"floor is {minimum_pt:.0f} pt",
-                                    n, eid, detector="geometric-preflight", confidence="HIGH",
-                                    role=role, font_pt=round(fitted.font_size*.75, 1),
-                                    floor_pt=minimum_pt))
-            if role == "footer" and "\n" in output:
-                # A soft break, not a new paragraph: OfficeCLI's overflow estimator counts every
-                # paragraph of a pre-broken footer as one line more than the renderer draws.
-                output = output.replace("\n", "\v")
+                plan, fitted, overflowed = fit_inline(content, measure_box, contract,
+                    self.preserve_terms and eid in self.scientific_text_ids, marker,
+                    self.font_paths['bold_font_file'])
+            except InlineWidthError as error:
+                self.issues.append(issue('INLINE_FORMULA_SPACE', 'FAIL', str(error), self.n, eid,
+                    detector='geometric-preflight', required_size_px=[error.required_width, 0],
+                    available_size_px=bbox[2:], suggested_actions=['widen_region', 'use_display_formula', 'split_slide']))
+                return
+            except ValueError as error:
+                self.issues.append(issue('INLINE_TEXT_CAPACITY', 'FAIL', str(error), self.n, eid, detector='geometric-preflight'))
+                return
+            if overflowed:
+                overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
+                bbox = [*bbox[:3], max(bbox[3], plan['height'] + contract.inset['top'] + contract.inset['bottom'])]
+                self.issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                    f'{eid}: complete mixed text and formulas retained beyond the nominal slot.', self.n, eid, detector='geometric-preflight'))
             unpaired = unmatched_markers(content)
             if unpaired:
-                issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
+                # A marker pair that was never closed stays visible. Refusing the page would be
+                # worse than showing the author what to fix, so the phrase is set literally and
+                # the page is reported.
+                self.issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
                     f"{eid}: {', '.join(unpaired)} is set literally; close the marker or escape it.",
-                    n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
-            elements.append({"id": eid, "kind": 'list' if marker else "text", "role": role,
-                             "text": output.replace('\n', '\v') if marker else output,
-                             **({'items': [output.split('\n')], 'bullet': marker,
-                                 'leading_marker': True, 'source_text': content} if marker else {}),
-                             "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
-                             "color": color or theme.get("foreground", "#142735"),
-                             **({'scientific_text_overflow': overflow} if overflow else {}),
-                             **({"align": align} if align else {}),
-                             **({"text_flow": flow} if flow else {})})
-        takeaway_marker = None
-        if slide['presentation'].get('takeaway_marker'):
-            setting = slide['presentation']['takeaway_marker']
-            from .fonts import bullet_metrics
-            takeaway_marker = {**bullet_metrics(setting['style'], theme['font_family'], regular_font, 28),
-                               'color': setting.get('color', theme.get('foreground', '#142735')),
-                               'space_after': 0}
-            adaptations.append({'action': 'takeaway_marker', **takeaway_marker})
-            if takeaway_marker['native_font_fallback']:
-                issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
-                    'Requested native marker font is unavailable; inspect the Unicode fallback glyph.',
-                    n, 'takeaway', detector='font-resolution'))
-        spacious = deck_frame == "spacious"
-        templated = deck_frame == "template"
-        footer = " · ".join(sem["evidence_refs"])
-        visible_caveats, moved_caveats = audience.split_caveats(sem["caveats"])
-        takeaway_outer = None
-        def takeaway(slot, size=28, color=None, lines=2, frame_plan=None):
-            nonlocal takeaway_outer
-            if slide['presentation'].get('takeaway_frame'):
-                from .container_frames import measure_takeaway, rectangle, grow_frame, stroke_width
-                plan = frame_plan or measure_takeaway(slide, font_paths, slot, takeaway_marker)
-                framed = rectangle('takeaway:frame', plan['bbox'], plan['style'], ['takeaway'])
-                elements.append(framed)
-                first = len(elements)
-                text('takeaway', sem['takeaway'], plan['text_bbox'], 'takeaway', size, 24,
-                     plan['lines'], color=color, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
-                takeaway_outer = grow_frame(framed, plan['bbox'], elements[first:],
-                                            plan['padding_px']+stroke_width(plan['style']))
-                adaptations.append({'action': 'takeaway_frame', **plan, 'bbox': takeaway_outer})
+                    self.n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
+            colour = color or self.theme.get('foreground', '#142735')
+            self.elements.append({'id': eid, 'kind': 'text', 'role': role, 'text': plan['text'], 'source_text': content,
+                'bbox': bbox, 'contract': fitted.to_dict(), 'color': colour, 'inline_math': True,
+                'inline_layout': plan, 'inline_xml': text_body(plan, fitted.to_dict(), colour, align or 'left', marker=marker,
+                                                               styles=self.text_inks),
+                **({'bullet': marker, 'leading_marker': True} if marker else {}),
+                **({'align': align} if align else {}), **({'scientific_text_overflow': overflow} if overflow else {})})
+            if plan['marks']:
+                self.adaptations.append({'action': 'inline_emphasis', 'element': eid, 'marks': plan['marks']})
+            if plan['formula_count']:
+                self.issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
+                    f'{eid}: verify native inline baseline, line spacing and formula bounds in PowerPoint.',
+                    self.n, eid, detector='geometric-preflight', confidence='LOW'))
+            return
+        try:
+            output, fitted = fit_text(content, measure_box, contract)
+        except ValueError:
+            if self.preserve_terms and eid in self.scientific_text_ids and min(bbox[2:]) > 0 and role != 'title':
+                wrapped = break_lines(content, ImageFont.truetype(contract.font_file, int(floor)), measure_box[2])
+                output = '\n'.join(wrapped)
+                overflow = {'original_bbox': list(bbox), 'policy': 'preserve-terms'}
+                bbox = [*bbox[:3], max(bbox[3], len(wrapped) * floor * contract.line_height)]
+                fitted = replace(contract, font_size=floor, max_lines=max(lines, len(wrapped)),
+                                 overflow_policy='preserve_terms_review')
+                self.issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                    f'{eid}: full scientific text retained beyond its nominal slot; inspect the candidate without abbreviating terminology.',
+                    self.n, eid, detector='geometric-preflight', original_bbox=overflow['original_bbox']))
             else:
-                text('takeaway', sem['takeaway'], slot, 'takeaway', size, 24, lines,
-                     color=color, inline_math='takeaway' in sem.get('inline_math', []), marker=takeaway_marker)
-        if design and family == 'cover':
+                self.issues.append(issue("SPLIT_REQUIRED", "FAIL", f"{eid} cannot fit above its font floor",
+                                         self.n, eid, detector="geometric-preflight", textbox_contract="deck_ir"))
+                return
+        # Missing-glyph comparison is a conservative signal, not full shaping coverage.
+        font = ImageFont.truetype(fitted.font_file, int(fitted.font_size))
+        missing = bytes(font.getmask(chr(0x10FFFF)))
+        gaps = {c for c in set(content) if not c.isspace() and bytes(font.getmask(c)) == missing}
+        if gaps and not gaps <= self.deck_gap:
+            self.issues.append(issue("FONT_COVERAGE_REVIEW", "REVIEW", "Possible missing glyphs; verify in PowerPoint",
+                                     self.n, eid, detector="geometric-preflight", confidence="LOW",
+                                     font_metrics="pillow", characters=''.join(sorted(gaps))[:20]))
+        # The declared scale, checked on the fitted size: an annotation may be 15 pt, body copy
+        # may not. This is the rule the old code implied with two different floors and never
+        # stated, which is how a 13.5 pt footer shipped beside 18 pt body text. A diagram label
+        # is annotation: a node body is a caption inside a shape, not running copy.
+        annotation = role in ANNOTATION_ROLES or eid.startswith('graphic:')
+        minimum_pt = ANNOTATION_MIN_PT if annotation else BODY_MIN_PT
+        if fitted.font_size * .75 < minimum_pt - .01:
+            self.issues.append(issue("TYPOGRAPHY_FLOOR", "FAIL",
+                                     f"{eid} is set at {fitted.font_size * .75:.1f} pt; the {role} "
+                                     f"floor is {minimum_pt:.0f} pt",
+                                     self.n, eid, detector="geometric-preflight", confidence="HIGH",
+                                     role=role, font_pt=round(fitted.font_size * .75, 1),
+                                     floor_pt=minimum_pt))
+        if role == "footer" and "\n" in output:
+            # A soft break, not a new paragraph: OfficeCLI's overflow estimator counts every
+            # paragraph of a pre-broken footer as one line more than the renderer draws.
+            output = output.replace("\n", "\v")
+        unpaired = unmatched_markers(content)
+        if unpaired:
+            self.issues.append(issue('EMPHASIS_UNCLOSED', 'REVIEW',
+                f"{eid}: {', '.join(unpaired)} is set literally; close the marker or escape it.",
+                self.n, eid, detector='geometric-preflight', suggested_actions=['close_marker', 'escape_marker']))
+        self.elements.append({"id": eid, "kind": 'list' if marker else "text", "role": role,
+                              "text": output.replace('\n', '\v') if marker else output,
+                              **({'items': [output.split('\n')], 'bullet': marker,
+                                  'leading_marker': True, 'source_text': content} if marker else {}),
+                              "source_text": content, "bbox": bbox, "contract": fitted.to_dict(),
+                              "color": color or self.theme.get("foreground", "#142735"),
+                              **({'scientific_text_overflow': overflow} if overflow else {}),
+                              **({"align": align} if align else {}),
+                              **({"text_flow": flow} if flow else {})})
+
+    def emit_takeaway(self, slot, size=28, color=None, lines=2, frame_plan=None):
+        if self.slide['presentation'].get('takeaway_frame'):
+            from .container_frames import grow_frame, measure_takeaway, rectangle, stroke_width
+            plan = frame_plan or measure_takeaway(self.slide, self.font_paths, slot, self.takeaway_marker)
+            framed = rectangle('takeaway:frame', plan['bbox'], plan['style'], ['takeaway'])
+            self.elements.append(framed)
+            first = len(self.elements)
+            self.emit_text('takeaway', self.sem['takeaway'], plan['text_bbox'], 'takeaway', size, 24,
+                           plan['lines'], color=color, inline_math='takeaway' in self.sem.get('inline_math', []),
+                           marker=self.takeaway_marker)
+            self.takeaway_outer = grow_frame(framed, plan['bbox'], self.elements[first:],
+                                             plan['padding_px'] + stroke_width(plan['style']))
+            self.adaptations.append({'action': 'takeaway_frame', **plan, 'bbox': self.takeaway_outer})
+        else:
+            self.emit_text('takeaway', self.sem['takeaway'], slot, 'takeaway', size, 24, lines,
+                           color=color, inline_math='takeaway' in self.sem.get('inline_math', []),
+                           marker=self.takeaway_marker)
+
+    def emit_header(self):
+        if self.slide['presentation'].get('takeaway_marker'):
+            setting = self.slide['presentation']['takeaway_marker']
+            from .fonts import bullet_metrics
+            self.takeaway_marker = {**bullet_metrics(setting['style'], self.theme['font_family'], self.regular_font, 28),
+                                    'color': setting.get('color', self.theme.get('foreground', '#142735')),
+                                    'space_after': 0}
+            self.adaptations.append({'action': 'takeaway_marker', **self.takeaway_marker})
+            if self.takeaway_marker['native_font_fallback']:
+                self.issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
+                    'Requested native marker font is unavailable; inspect the Unicode fallback glyph.',
+                    self.n, 'takeaway', detector='font-resolution'))
+        if self.design and self.family == 'cover':
             # A cover is the page the design layer can ask for that carries no content blocks: the
             # title says what the talk is, one line says why it is worth the next forty minutes, and
             # a short accent rule sets the tone without a picture. It is deliberately the only page
             # whose title does not sit in the header box.
-            sizes = type_sizes(design)
-            elements.append(rule('cover:rule', [56, 268, 136, 4], design))
-            text('title', sem['title'], [56, 300, 1100, 116], 'title', sizes['title'], sizes['title'], 2)
-            text('takeaway', sem['takeaway'], [56, 462, 980, 96], 'takeaway', sizes['takeaway'], 24, 3)
-            adaptations.append({'action': 'cover', 'title': sem['title']})
+            sizes = type_sizes(self.design)
+            self.elements.append(rule('cover:rule', [56, 268, 136, 4], self.design))
+            self.emit_text('title', self.sem['title'], [56, 300, 1100, 116], 'title', sizes['title'], sizes['title'], 2)
+            self.emit_text('takeaway', self.sem['takeaway'], [56, 462, 980, 96], 'takeaway', sizes['takeaway'], 24, 3)
+            self.adaptations.append({'action': 'cover', 'title': self.sem['title']})
             # A cover has no caveat strip and no page furniture: it is the page before page 1.
-            visible_caveats = []
+            self.visible_caveats = []
             caveat_y, caveat_h = 604, 46
-        elif design:
-            header = header_layout(design, slide, font_paths, preserve_terms)
+        elif self.design:
+            deck_pres = self.ir.get('presentation') or {}
+            section_nav_elements(self.elements, self.emit_text, self.slide, self.ir, self.design)
+            header = header_layout(self.design, self.slide, self.font_paths, self.preserve_terms, deck_pres)
             # One title size for the whole deck; the header grew instead of the title shrinking.
-            title_pt = header.get('title_size', type_sizes(design)['title'])
-            text('title', sem['title'], header['title'], 'title', title_pt, title_pt,
-                 header.get('title_lines', 2), inline_math='title' in sem.get('inline_math', []))
+            title_pt = header.get('title_size', type_sizes(self.design)['title'])
+            self.emit_text('title', self.sem['title'], header['title'], 'title', title_pt, title_pt,
+                           header.get('title_lines', 2), inline_math='title' in self.sem.get('inline_math', []))
             if header.get('title_lines', 2) >= TITLE_BOX_LINES and len(
-                    break_lines(sem['title'], ImageFont.truetype(font_paths['bold_font_file'], int(title_pt)), 1168)) > TITLE_BOX_LINES:
-                issues.append(issue('TITLE_TOO_LONG', 'FAIL',
+                    break_lines(self.sem['title'], ImageFont.truetype(self.font_paths['bold_font_file'], int(title_pt)), header['title'][2])) > TITLE_BOX_LINES:
+                self.issues.append(issue('TITLE_TOO_LONG', 'FAIL',
                     'The title needs more than three lines at the deck title size; shorten it or split the page.',
-                    n, 'title', detector='geometric-preflight', suggested_actions=['shorten_title', 'split_slide']))
-            takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
-            elements.extend(header_decoration(design, header))
-            caveat_y, caveat_h = (622, 36) if family == 'dual' else (604, 46)
-        elif templated:
+                    self.n, 'title', detector='geometric-preflight', suggested_actions=['shorten_title', 'split_slide']))
+            if not header.get('hide_takeaway') and header.get('takeaway'):
+                self.emit_takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
+            self.elements.extend(header_decoration(self.design, header))
+            caveat_y, caveat_h = (622, 36) if self.family == 'dual' else (604, 46)
+        elif self.templated:
             # A lab template owns the page frame: its own title slot, its own footer band, its own
             # white page. The compiler keeps the body grid but hands the title, takeaway and caveat
             # to the template's geometry.
             # The template's title slot ends at its red rule (y=78), so the title is set to fit
             # above it and the takeaway opens the body underneath.
-            text("title", sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A", inline_math='title' in sem.get('inline_math', []))
-            takeaway([88, 84, 1104, 42], 24, color='#333333')
+            self.emit_text("title", self.sem["title"], [88, 24, 1104, 50], "title", 36, 30, 2, color="#1A1A1A",
+                           inline_math='title' in self.sem.get('inline_math', []))
+            self.emit_takeaway([88, 84, 1104, 42], 24, color='#333333')
             caveat_y, caveat_h = 640, 36
         else:
-            text("title", sem["title"], [56, 24 if spacious else 34, 1168, 116 if spacious else 120], "title", 44, 36, 2, inline_math='title' in sem.get('inline_math', []))
+            self.emit_text("title", self.sem["title"], [56, 24 if self.spacious else 34, 1168, 116 if self.spacious else 120],
+                           "title", 44, 36, 2, inline_math='title' in self.sem.get('inline_math', []))
             # These two evidence-heavy slides use a single-line takeaway; reclaiming
             # the unused vertical room lets the original scientific panels render
             # larger without colliding with the title block.
-            takeaway_h = 56 if slide["id"] in ("s05-anneal", "s07-contact") else 76
-            takeaway([56, 144 if spacious else 164, 1168, takeaway_h])
+            takeaway_h = 56 if self.slide["id"] in ("s05-anneal", "s07-contact") else 76
+            self.emit_takeaway([56, 144 if self.spacious else 164, 1168, takeaway_h])
             # No footer element on any frame. The evidence ids used to be set at 15 pt under every
             # page, which meant a dozen EV numbers shared the bottom strip with the caveat. They are
             # traceability keys: the notes carry them, the room does not need them.
             caveat_y, caveat_h = 604, 46
-            if family == "dual":
+            if self.family == "dual":
                 # Compact callouts and larger scientific panels extend lower on
                 # dual-evidence slides, while keeping the caveat clear.
                 caveat_y, caveat_h = 622, 36
-        if visible_caveats:
-            text("caveats", audience.join_caveats(visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 24, 24, 2)
-        top, bottom = body_region(slide, family, deck_frame, design, font_paths, preserve_terms)
-        if takeaway_outer:
-            top = max(top, takeaway_outer[1]+takeaway_outer[3]+20)
-        bh = bottom-top
-        def block(b, box, formula_size=None, formula_align='center'):
-            label = b.get("label", "")
-            if b.get('component') == 'caption':
-                _, lines = caption_measure({'caption': b['text']}, box[2], font_paths['font_file'], design)
-                size = native_caption_size(design)
-                text(b['id'], b['text'], box, 'caption', size, size,
-                     max(2, lines))
-                if elements and elements[-1].get('id') == b['id']:
-                    elements[-1]['caption_for'] = dict(b['caption_for'])
-                return
-            if b.get("component") == "formula":
-                # A formula is a measured unit: it cannot wrap, it is never fed through the text
-                # wrapper, and it is never silently set below 18 pt to make a page fit.
-                from totalpipe_layout.formula import (FormulaError, measure, parse,
-                                                      to_omml_paragraph, to_plain)
-                try:
-                    ast = parse(b["text"])
-                except FormulaError as error:
-                    issues.append(issue("FORMULA_SYNTAX", "FAIL", f"{b['id']}: {error}",
-                                        n, b["id"], detector="geometric-preflight"))
-                    return
-                # A label sits to the left of the equation on its centre line. A heading above it
-                # would cost the row 40 px, and on a dense page that is the whole difference.
-                label_w = formula_label_width(label, font_paths["bold_font_file"])
-                gaps = (label_w + 12) if label_w else 0
-                inner = [box[0]+gaps, box[1]+6, box[2]-gaps-20 if label_w else box[2]-20,
-                         box[3]-12]
-                chosen = None
-                for size_px in ([formula_size] if formula_size is not None else formula_sizes):
-                    metrics = measure(ast, size_px)
-                    if metrics.width <= inner[2]+.5 and metrics.height <= inner[3]+.5:
-                        chosen = (size_px, metrics)
-                        break
-                if chosen is None:
-                    widest = measure(ast, FORMULA_SIZES[-1])
-                    issues.append(issue(
-                        "FORMULA_CAPACITY", "FAIL",
-                        f"{b['id']} needs {widest.width:.0f} × {widest.height:.0f} px at 18 pt but its slot is "
-                        f"{max(inner[2], 0):.0f} × {max(inner[3], 0):.0f} px. Widen the slot or move the equation to "
-                        "its own slide: the compiler will not shrink the body text, or the "
-                        "equation below 18 pt, to make it fit.",
-                        n, b["id"], detector="geometric-preflight",
-                        formula_width_px=round(widest.width, 1),
-                        formula_height_px=round(widest.height, 1),
-                        slot_width_px=round(max(inner[2], 0), 1),
-                        slot_height_px=round(max(inner[3], 0), 1),
-                        suggested_fix="widen_text_column_or_split_slide"))
-                    return
-                if label_w:
-                    text(b["id"]+":label", label,
-                         [box[0], box[1]+(box[3]-30)/2, label_w, 30], "heading", 24, 24, 1)
-                size_px, metrics = chosen
-                slide_formulas.append((b["id"], metrics.height))
-                bbox = [inner[0]+((inner[2]-metrics.width)/2 if formula_align == 'center' else 0),
-                        inner[1]+(inner[3]-metrics.height)/2,
-                        metrics.width, metrics.height]
-                colour = theme.get("foreground", "#142735")
-                elements.append({
-                    "id": b["id"], "kind": "math", "role": "formula", "bbox": bbox,
-                    "omml": to_omml_paragraph(ast, size_px, colour,
-                                              fallback_font=font_paths["font_file"],
-                                              box_width=inner[2]),
-                    "plain": to_plain(ast), "font_size_px": size_px,
-                    "measured_exact": metrics.exact, "source_text": b["text"],
-                    "color": colour})
-                if not metrics.exact:
-                    issues.append(issue("FORMULA_MEASURE_APPROXIMATE", "REVIEW",
-                                        f"{b['id']} uses conservative structural or fallback metrics; "
-                                        "verify the rendered formula width and height in PowerPoint",
-                                        n, b["id"], detector="geometric-preflight",
-                                        confidence="LOW", font_metrics="heuristic"))
-                return
-            if show_sequence:
-                box = [box[0]+56, box[1], box[2]-56, box[3]]
-            flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
-            if b.get('_inferred_list') and flow['source'] == 'explicit':
-                flow = {**flow, 'source': 'auto'}
-            if b.get('inline_math'):
-                flow = {**flow, 'mode': 'plain'}
-            if flow['mode'] == DISTRIBUTED_ARROW_LIST and has_markup(b['text']):
-                # A native list is one run style across its items: the words stay, the emphasis
-                # cannot. Report it instead of shipping a bullet with visible ** in it.
-                flow = {**flow, 'items': [strip_markup(item) for item in flow['items']]}
-                issues.append(issue('EMPHASIS_IN_LIST', 'REVIEW',
-                    f"{b['id']}: a native list carries one run style, so emphasis markers are set as plain text; "
-                    "use text_flow=plain to keep the emphasis.", n, b['id'], detector='geometric-preflight',
-                    suggested_actions=['text_flow_plain', 'drop_markers']))
-            pad_x, pad_y = (0, 0) if design else (28, 18)
-            min_list_width = list_min_width(b)
-            measured_list_height = (native_list_height(
-                b, max(min_list_width, box[2]), font_paths["font_file"], list_gap_ratio,
-                (pad_x, pad_y), preserve_terms, bullet_style, flow=flow)
-                if flow["mode"] == DISTRIBUTED_ARROW_LIST else None)
-            if (flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= min_list_width
-                    and measured_list_height is not None
-                    and (preserve_terms or box[3] + .5 >= measured_list_height)):
-                label_h = 44 if label else 0
-                items = flow["items"]
-                from .fonts import list_marker_metrics
-                marker = list_marker_metrics(b, bullet_style, theme['font_family'], regular_font, 24, len(items))
-                # One text object, one paragraph per item, marker set by the paragraph itself.
-                # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
-                fitted = fit_list_items(items, box[2]-2*pad_x-marker['gutter'],
-                                        font_paths["font_file"], 24, 24, LIST_ITEM_LINES)
-                beyond_lines = fitted is None
-                if beyond_lines and not preserve_terms:
-                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
-                                        f"{b['id']} list items cannot fit above their font floor",
-                                        n, b["id"], detector="geometric-preflight",
-                                        textbox_contract="deck_ir"))
-                    return
-                if beyond_lines:
-                    size = 24
-                    lines = [break_lines(item, ImageFont.truetype(font_paths['font_file'], size),
-                                         box[2]-2*pad_x-marker['gutter']) for item in items]
-                else:
-                    lines, size = fitted
-                line_h = marker['line_height_px']
-                gaps = len(lines) - 1
-                # Item spacing is a typographic value, not leftover space: filling the panel is what
-                # pushed three short items a hundred pixels apart. The ratio is relative to the line
-                # height (so it follows the font), and the deck may override it.
-                space_after = round(line_h * list_gap_ratio, 2) if gaps else 0.0
-                content_h = sum(len(item_lines) for item_lines in lines) * line_h + space_after * gaps
-                panel_h = 2*pad_y + label_h + content_h
-                overflow = None
-                if (panel_h > box[3] + .5 or beyond_lines) and not preserve_terms:
-                    issues.append(issue("SPLIT_REQUIRED", "FAIL",
-                                        f"{b['id']} list needs {content_h:.0f}px but the panel gives "
-                                        f"{box[3]-2*pad_y-label_h:.0f}px", n, b["id"],
-                                        detector="geometric-preflight", textbox_contract="deck_ir"))
-                    return
-                if panel_h > box[3] + .5 or beyond_lines:
-                    overflow = {'original_bbox': [box[0]+pad_x, box[1]+pad_y+label_h,
-                                                 box[2]-2*pad_x, max(0, box[3]-2*pad_y-label_h)],
-                                'policy': 'preserve-terms'}
-                    issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
-                        f"{b['id']}: complete native list retained with its markers and wrapped scientific terms beyond the nominal slot or item-line budget.",
-                        n, b['id'], detector='geometric-preflight', original_bbox=overflow['original_bbox'],
-                        required_size_px=[box[2], panel_h], available_size_px=box[2:],
-                        suggested_actions=['increase_region_height', 'split_slide', 'review_native_render']))
-                # The card hugs the list instead of stretching to the page: a panel with 150 px of
-                # empty space under three rows reads as a layout mistake, not as breathing room.
-                if not design and min_list_width == 520:
-                    elements.append({
-                    "id": b["id"] + ":panel", "kind": "shape", "role": "decoration",
-                    "bbox": [box[0], box[1], box[2], panel_h],
-                    "geometry": "rect", "fill": theme.get("panel_fill", "none"),
-                    "line": theme.get("panel_line", "#142735"), "line_width": 1,
-                    "collision_mode": "container",
-                    **({'scientific_text_overflow': {'original_bbox': list(box), 'policy': 'preserve-terms'}} if overflow else {})})
-                if label:
-                    text(b["id"]+":label", label,
-                         [box[0]+pad_x, box[1]+pad_y, box[2]-2*pad_x, label_h],
-                         "heading", 28, 24, 1)
-                style = {"id": b["id"], "kind": "list", "role": "body",
-                         "bbox": [box[0]+pad_x, box[1]+pad_y+label_h, box[2]-2*pad_x, content_h],
-                         "color": theme.get("foreground", "#142735")}
-                contract = TextBoxContract(theme["font_family"], size, font_paths["font_file"],
-                                           font_weight=400, font_floor=24,
-                                           line_height=line_h/size,
-                                           max_lines=max(len(item_lines) for item_lines in lines),
-                                           vertical_anchor="top")
-                current_color = b.get('bullet_color', bullet_color)
-                if marker['native_font_fallback']:
-                    issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
-                        'Requested native marker is unavailable in the installed fonts; inspect the fallback glyph.',
-                        n, b['id'], detector='font-resolution'))
-                elements.append({**style, "items": lines,
-                                 "text": "\n".join("\v".join(item_lines) for item_lines in lines),
-                                 "source_text": b["text"], "contract": contract.to_dict(),
-                                 "bullet": {**marker,
-                                            "color": current_color,
-                                            "space_after": round(space_after, 2)},
-                                 "text_flow": flow,
-                                 **({'scientific_text_overflow': overflow} if overflow else {})})
-                adaptations.append({
-                    "block_id": b["id"],
-                    "action": DISTRIBUTED_ARROW_LIST,
-                    "source": flow["source"],
-                    "item_count": len(lines),
-                    "bullet_style": marker['style'],
-                    "bullet_color": current_color,
-                    "bullet_glyph": marker.get('char', ''),
-                    "bullet_face": marker['face'],
-                    **({'list_start': marker['start']} if marker.get('numbering') else {}),
-                    "distribution": flow["distribution"],
-                })
-                return
-            if flow["mode"] == DISTRIBUTED_ARROW_LIST:
-                if flow['source'] == 'explicit':
-                    required_height = round(measured_list_height, 1)
-                    issues.append(issue('SPLIT_REQUIRED', 'FAIL',
-                        f"{b['id']}: explicit native list requires at least {min_list_width} px width and its measured content height; markers were not removed.",
-                        n, b['id'], detector='geometric-preflight', required_size_px=[min_list_width, required_height],
-                        available_size_px=box[2:], suggested_actions=['widen_region', 'increase_region_height', 'split_slide']))
-                    return
-                adaptations.append({
-                    "block_id": b["id"],
-                    "action": "text_flow_fallback",
-                    "requested": DISTRIBUTED_ARROW_LIST,
-                    "reason": "component_box_below_measured_minimum",
-                })
-                issues.append(issue("TEXT_FLOW_FALLBACK", "INFO",
-                                    f"{b['id']} kept plain because its component box is narrower than 520 px or shorter than the measured list content",
-                                    n, b["id"], detector="geometric-preflight"))
-            label_h = (40 if comp["archetype"] == "figure-parameters" else 44) if label else 0
-            text(b["id"]+":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
-            emphasis_color = theme.get("accent", DEFAULT_ACCENT) if b["id"] == visual_intent.get("emphasis") else None
-            from .type_scale import display_floor, display_size
-            size, floor = display_size(b, design), display_floor(b, design)
-            if size:
-                # A promoted object is the page's anchor: display role keeps its own floor instead
-                # of being capped by the body size the rest of the page uses.
-                text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], "display",
-                     size, floor, 2, color=emphasis_color, inline_math=b.get('inline_math', False))
-            else:
-                text(b["id"], b["text"], [box[0], box[1]+label_h, box[2], box[3]-label_h], color=emphasis_color, inline_math=b.get('inline_math', False))
-        def formula_flow(bs, box, max_columns=1, preferred_columns=1):
-            try:
-                plan = plan_formula_flow(bs, box, font_paths, comp['archetype'],
-                    max_columns=max_columns, preferred_columns=preferred_columns,
-                    body_size=type_sizes(design)['body'] if design else 28,
-                    text_inset=56 if show_sequence else 0, preserve_terms=preserve_terms,
-                    list_gap_ratio=list_gap_ratio, list_padding=(0, 0) if design else (28, 18),
-                    bullet_style=bullet_style,
-                    gap=24 if comp['archetype'] == 'figure-parameters' else 18)
-            except FormulaCapacityError as error:
-                issues.append(issue('FORMULA_CAPACITY', 'FAIL', str(error), n,
-                    detector='geometric-preflight', confidence='HIGH',
-                    suggested_fix='widen_text_column_or_split_slide', attempts=error.attempts,
-                    available_width_px=box[2], available_height_px=box[3]))
-                return
-            by_id = {b['id']: b for b in bs}
-            heights = plan.get('column_heights_px') or []
-            if heights:
-                offset = max(0.0, box[3]-max(heights))/2
-                if offset > .5:
-                    for item in plan['boxes'].values():
-                        item[1] += offset
-                    plan['vertical_offset_px'] = round(offset, 2)
-            for bid in plan['reading_order']:
-                block(by_id[bid], plan['boxes'][bid], plan['font_size_px'], 'left')
-            adaptations.append({'action': 'formula_flow', 'region': list(box), **plan})
+        if self.visible_caveats:
+            self.emit_text("caveats", audience.join_caveats(self.visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 24, 24, 2)
+        self.top, self.bottom = body_region(self.slide, self.family, self.deck_frame, self.design, self.font_paths,
+                                            self.preserve_terms, self.ir.get('presentation'))
+        if self.takeaway_outer:
+            self.top = max(self.top, self.takeaway_outer[1] + self.takeaway_outer[3] + 20)
+        self.bh = self.bottom - self.top
 
-        def stack(bs, box):
-            if not bs:
+    def _emit_formula_block(self, b, box, label, formula_size, formula_align):
+        # A formula is a measured unit: it cannot wrap, it is never fed through the text
+        # wrapper, and it is never silently set below 18 pt to make a page fit.
+        from totalpipe_layout.formula import FormulaError, measure, parse, to_omml_paragraph, to_plain
+        try:
+            ast = parse(b["text"])
+        except FormulaError as error:
+            self.issues.append(issue("FORMULA_SYNTAX", "FAIL", f"{b['id']}: {error}",
+                                     self.n, b["id"], detector="geometric-preflight"))
+            return
+        # A label sits to the left of the equation on its centre line. A heading above it
+        # would cost the row 40 px, and on a dense page that is the whole difference.
+        label_w = formula_label_width(label, self.font_paths["bold_font_file"])
+        gaps = (label_w + 12) if label_w else 0
+        inner = [box[0] + gaps, box[1] + 6, box[2] - gaps - 20 if label_w else box[2] - 20, box[3] - 12]
+        chosen = None
+        for size_px in ([formula_size] if formula_size is not None else self.formula_sizes):
+            metrics = measure(ast, size_px)
+            if metrics.width <= inner[2] + .5 and metrics.height <= inner[3] + .5:
+                chosen = (size_px, metrics)
+                break
+        if chosen is None:
+            widest = measure(ast, FORMULA_SIZES[-1])
+            self.issues.append(issue(
+                "FORMULA_CAPACITY", "FAIL",
+                f"{b['id']} needs {widest.width:.0f} × {widest.height:.0f} px at 18 pt but its slot is "
+                f"{max(inner[2], 0):.0f} × {max(inner[3], 0):.0f} px. Widen the slot or move the equation to "
+                "its own slide: the compiler will not shrink the body text, or the "
+                "equation below 18 pt, to make it fit.",
+                self.n, b["id"], detector="geometric-preflight",
+                formula_width_px=round(widest.width, 1),
+                formula_height_px=round(widest.height, 1),
+                slot_width_px=round(max(inner[2], 0), 1),
+                slot_height_px=round(max(inner[3], 0), 1),
+                suggested_fix="widen_text_column_or_split_slide"))
+            return
+        if label_w:
+            self.emit_text(b["id"] + ":label", label,
+                           [box[0], box[1] + (box[3] - 30) / 2, label_w, 30], "heading", 24, 24, 1)
+        size_px, metrics = chosen
+        self.slide_formulas.append((b["id"], metrics.height))
+        bbox = [inner[0] + ((inner[2] - metrics.width) / 2 if formula_align == 'center' else 0),
+                inner[1] + (inner[3] - metrics.height) / 2,
+                metrics.width, metrics.height]
+        colour = self.theme.get("foreground", "#142735")
+        self.elements.append({
+            "id": b["id"], "kind": "math", "role": "formula", "bbox": bbox,
+            "omml": to_omml_paragraph(ast, size_px, colour,
+                                      fallback_font=self.font_paths["font_file"],
+                                      box_width=inner[2]),
+            "plain": to_plain(ast), "font_size_px": size_px,
+            "measured_exact": metrics.exact, "source_text": b["text"],
+            "color": colour})
+        if not metrics.exact:
+            self.issues.append(issue("FORMULA_MEASURE_APPROXIMATE", "REVIEW",
+                                     f"{b['id']} uses conservative structural or fallback metrics; "
+                                     "verify the rendered formula width and height in PowerPoint",
+                                     self.n, b["id"], detector="geometric-preflight",
+                                     confidence="LOW", font_metrics="heuristic"))
+
+    def _emit_list_block(self, b, box, label, flow, pad_x, pad_y, min_list_width):
+        label_h = 44 if label else 0
+        items = flow["items"]
+        from .fonts import list_marker_metrics
+        marker = list_marker_metrics(b, self.bullet_style, self.theme['font_family'], self.regular_font, 24, len(items))
+        # One text object, one paragraph per item, marker set by the paragraph itself.
+        # The theme's line height is 1.25, which is what the contract and OfficeCLI agree on.
+        fitted = fit_list_items(items, box[2] - 2 * pad_x - marker['gutter'],
+                                self.font_paths["font_file"], 24, 24, LIST_ITEM_LINES)
+        beyond_lines = fitted is None
+        if beyond_lines and not self.preserve_terms:
+            self.issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                     f"{b['id']} list items cannot fit above their font floor",
+                                     self.n, b["id"], detector="geometric-preflight",
+                                     textbox_contract="deck_ir"))
+            return
+        if beyond_lines:
+            size = 24
+            lines = [break_lines(item, ImageFont.truetype(self.font_paths['font_file'], size),
+                                 box[2] - 2 * pad_x - marker['gutter']) for item in items]
+        else:
+            lines, size = fitted
+        line_h = marker['line_height_px']
+        gaps = len(lines) - 1
+        # Item spacing is a typographic value, not leftover space: filling the panel is what
+        # pushed three short items a hundred pixels apart. The ratio is relative to the line
+        # height (so it follows the font), and the deck may override it.
+        space_after = round(line_h * self.list_gap_ratio, 2) if gaps else 0.0
+        content_h = sum(len(item_lines) for item_lines in lines) * line_h + space_after * gaps
+        panel_h = 2 * pad_y + label_h + content_h
+        overflow = None
+        if (panel_h > box[3] + .5 or beyond_lines) and not self.preserve_terms:
+            self.issues.append(issue("SPLIT_REQUIRED", "FAIL",
+                                     f"{b['id']} list needs {content_h:.0f}px but the panel gives "
+                                     f"{box[3] - 2 * pad_y - label_h:.0f}px", self.n, b["id"],
+                                     detector="geometric-preflight", textbox_contract="deck_ir"))
+            return
+        if panel_h > box[3] + .5 or beyond_lines:
+            overflow = {'original_bbox': [box[0] + pad_x, box[1] + pad_y + label_h,
+                                          box[2] - 2 * pad_x, max(0, box[3] - 2 * pad_y - label_h)],
+                        'policy': 'preserve-terms'}
+            self.issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                f"{b['id']}: complete native list retained with its markers and wrapped scientific terms beyond the nominal slot or item-line budget.",
+                self.n, b['id'], detector='geometric-preflight', original_bbox=overflow['original_bbox'],
+                required_size_px=[box[2], panel_h], available_size_px=box[2:],
+                suggested_actions=['increase_region_height', 'split_slide', 'review_native_render']))
+        # The card hugs the list instead of stretching to the page: a panel with 150 px of
+        # empty space under three rows reads as a layout mistake, not as breathing room.
+        if not self.design and min_list_width == 520:
+            self.elements.append({
+                "id": b["id"] + ":panel", "kind": "shape", "role": "decoration",
+                "bbox": [box[0], box[1], box[2], panel_h],
+                "geometry": "rect", "fill": self.theme.get("panel_fill", "none"),
+                "line": self.theme.get("panel_line", "#142735"), "line_width": 1,
+                "collision_mode": "container",
+                **({'scientific_text_overflow': {'original_bbox': list(box), 'policy': 'preserve-terms'}} if overflow else {})})
+        if label:
+            self.emit_text(b["id"] + ":label", label,
+                           [box[0] + pad_x, box[1] + pad_y, box[2] - 2 * pad_x, label_h],
+                           "heading", 28, 24, 1)
+        style = {"id": b["id"], "kind": "list", "role": "body",
+                 "bbox": [box[0] + pad_x, box[1] + pad_y + label_h, box[2] - 2 * pad_x, content_h],
+                 "color": self.theme.get("foreground", "#142735")}
+        contract = TextBoxContract(self.theme["font_family"], size, self.font_paths["font_file"],
+                                   font_weight=400, font_floor=24,
+                                   line_height=line_h / size,
+                                   max_lines=max(len(item_lines) for item_lines in lines),
+                                   vertical_anchor="top")
+        current_color = b.get('bullet_color', self.bullet_color)
+        if marker['native_font_fallback']:
+            self.issues.append(issue('BULLET_GLYPH_REVIEW', 'REVIEW',
+                'Requested native marker is unavailable in the installed fonts; inspect the fallback glyph.',
+                self.n, b['id'], detector='font-resolution'))
+        self.elements.append({**style, "items": lines,
+                              "text": "\n".join("\v".join(item_lines) for item_lines in lines),
+                              "source_text": b["text"], "contract": contract.to_dict(),
+                              "bullet": {**marker,
+                                         "color": current_color,
+                                         "space_after": round(space_after, 2)},
+                              "text_flow": flow,
+                              **({'scientific_text_overflow': overflow} if overflow else {})})
+        self.adaptations.append({
+            "block_id": b["id"],
+            "action": DISTRIBUTED_ARROW_LIST,
+            "source": flow["source"],
+            "item_count": len(lines),
+            "bullet_style": marker['style'],
+            "bullet_color": current_color,
+            "bullet_glyph": marker.get('char', ''),
+            "bullet_face": marker['face'],
+            **({'list_start': marker['start']} if marker.get('numbering') else {}),
+            "distribution": flow["distribution"],
+        })
+
+    def emit_block(self, b, box, formula_size=None, formula_align='center'):
+        label = b.get("label", "")
+        if b.get('component') == 'caption':
+            _, lines = caption_measure({'caption': b['text']}, box[2], self.font_paths['font_file'], self.design)
+            size = native_caption_size(self.design)
+            self.emit_text(b['id'], b['text'], box, 'caption', size, size, max(2, lines))
+            if self.elements and self.elements[-1].get('id') == b['id']:
+                self.elements[-1]['caption_for'] = dict(b['caption_for'])
+            return
+        if b.get("component") == "formula":
+            self._emit_formula_block(b, box, label, formula_size, formula_align)
+            return
+        if self.show_sequence:
+            box = [box[0] + 56, box[1], box[2] - 56, box[3]]
+        flow = select_text_flow(b["text"], b.get("text_flow", "auto"))
+        if b.get('_inferred_list') and flow['source'] == 'explicit':
+            flow = {**flow, 'source': 'auto'}
+        if b.get('inline_math'):
+            flow = {**flow, 'mode': 'plain'}
+        if flow['mode'] == DISTRIBUTED_ARROW_LIST and has_markup(b['text']):
+            # A native list is one run style across its items: the words stay, the emphasis
+            # cannot. Report it instead of shipping a bullet with visible ** in it.
+            flow = {**flow, 'items': [strip_markup(item) for item in flow['items']]}
+            self.issues.append(issue('EMPHASIS_IN_LIST', 'REVIEW',
+                f"{b['id']}: a native list carries one run style, so emphasis markers are set as plain text; "
+                "use text_flow=plain to keep the emphasis.", self.n, b['id'], detector='geometric-preflight',
+                suggested_actions=['text_flow_plain', 'drop_markers']))
+        pad_x, pad_y = (0, 0) if self.design else (28, 18)
+        min_list_width = list_min_width(b)
+        measured_list_height = (native_list_height(
+            b, max(min_list_width, box[2]), self.font_paths["font_file"], self.list_gap_ratio,
+            (pad_x, pad_y), self.preserve_terms, self.bullet_style, flow=flow)
+            if flow["mode"] == DISTRIBUTED_ARROW_LIST else None)
+        if (flow["mode"] == DISTRIBUTED_ARROW_LIST and box[2] >= min_list_width
+                and measured_list_height is not None
+                and (self.preserve_terms or box[3] + .5 >= measured_list_height)):
+            self._emit_list_block(b, box, label, flow, pad_x, pad_y, min_list_width)
+            return
+        if flow["mode"] == DISTRIBUTED_ARROW_LIST:
+            if flow['source'] == 'explicit':
+                required_height = round(measured_list_height, 1)
+                self.issues.append(issue('SPLIT_REQUIRED', 'FAIL',
+                    f"{b['id']}: explicit native list requires at least {min_list_width} px width and its measured content height; markers were not removed.",
+                    self.n, b['id'], detector='geometric-preflight', required_size_px=[min_list_width, required_height],
+                    available_size_px=box[2:], suggested_actions=['widen_region', 'increase_region_height', 'split_slide']))
                 return
-            if any(b.get('component') == 'formula' or b.get('inline_math') for b in bs):
-                formula_flow(bs, box)
-                return
-            from .academic_layout import block_height
-            gap = 24 if comp['archetype'] == 'figure-parameters' else 18
-            needs = [block_height(b, box[2], font_paths, comp['archetype'], design=design,
-                                  list_gap_ratio=list_gap_ratio, bullet_style=bullet_style) for b in bs]
-            total = sum(needs)+gap*(len(bs)-1)
-            extra = max(0.0, box[3]-total)
-            # Keep the content block at the top, share the remaining height as
-            # breathing room above, between and below the blocks. This is the
-            # same measured content, never a stretched text box.
-            top_pad = extra/3
-            gap_extra = (extra-2*top_pad)/max(1, len(bs)-1)
-            cursor = box[1]+top_pad
-            for b, need in zip(bs, needs):
-                block(b, [box[0], cursor, box[2], need])
-                cursor += need+gap+gap_extra
-        def figure(f, box, k, caption_top=None):
-            asset = assets[f["asset_id"]]
-            schematic = (asset.get("origin") or "paper") == "generated"
-            reference = asset.get("origin") == "reference"
-            content = caption_with_source(f)
-            caption_h, caption_lines = caption_measure(f, box[2], font_paths["font_file"])
-            if f.get("caption_height") and content:
-                # An explicit height still wins; it was measured by its author.
-                caption_h = f["caption_height"]
-                caption_lines = max(2, int(round((caption_h-8)/(f.get("caption_font_size", 22)*1.25))))
-            h = box[3] - caption_h - 12
-            if caption_top is not None:
-                h = min(h, caption_top-12-box[1])
-            scale = min(box[2]/asset["width"], h/asset["height"])
-            w, h = asset["width"]*scale, asset["height"]*scale
-            bbox = [box[0]+(box[2]-w)/2, box[1], w, h]
-            if caption_top is not None:
-                bbox[1] = caption_top-12-h
-            eid = f"figure-{k}"
-            min_extent = f.get("min_panel_extent", 220)
-            actual_extent = min(w / f.get("panel_count", 1), h)
-            element = {"id": eid, "kind": "image", "role": "reference" if reference else "evidence", "bbox": bbox,
-                       "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
-                       "min_panel_extent": min_extent,
-                       "actual_panel_extent": actual_extent}
+            self.adaptations.append({
+                "block_id": b["id"],
+                "action": "text_flow_fallback",
+                "requested": DISTRIBUTED_ARROW_LIST,
+                "reason": "component_box_below_measured_minimum",
+            })
+            self.issues.append(issue("TEXT_FLOW_FALLBACK", "INFO",
+                                     f"{b['id']} kept plain because its component box is narrower than 520 px or shorter than the measured list content",
+                                     self.n, b["id"], detector="geometric-preflight"))
+        label_h = (40 if self.comp["archetype"] == "figure-parameters" else 44) if label else 0
+        self.emit_text(b["id"] + ":label", label, [box[0], box[1], box[2], label_h], "heading", 28, 24, 1)
+        emphasis_color = self.theme.get("accent", DEFAULT_ACCENT) if b["id"] == self.visual_intent.get("emphasis") else None
+        from .type_scale import display_floor, display_size
+        size, floor = display_size(b, self.design), display_floor(b, self.design)
+        if size:
+            # A promoted object is the page's anchor: display role keeps its own floor instead
+            # of being capped by the body size the rest of the page uses.
+            self.emit_text(b["id"], b["text"], [box[0], box[1] + label_h, box[2], box[3] - label_h], "display",
+                           size, floor, 2, color=emphasis_color, inline_math=b.get('inline_math', False))
+        else:
+            self.emit_text(b["id"], b["text"], [box[0], box[1] + label_h, box[2], box[3] - label_h],
+                           color=emphasis_color, inline_math=b.get('inline_math', False))
+
+    def emit_formula_flow(self, bs, box, max_columns=1, preferred_columns=1):
+        try:
+            plan = plan_formula_flow(bs, box, self.font_paths, self.comp['archetype'],
+                max_columns=max_columns, preferred_columns=preferred_columns,
+                body_size=type_sizes(self.design)['body'] if self.design else 28,
+                text_inset=56 if self.show_sequence else 0, preserve_terms=self.preserve_terms,
+                list_gap_ratio=self.list_gap_ratio, list_padding=(0, 0) if self.design else (28, 18),
+                bullet_style=self.bullet_style,
+                gap=24 if self.comp['archetype'] == 'figure-parameters' else 18)
+        except FormulaCapacityError as error:
+            self.issues.append(issue('FORMULA_CAPACITY', 'FAIL', str(error), self.n,
+                detector='geometric-preflight', confidence='HIGH',
+                suggested_fix='widen_text_column_or_split_slide', attempts=error.attempts,
+                available_width_px=box[2], available_height_px=box[3]))
+            return
+        by_id = {b['id']: b for b in bs}
+        heights = plan.get('column_heights_px') or []
+        if heights:
+            offset = max(0.0, box[3] - max(heights)) / 2
+            if offset > .5:
+                for item in plan['boxes'].values():
+                    item[1] += offset
+                plan['vertical_offset_px'] = round(offset, 2)
+        for bid in plan['reading_order']:
+            self.emit_block(by_id[bid], plan['boxes'][bid], plan['font_size_px'], 'left')
+        self.adaptations.append({'action': 'formula_flow', 'region': list(box), **plan})
+
+    def emit_stack(self, bs, box):
+        if not bs:
+            return
+        if any(b.get('component') == 'formula' or b.get('inline_math') for b in bs):
+            self.emit_formula_flow(bs, box)
+            return
+        from .academic_layout import block_height
+        gap = 24 if self.comp['archetype'] == 'figure-parameters' else 18
+        needs = [block_height(b, box[2], self.font_paths, self.comp['archetype'], design=self.design,
+                              list_gap_ratio=self.list_gap_ratio, bullet_style=self.bullet_style) for b in bs]
+        total = sum(needs) + gap * (len(bs) - 1)
+        extra = max(0.0, box[3] - total)
+        # Keep the content block at the top, share the remaining height as
+        # breathing room above, between and below the blocks. This is the
+        # same measured content, never a stretched text box.
+        top_pad = extra / 3
+        gap_extra = (extra - 2 * top_pad) / max(1, len(bs) - 1)
+        cursor = box[1] + top_pad
+        for b, need in zip(bs, needs):
+            self.emit_block(b, [box[0], cursor, box[2], need])
+            cursor += need + gap + gap_extra
+
+    def emit_figure(self, f, box, k, caption_top=None):
+        asset = self.assets[f["asset_id"]]
+        schematic = (asset.get("origin") or "paper") == "generated"
+        reference = asset.get("origin") == "reference"
+        content = caption_with_source(f)
+        caption_h, caption_lines = caption_measure(f, box[2], self.font_paths["font_file"])
+        if f.get("caption_height") and content:
+            # An explicit height still wins; it was measured by its author.
+            caption_h = f["caption_height"]
+            caption_lines = max(2, int(round((caption_h - 8) / (f.get("caption_font_size", 22) * 1.25))))
+        h = box[3] - caption_h - 12
+        if caption_top is not None:
+            h = min(h, caption_top - 12 - box[1])
+        scale = min(box[2] / asset["width"], h / asset["height"])
+        w, h = asset["width"] * scale, asset["height"] * scale
+        bbox = [box[0] + (box[2] - w) / 2, box[1], w, h]
+        if caption_top is not None:
+            bbox[1] = caption_top - 12 - h
+        eid = f"figure-{k}"
+        min_extent = f.get("min_panel_extent", 220)
+        actual_extent = min(w / f.get("panel_count", 1), h)
+        highlights = f.get("highlights") if isinstance(f.get("highlights"), list) else []
+        element = {"id": eid, "kind": "image", "role": "reference" if reference else "evidence", "bbox": bbox,
+                   "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
+                   "min_panel_extent": min_extent,
+                   "actual_panel_extent": actual_extent,
+                   **({"overlap_group": eid} if highlights else {})}
+        if schematic:
+            element["schematic"] = {"generator": asset.get("generator")}
+        elif reference:
+            element.update(origin="reference", reference_source=asset["reference_source"])
+        else:
+            element["source_figure"] = f["source_figure"]
+        self.elements.append(element)
+        if highlights:
+            default_hl_color = self.theme.get("accent", DEFAULT_ACCENT)
+            badge_face = ImageFont.truetype(self.font_paths["bold_font_file"], 20)
+            for h_idx, hl in enumerate(highlights, 1):
+                rx, ry, rw, rh = hl["box"]
+                hx = bbox[0] + rx * bbox[2]
+                hy = bbox[1] + ry * bbox[3]
+                hw = max(8.0, min(bbox[0] + bbox[2] - hx, rw * bbox[2]))
+                hh = max(8.0, min(bbox[1] + bbox[3] - hy, rh * bbox[3]))
+                hl_color = hl.get("color") or default_hl_color
+                self.elements.append({
+                    "id": f"{eid}:highlight:{h_idx}",
+                    "kind": "shape",
+                    "role": "decoration",
+                    "bbox": [hx, hy, hw, hh],
+                    "geometry": "rect",
+                    "fill": "none",
+                    "line": hl_color,
+                    "line_width": 2.5,
+                    "visual_decoration": True,
+                    "overlap_group": eid,
+                })
+                hl_label = str(hl.get("label") or "").strip()
+                if hl_label:
+                    lbl_w = min(bbox[2] - 4.0, max(36.0, badge_face.getlength(hl_label) + 16.0))
+                    lbl_h = 26.0
+                    lbl_x = min(max(bbox[0] + 2.0, hx + (hw - lbl_w) * 0.5), bbox[0] + bbox[2] - lbl_w - 2.0)
+                    if hy - lbl_h - 4.0 >= bbox[1] + 2.0:
+                        lbl_y = hy - lbl_h - 4.0
+                    elif hy + hh + 4.0 + lbl_h <= bbox[1] + bbox[3] - 2.0:
+                        lbl_y = hy + hh + 4.0
+                    else:
+                        lbl_y = min(hy + 2.0, bbox[1] + bbox[3] - lbl_h - 2.0)
+                    badge_box = [lbl_x, lbl_y, lbl_w, lbl_h]
+                    self.elements.append({
+                        "id": f"{eid}:highlight-badge:{h_idx}",
+                        "kind": "shape",
+                        "role": "decoration",
+                        "bbox": badge_box,
+                        "geometry": "roundRect",
+                        "fill": hl_color,
+                        "line": "none",
+                        "visual_decoration": True,
+                        "overlap_group": eid,
+                    })
+                    self.emit_text(f"{eid}:highlight-label:{h_idx}", hl_label, badge_box,
+                                   "badge", 20, 20, 1, "middle", "#FFFFFF")
+                    if self.elements and self.elements[-1]["id"] == f"{eid}:highlight-label:{h_idx}":
+                        self.elements[-1]["overlap_group"] = eid
+        if actual_extent < min_extent:
             if schematic:
-                element["schematic"] = {"generator": asset.get("generator")}
+                self.issues.append(issue("SCHEMATIC_TOO_SMALL", "FAIL",
+                                         f"Schematic extent {actual_extent:.1f}px is below {min_extent}px",
+                                         self.n, eid, detector="geometric-preflight", confidence="HIGH"))
             elif reference:
-                element.update(origin="reference", reference_source=asset["reference_source"])
+                self.issues.append(issue("REFERENCE_IMAGE_TOO_SMALL", "FAIL",
+                                         f"Reference image extent {actual_extent:.1f}px is below {min_extent}px",
+                                         self.n, eid, detector="geometric-preflight", confidence="HIGH",
+                                         reference_source=asset["reference_source"]))
             else:
-                element["source_figure"] = f["source_figure"]
-            elements.append(element)
-            if actual_extent < min_extent:
-                if schematic:
-                    issues.append(issue("SCHEMATIC_TOO_SMALL", "FAIL",
-                                        f"Schematic extent {actual_extent:.1f}px is below {min_extent}px",
-                                        n, eid, detector="geometric-preflight", confidence="HIGH"))
-                elif reference:
-                    issues.append(issue("REFERENCE_IMAGE_TOO_SMALL", "FAIL",
-                                        f"Reference image extent {actual_extent:.1f}px is below {min_extent}px",
-                                        n, eid, detector="geometric-preflight", confidence="HIGH",
-                                        reference_source=asset["reference_source"]))
+                self.issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
+                                         f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
+                                         self.n, eid, detector="geometric-preflight", confidence="HIGH",
+                                         source_figure=f["source_figure"]))
+        caption_y = bbox[1] + bbox[3] + 12
+        if self.design and content and self.design['figure_treatment'] == 'ruled-caption':
+            self.elements.append(rule(eid + ':caption-rule', [box[0], caption_y - 6, box[2], 1], self.design))
+        # A real paper caption is often three or four lines; the strip was measured for exactly
+        # that many lines, so the emitter must not clamp it back to two.
+        self.emit_text(eid + ":caption", content, [box[0], caption_y, box[2], caption_h],
+                       "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20),
+                       max(2, caption_lines))
+        if schematic:
+            self.issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
+                                     "Confirm the drawn schematic matches the text it illustrates; "
+                                     "it is not a paper figure",
+                                     self.n, eid, detector="scientific-review", confidence="MEDIUM"))
+        elif reference:
+            self.issues.append(issue("REFERENCE_IMAGE_REVIEW", "REVIEW",
+                                     "Confirm the crop and readability against its user-provided source; "
+                                     "this image is not independently verified scientific evidence",
+                                     self.n, eid, detector="source-review", confidence="MEDIUM",
+                                     reference_source=asset["reference_source"]))
+        else:
+            self.issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW",
+                                     "Confirm scientific panel labels and evidence fidelity",
+                                     self.n, eid, detector="scientific-review", confidence="MEDIUM"))
+
+    def emit_schematic_band(self, bs, f):
+        face = ImageFont.truetype(self.font_paths["font_file"], 28)
+        if len(bs) == 2:
+            # Two short paragraphs read as one line each of context: side by side they leave the
+            # height to the diagram instead of stacking into a wall above it.
+            rows = [break_lines(item["text"], face, 568) for item in bs]
+            band = max((len(lines) for lines in rows), default=0) * 35
+            for k, (item, _) in enumerate(zip(bs, rows)):
+                self.emit_block(item, [56 + k * 600, self.top, 568, band])
+            cursor = self.top + band + 18
+        else:
+            rows = [break_lines(item["text"], face, 1168) for item in bs]
+            natural = sum(len(lines) for lines in rows) * 35 + 18 * max(len(bs) - 1, 0)
+            band = min(natural, self.bh * .45)
+            cursor = self.top
+            total = max(sum(len(lines) for lines in rows), 1)
+            for item, lines in zip(bs, rows):
+                height = band * len(lines) / total
+                self.emit_block(item, [56, cursor, 1168, height])
+                cursor += height + 18
+        self.emit_figure(f, [56, cursor, 1168, self.bottom - cursor], 1)
+
+    def emit_native_graphic(self, region, graphic=None):
+        graphic = graphic or self.comp["graphics"][0]
+        try:
+            graphic_elements = compile_graphic(graphic, region, self.theme, self.font_paths)
+        except ValueError as error:
+            graphic_elements = []
+            self.issues.append(issue(getattr(error, "rule", "GRAPHIC_CAPACITY"), "FAIL", str(error), self.n, graphic["id"],
+                                     detector="geometric-preflight"))
+        for element in graphic_elements:
+            if element["kind"] in ("shape", "connector"):
+                self.elements.append(element)
+                continue
+            before = len(self.elements)
+            self.emit_text(element["id"], element["text"], element["bbox"], element["role"],
+                           element["font_size"], min(24, element["font_size"]), element["max_lines"], "middle",
+                           element["color"], align="center")
+            if len(self.elements) > before:
+                self.elements[-1].update({key: element[key] for key in
+                    ("graphic_id", "node_id", "container_id", "overlap_group", "graphic_region", "edge_id")
+                    if key in element})
+        node_count, edge_count = graphic_counts(graphic)
+        self.adaptations.append({"action": "native_graphic", "graphic_id": graphic["id"],
+                                 "region": region, "node_count": node_count,
+                                 "edge_count": edge_count})
+        self.issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
+                                 ("Confirm the process order and labels match the scientific explanation; "
+                                  "this is a generated schematic, not a paper figure")
+                                 if graphic['type'] in ('process', 'dag') else
+                                 "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
+                                 "generated graphics do not establish scientific correctness",
+                                 self.n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
+
+    def _checkpoints(self):
+        return [len(values) for values in (self.elements, self.issues, self.adaptations, self.slide_formulas)]
+
+    def _rollback(self, checkpoints):
+        for values, checkpoint in zip((self.elements, self.issues, self.adaptations, self.slide_formulas), checkpoints):
+            del values[checkpoint:]
+
+    def _emit_tree_node(self, entry, by_id, annotated_formulas, graphics_by_id, charts_by_id):
+        from .container_frames import rectangle, stroke_width
+        from .layout_tree import LayoutTreeError
+        first = len(self.elements)
+        if entry['type'] == 'panel':
+            title_id = 'region:' + entry['node_id'] + ':title'
+            style = entry.get('frame')
+            if style and (style.get('border') or style.get('fill', 'none') != 'none'):
+                self.elements.append(rectangle('region:' + entry['node_id'] + ':frame', entry['bbox'], style, []))
+            if style and style.get('title_fill', 'none') != 'none':
+                self.elements.append({'id': 'region:' + entry['node_id'] + ':title-band', 'kind': 'shape',
+                    'role': 'decoration', 'bbox': entry['title_band_bbox'],
+                    'geometry': entry.get('title_band_geometry', 'rect'),
+                    'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
+                    'visual_decoration': True, 'frame_members': [title_id],
+                    'frame_growth_inset': stroke_width(style)})
+            self.emit_text('region:' + entry['node_id'] + ':title', entry['title'], entry['title_bbox'],
+                           'heading', 28, 24, max(2, int(entry['title_bbox'][3] / 30)),
+                           anchor='middle' if entry.get('title_band_geometry') == 'roundRect' else 'top',
+                           color=style.get('title_color') if style else None,
+                           align=entry.get('title_align') or (style.get('title_align') if style else None))
+        elif entry['type'] == 'block':
+            source = by_id[entry['ref']]
+            self.emit_block(source, entry['bbox'],
+                            formula_align='center' if source['id'] in annotated_formulas else 'left')
+            if source.get('text_for'):
+                for element in self.elements[first:]:
+                    if element['id'] == source['id']:
+                        element['text_for'] = dict(source['text_for'])
+        elif entry['type'] == 'figure':
+            self.emit_figure(self.figs[entry['ref']], entry['bbox'], entry['ref'] + 1)
+        elif entry['type'] == 'graphic':
+            self.emit_native_graphic(entry['bbox'], graphics_by_id[entry['ref']])
+        elif entry['type'] == 'chart':
+            from .chart_render import ChartLayoutError, compile_chart
+            chart = charts_by_id[entry['ref']]
+            try:
+                rendered = compile_chart(chart, entry['bbox'], self.theme, self.font_paths)
+            except ChartLayoutError as error:
+                self.issues.append(issue(error.rule, 'FAIL', str(error), self.n, chart['id'],
+                                         detector='geometric-preflight', component=entry['component']))
+                return None
+            for element in rendered:
+                if element['kind'] in ('shape', 'connector'):
+                    self.elements.append(element)
                 else:
-                    issues.append(issue("SCIENTIFIC_PANEL_TOO_SMALL", "FAIL",
-                                        f"Scientific panel extent {actual_extent:.1f}px is below {min_extent}px",
-                                        n, eid, detector="geometric-preflight", confidence="HIGH",
-                                        source_figure=f["source_figure"]))
-            caption_y = bbox[1]+bbox[3]+12
-            if design and content and design['figure_treatment'] == 'ruled-caption':
-                elements.append(rule(eid+':caption-rule', [box[0], caption_y-6, box[2], 1], design))
-            # A real paper caption is often three or four lines; the strip was measured for exactly
-            # that many lines, so the emitter must not clamp it back to two.
-            text(eid+":caption", content, [box[0], caption_y, box[2], caption_h],
-                 "caption", f.get("caption_font_size", 22), f.get("caption_font_floor", 20),
-                 max(2, caption_lines))
-            if schematic:
-                issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
-                                    "Confirm the drawn schematic matches the text it illustrates; "
-                                    "it is not a paper figure",
-                                    n, eid, detector="scientific-review", confidence="MEDIUM"))
-            elif reference:
-                issues.append(issue("REFERENCE_IMAGE_REVIEW", "REVIEW",
-                                    "Confirm the crop and readability against its user-provided source; "
-                                    "this image is not independently verified scientific evidence",
-                                    n, eid, detector="source-review", confidence="MEDIUM",
-                                    reference_source=asset["reference_source"]))
-            else:
-                issues.append(issue("SCIENTIFIC_PANEL_REVIEW", "REVIEW",
-                                    "Confirm scientific panel labels and evidence fidelity",
-                                    n, eid, detector="scientific-review", confidence="MEDIUM"))
+                    before = len(self.elements)
+                    self.emit_text(element['id'], element['text'], element['bbox'], element['role'],
+                                   element['font_size'],
+                                   20 if element['role'] == 'caption' else 24,
+                                   element['max_lines'], 'middle', element['color'],
+                                   align=element.get('align'))
+                    if len(self.elements) > before:
+                        self.elements[-1].update({key: element[key] for key in
+                            ('graphic_id', 'overlap_group', 'node_id') if key in element})
+            self.issues.append(issue(
+                'CHART_DATA_REVIEW' if chart.get('basis') == 'evidence' else 'CHART_ILLUSTRATIVE_REVIEW',
+                'REVIEW',
+                'Confirm every plotted point against the cited evidence; the compiler checked '
+                'the chart structure, not the paper text.' if chart.get('basis') == 'evidence'
+                else 'This chart is an illustrative schematic, not measured data; confirm the '
+                     '示意 badge is visible in the rendered slide.',
+                self.n, chart['id'], detector='scientific-review', confidence='MEDIUM'))
+        elif entry['type'] == 'table':
+            from .native_table import compile_table
+            table = next(t for t in self.comp['tables'] if t['id'] == entry['ref'])
+            try:
+                rendered = compile_table(table, entry['bbox'], self.font_paths, self.theme, self.preserve_terms)
+            except LayoutTreeError as error:
+                error.detail['component'] = entry['component']
+                raise
+            self.elements.append(rendered)
+            self.issues.append(issue('TABLE_CONTENT_REVIEW', 'REVIEW',
+                'Confirm every table value, scientific term, unit and source reference.', self.n, rendered['id'],
+                detector='scientific-review', confidence='MEDIUM'))
+            if any(c.get('measured_exact') is False for c in rendered['cells']):
+                self.issues.append(issue('FORMULA_MEASURE_APPROXIMATE', 'REVIEW',
+                    'Native table formulas use conservative structural metrics; verify cell bounds in PowerPoint.',
+                    self.n, rendered['id'], detector='geometric-preflight', confidence='LOW', font_metrics='heuristic'))
+            if any(c.get('inline_formula_count', 0) for c in rendered['cells']):
+                self.issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
+                    'Verify inline formula baselines and measured line heights in native table cells.',
+                    self.n, rendered['id'], detector='geometric-preflight', confidence='LOW'))
+            if rendered.get('scientific_text_overflow'):
+                self.issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
+                    'Native table retains complete scientific terminology beyond its nominal region.',
+                    self.n, rendered['id'], detector='geometric-preflight'))
+        return first
+
+    def compile_layout_tree(self):
+        from .layout_tree import LayoutTreeError, attachment_link, compile_regions
+        from .container_frames import grow_frame, stroke_width
+        checkpoints = self._checkpoints()
+        try:
+            plan = compile_regions(self.comp, [56, self.top, 1168, self.bh], self.assets, self.font_paths,
+                                   self.theme, self.preserve_terms, self.list_gap_ratio,
+                                   (0, 0) if self.design else (28, 18), self.bullet_style,
+                                   design=self.design,
+                                   formula_sizes=self.formula_sizes if self.equation_page else None)
+            balance_shift = (plan.get('balanced') or {}).get('shift_px', 0.)
+            if balance_shift > .5:
+                self.adaptations.append({'action': 'vertical_balance', **plan['balanced']})
+            if plan.get('elastic_micro_fit'):
+                emf = plan['elastic_micro_fit']
+                self.adaptations.append({'action': 'elastic_micro_fit', **emf})
+                self.issues.append(issue(
+                    'ELASTIC_MICRO_FIT', 'INFO',
+                    f"Tightened container spacing by {emf['saved_px']} px ({', '.join(emf['adjustments'][:3])}) without altering font sizes.",
+                    self.n, detector='geometric-preflight', slide_id=self.slide['id']))
+            by_id = {b['id']: b for b in self.blocks}
+            annotated_formulas = {link['ref'] for b in self.blocks if (link := attachment_link(b))
+                                  and link['kind'] == 'formula' and 'position' in link}
+            graphics_by_id = {g['id']: g for g in self.comp.get('graphics', [])}
+            charts_by_id = {c['id']: c for c in self.comp.get('charts', [])}
+            for entry in plan['nodes']:
+                issue_start = len(self.issues)
+                first = self._emit_tree_node(entry, by_id, annotated_formulas, graphics_by_id, charts_by_id)
+                if first is None:
+                    continue
+                for element in self.elements[first:]:
+                    element.update(layout_component=entry['component'], layout_region=entry['bbox'])
+                    ex, ey, ew, eh = element['bbox']
+                    rx, ry, rw, rh = entry['bbox']
+                    # Sub-pixel rounding is not a layout decision: a preserve-terms block whose
+                    # region came out of a ratio split can be 0.7 px shorter than the line grid.
+                    # Clamp that residue so "an element never leaves its assigned region" stays
+                    # true; anything larger is still reported as a real overflow below.
+                    if eh > rh and eh - rh < 1.0:
+                        element['bbox'][3] = rh
+                        eh = rh
+                    if ew > rw and ew - rw < 1.0:
+                        element['bbox'][2] = rw
+                        ew = rw
+                    if (not element.get('scientific_text_overflow') and
+                        (ex < rx - .1 or ey < ry - .1 or ex + ew > rx + rw + .1 or ey + eh > ry + rh + .1)):
+                        self.issues.append(issue('REGION_CONTENT_OUT_OF_BOUNDS', 'FAIL',
+                            'Rendered component exceeds its assigned compiler region.', self.n, element['id'],
+                            detector='geometric-preflight', component=entry['component']))
+                failures = [item for item in self.issues[issue_start:] if item['severity'] == 'FAIL']
+                if failures:
+                    raise LayoutTreeError(entry['component'], 'COMPONENT_RENDER_FAILED',
+                        'A component failed an existing renderer gate after region allocation.',
+                        [entry['bbox'][2], entry['requirements']['min_height_px']], entry['bbox'][2:],
+                        cause=failures[0]['message'])
+            # Grow opted-in frames bottom-up when preserve-terms releases complete text.
+            # Each frame only exempts its own descendants from overlap checks.
+            for entry in reversed(plan['nodes']):
+                if not entry.get('frame'):
+                    continue
+                prefix, eid = entry['component'], 'region:' + entry['node_id']
+                framed = next((e for e in self.elements if e['id'] == eid + ':frame'), None)
+                title_element = next(e for e in self.elements if e['id'] == eid + ':title')
+                band = next((e for e in self.elements if e['id'] == eid + ':title-band'), None)
+                # A chip is a label around its text, not a row that can absorb extra height:
+                # growing it would stretch the pill, so a chip keeps its measured size.
+                if band and not entry.get('title_band_geometry'):
+                    needed = title_element['bbox'][1] + title_element['bbox'][3] + entry['padding_px'] - band['bbox'][1]
+                    if needed > band['bbox'][3] + .1:
+                        band['bbox'] = [*band['bbox'][:3], needed]
+                        band['scientific_text_overflow'] = {'policy': 'preserve-terms'}
+                if framed is None:
+                    continue
+                members = [e for e in self.elements if e is not framed and
+                           (e.get('layout_component') == prefix or e.get('layout_component', '').startswith(prefix + '.'))]
+                framed['frame_members'] = [e['id'] for e in members]
+                outer = grow_frame(framed, entry['bbox'], members,
+                                   entry['padding_px'] + stroke_width(entry['frame']))
+                entry['frame_bbox'] = outer
+                framed['layout_region'] = outer
+                if framed.get('scientific_text_overflow'):
+                    self.issues.append(issue('FRAME_EXPANDED_FOR_TERMS', 'REVIEW',
+                        'Native frame expanded with complete scientific content; inspect neighbouring regions.',
+                        self.n, framed['id'], detector='geometric-preflight', component=prefix,
+                        original_bbox=entry['bbox'], expanded_bbox=outer))
+            self.adaptations.append({'action': 'layout_tree', **plan})
+            for entry in plan['nodes']:
+                if (entry.get('underfill') and
+                        balance_shift < entry['underfill']['underfill_px'] * .5):
+                    # The balance nudge is capped at 32 px; a 300 px gap is not explained by it.
+                    # Suppress the report only when the shift actually absorbed most of the gap.
+                    self.issues.append(issue('PAGE_UNDERFILL', 'REVIEW',
+                        'A stack leaves more than 15% of its allocated height unused. '
+                        'Review intentional whitespace or adjust relative weights / stack alignment.',
+                        self.n, 'region:' + entry['node_id'], detector='geometric-preflight',
+                        component=entry['component'], **entry['underfill']))
+                if sparse_text_page(entry, self.elements):
+                    filled = entry['requirements']['preferred_height_px'] / entry['bbox'][3]
+                    # A stack of one-line statements in a half-empty region is the
+                    # document look: the page has structure but no composition.
+                    self.issues.append(issue('SPARSE_TEXT_PAGE', 'REVIEW',
+                        f'The text on this page fills {filled * 100:.0f}% of its region. Short '
+                        'statements stacked in one column read as a document; give the page a '
+                        'composition — two columns, one display-size statement, or numbered '
+                        'points — or split it.', self.n, 'region:' + entry['node_id'],
+                        detector='geometric-preflight', filled_ratio=round(filled, 3),
+                        suggested_actions=['text_columns', 'statement', 'numbered_points', 'split_slide']))
+            self.adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                     'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
+        except LayoutTreeError as error:
+            self._rollback(checkpoints)
+            self.issues.append(issue(error.detail['code'], 'FAIL', str(error), self.n,
+                detector='geometric-preflight', slide_id=self.slide['id'],
+                **{key: value for key, value in error.detail.items() if key not in ('code', 'message')}))
+
+    def compile_visual_plan(self):
+        from .academic_layout import candidates
+        best_failures, attempts = [], []
+        for plan in candidates(self.slide, [56, self.top, 1168, self.bh], self.assets, self.font_paths, self.design,
+                               list_gap_ratio=self.list_gap_ratio, bullet_style=self.bullet_style):
+            boxes = [*plan['blocks'], *plan['figures']]
+            boxes += [plan[key] for key in ('graphic', 'emphasis') if plan.get(key) is not None]
+            if any(min(box[2:]) <= 0 for box in boxes):
+                attempts.append({'pattern': plan['pattern'], 'rules': ['INVALID_REGION']})
+                continue
+            checkpoints = self._checkpoints()
+            for b, box in zip(self.blocks, plan['blocks']):
+                self.emit_block(b, box)
+            for k, (f, box) in enumerate(zip(self.figs, plan['figures']), 1):
+                self.emit_figure(f, box, k, plan.get('caption_top'))
+            if plan.get('graphic'):
+                self.emit_native_graphic(plan['graphic'])
+            if plan.get('emphasis'):
+                self.emit_text('visual:emphasis', self.visual_plan['emphasis']['text'], plan['emphasis'],
+                               'body', 28, 24, 3, color=self.theme['accent'])
+            failures = [finding for finding in self.issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
+            failures += geometry_issues(self.elements, self.n)
+            if len({e['id'] for e in self.elements}) != len(self.elements):
+                failures.append(issue('VISUAL_PLAN_ID_COLLISION', 'FAIL',
+                    'Page object names must be unique', self.n, detector='geometric-preflight'))
+            failures += [finding for finding in self.issues[:checkpoints[1]]
+                         if finding['severity'] == 'FAIL' and finding.get('slide') == self.n]
+            attempts.append({'pattern': plan['pattern'], 'rules': sorted({i['rule'] for i in failures})})
+            if not failures:
+                self.adaptations.append({'action': 'scientific_visual_plan', 'visual_job': self.visual_plan['visual_job'],
+                    'requested': self.visual_plan, 'selected': plan, 'attempts': attempts})
+                self.adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                         'status': 'COMPILER_FALLBACK', 'reason': 'scientific_visual_plan'})
+                break
+            if not best_failures or len(failures) < len(best_failures):
+                best_failures = failures
+            self._rollback(checkpoints)
+        else:
+            self.issues.extend(best_failures)
+            self.issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
+                'No candidate satisfies the visual plan and existing content, panel, typography and collision gates. Replan this page.',
+                self.n, detector='geometric-preflight', attempted_compositions=attempts))
+
+    def compile_graphic_composition(self):
+        # Try a small set of whole-page compositions using the existing emitters. Failed
+        # attempts never leak partial content, warnings or text adaptations into the result.
+        best_failures, attempted = [], 0
+        for plan in graphic_page_regions(self.comp, [56, self.top, 1168, self.bh], self.assets, self.font_paths,
+                design=self.design, list_gap_ratio=self.list_gap_ratio,
+                list_padding=(0, 0) if self.design else (28, 18), bullet_style=self.bullet_style):
+            boxes = [plan['graphic'], *plan['blocks'], *plan['figures']]
+            if any(min(box[2:]) <= 0 for box in boxes):
+                continue
+            attempted += 1
+            checkpoints = self._checkpoints()
+            for b, box in zip(self.blocks, plan['blocks']):
+                self.emit_block(b, box)
+            for k, (f, box) in enumerate(zip(self.figs, plan['figures']), 1):
+                self.emit_figure(f, box, k)
+            self.emit_native_graphic(plan['graphic'])
+            failures = [finding for finding in self.issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
+            if not failures:
+                self.adaptations.append({'action': 'graphic_composition', 'pattern': plan['pattern'],
+                                         'block_ids': [b['id'] for b in self.blocks],
+                                         'figure_ids': [f'figure-{k + 1}' for k in range(len(self.figs))],
+                                         'graphic_id': self.comp['graphics'][0]['id']})
+                self.adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
+                                         'status': 'COMPILER_FALLBACK', 'reason': 'native_graphic_composition'})
+                break
+            if not best_failures or len(failures) < len(best_failures):
+                best_failures = failures
+            self._rollback(checkpoints)
+        else:
+            self.issues.extend(best_failures)
+            self.issues.append(issue('GRAPHIC_PAGE_CAPACITY', 'FAIL',
+                'The graphic, context and source figure/caption cannot share this page above '
+                'their size floors. Try composite-research with a vertical layout_tree stack '
+                '(graphic + blocks) before splitting; if the measured tree still cannot fit, '
+                'split the page. No content was shortened or dropped.',
+                self.n, self.comp['graphics'][0]['id'], detector='geometric-preflight',
+                attempted_compositions=attempted))
+            self.issues.append(issue('SCHEMATIC_REVIEW', 'REVIEW',
+                'Confirm the declared graphic relationships match the scientific evidence.',
+                self.n, self.comp['graphics'][0]['id'], detector='scientific-review', confidence='MEDIUM'))
+
+    def compile_body(self, proposals):
         # A drawn schematic is not evidence that has to sit beside its text: it gets the width of
         # the page and the reader's eye goes text -> diagram -> caption, top to bottom.
-        schematic_only = (len(figs) == 1 and
-                          (assets[figs[0]["asset_id"]].get("origin") or "paper") == "generated")
-        def schematic_band(bs, f):
-            face = ImageFont.truetype(font_paths["font_file"], 28)
-            if len(bs) == 2:
-                # Two short paragraphs read as one line each of context: side by side they leave the
-                # height to the diagram instead of stacking into a wall above it.
-                rows = [break_lines(item["text"], face, 568) for item in bs]
-                band = max((len(lines) for lines in rows), default=0) * 35
-                for k, (item, _) in enumerate(zip(bs, rows)):
-                    block(item, [56 + k * 600, top, 568, band])
-                cursor = top + band + 18
-            else:
-                rows = [break_lines(item["text"], face, 1168) for item in bs]
-                natural = sum(len(lines) for lines in rows) * 35 + 18 * max(len(bs) - 1, 0)
-                band = min(natural, bh * .45)
-                cursor = top
-                total = max(sum(len(lines) for lines in rows), 1)
-                for item, lines in zip(bs, rows):
-                    height = band * len(lines) / total
-                    block(item, [56, cursor, 1168, height])
-                    cursor += height + 18
-            figure(f, [56, cursor, 1168, bottom - cursor], 1)
-
-        def native_graphic(region, graphic=None):
-            graphic = graphic or comp["graphics"][0]
-            try:
-                graphic_elements = compile_graphic(graphic, region, theme, font_paths)
-            except ValueError as error:
-                graphic_elements = []
-                issues.append(issue(getattr(error, "rule", "GRAPHIC_CAPACITY"), "FAIL", str(error), n, graphic["id"],
-                                    detector="geometric-preflight"))
-            for element in graphic_elements:
-                if element["kind"] in ("shape", "connector"):
-                    elements.append(element)
-                    continue
-                before = len(elements)
-                text(element["id"], element["text"], element["bbox"], element["role"],
-                     element["font_size"], min(24, element["font_size"]), element["max_lines"], "middle",
-                     element["color"], align="center")
-                if len(elements) > before:
-                    elements[-1].update({key: element[key] for key in
-                        ("graphic_id", "node_id", "container_id", "overlap_group", "graphic_region", "edge_id")
-                        if key in element})
-            node_count, edge_count = graphic_counts(graphic)
-            adaptations.append({"action": "native_graphic", "graphic_id": graphic["id"],
-                                "region": region, "node_count": node_count,
-                                "edge_count": edge_count})
-            issues.append(issue("SCHEMATIC_REVIEW", "REVIEW",
-                                ("Confirm the process order and labels match the scientific explanation; "
-                                 "this is a generated schematic, not a paper figure")
-                                if graphic['type'] in ('process', 'dag') else
-                                "Confirm component labels, explicit relationships and evidence/hypothesis distinctions; "
-                                "generated graphics do not establish scientific correctness",
-                                n, graphic["id"], detector="scientific-review", confidence="MEDIUM"))
-        has_formulas = any(b.get('component') == 'formula' or b.get('inline_math') for b in blocks)
-        proposal = None if comp.get('layout_tree') or visual_plan or schematic_only or comp.get('graphics') or has_formulas else (proposals or {}).get(slide['id'])
-        if comp.get('layout_tree'):
-            from .layout_tree import LayoutTreeError, attachment_link, compile_regions
-            from .container_frames import grow_frame, rectangle, stroke_width
-            checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
-            try:
-                plan = compile_regions(comp, [56, top, 1168, bh], assets, font_paths, theme, preserve_terms,
-                                       list_gap_ratio, (0, 0) if design else (28, 18), bullet_style,
-                                       design=design,
-                                       formula_sizes=formula_sizes if equation_page else None)
-                balance_shift = (plan.get('balanced') or {}).get('shift_px', 0.)
-                if balance_shift > .5:
-                    adaptations.append({'action': 'vertical_balance', **plan['balanced']})
-                by_id = {b['id']: b for b in blocks}
-                annotated_formulas = {link['ref'] for b in blocks if (link := attachment_link(b))
-                                      and link['kind'] == 'formula' and 'position' in link}
-                graphics_by_id = {g['id']: g for g in comp.get('graphics', [])}
-                charts_by_id = {c['id']: c for c in comp.get('charts', [])}
-                for entry in plan['nodes']:
-                    first, issue_start = len(elements), len(issues)
-                    if entry['type'] == 'panel':
-                        title_id = 'region:'+entry['node_id']+':title'
-                        style = entry.get('frame')
-                        if style and (style.get('border') or style.get('fill', 'none') != 'none'):
-                            elements.append(rectangle('region:'+entry['node_id']+':frame', entry['bbox'], style, []))
-                        if style and style.get('title_fill', 'none') != 'none':
-                            elements.append({'id': 'region:'+entry['node_id']+':title-band', 'kind': 'shape',
-                                'role': 'decoration', 'bbox': entry['title_band_bbox'],
-                                'geometry': entry.get('title_band_geometry', 'rect'),
-                                'fill': style['title_fill'], 'line': 'none', 'line_width': 0,
-                                'visual_decoration': True, 'frame_members': [title_id],
-                                'frame_growth_inset': stroke_width(style)})
-                        text('region:'+entry['node_id']+':title', entry['title'], entry['title_bbox'],
-                             'heading', 28, 24, max(2, int(entry['title_bbox'][3]/30)),
-                             anchor='middle' if entry.get('title_band_geometry') == 'roundRect' else 'top',
-                             color=style.get('title_color') if style else None,
-                             align=entry.get('title_align') or (style.get('title_align') if style else None))
-                    elif entry['type'] == 'block':
-                        source = by_id[entry['ref']]
-                        block(source, entry['bbox'],
-                              formula_align='center' if source['id'] in annotated_formulas else 'left')
-                        if source.get('text_for'):
-                            for element in elements[first:]:
-                                if element['id'] == source['id']:
-                                    element['text_for'] = dict(source['text_for'])
-                    elif entry['type'] == 'figure':
-                        figure(figs[entry['ref']], entry['bbox'], entry['ref']+1)
-                    elif entry['type'] == 'graphic':
-                        native_graphic(entry['bbox'], graphics_by_id[entry['ref']])
-                    elif entry['type'] == 'chart':
-                        from .chart_render import ChartLayoutError, compile_chart
-                        chart = charts_by_id[entry['ref']]
-                        try:
-                            rendered = compile_chart(chart, entry['bbox'], theme, font_paths)
-                        except ChartLayoutError as error:
-                            issues.append(issue(error.rule, 'FAIL', str(error), n, chart['id'],
-                                                detector='geometric-preflight',
-                                                component=entry['component']))
-                            continue
-                        for element in rendered:
-                            if element['kind'] in ('shape', 'connector'):
-                                elements.append(element)
-                            else:
-                                before = len(elements)
-                                text(element['id'], element['text'], element['bbox'], element['role'],
-                                     element['font_size'],
-                                     20 if element['role'] == 'caption' else 24,
-                                     element['max_lines'], 'middle', element['color'],
-                                     align=element.get('align'))
-                                if len(elements) > before:
-                                    elements[-1].update({key: element[key] for key in
-                                        ('graphic_id', 'overlap_group', 'node_id') if key in element})
-                        issues.append(issue(
-                            'CHART_DATA_REVIEW' if chart.get('basis') == 'evidence' else 'CHART_ILLUSTRATIVE_REVIEW',
-                            'REVIEW',
-                            'Confirm every plotted point against the cited evidence; the compiler checked '
-                            'the chart structure, not the paper text.' if chart.get('basis') == 'evidence'
-                            else 'This chart is an illustrative schematic, not measured data; confirm the '
-                                 '示意 badge is visible in the rendered slide.',
-                            n, chart['id'], detector='scientific-review', confidence='MEDIUM'))
-                    elif entry['type'] == 'table':
-                        from .native_table import compile_table
-                        table = next(t for t in comp['tables'] if t['id'] == entry['ref'])
-                        try:
-                            rendered = compile_table(table, entry['bbox'], font_paths, theme, preserve_terms)
-                        except LayoutTreeError as error:
-                            error.detail['component'] = entry['component']
-                            raise
-                        elements.append(rendered)
-                        issues.append(issue('TABLE_CONTENT_REVIEW', 'REVIEW',
-                            'Confirm every table value, scientific term, unit and source reference.', n, rendered['id'],
-                            detector='scientific-review', confidence='MEDIUM'))
-                        if any(c.get('measured_exact') is False for c in rendered['cells']):
-                            issues.append(issue('FORMULA_MEASURE_APPROXIMATE', 'REVIEW',
-                                'Native table formulas use conservative structural metrics; verify cell bounds in PowerPoint.',
-                                n, rendered['id'], detector='geometric-preflight', confidence='LOW', font_metrics='heuristic'))
-                        if any(c.get('inline_formula_count', 0) for c in rendered['cells']):
-                            issues.append(issue('INLINE_MATH_MEASUREMENT_REVIEW', 'REVIEW',
-                                'Verify inline formula baselines and measured line heights in native table cells.',
-                                n, rendered['id'], detector='geometric-preflight', confidence='LOW'))
-                        if rendered.get('scientific_text_overflow'):
-                            issues.append(issue('SCIENTIFIC_TEXT_OVERFLOW', 'REVIEW',
-                                'Native table retains complete scientific terminology beyond its nominal region.',
-                                n, rendered['id'], detector='geometric-preflight'))
-                    for element in elements[first:]:
-                        element.update(layout_component=entry['component'], layout_region=entry['bbox'])
-                        ex, ey, ew, eh = element['bbox']
-                        rx, ry, rw, rh = entry['bbox']
-                        # Sub-pixel rounding is not a layout decision: a preserve-terms block whose
-                        # region came out of a ratio split can be 0.7 px shorter than the line grid.
-                        # Clamp that residue so "an element never leaves its assigned region" stays
-                        # true; anything larger is still reported as a real overflow below.
-                        if eh > rh and eh-rh < 1.0:
-                            element['bbox'][3] = rh
-                            eh = rh
-                        if ew > rw and ew-rw < 1.0:
-                            element['bbox'][2] = rw
-                            ew = rw
-                        if (not element.get('scientific_text_overflow') and
-                            (ex < rx-.1 or ey < ry-.1 or ex+ew > rx+rw+.1 or ey+eh > ry+rh+.1)):
-                            issues.append(issue('REGION_CONTENT_OUT_OF_BOUNDS', 'FAIL',
-                                'Rendered component exceeds its assigned compiler region.', n, element['id'],
-                                detector='geometric-preflight', component=entry['component']))
-                    failures = [item for item in issues[issue_start:] if item['severity'] == 'FAIL']
-                    if failures:
-                        raise LayoutTreeError(entry['component'], 'COMPONENT_RENDER_FAILED',
-                            'A component failed an existing renderer gate after region allocation.',
-                            [entry['bbox'][2], entry['requirements']['min_height_px']], entry['bbox'][2:],
-                            cause=failures[0]['message'])
-                # Grow opted-in frames bottom-up when preserve-terms releases complete text.
-                # Each frame only exempts its own descendants from overlap checks.
-                for entry in reversed(plan['nodes']):
-                    if not entry.get('frame'):
-                        continue
-                    prefix, eid = entry['component'], 'region:'+entry['node_id']
-                    framed = next((e for e in elements if e['id'] == eid+':frame'), None)
-                    title_element = next(e for e in elements if e['id'] == eid+':title')
-                    band = next((e for e in elements if e['id'] == eid+':title-band'), None)
-                    # A chip is a label around its text, not a row that can absorb extra height:
-                    # growing it would stretch the pill, so a chip keeps its measured size.
-                    if band and not entry.get('title_band_geometry'):
-                        needed = title_element['bbox'][1]+title_element['bbox'][3]+entry['padding_px']-band['bbox'][1]
-                        if needed > band['bbox'][3]+.1:
-                            band['bbox'] = [*band['bbox'][:3], needed]
-                            band['scientific_text_overflow'] = {'policy': 'preserve-terms'}
-                    if framed is None:
-                        continue
-                    members = [e for e in elements if e is not framed and
-                               (e.get('layout_component') == prefix or e.get('layout_component', '').startswith(prefix+'.'))]
-                    framed['frame_members'] = [e['id'] for e in members]
-                    outer = grow_frame(framed, entry['bbox'], members,
-                                       entry['padding_px']+stroke_width(entry['frame']))
-                    entry['frame_bbox'] = outer
-                    framed['layout_region'] = outer
-                    if framed.get('scientific_text_overflow'):
-                        issues.append(issue('FRAME_EXPANDED_FOR_TERMS', 'REVIEW',
-                            'Native frame expanded with complete scientific content; inspect neighbouring regions.',
-                            n, framed['id'], detector='geometric-preflight', component=prefix,
-                            original_bbox=entry['bbox'], expanded_bbox=outer))
-                adaptations.append({'action': 'layout_tree', **plan})
-                for entry in plan['nodes']:
-                    if (entry.get('underfill') and
-                            balance_shift < entry['underfill']['underfill_px']*.5):
-                        # The balance nudge is capped at 32 px; a 300 px gap is not explained by it.
-                        # Suppress the report only when the shift actually absorbed most of the gap.
-                        issues.append(issue('PAGE_UNDERFILL', 'REVIEW',
-                            'A stack leaves more than 15% of its allocated height unused. '
-                            'Review intentional whitespace or adjust relative weights / stack alignment.',
-                            n, 'region:'+entry['node_id'], detector='geometric-preflight',
-                            component=entry['component'], **entry['underfill']))
-                    if sparse_text_page(entry, elements):
-                        filled = entry['requirements']['preferred_height_px']/entry['bbox'][3]
-                        # A stack of one-line statements in a half-empty region is the
-                        # document look: the page has structure but no composition.
-                        issues.append(issue('SPARSE_TEXT_PAGE', 'REVIEW',
-                            f'The text on this page fills {filled*100:.0f}% of its region. Short '
-                            'statements stacked in one column read as a document; give the page a '
-                            'composition — two columns, one display-size statement, or numbered '
-                            'points — or split it.', n, 'region:'+entry['node_id'],
-                            detector='geometric-preflight', filled_ratio=round(filled, 3),
-                            suggested_actions=['text_columns', 'statement', 'numbered_points',
-                                               'split_slide']))
-                adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
-                                    'status': 'COMPILER_OWNED', 'reason': 'recursive_regions'})
-            except LayoutTreeError as error:
-                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
-                    del values[checkpoint:]
-                issues.append(issue(error.detail['code'], 'FAIL', str(error), n,
-                    detector='geometric-preflight', slide_id=slide['id'],
-                    **{key: value for key, value in error.detail.items() if key not in ('code', 'message')}))
-        elif visual_plan:
-            from .academic_layout import candidates
-            best_failures, attempts = [], []
-            for plan in candidates(slide, [56, top, 1168, bh], assets, font_paths, design,
-                                   list_gap_ratio=list_gap_ratio, bullet_style=bullet_style):
-                boxes = [*plan['blocks'], *plan['figures']]
-                boxes += [plan[key] for key in ('graphic', 'emphasis') if plan.get(key) is not None]
-                if any(min(box[2:]) <= 0 for box in boxes):
-                    attempts.append({'pattern': plan['pattern'], 'rules': ['INVALID_REGION']})
-                    continue
-                checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
-                for b, box in zip(blocks, plan['blocks']):
-                    block(b, box)
-                for k, (f, box) in enumerate(zip(figs, plan['figures']), 1):
-                    figure(f, box, k, plan.get('caption_top'))
-                if plan.get('graphic'):
-                    native_graphic(plan['graphic'])
-                if plan.get('emphasis'):
-                    text('visual:emphasis', visual_plan['emphasis']['text'], plan['emphasis'],
-                         'body', 28, 24, 3, color=theme['accent'])
-                failures = [finding for finding in issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
-                failures += geometry_issues(elements, n)
-                if len({e['id'] for e in elements}) != len(elements):
-                    failures.append(issue('VISUAL_PLAN_ID_COLLISION', 'FAIL',
-                        'Page object names must be unique', n, detector='geometric-preflight'))
-                failures += [finding for finding in issues[:checkpoints[1]]
-                             if finding['severity'] == 'FAIL' and finding.get('slide') == n]
-                attempts.append({'pattern': plan['pattern'], 'rules': sorted({i['rule'] for i in failures})})
-                if not failures:
-                    adaptations.append({'action': 'scientific_visual_plan', 'visual_job': visual_plan['visual_job'],
-                        'requested': visual_plan, 'selected': plan, 'attempts': attempts})
-                    adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
-                                        'status': 'COMPILER_FALLBACK', 'reason': 'scientific_visual_plan'})
-                    break
-                if not best_failures or len(failures) < len(best_failures):
-                    best_failures = failures
-                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
-                    del values[checkpoint:]
-            else:
-                issues.extend(best_failures)
-                issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
-                    'No candidate satisfies the visual plan and existing content, panel, typography and collision gates. Replan this page.',
-                    n, detector='geometric-preflight', attempted_compositions=attempts))
-        elif family == "graphic":
-            native_graphic([56, top, 1168, bh])
-        elif comp.get('graphics'):
-            # Try a small set of whole-page compositions using the existing emitters. Failed
-            # attempts never leak partial content, warnings or text adaptations into the result.
-            best_failures, attempted = [], 0
-            for plan in graphic_page_regions(comp, [56, top, 1168, bh], assets, font_paths, design=design,
-                    list_gap_ratio=list_gap_ratio, list_padding=(0, 0) if design else (28, 18),
-                    bullet_style=bullet_style):
-                boxes = [plan['graphic'], *plan['blocks'], *plan['figures']]
-                if any(min(box[2:]) <= 0 for box in boxes):
-                    continue
-                attempted += 1
-                checkpoints = [len(values) for values in (elements, issues, adaptations, slide_formulas)]
-                for b, box in zip(blocks, plan['blocks']):
-                    block(b, box)
-                for k, (f, box) in enumerate(zip(figs, plan['figures']), 1):
-                    figure(f, box, k)
-                native_graphic(plan['graphic'])
-                failures = [finding for finding in issues[checkpoints[1]:] if finding['severity'] == 'FAIL']
-                if not failures:
-                    adaptations.append({'action': 'graphic_composition', 'pattern': plan['pattern'],
-                                        'block_ids': [b['id'] for b in blocks],
-                                        'figure_ids': [f'figure-{k+1}' for k in range(len(figs))],
-                                        'graphic_id': comp['graphics'][0]['id']})
-                    adaptations.append({'action': 'layout_provider', 'provider': 'compiler',
-                                        'status': 'COMPILER_FALLBACK', 'reason': 'native_graphic_composition'})
-                    break
-                if not best_failures or len(failures) < len(best_failures):
-                    best_failures = failures
-                for values, checkpoint in zip((elements, issues, adaptations, slide_formulas), checkpoints):
-                    del values[checkpoint:]
-            else:
-                issues.extend(best_failures)
-                issues.append(issue('GRAPHIC_PAGE_CAPACITY', 'FAIL',
-                    'The graphic, context and source figure/caption cannot share this page above '
-                    'their size floors. Try composite-research with a vertical layout_tree stack '
-                    '(graphic + blocks) before splitting; if the measured tree still cannot fit, '
-                    'split the page. No content was shortened or dropped.',
-                    n, comp['graphics'][0]['id'], detector='geometric-preflight',
-                    attempted_compositions=attempted))
-                issues.append(issue('SCHEMATIC_REVIEW', 'REVIEW',
-                    'Confirm the declared graphic relationships match the scientific evidence.',
-                    n, comp['graphics'][0]['id'], detector='scientific-review', confidence='MEDIUM'))
+        schematic_only = (len(self.figs) == 1 and
+                          (self.assets[self.figs[0]["asset_id"]].get("origin") or "paper") == "generated")
+        has_formulas = any(b.get('component') == 'formula' or b.get('inline_math') for b in self.blocks)
+        proposal = None if (self.comp.get('layout_tree') or self.visual_plan or schematic_only
+                            or self.comp.get('graphics') or has_formulas) else (proposals or {}).get(self.slide['id'])
+        if self.comp.get('layout_tree'):
+            self.compile_layout_tree()
+        elif self.visual_plan:
+            self.compile_visual_plan()
+        elif self.family == "graphic":
+            self.emit_native_graphic([56, self.top, 1168, self.bh])
+        elif self.comp.get('graphics'):
+            self.compile_graphic_composition()
         elif proposal:
             supplied = proposal['units']
-            expected = [b['id'] for b in blocks] + [f'figure-{k+1}' for k in range(len(figs))]
+            expected = [b['id'] for b in self.blocks] + [f'figure-{k + 1}' for k in range(len(self.figs))]
             if len(expected) != len(set(expected)) or set(supplied) != set(expected):
                 raise ValueError('Provider unit identities must match the canonical slide exactly')
-            if family == 'evidence':
+            if self.family == 'evidence':
                 for col, role in enumerate(('direct-evidence', 'hypothesis')):
-                    text(role+':heading', '直接证据' if col == 0 else '假设（未证实）',
-                         [56+col*600, top, 568, 44], 'heading', 28, 24, 1)
-            for b in blocks:
-                block(b, supplied[b['id']]['bbox'])
-            for k, f in enumerate(figs, 1):
+                    self.emit_text(role + ':heading', '直接证据' if col == 0 else '假设（未证实）',
+                                   [56 + col * 600, self.top, 568, 44], 'heading', 28, 24, 1)
+            for b in self.blocks:
+                self.emit_block(b, supplied[b['id']]['bbox'])
+            for k, f in enumerate(self.figs, 1):
                 group = supplied[f'figure-{k}']
                 declared = group.get('caption_height', f.get('caption_height'))
-                figure({**f, **({'caption_height': declared} if declared else {})},
-                       group['bbox'], k)
-            adaptations.append({'action': 'layout_provider',
-                                'provider': proposal.get('provider', 'provider'),
-                                'status': proposal['status']})
+                self.emit_figure({**f, **({'caption_height': declared} if declared else {})},
+                                 group['bbox'], k)
+            self.adaptations.append({'action': 'layout_provider',
+                                     'provider': proposal.get('provider', 'provider'),
+                                     'status': proposal['status']})
         elif schematic_only:
-            schematic_band(blocks, figs[0])
-        elif not figs and not show_sequence and family != 'evidence' and (has_formulas or family == 'equations'):
-            formula_flow(blocks, [56, top, 1168, bh], max_columns=2,
-                         preferred_columns=2 if comp['archetype'] == 'metric-comparison' else 1)
-        elif family in ("figure-left", "figure-right") and figs:
-            base_text = 440 if family == "figure-left" else 460
-            txt_w = formula_column_width(blocks, font_paths["bold_font_file"], base_text, 616)
+            self.emit_schematic_band(self.blocks, self.figs[0])
+        elif not self.figs and not self.show_sequence and self.family != 'evidence' and (has_formulas or self.family == 'equations'):
+            self.emit_formula_flow(self.blocks, [56, self.top, 1168, self.bh], max_columns=2,
+                                   preferred_columns=2 if self.comp['archetype'] == 'metric-comparison' else 1)
+        elif self.family in ("figure-left", "figure-right") and self.figs:
+            base_text = 440 if self.family == "figure-left" else 460
+            txt_w = formula_column_width(self.blocks, self.font_paths["bold_font_file"], base_text, 616)
             fig_w = 1168 - 32 - txt_w
-            if family == "figure-left":
+            if self.family == "figure-left":
                 fig_x, txt_x = 56, 56 + fig_w + 32
             else:
                 txt_x, fig_x = 56, 56 + txt_w + 32
-            figure(figs[0], [fig_x, top, fig_w, bh], 1)
-            stack(blocks, [txt_x, top, txt_w, bh])
-        elif show_sequence and not figs:
-            stack(blocks, [280, top, 720, bh])
-        elif family == "process" and figs and len(blocks) >= 4:
+            self.emit_figure(self.figs[0], [fig_x, self.top, fig_w, self.bh], 1)
+            self.emit_stack(self.blocks, [txt_x, self.top, txt_w, self.bh])
+        elif self.show_sequence and not self.figs:
+            self.emit_stack(self.blocks, [280, self.top, 720, self.bh])
+        elif self.family == "process" and self.figs and len(self.blocks) >= 4:
             # The method slide needs both a legible process summary and a readable
             # source panel. A four-row left column frees the right half for the
             # original Fig.3a panel instead of squeezing it into a shallow strip.
             left_x, left_w = 56, 520
             row_h, row_gap = 75, 5
-            for k, b in enumerate(blocks[:4]):
-                y = top + k * (row_h + row_gap)
-                text(b["id"]+":label", b.get("label", ""), [left_x, y, left_w, 32],
-                     "heading", 24, 24, 1)
-                text(b["id"], b["text"], [left_x, y+32, left_w, row_h-32],
-                     "body", 24, 24, 1)
-            figure(figs[0], [650, top, 574, bh], 1)
-        elif slide["id"] == "s07-contact" and figs:
+            for k, b in enumerate(self.blocks[:4]):
+                y = self.top + k * (row_h + row_gap)
+                self.emit_text(b["id"] + ":label", b.get("label", ""), [left_x, y, left_w, 32], "heading", 24, 24, 1)
+                self.emit_text(b["id"], b["text"], [left_x, y + 32, left_w, row_h - 32], "body", 24, 24, 1)
+            self.emit_figure(self.figs[0], [650, self.top, 574, self.bh], 1)
+        elif self.slide["id"] == "s07-contact" and self.figs:
             # Keep the two numeric callouts compact so the two original Fig.3e/f
             # panels can occupy most of the evidence area at readable size.
-            for k, b in enumerate(blocks[:2]):
+            for k, b in enumerate(self.blocks[:2]):
                 x = 56 + k * 600
-                text(b["id"]+":label", b.get("label", ""), [x, top, 568, 32],
-                     "heading", 24, 24, 1)
-                text(b["id"], b["text"], [x, top+32, 568, 38],
-                     "body", 26, 22, 1)
-            fw = (1168-32*(len(figs)-1))/len(figs)
-            for k, f in enumerate(figs):
-                figure(f, [56+k*(fw+32), top+70, fw, bottom-(top+70)], k+1)
-        elif family == "dual" and figs:
+                self.emit_text(b["id"] + ":label", b.get("label", ""), [x, self.top, 568, 32], "heading", 24, 24, 1)
+                self.emit_text(b["id"], b["text"], [x, self.top + 32, 568, 38], "body", 26, 22, 1)
+            fw = (1168 - 32 * (len(self.figs) - 1)) / len(self.figs)
+            for k, f in enumerate(self.figs):
+                self.emit_figure(f, [56 + k * (fw + 32), self.top + 70, fw, self.bottom - (self.top + 70)], k + 1)
+        elif self.family == "dual" and self.figs:
             # Dual scientific figures get compact native callouts and a hard
             # 240px evidence band. This avoids the former 154px thumbnails.
-            for k, b in enumerate(blocks[:2]):
+            for k, b in enumerate(self.blocks[:2]):
                 x = 56 + k * 600
-                text(b["id"]+":label", b.get("label", ""), [x, top, 568, 30],
-                     "heading", 24, 24, 1)
-                text(b["id"], b["text"], [x, top+30, 568, 34],
-                     "body", 24, 24, 1)
-            fw = (1168-32*(len(figs)-1))/len(figs)
-            for k, f in enumerate(figs):
-                figure(f, [56+k*(fw+32), top+70, fw, bottom-(top+70)], k+1)
-        elif family == "evidence":
+                self.emit_text(b["id"] + ":label", b.get("label", ""), [x, self.top, 568, 30], "heading", 24, 24, 1)
+                self.emit_text(b["id"], b["text"], [x, self.top + 30, 568, 34], "body", 24, 24, 1)
+            fw = (1168 - 32 * (len(self.figs) - 1)) / len(self.figs)
+            for k, f in enumerate(self.figs):
+                self.emit_figure(f, [56 + k * (fw + 32), self.top + 70, fw, self.bottom - (self.top + 70)], k + 1)
+        elif self.family == "evidence":
             for col, role in enumerate(("direct-evidence", "hypothesis")):
-                x = 56 + col*600
-                text(role+":heading", "直接证据" if col == 0 else "假设（未证实）",
-                     [x, top, 568, 44], "heading", 28, 24, 1)
-                stack([b for b in blocks if b["component"] == role], [x, top+56, 568, bh-56])
-        else:
-            if blocks:
-                w = (1168-32*(len(blocks)-1))/len(blocks)
-                column_start = len(elements)
-                for k, b in enumerate(blocks):
-                    block(b, [56+k*(w+32), top, w, bh])
-                # Flat columns otherwise pin every label to the body top and
-                # leave the lower band empty. Centre the measured content in
-                # the body band without enlarging or re-wrapping it.
-                if len(blocks) > 1 and not figs and not comp.get('graphics') and not show_sequence:
-                    created = elements[column_start:]
-                    visible = [e for e in created if e['kind'] in ('text', 'list', 'math')
-                               and e['role'] in ('heading', 'body', 'formula')]
-                    if visible:
-                        content_top = min(e['bbox'][1] for e in visible)
-                        content_bottom = max((e['bbox'][1]+e['bbox'][3] if e['kind'] == 'math'
-                                              else text_visible_bottom(e)) for e in visible)
-                        empty = bh-(content_bottom-content_top)
-                        if empty > 60:
-                            shift = empty/2
-                            limit = top+bh
-                            for e in created:
-                                e['bbox'][1] += shift
-                                e['bbox'][3] = max(1, min(e['bbox'][3], limit-e['bbox'][1]))
-        if show_sequence:
-            rows = [next((e for e in elements if e["id"] == b["id"]), None) for b in blocks]
+                x = 56 + col * 600
+                self.emit_text(role + ":heading", "直接证据" if col == 0 else "假设（未证实）",
+                               [x, self.top, 568, 44], "heading", 28, 24, 1)
+                self.emit_stack([b for b in self.blocks if b["component"] == role], [x, self.top + 56, 568, self.bh - 56])
+        elif self.blocks:
+            w = (1168 - 32 * (len(self.blocks) - 1)) / len(self.blocks)
+            column_start = len(self.elements)
+            for k, b in enumerate(self.blocks):
+                self.emit_block(b, [56 + k * (w + 32), self.top, w, self.bh])
+            # Flat columns otherwise pin every label to the body top and
+            # leave the lower band empty. Centre the measured content in
+            # the body band without enlarging or re-wrapping it.
+            if len(self.blocks) > 1 and not self.figs and not self.comp.get('graphics') and not self.show_sequence:
+                created = self.elements[column_start:]
+                visible = [e for e in created if e['kind'] in ('text', 'list', 'math')
+                           and e['role'] in ('heading', 'body', 'formula')]
+                if visible:
+                    content_top = min(e['bbox'][1] for e in visible)
+                    content_bottom = max((e['bbox'][1] + e['bbox'][3] if e['kind'] == 'math'
+                                          else text_visible_bottom(e)) for e in visible)
+                    empty = self.bh - (content_bottom - content_top)
+                    if empty > 60:
+                        shift = empty / 2
+                        limit = self.top + self.bh
+                        for e in created:
+                            e['bbox'][1] += shift
+                            e['bbox'][3] = max(1, min(e['bbox'][3], limit - e['bbox'][1]))
+        if self.show_sequence:
+            rows = [next((e for e in self.elements if e["id"] == b["id"]), None) for b in self.blocks]
             if all(rows):
                 rail_x = rows[0]["bbox"][0] - 56
                 centers = [row["bbox"][1] + 18 for row in rows]
-                accent = theme.get("accent", DEFAULT_ACCENT)
-                elements.append({"id": "sequence:spine", "kind": "shape",
-                    "role": "decoration", "bbox": [rail_x+25, centers[0], 2, centers[-1]-centers[0]],
+                accent = self.theme.get("accent", DEFAULT_ACCENT)
+                self.elements.append({"id": "sequence:spine", "kind": "shape",
+                    "role": "decoration", "bbox": [rail_x + 25, centers[0], 2, centers[-1] - centers[0]],
                     "geometry": "rect", "fill": "#B9CCD8", "line": "none",
                     "collision_mode": "container"})
                 for index, row in enumerate(rows, 1):
-                    badge = [rail_x+10, row["bbox"][1]+2, 32, 32]
-                    elements.append({"id": f"sequence:step:{index}", "kind": "shape",
+                    badge = [rail_x + 10, row["bbox"][1] + 2, 32, 32]
+                    self.elements.append({"id": f"sequence:step:{index}", "kind": "shape",
                         "role": "decoration", "bbox": badge, "geometry": "ellipse",
                         "fill": accent, "line": "none", "collision_mode": "container"})
-                    text(f"sequence:number:{index}", str(index), badge, "badge", 20, 20, 1,
-                         "middle", "#FFFFFF")
-                adaptations.append({"action": "sequence_rail",
-                    "source": "visual_intent" if visual_intent else "legacy_roles",
-                    "block_ids": [b["id"] for b in blocks]})
-        if family in ('columns', 'equations') and not figs and not visible_caveats and len(blocks) >= 3:
-            notice = lower_whitespace_issue(elements, n, top, bottom)
+                    self.emit_text(f"sequence:number:{index}", str(index), badge, "badge", 20, 20, 1, "middle", "#FFFFFF")
+                self.adaptations.append({"action": "sequence_rail",
+                    "source": "visual_intent" if self.visual_intent else "legacy_roles",
+                    "block_ids": [b["id"] for b in self.blocks]})
+
+    def finalize_slide(self):
+        if self.family in ('columns', 'equations') and not self.figs and not self.visible_caveats and len(self.blocks) >= 3:
+            notice = lower_whitespace_issue(self.elements, self.n, self.top, self.bottom)
             if notice:
-                issues.append(notice)
-        page_furniture_elements(elements, text, n, slide, ir.get('presentation') or {}, design, furniture)
-        if (comp.get('layout_tree') or comp.get('graphics') or design) and len({e['id'] for e in elements}) != len(elements):
-            issues.append(issue('GRAPHIC_ID_COLLISION' if comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
-                                'FAIL', 'Page object names must be unique',
-                                n, detector='geometric-preflight'))
+                self.issues.append(notice)
+        if self.family != 'cover' and not any(
+            i.get('slide') == self.n and i.get('rule') in (
+                'TEXT_ONLY_LOWER_WHITESPACE', 'CONTENT_LOWER_WHITESPACE', 'SPARSE_TEXT_PAGE'
+            )
+            for i in self.issues
+        ):
+            ws_notice = body_whitespace_issue(self.elements, self.n, self.top, self.bottom)
+            if ws_notice:
+                self.issues.append(ws_notice)
+        page_furniture_elements(self.elements, self.emit_text, self.n, self.slide,
+                                self.ir.get('presentation') or {}, self.design, self.furniture)
+        if (self.comp.get('layout_tree') or self.comp.get('graphics') or self.design) and len({e['id'] for e in self.elements}) != len(self.elements):
+            self.issues.append(issue('GRAPHIC_ID_COLLISION' if self.comp.get('graphics') else 'VISUAL_PLAN_ID_COLLISION',
+                                     'FAIL', 'Page object names must be unique',
+                                     self.n, detector='geometric-preflight'))
         # Diagram labels are their own type scale; this rule is about running body copy on the page.
-        body_sizes = sorted({round(e['contract']['font_size'], 1) for e in elements
+        body_sizes = sorted({round(e['contract']['font_size'], 1) for e in self.elements
                              if e.get('kind') == 'text' and e.get('role') == 'body' and e.get('contract')
                              and not e['id'].startswith('graphic:')})
         if len(body_sizes) > 1:
             # Body copy on one page is one size. A fitted block may shrink to avoid a hard failure,
             # but then the page is reported so the composition can be reflowed instead of shipping
             # three body sizes that read as accidental emphasis.
-            issues.append(issue('BODY_SIZE_VARIANCE', 'REVIEW',
-                f'Body copy uses {len(body_sizes)} sizes on one page ({", ".join(f"{s*.75:.1f}" for s in body_sizes)} pt); '
+            self.issues.append(issue('BODY_SIZE_VARIANCE', 'REVIEW',
+                f'Body copy uses {len(body_sizes)} sizes on one page ({", ".join(f"{s * .75:.1f}" for s in body_sizes)} pt); '
                 'reflow or split the page so body text keeps one size and the page anchor stays distinct.',
-                n, detector='geometric-preflight', body_font_px=body_sizes,
+                self.n, detector='geometric-preflight', body_font_px=body_sizes,
                 suggested_actions=['reflow_region', 'split_slide']))
-        for b in blocks:
+        for b in self.blocks:
             if (b.get('text_flow') in EXPLICIT_LISTS and not b.get('_inferred_list')
-                    and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in elements)
-                    and not any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues)):
-                issues.append(issue('SPLIT_REQUIRED', 'FAIL',
+                    and not any(e['id'] == b['id'] and e['kind'] == 'list' for e in self.elements)
+                    and not any(i['severity'] == 'FAIL' and i.get('slide') == self.n for i in self.issues)):
+                self.issues.append(issue('SPLIT_REQUIRED', 'FAIL',
                     f"{b['id']}: this composition cannot realize the explicit native list; choose a wider layout or split the page.",
-                    n, b['id'], detector='geometric-preflight', suggested_actions=['widen_region', 'split_slide']))
-        issues.extend(geometry_issues(elements, n))
-        if visual_plan and any(i['severity'] == 'FAIL' and i.get('slide') == n for i in issues) and not any(
-                i['rule'] == 'VISUAL_PLAN_UNSATISFIABLE' and i.get('slide') == n for i in issues):
-            issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
+                    self.n, b['id'], detector='geometric-preflight', suggested_actions=['widen_region', 'split_slide']))
+        self.issues.extend(geometry_issues(self.elements, self.n))
+        if self.visual_plan and any(i['severity'] == 'FAIL' and i.get('slide') == self.n for i in self.issues) and not any(
+                i['rule'] == 'VISUAL_PLAN_UNSATISFIABLE' and i.get('slide') == self.n for i in self.issues):
+            self.issues.append(issue('VISUAL_PLAN_UNSATISFIABLE', 'FAIL',
                 'The selected visual composition failed a page gate; replan without changing scientific content.',
-                n, detector='geometric-preflight'))
-        notes = sem["speaker_notes"]
-        notes_only = [*(sem.get("run_notes") or []), *moved_caveats]
+                self.n, detector='geometric-preflight'))
+        notes = self.sem["speaker_notes"]
+        notes_only = [*(self.sem.get("run_notes") or []), *self.moved_caveats]
         if notes_only:
             # Provenance stays with the deck; it just stops being projected.
             notes += "\n\n备注（不投屏）：" + "；".join(notes_only)
-        if footer:
-            notes += "\nEvidence: " + footer
-        slides.append({"id": slide["id"],
-                       "background": "#FFFFFF" if templated else theme.get("background", "#FFFFFF"),
-                       "notes": notes,
-                       "elements": elements, "adaptation_log": adaptations})
+        if self.footer:
+            notes += "\nEvidence: " + self.footer
+        return {"id": self.slide["id"],
+                "background": "#FFFFFF" if self.templated else self.theme.get("background", "#FFFFFF"),
+                "notes": notes,
+                "elements": self.elements, "adaptation_log": self.adaptations}
+
+    def compile(self, proposals):
+        self.emit_header()
+        self.compile_body(proposals)
+        return self.finalize_slide()
+
+
+def _apply_deck_agenda(ir, slides, ctx, issues):
     presentation = ir.get('presentation') or {}
     agenda = presentation.get('agenda')
     sections = agenda_sections(ir)
@@ -1901,47 +2192,65 @@ def compile_deck(ir, base, _retry=True, proposals=None):
         issues.append(issue('SECTION_LABELS_UNUSED', 'INFO',
             f'{len(sections)} section labels are declared but presentation.agenda is off, so nothing '
             'on the page shows them. Add an agenda or drop the labels.', detector='geometric-preflight'))
-    if agenda:
-        sections = agenda_sections(ir)
-        if not design:
-            issues.append(issue('AGENDA_SKIPPED', 'REVIEW',
-                'presentation.agenda needs academic_design: the contents page uses the designed header, '
-                'footer rule and page numbers.', detector='geometric-preflight'))
-        elif len(sections) < 2:
-            issues.append(issue('AGENDA_EMPTY', 'REVIEW',
-                'presentation.agenda needs at least two slides that declare presentation.section; '
-                'no contents page was generated.', detector='geometric-preflight'))
-        elif len(slides) >= 2:
-            # The contents page goes after the opening page, so every later page moves one slot;
-            # the number the reader sees is rewritten before the contents page is built from it.
-            for index, page in enumerate(slides, 1):
-                if index > 1:
-                    number_element = next((e for e in page['elements'] if e['id'] == 'page:number'), None)
-                    if number_element is not None:
-                        number_element['text'] = str(index+1)
-            slides.insert(1, agenda_slide(agenda if isinstance(agenda, dict) else {},
-                                          sections, theme, font_paths, design,
-                                          2 if presentation.get('page_numbers', True) else None,
-                                          furniture, footer_text=presentation.get('footer')))
-            if len(sections) > AGENDA_MAX_SECTIONS:
-                issues.append(issue('AGENDA_TRUNCATED', 'REVIEW',
-                    f'presentation.section declares {len(sections)} sections; the contents page holds '
-                    f'{AGENDA_MAX_SECTIONS}. Merge sections or split the deck.', detector='geometric-preflight'))
-    if _retry and not design and not preserve_terms and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
+    if not agenda:
+        return
+    if not ctx['design']:
+        issues.append(issue('AGENDA_SKIPPED', 'REVIEW',
+            'presentation.agenda needs academic_design: the contents page uses the designed header, '
+            'footer rule and page numbers.', detector='geometric-preflight'))
+    elif len(sections) < 2:
+        issues.append(issue('AGENDA_EMPTY', 'REVIEW',
+            'presentation.agenda needs at least two slides that declare presentation.section; '
+            'no contents page was generated.', detector='geometric-preflight'))
+    elif len(slides) >= 2:
+        # The contents page goes after the opening page, so every later page moves one slot;
+        # the number the reader sees is rewritten before the contents page is built from it.
+        for index, page in enumerate(slides, 1):
+            if index > 1:
+                number_element = next((e for e in page['elements'] if e['id'] == 'page:number'), None)
+                if number_element is not None:
+                    number_element['text'] = str(index + 1)
+        slides.insert(1, agenda_slide(agenda if isinstance(agenda, dict) else {},
+                                      sections, ctx['theme'], ctx['font_paths'], ctx['design'],
+                                      2 if presentation.get('page_numbers', True) else None,
+                                      ctx['furniture'], footer_text=presentation.get('footer')))
+        if len(sections) > AGENDA_MAX_SECTIONS:
+            issues.append(issue('AGENDA_TRUNCATED', 'REVIEW',
+                f'presentation.section declares {len(sections)} sections; the contents page holds '
+                f'{AGENDA_MAX_SECTIONS}. Merge sections or split the deck.', detector='geometric-preflight'))
+
+
+def compile_deck(ir, base, _retry=True, proposals=None):
+    ir = enable_bare_subscripts(deepcopy(ir))
+    issues = validate(ir)
+    # A REVIEW is something a human confirms later; only a FAIL stops compilation. Treating every
+    # finding as fatal meant an equation-only page could not even be laid out to be reviewed.
+    if any(item["severity"] == "FAIL" for item in issues):
+        return None, issues
+    ctx = _resolve_deck_context(ir, base, issues)
+    if ctx is None:
+        return None, issues
+    slides = [_SlideCompiler(ctx, n, slide, issues).compile(proposals)
+              for n, slide in enumerate(ir["slides"], 1)]
+    _apply_deck_agenda(ir, slides, ctx, issues)
+    if _retry and not ctx["design"] and not ctx["preserve_terms"] and any(i["rule"] == "SPLIT_REQUIRED" for i in issues):
         import copy
         alternative = copy.deepcopy(ir)
         alternative.setdefault("presentation", {})["frame_variant"] = "spacious"
         retry_layout, retry_issues = compile_deck(alternative, base, _retry=False, proposals=proposals)
         if retry_layout and not any(i["severity"] == "FAIL" for i in retry_issues):
             retry_layout["ir_sha256"] = digest(ir)
-            retry_layout["selected_variants"] = {str(n): "spacious" for n in range(1, len(ir["slides"])+1)}
+            retry_layout["selected_variants"] = {str(n): "spacious" for n in range(1, len(ir["slides"]) + 1)}
             return retry_layout, retry_issues
+    deck_frame = ctx["deck_frame"]
+    assets = ctx["assets"]
+    background_key = ctx["background_key"]
     return {"schema_version": "2.0", "ir_sha256": digest(ir), "slide_size": [WIDTH, HEIGHT],
             "deck_frame_variant": deck_frame,
             "frame_variant_overrides": {str(n): deck_frame for n, slide in enumerate(ir["slides"], 1)
                 if slide["presentation"].get("variant", "default") != deck_frame},
-            "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in font_paths.values()},
-            "resolved_font_family": theme['font_family'],
+            "assets": assets, "font_hashes": {p: file_hash(Path(p)) for p in ctx["font_paths"].values()},
+            "resolved_font_family": ctx["theme"]['font_family'],
             "background_image": (assets[background_key]["path"] if background_key else None),
-            **({'academic_design': design} if design else {}),
+            **({'academic_design': ctx["design"]} if ctx["design"] else {}),
             "slides": slides}, issues

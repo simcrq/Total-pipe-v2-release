@@ -28,7 +28,7 @@ def comparison_table(id, rows, column_weights):
 
 
 def page(id, title, takeaway, blocks, body, *, figures=(), graphics=(), tables=(), charts=(),
-         evidence_refs=(SOURCE,)):
+         evidence_refs=(SOURCE,), presentation=None):
     composition = {
         'archetype': 'composite-research', 'blocks': blocks, 'figure_refs': list(figures),
         'graphics': list(graphics), 'layout_tree': {'version': '1.2', 'regions': {'body': body}},
@@ -44,21 +44,31 @@ def page(id, title, takeaway, blocks, body, *, figures=(), graphics=(), tables=(
                      'evidence_refs': list(evidence_refs), 'caveats': [],
                      'speaker_notes': 'Layout example. Replace the sample text and source references with approved project content.'},
         'composition': composition,
-        'presentation': {},
+        'presentation': dict(presentation) if presentation else {},
     }
 
 
-def deck(id, slides, assets=None):
+def deck(id, slides, assets=None, *, presentation=None, theme=None):
+    base_theme = {'font_family': 'Arial', 'font_file': 'arial.ttf', 'bold_font_file': 'arialbd.ttf',
+                  'accent': '#266E72', 'foreground': '#142735', 'background': '#FFFFFF'}
+    if theme:
+        base_theme.update(theme)
+    base_pres = {
+        'academic_design': {'style': 'research-seminar', 'title_treatment': 'thin-rule',
+                            'density': 'balanced', 'figure_treatment': 'unframed',
+                            'decoration_policy': 'minimal', 'header_variant': 'compact'},
+        'text_capacity_policy': 'preserve-terms',
+    }
+    if presentation:
+        for key, value in presentation.items():
+            if key == 'academic_design' and isinstance(value, dict):
+                base_pres['academic_design'] = {**base_pres['academic_design'], **value}
+            else:
+                base_pres[key] = value
     return {
         'schema_version': '2.0', 'deck_id': id,
-        'theme': {'font_family': 'Arial', 'font_file': 'arial.ttf', 'bold_font_file': 'arialbd.ttf',
-                  'accent': '#266E72', 'foreground': '#142735', 'background': '#FFFFFF'},
-        'presentation': {
-            'academic_design': {'style': 'research-seminar', 'title_treatment': 'thin-rule',
-                                'density': 'balanced', 'figure_treatment': 'unframed',
-                                'decoration_policy': 'minimal', 'header_variant': 'compact'},
-            'text_capacity_policy': 'preserve-terms',
-        },
+        'theme': base_theme,
+        'presentation': base_pres,
         'assets': assets or {},
         'slides': slides,
     }

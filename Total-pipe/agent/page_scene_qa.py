@@ -70,6 +70,38 @@ def _resolve_item(item, bindings):
     return item.get('text', '')
 
 
+def page_whitespace_metrics(page, bindings=None, *, page_index=None):
+    """Measure exact 2D body-area visible ink coverage and largest empty rectangle."""
+    from deck_compiler.whitespace import (
+        DEFAULT_SCENE_BODY,
+        analyze_region_whitespace,
+        estimate_scene_object_box,
+    )
+
+    objects = list(_flatten_objects(page.get('objects') or []))
+    occupied = []
+    for obj in objects:
+        box = estimate_scene_object_box(obj, bindings)
+        if box is not None:
+            occupied.append(box)
+    spatial = analyze_region_whitespace(
+        occupied, DEFAULT_SCENE_BODY, min_empty_size=(3.6, 1.8), margin=0.0
+    )
+    is_cover = page_index == 1 and bool(page.get('title') or page.get('title_ref'))
+    sparse = (not is_cover) and (
+        spatial['coverage_ratio'] < 0.30 and spatial['largest_empty_ratio'] >= 0.42
+    )
+    return {
+        'body_coverage': spatial['coverage_ratio'],
+        'whitespace_ratio': spatial['whitespace_ratio'],
+        'largest_empty_box': spatial['largest_empty_rect'],
+        'largest_empty_ratio': spatial['largest_empty_ratio'],
+        'empty_quadrants': spatial['empty_quadrants'],
+        'quadrant_coverage': spatial['quadrant_coverage'],
+        'sparse': sparse,
+    }
+
+
 def validate_spec(spec, spec_path):
     """Return (errors, page_metrics). Explicit geometry and density only."""
     errors = []
@@ -223,7 +255,14 @@ def validate_spec(spec, spec_path):
                     continue
                 if _overlap(a, b):
                     errors.append('%s: text collision %s vs %s' % (pid, a_id, b_id))
-        metrics.append({'page_id': pid, 'body_chars': body_chars, 'visuals': len(visuals), 'objects': len(objects)})
+        spatial = page_whitespace_metrics(page, bindings, page_index=index)
+        metrics.append({
+            'page_id': pid,
+            'body_chars': body_chars,
+            'visuals': len(visuals),
+            'objects': len(objects),
+            **spatial,
+        })
     return errors, metrics
 
 
@@ -282,9 +321,15 @@ def expression_report(spec, spec_path):
                     card_area += area
         plain = ''.join(text)
         text_only = native == 0
+        spatial = page_whitespace_metrics(page, bindings, page_index=len(rows) + 1)
         rows.append({'page_id': page.get('id'), 'native_moves': native, 'lists': lists,
                      'inline_math': formulas, 'card_area': round(card_area, 2),
-                     'text_only': text_only, 'chars': len(plain)})
+                     'text_only': text_only, 'chars': len(plain),
+                     'body_coverage': spatial['body_coverage'],
+                     'whitespace_ratio': spatial['whitespace_ratio'],
+                     'largest_empty_ratio': spatial['largest_empty_ratio'],
+                     'empty_quadrants': spatial['empty_quadrants'],
+                     'sparse': spatial['sparse']})
     total = len(rows) or 1
     summary = {
         'pages': len(rows),
@@ -293,6 +338,8 @@ def expression_report(spec, spec_path):
         'inline_math': sum(row['inline_math'] for row in rows),
         'list_styles': sorted(styles),
         'native_move_pages': sum(row['native_moves'] > 0 for row in rows),
+        'avg_body_coverage': round(sum(row['body_coverage'] for row in rows) / total, 3),
+        'sparse_pages': sum(row['sparse'] for row in rows),
     }
     summary['status'] = ('PASS' if summary['text_only_pages'] == 0
                          and summary['card_area'] <= 0.01
@@ -382,6 +429,7 @@ def preview_page(spec_path, page_id, out_dir):
     if not evidence:
         return {'status': 'BLOCKED', 'page_id': page_id, 'pdf': str(pdf), 'png': None,
                 'issues': [i.get('message', str(i)) for i in issues]}
+    png_whitespace = None
     try:
         import pdfplumber
         with pdfplumber.open(pdf) as doc:
@@ -396,11 +444,29 @@ def preview_page(spec_path, page_id, out_dir):
                     issues.append({'rule': 'NATIVE_TEXT_OUT_OF_BOUNDS', 'severity': 'FAIL',
                                    'message': 'rendered text exceeds the page'})
                     break
+        if png.exists():
+            from deck_compiler.whitespace import analyze_rendered_png_whitespace
+            png_whitespace = analyze_rendered_png_whitespace(png)
     except Exception as error:
         issues.append({'rule': 'PREVIEW_RASTERIZE_FAILED', 'severity': 'FAIL', 'message': str(error)})
+    spatial = page_whitespace_metrics(page, spec.get('bindings') or {}, page_index=original_index)
+    if spatial['sparse']:
+        issues.append({
+            'rule': 'PAGE_SCENE_SPARSE_LAYOUT',
+            'severity': 'REVIEW',
+            'message': (
+                f"{page_id}: body visible ink covers only {spatial['body_coverage']:.0%} "
+                f"(largest contiguous empty zone {spatial['largest_empty_ratio']:.0%}, "
+                f"{spatial['empty_quadrants']}/4 empty quadrants). Consider a richer multi-zone "
+                "composition inspired by examples/library."
+            ),
+            'spatial': spatial,
+        })
     fails = [i for i in issues if i.get('severity') == 'FAIL']
     return {'status': 'FAIL' if fails else 'PASS', 'page_id': page_id, 'pdf': str(pdf),
             'png': str(png) if png.exists() else None, 'issues': issues,
+            'spatial': spatial,
+            **({'png_whitespace': png_whitespace} if png_whitespace else {}),
             'evidence': evidence}
 
 

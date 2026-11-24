@@ -13,6 +13,7 @@ def qa_summary(qa, out):
             'layout_feedback': str(out/'layout_feedback.json'),
             **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
             **({'explain_viz': qa['explain_viz']} if 'explain_viz' in qa else {}),
+            **({'rendered_pngs': qa['rendered_pngs']} if qa.get('rendered_pngs') else {}),
             'design_notices': [
                 {'rule': item['rule'], 'slide': item['slide'], 'message': item['message']}
                 for item in qa['items']
@@ -30,6 +31,8 @@ def main():
     parser = argparse.ArgumentParser(description='Total-pipe Deck Compiler v3')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('capabilities', help='Print supported region-tree and backend contracts')
+    p = commands.add_parser('discover-fonts', help='List discovered system font families and default faces')
+    p.add_argument('--json', action='store_true', help='Machine-readable JSON output')
     p = commands.add_parser('listify', help='Merge a page of prose blocks into one native list')
     p.add_argument('--ir', required=True, type=Path)
     p.add_argument('--out', required=True, type=Path, help='Output Deck IR (write beside its source)')
@@ -89,6 +92,8 @@ def main():
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
+            p.add_argument('--render-png', action='store_true',
+                           help='Export each page of native.pdf to high-res PNG previews under <out>/slides_png/')
             p.add_argument('--require-visuals', action='store_const', const=True, default=None,
                            help='Strictly require a visual or standalone equation on each page')
     p = commands.add_parser('review-officecli')
@@ -236,6 +241,22 @@ def main():
                               'dropped': sorted(set(dropped)), 'output': str(out_path)},
                              ensure_ascii=False))
             return 0
+        if args.command == 'discover-fonts':
+            from .fonts import discover_fonts, font_search_dirs, get_default_font
+            fonts = discover_fonts()
+            default_regular, default_bold = get_default_font()
+            payload = {
+                'fonts': fonts,
+                'default': {'regular': default_regular, 'bold': default_bold},
+                'search_directories': [str(d) for d in font_search_dirs()],
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                for family, variants in sorted(fonts.items()):
+                    print(f'{family}: {variants}')
+                print(f'Default: regular={default_regular}, bold={default_bold}')
+            return 0
         if args.command == 'capabilities':
             from .layout_tree import capabilities
             from .explain_viz.specs import capabilities as explain_capabilities
@@ -338,7 +359,8 @@ def main():
             qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
                        require_visual_design=not args.skip_visual_design,
                        explain_viz_request=args.explain_viz_request,
-                       explain_viz_mode=args.explain_viz_mode, require_visuals=args.require_visuals)
+                       explain_viz_mode=args.explain_viz_mode, require_visuals=args.require_visuals,
+                       render_png=args.render_png)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:

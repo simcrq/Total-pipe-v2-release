@@ -1,10 +1,81 @@
 """Isolated, page-cached rendering for IR authoring, never candidate/native evidence."""
 import copy
 from pathlib import Path
+import re
 import tempfile
 
 from . import COMPONENT
 from .state import confined, digest, read, sha, write
+
+_CJK_SINGLE_RE = re.compile(r'^[\u3400-\u9fff\uf900-\ufaff][，。、；：？！）】》」』”’,.!?;:)]*$')
+
+
+def _box_overlap(a, b, pad=1.0):
+    return not (a[0] + a[2] + pad <= b[0] or b[0] + b[2] + pad <= a[0]
+                or a[1] + a[3] + pad <= b[1] or b[1] + b[3] + pad <= a[1])
+
+
+def build_visual_checklist(slide_layout, issues, capacity_metrics, pixel_ws=None):
+    """Structured geometric + pixel visual checklist returned on every IR preview."""
+    elements = (slide_layout or {}).get('elements') or []
+    orphan_ids = []
+    max_bottom = 0.0
+    for elem in elements:
+        bbox = elem.get('bbox') or [0, 0, 0, 0]
+        if elem.get('role') not in ('background', 'footer', 'page_number') and not str(elem.get('id', '')).startswith('page:'):
+            max_bottom = max(max_bottom, float(bbox[1]) + float(bbox[3]))
+        if elem.get('kind') == 'text':
+            lines = [ln.strip() for ln in str(elem.get('text') or '').split('\n') if ln.strip()]
+            if len(lines) >= 2 and _CJK_SINGLE_RE.fullmatch(lines[-1]):
+                orphan_ids.append(elem.get('id'))
+        elif elem.get('kind') == 'list':
+            for item_lines in elem.get('items') or []:
+                clean = [ln.strip() for ln in item_lines if ln.strip()]
+                if len(clean) >= 2 and _CJK_SINGLE_RE.fullmatch(clean[-1]):
+                    orphan_ids.append(elem.get('id'))
+                    break
+    chart_conflicts = [
+        item.get('shape') or item.get('rule')
+        for item in (issues or [])
+        if item.get('severity') == 'FAIL'
+        and ('chart:' in str(item.get('shape', '')) or 'chart:' in str(item.get('message', '')))
+    ]
+    # Perform real geometric overlap audit between chart annotations/ref-labels and bars/reference lines.
+    chart_labels = [e for e in elements if e.get('kind') == 'text'
+                    and (':annotation:' in str(e.get('id', '')) or ':ref-label:' in str(e.get('id', '')))]
+    chart_marks = [e for e in elements if e.get('kind') == 'shape'
+                   and any(tag in str(e.get('id', '')) for tag in (':bar:', ':ref:'))]
+    for lbl in chart_labels:
+        cid = lbl.get('graphic_id')
+        for mark in chart_marks:
+            if mark.get('graphic_id') != cid:
+                continue
+            if _box_overlap(lbl['bbox'], mark['bbox'], pad=0.5):
+                chart_conflicts.append(f"{lbl['id']} overlaps {mark['id']}")
+    ws_info = (capacity_metrics or {}).get('whitespace') or {}
+    empty_quads = int(ws_info.get('empty_quadrants', 0)) if isinstance(ws_info, dict) else 0
+    pixel_skew = False
+    if isinstance(pixel_ws, dict):
+        q_ink = pixel_ws.get('quadrant_pixel_ink') or []
+        if len(q_ink) == 4 and sum(1 for v in q_ink if v < 0.008) >= 2 and pixel_ws.get('pixel_ink_ratio', 1.0) > 0.01:
+            pixel_skew = True
+    is_cover = len([e for e in elements if e.get('role') not in ('background', 'title', 'takeaway', 'footer', 'page_number')
+                    and not str(e.get('id', '')).startswith('page:')]) == 0
+    balance_ok = is_cover or (empty_quads <= 1 and not pixel_skew)
+    return {
+        'orphan_line_wraps': {'status': 'REVIEW' if orphan_ids else 'PASS', 'elements': orphan_ids},
+        'chart_annotation_clearance': {'status': 'FAIL' if chart_conflicts else 'PASS', 'conflicts': chart_conflicts},
+        'quadrant_balance': {
+            'status': 'PASS' if balance_ok else 'REVIEW',
+            'empty_quadrants': empty_quads,
+            **({'pixel_ink_ratio': pixel_ws['pixel_ink_ratio'],
+                'quadrant_pixel_ink': pixel_ws['quadrant_pixel_ink']} if isinstance(pixel_ws, dict) else {}),
+        },
+        'footer_clearance': {
+            'status': 'PASS' if max_bottom <= 692.0 else 'REVIEW',
+            'max_content_bottom_px': round(max_bottom, 1),
+        },
+    }
 
 
 SCHEMA = COMPONENT/'agent/schemas/ir-preview.schema.json'
@@ -43,10 +114,17 @@ def authoring_follow_up(job_id, request, result):
     if not all(page.get('png') for page in pages):
         return {'type': 'review_preview_failure',
                 'instruction': 'Read the preview feedback for any page without a rendered PNG.'}
+    flagged = [
+        f"{page['slide_id']}:{check_name}"
+        for page in pages
+        for check_name, detail in (page.get('visual_checklist') or {}).items()
+        if isinstance(detail, dict) and detail.get('status') in ('REVIEW', 'FAIL')
+    ]
     return {'type': 'inspect_render',
             'instruction': 'Open the rendered PNGs and follow the approved reading order. Verify the evidence anchor, '
-                           'chart marks, formulas, units and conditions. Check clipping and overlap. Revise and re-preview '
-                           'as needed, then submit the draft through the normal IR acceptance step.'}
+                           'chart marks, formulas, units and conditions. Check clipping, quadrant balance and overlap. '
+                           'Revise and re-preview as needed, then submit the draft through the normal IR acceptance step.',
+            **({'attention_items': flagged} if flagged else {})}
 
 
 def validate_request(request):
@@ -90,8 +168,18 @@ def execute(job, request):
     work = Path(job['request']['out_dir'])/'work'
     path = confined(request['artifact_path'], work)
     source_sha = sha(path)
-    design = a.load_design(work)
-    value = bind_sources(read(path), design, work, path)
+    design_draft_mode = False
+    try:
+        design = a.load_design(work)
+    except a.Failure:
+        # During merged page_design/page_review co-design, allow single-page IR prototyping
+        # and layout/PNG debugging before final source/copy review is signed off.
+        design_draft_mode = True
+        raw_design = work/'page_design.json'
+        design = read(raw_design) if raw_design.is_file() else None
+    if design is None and not (work/'page_design.json').is_file():
+        design_draft_mode = True
+    value = bind_sources(read(path), None if design_draft_mode else design, work, path)
     slides = value.get('slides')
     if not isinstance(slides, list) or not slides or any(not isinstance(s, dict) for s in slides):
         raise ValueError('Preview input must be canonical Deck IR with slides.')
@@ -111,12 +199,17 @@ def execute(job, request):
         if slide['id'] not in selected:
             continue
         sid = slide['id']
-        partial = copy.deepcopy(design)
-        if partial:
+        partial = None
+        if design and not design_draft_mode:
+            partial = copy.deepcopy(design)
             partial['pages'] = [p for p in partial['pages'] if p['id'] == sid]
             partial['_partial'] = True
             if not partial['pages']:
                 raise ValueError(f'Preview slide {sid} is not in the approved page design.')
+        elif design and design_draft_mode:
+            matched = [p for p in (design.get('pages') or []) if isinstance(p, dict) and p.get('id') == sid]
+            if matched and design.get('schema_version') not in ('1.2', '1.3'):
+                partial = {**copy.deepcopy(design), 'pages': matched, '_partial': True}
         page = {**copy.deepcopy(value), 'slides': [copy.deepcopy(slide)]}
         used = {ref.get('asset_id') for ref in slide.get('composition', {}).get('figure_refs', [])}
         page['assets'] = {aid: asset for aid, asset in value.get('assets', {}).items() if aid in used}
@@ -177,6 +270,7 @@ def execute(job, request):
                 diagnostics['units_report'] = str(folder/'units_report.md')
                 outputs += ['units.json', 'units_report.md']
                 outputs += [str(p.relative_to(folder)) for p in sorted((folder/'units').glob('*.png'))]
+            pixel_ws = None
             if render_pptx:
                 officecli.render(folder/'preview-layout.json', folder/'preview.pptx')
                 officecli._run('officecli', 'view', folder/'preview.pptx', 'screenshot',
@@ -184,8 +278,12 @@ def execute(job, request):
                 from PIL import Image
                 with Image.open(folder/'slide.png') as picture:
                     picture.verify()
+                from deck_compiler.whitespace import analyze_rendered_png_whitespace
+                pixel_ws = analyze_rendered_png_whitespace(folder/'slide.png')
+                diagnostics['pixel_whitespace'] = pixel_ws
                 png = str(folder/'slide.png')
                 outputs += ['preview.pptx', 'slide.png']
+            diagnostics['visual_checklist'] = build_visual_checklist(target[0], issues, metrics, pixel_ws)
         after = resource_snapshot(folder/'input.json')
         after.pop(str(folder/'input.json'), None)
         after = {key: hashed for key, hashed in after.items() if hashed is not None}
@@ -207,6 +305,7 @@ def execute(job, request):
         raise ValueError('Preview source changed during rendering; retry.')
     return {'status': 'FAIL' if any(p['status'] == 'FAIL' for p in pages) else 'PASS',
             'source_sha256': source_sha, 'renderer': renderer, 'pages': pages,
+            'design_draft_mode': design_draft_mode,
             'job_unchanged': True, 'candidate_unchanged': True, 'powerpoint_ui_review': False,
             'note': 'Inspect the skeleton and unit diagnostics when planning, then open the actual rendered PNG. HTML previews can differ from PowerPoint '
                     'in fonts, equations and shapes; isolated page numbers restart and generated agenda pages are omitted. '

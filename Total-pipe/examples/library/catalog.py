@@ -23,6 +23,8 @@ def main():
     build = sub.add_parser('build', help='Build one editable sample using the standard compiler')
     build.add_argument('id')
     build.add_argument('--out', required=True, type=Path)
+    build.add_argument('--render-png', action='store_true',
+                       help='Run PowerPoint native export and render high-res PNG slide previews')
     args = parser.parse_args()
     entries = inventory()
     if args.action == 'search':
@@ -41,8 +43,12 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     source = output/f'{entry["id"]}.deck_ir.json'
     source.write_text(encoded, encoding='utf-8')
-    return subprocess.run([sys.executable, '-m', 'deck_compiler', 'build', '--ir', str(source),
-                           '--out', str(output), '--skip-native'], cwd=COMPONENT).returncode
+    cmd = [sys.executable, '-m', 'deck_compiler', 'build', '--ir', str(source), '--out', str(output)]
+    if args.render_png:
+        cmd.append('--render-png')
+    else:
+        cmd.append('--skip-native')
+    return subprocess.run(cmd, cwd=COMPONENT).returncode
 
 
 if __name__ == '__main__':

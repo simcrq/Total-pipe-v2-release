@@ -307,17 +307,26 @@ def tool_literature_workflow(args: dict[str, Any]) -> dict[str, Any]:
 
     if suffix == ".md":
         markdown_path = source_path
-        ingestion = None
+        ingestion = args.get("ingestion") if isinstance(args.get("ingestion"), dict) else None
     elif suffix == ".pdf":
-        if missing_ocr_deps():
-            return blocked_ocr("OCR for a PDF source")
-        conversion = _ocr_to_markdown(source_path)
-        markdown_path = Path(conversion["markdown_path"])
-        ingestion = {
-            "mode": _mineru_mode(),
-            "engine": "mineru",
-            **{key: value for key, value in conversion.items() if key != "content"},
-        }
+        pre_ocr_md = args.get("ocr_markdown_path")
+        if pre_ocr_md:
+            markdown_path = resolve_source(pre_ocr_md, suffix=".md")
+            ingestion = (
+                args.get("ingestion")
+                if isinstance(args.get("ingestion"), dict)
+                else {"mode": "direct_cli", "engine": "mineru-open-api"}
+            )
+        else:
+            if missing_ocr_deps():
+                return blocked_ocr("OCR for a PDF source")
+            conversion = _ocr_to_markdown(source_path)
+            markdown_path = Path(conversion["markdown_path"])
+            ingestion = {
+                "mode": _mineru_mode(),
+                "engine": "mineru",
+                **{key: value for key, value in conversion.items() if key != "content"},
+            }
     else:
         raise ValueError("source_path must be .pdf or .md")
 

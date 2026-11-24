@@ -327,11 +327,17 @@ def resolve_theme_fonts(theme, base_dir=None, text_sample=''):
             _, name, candidate, missing = best
             declared_missing = declared_gap
             if len(missing) < len(declared_missing):
-                notes.append({'rule': 'FONT_SUBSTITUTED', 'severity': 'REVIEW',
+                cjk_switch = (
+                    regular is not None
+                    and len(missing) == 0
+                    and any('\u3400' <= ch <= '\u9fff' for ch in declared_missing)
+                    and name in FALLBACK_FAMILIES
+                )
+                notes.append({'rule': 'FONT_SUBSTITUTED', 'severity': 'INFO' if cjk_switch else 'REVIEW',
                               'message': f"theme font {Path(regular).name if regular else theme.get('font_file')!r} "
                                          f"cannot draw {len(declared_missing)} character(s) of this deck; "
                                          f"used {name} instead ({len(missing)} still unsupported)",
-                              'detail': {'reason': 'glyph_coverage',
+                              'detail': {'reason': 'cjk_auto_fallback' if cjk_switch else 'glyph_coverage',
                                          'declared': theme.get('font_file'),
                                          'used_regular': candidate['regular'],
                                          'used_bold': candidate.get('bold', candidate['regular']),

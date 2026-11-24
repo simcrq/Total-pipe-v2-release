@@ -19,6 +19,7 @@ TABLE = read(Path(__file__).with_name('stages.json'))
 STAGES = TABLE['stages']
 BY_ARTIFACT = {s['artifact']: s for s in STAGES if 'artifact' in s}
 NAMES = [s['id'] for s in STAGES]
+MAX_REPAIR_ATTEMPTS = 5
 
 
 def design_complete(job):
@@ -151,6 +152,30 @@ def envelope(job, stage, failure=None, detail='summary', upstream=None):
                            'input_path': str(prompt) if prompt else None,
                            'schema_path': read(prompt).get('schema_path', str(COMPONENT/'schemas/page-design.schema.json')) if prompt and prompt.is_file() else str(COMPONENT/'schemas/page-design.schema.json'),
                            'instructions_path': str(task) if task.is_file() else str(prompt)})
+            if job['request'].get('page_mode', 'deck_ir') == 'deck_ir':
+                from .ir_pages import MAX_IR_SUBAGENTS
+                action['co_design'] = {
+                    'enabled': True,
+                    'merged_with': 'deck_ir',
+                    'live_preview_enabled': True,
+                    'draft_pages_dir': str(work/'pages'),
+                    'deck_ir_schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
+                    'syntax_reference_path': str(COMPONENT/'docs/deck-ir-syntax-reference.md'),
+                    'ir_prompt_path': str(work/'ir_prompt.json'),
+                    'max_ir_subagents': MAX_IR_SUBAGENTS,
+                    'note': 'You may author and live-debug single-page Deck IR drafts in work/pages/<id>.json '
+                            'using advance(preview=...) while designing; read syntax_reference_path instead of '
+                            'browsing compiler source code, while still consulting example_lookup. Pre-debugged drafts carry directly into deck_ir.',
+                }
+        if sid == 'queries' and (work/'ocr_result.json').is_file():
+            try:
+                ocr = read(work/'ocr_result.json')
+                if ocr.get('markdown_path'):
+                    action['ocr_markdown_path'] = ocr['markdown_path']
+                    action['ocr_result_path'] = str(work/'ocr_result.json')
+                    action['outline'] = (ocr.get('outline') or [])[:40]
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
         if sid == 'page_review':
             from .content_review import SCHEMA
             action.update({'schema_path': str(SCHEMA), 'instructions_path': str(work/'page_design_review_task.md'),
@@ -164,6 +189,7 @@ def envelope(job, stage, failure=None, detail='summary', upstream=None):
         if sid == 'story' and prompt and prompt.is_file() and read(prompt).get('schema_path'):
             action['schema_path'] = read(prompt)['schema_path']
         if sid == 'deck_ir':
+            action['syntax_reference_path'] = str(COMPONENT/'docs/deck-ir-syntax-reference.md')
             from .ir_pages import descriptor
             paging = descriptor(job, upstream if upstream is not None else current(job)[1])
             if paging:
@@ -223,16 +249,35 @@ def envelope(job, stage, failure=None, detail='summary', upstream=None):
                  for name, record in job['checkpoints'].items() for path, hashed in record['files'].items()]
     repair_info = None
     native_info = None
-    if not topic and sid in ('deck_ir', 'build', 'candidate_ready'):
+    if job['request'].get('page_mode', 'deck_ir') == 'deck_ir' and sid in ('deck_ir', 'build', 'candidate_ready'):
         try:
             from .repair import descriptor
             repair_info = descriptor(out)
         except (OSError, ValueError, KeyError, TypeError):
             pass  # Invalid/incomplete IR still has its ordinary full-authoring action.
     preview_info = None
-    if not topic and sid in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
+    if (job['request'].get('page_mode', 'deck_ir') == 'deck_ir'
+            and sid in ('page_design', 'page_review', 'deck_ir', 'design', 'visual_design', 'build', 'candidate_ready')):
         from .ir_preview import descriptor
         preview_info = descriptor()
+    evidence_info = None
+    if not topic and sid in ('story', 'scientific_review', 'page_design', 'page_review') and (work/'evidence_pointer.json').is_file():
+        evidence_info = {
+            'tool': 'totalpipe_advance',
+            'argument': 'evidence_query',
+            'schema_path': str(Path(__file__).parent/'schemas/evidence-query.schema.json'),
+            'operations': ['search', 'outline', 'read_lines'],
+            'note': 'Query evidence_registry (exact EV IDs), full source Markdown, and paired SI without mutating job state.',
+        }
+    figure_crop_info = None
+    if not topic and sid in ('page_design', 'page_review', 'deck_ir', 'page_scene') and (work/'evidence_pointer.json').is_file():
+        figure_crop_info = {
+            'tool': 'totalpipe_advance',
+            'argument': 'figure_crop',
+            'schema_path': str(Path(__file__).parent/'schemas/figure-crop.schema.json'),
+            'operations': ['inspect', 'crop'],
+            'note': 'Inspect multi-panel figures with a 100px coordinate ruler or extract lossless crops certified by crops.verified_source().',
+        }
     if kind == 'terminal':
         try:
             from .native_acceptance import descriptor
@@ -245,6 +290,8 @@ def envelope(job, stage, failure=None, detail='summary', upstream=None):
             'events_path': str(out/'logs/events.jsonl'),
             **({'repair': repair_info} if repair_info else {}),
             **({'ir_preview': preview_info} if preview_info else {}),
+            **({'evidence_lookup': evidence_info} if evidence_info else {}),
+            **({'figure_crop_tool': figure_crop_info} if figure_crop_info else {}),
             **({'last_repair': job['last_repair']} if job.get('last_repair') else {}),
             **({'native': native_info} if native_info else {}),
             **({'last_native': job['last_native']} if job.get('last_native') else {}),
@@ -335,7 +382,11 @@ def start(source, out_dir, language=None, presentation_type=None, source_kind='a
                                 invalidate(job, 'queries')
                                 write(query_path, queries)
                                 stage, upstream = current(job)
-                                checkpoint(job, 'queries', [query_path], upstream)
+                                if stage['id'] == 'queries':
+                                    checkpoint(job, 'queries', [query_path], upstream)
+                                else:
+                                    job['pending_queries'] = True
+                                    save(job)
                     except a.Failure:
                         raise
                     except (ValueError, KeyError, TypeError):
@@ -351,7 +402,11 @@ def start(source, out_dir, language=None, presentation_type=None, source_kind='a
                         a.check_queries(queries)
                         write(out/'work/queries.json', queries)
                         stage, upstream = current(job)
-                        checkpoint(job, stage['id'], [out/'work/queries.json'], upstream)
+                        if stage['id'] == 'queries':
+                            checkpoint(job, 'queries', [out/'work/queries.json'], upstream)
+                        else:
+                            job['pending_queries'] = True
+                            save(job)
                     if source_kind == 'deck_ir':
                         write(out/'work/ir_prompt.json', {**a.ir_prompt({}, {}, {}, {}, supplement),
                             'imported_deck_ir': read(source), 'source_base': str(source.parent),
@@ -490,7 +545,7 @@ def _accept(job, stage, upstream, kind, path):
         # Scene binding expands recipes and supplies bindings, provenance and
         # absolute image paths even when the author used expected_output.
         write(destination, value)
-    if (kind == 'page_design' and job['request']['source_kind'] != 'topic'
+    if (kind == 'page_design' and job['request'].get('page_mode', 'deck_ir') == 'deck_ir'
             and value.get('schema_version') not in ('1.2', '1.3')):
         # The design is approved; the IR stage must now realize it instead of re-deciding it.
         a.finalize_design(work, value)
@@ -525,14 +580,14 @@ def _repair_rejection(job, stage, failure, result):
         'instructions_path': str(full_instructions if limited else SCHEMA),
         'instructions_ref': 'ir' if limited else 'deck_ir_patch', 'target_stage': 'deck_ir',
         'feedback_path': result['feedback_path'],
-        'constraints': ['Preserve scientific content, provenance and font/figure floors.'], 'max_attempts': 3}
+        'constraints': ['Preserve scientific content, provenance and font/figure floors.'], 'max_attempts': MAX_REPAIR_ATTEMPTS}
     if dependency:
         action['remedy'] = a.redact(str(failure))+' Restore dependencies/permissions, then retry the same patch.'
     if failure.code == 'PATCH_STAGE_MISMATCH':
         action = response['next_action']
     response.update(status='blocked', blocking=True, repair_result=result,
         issues=[{'code': failure.code, 'severity': 'FAIL', 'message': a.redact(str(failure)), 'path': result['feedback_path']}],
-        next_action=action, retry={'safe': dependency, 'max': 3})
+        next_action=action, retry={'safe': dependency, 'max': MAX_REPAIR_ATTEMPTS})
     return response
 
 
@@ -570,8 +625,8 @@ def _repair(job, stage, path):
             emit(out, 'repair_replayed', job_id=job['job_id'], stage=stage['id'], status='failure', code=failure.code)
             return _repair_rejection(job, stage, failure, result), None
         attempts = job.get('repair_attempts', {}).get(patch['base_resources_sha256'], [])
-        if len(attempts) >= 3:
-            raise a.Failure('PATCH_LIMIT_REACHED', 'Three distinct repairs were rejected for this base. '
+        if len(attempts) >= MAX_REPAIR_ATTEMPTS:
+            raise a.Failure('PATCH_LIMIT_REACHED', f'{MAX_REPAIR_ATTEMPTS} distinct repairs were rejected for this base. '
                             'Use full IR replan or manual review.', 'replan', 'deck_ir')
         try:
             prepared = repair.preflight(job, patch, path)
@@ -698,11 +753,19 @@ def _preflight_ir(job, stage, artifact_path):
     work = Path(job['request']['out_dir'])/'work'
     path = confined(artifact_path, work)
     before, artifact_sha = a.resources(path), sha(path)
-    design = a.load_design(work)
+    design_draft_mode = False
+    try:
+        design = a.load_design(work)
+    except a.Failure:
+        design = None
+        design_draft_mode = True
+    if design is None and stage['id'] in ('page_design', 'page_review'):
+        design_draft_mode = True
     from .ir_pages import bind_sources
     value, _ = a.apply_art_direction(bind_sources(read(path), design, work, path), design)
     issues = a.ir_issues(value, read(work/'normalized_content.json') if (work/'normalized_content.json').is_file() else None,
-                         job['request'].get('supplement', 'off'), design, job['request'].get('slide_count'))
+                         job['request'].get('supplement', 'off'), design,
+                         None if design_draft_mode else job['request'].get('slide_count'))
     geometry = False
     try:
         with tempfile.TemporaryDirectory(prefix='totalpipe-ir-preflight-') as temporary:
@@ -734,6 +797,7 @@ def _preflight_ir(job, stage, artifact_path):
     response = envelope(job, stage, failure)
     response['preflight_result'] = {'status': 'FAIL' if counts['FAIL'] else 'PASS',
         'artifact_sha256': artifact_sha, 'resources_sha256': digest(before), 'issues': issues, 'counts': counts, 'geometry_checked': geometry,
+        'design_draft_mode': design_draft_mode,
         'job_unchanged': True, 'candidate_unchanged': True,
         'note': 'Preflight does not accept the artifact, consume revisions or replace final build/native QA.'}
     return response
@@ -751,9 +815,100 @@ def _preview_ir(job, stage, request):
         response['preview_result'] = {'status': 'FAIL', 'message': a.redact(str(error)),
                                       'job_unchanged': True, 'candidate_unchanged': True,
                                       'powerpoint_ui_review': False}
-    if stage['id'] == 'deck_ir':
+    if stage['id'] in ('page_design', 'page_review', 'deck_ir'):
         response['next_action']['preview_follow_up'] = authoring_follow_up(
             job['job_id'], request, response['preview_result'])
+    return response
+
+
+def _evidence_query(job, stage, request):
+    """Read-only evidence retrieval across registry, source Markdown, and paired SI."""
+    from .evidence_search import document_outline, read_source_lines, search_evidence
+
+    work = Path(job['request']['out_dir'])/'work'
+    pointer = work/'evidence_pointer.json'
+    if not pointer.is_file():
+        raise ValueError('Evidence retrieval requires a completed evidence stage.')
+    workflow = read(pointer)['workflow']
+    if not isinstance(request, dict):
+        raise ValueError('evidence_query must be an object.')
+    op = request.get('operation', 'search')
+    old = job.get('last_error')
+    failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+    response = envelope(job, stage, failure)
+    try:
+        if op == 'outline':
+            result = document_outline(workflow)
+        elif op == 'read_lines':
+            result = read_source_lines(workflow, int(request['start']), int(request['end']), file_path=request.get('file'))
+        elif op == 'search':
+            result = search_evidence(
+                workflow,
+                request.get('query', ''),
+                top_k=int(request.get('top_k', 8)),
+                scope=request.get('scope', 'all'),
+                modality=request.get('modality'),
+                section=request.get('section'),
+                extra_supplementary=job['request'].get('supplementary_paths') or [],
+            )
+        else:
+            raise ValueError('evidence_query.operation must be search, outline, or read_lines.')
+        response['evidence_result'] = {**result, 'status': 'PASS', 'job_unchanged': True}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        response['evidence_result'] = {'status': 'FAIL', 'message': a.redact(str(error)), 'job_unchanged': True}
+    return response
+
+
+def _figure_crop(job, stage, request):
+    """Lossless multi-panel figure inspection and cropping without mutating job checkpoints."""
+    from .figure_crop import crop_figure, inspect_figure
+    from .ir_pages import _inventory
+
+    out = Path(job['request']['out_dir'])
+    work = out/'work'
+    if not isinstance(request, dict) or request.get('operation') not in ('inspect', 'crop') or not isinstance(request.get('source'), str):
+        raise ValueError('figure_crop requires operation ("inspect" or "crop") and source.')
+    inventory = _inventory(work)
+    raw_source = request['source'].strip()
+    if raw_source in inventory:
+        src_path = Path(inventory[raw_source]).resolve()
+    else:
+        allowed_roots = [out.resolve()]
+        pointer = work/'evidence_pointer.json'
+        if pointer.is_file():
+            allowed_roots.append(Path(read(pointer)['workflow']).resolve().parent)
+        candidate = Path(raw_source)
+        resolved = None
+        for root in allowed_roots:
+            probe = candidate if candidate.is_absolute() else root/candidate
+            try:
+                checked = confined(probe, root)
+            except ValueError:
+                continue
+            if checked.is_file():
+                resolved = checked
+                break
+        if resolved is None:
+            raise ValueError(f'figure_crop source not found inside job/workflow workspace: {raw_source}')
+        src_path = resolved
+    old = job.get('last_error')
+    failure = a.Failure(old['code'], old['message'], old['action'], old.get('target'), old.get('log')) if old else None
+    response = envelope(job, stage, failure)
+    crops_dir = work/'crops'
+    try:
+        if request['operation'] == 'inspect':
+            result = inspect_figure(src_path, crops_dir)
+        else:
+            result = crop_figure(
+                src_path,
+                request.get('box'),
+                crops_dir,
+                output_name=request.get('output_name'),
+                source_figure=request.get('source_figure'),
+            )
+        response['figure_crop_result'] = {**result, 'status': 'PASS', 'job_unchanged': True}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        response['figure_crop_result'] = {'status': 'FAIL', 'message': a.redact(str(error)), 'job_unchanged': True}
     return response
 
 
@@ -790,13 +945,25 @@ def _scene_preview(job, stage, request):
 
 
 def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_from=None, acknowledge=None,
-            native=None, preflight=False, preview=None, scene_preview=None):
+            native=None, preflight=False, preview=None, scene_preview=None, evidence_query=None, figure_crop=None):
     try:
         out, _ = locate(job_id)
         with locked(out):
             _, job = locate(job_id)
             stage, upstream = current(job)
             topic = job['request']['source_kind'] == 'topic'
+            if figure_crop is not None:
+                if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from,
+                                                            acknowledge, native, preview, scene_preview, evidence_query)):
+                    raise ValueError('Submit figure_crop alone; it inspects or crops figures without changing job state.')
+                return _figure_crop(job, stage, figure_crop)
+            if evidence_query is not None:
+                if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from,
+                                                            acknowledge, native, preview, scene_preview)):
+                    raise ValueError('Submit evidence_query alone; it is a read-only search without changing job state.')
+                if topic:
+                    raise ValueError('evidence_query is available for paper/workflow jobs after the evidence stage.')
+                return _evidence_query(job, stage, evidence_query)
             if scene_preview is not None:
                 if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from,
                                                             acknowledge, native, preview)):
@@ -804,20 +971,22 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 if stage['id'] != 'page_scene':
                     raise ValueError('scene_preview is available at the page_scene stage.')
                 return _scene_preview(job, stage, scene_preview)
-            if topic and (preview is not None or artifact_kind == 'deck_ir_patch'):
-                raise ValueError('Topic jobs use PageScene. Use scene_preview for drafts or replan_from=page_scene to revise.')
+            if topic and job['request'].get('page_mode', 'page_scene') == 'page_scene' and (preview is not None or artifact_kind == 'deck_ir_patch'):
+                raise ValueError('Topic jobs in page_scene mode use scene_preview for drafts or replan_from=page_scene to revise.')
             if preview is not None:
                 if preflight or any(v is not None for v in (artifact_kind, artifact_path, inputs, replan_from, acknowledge, native)):
                     raise ValueError('Submit preview alone; it renders a draft without accepting or advancing it.')
-                if stage['id'] not in ('deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
-                    raise ValueError('IR preview requires the deck_ir stage or later.')
+                if stage['id'] not in ('page_design', 'page_review', 'deck_ir', 'design', 'visual_design', 'build', 'candidate_ready'):
+                    raise ValueError('IR preview requires the page_design stage or later.')
                 return _preview_ir(job, stage, preview)
             if preflight:
                 if artifact_kind not in ('deck_ir', 'deck_ir_page') or not artifact_path or any(v is not None for v in (inputs, replan_from, acknowledge, native)):
                     raise ValueError('preflight=true requires only a deck_ir/deck_ir_page artifact and artifact_path.')
-                if stage['id'] != 'deck_ir':
-                    raise ValueError('IR preflight is available at the deck_ir stage.')
+                if stage['id'] not in ('page_design', 'page_review', 'deck_ir'):
+                    raise ValueError('IR preflight is available at the page_design, page_review, or deck_ir stage.')
                 if artifact_kind == 'deck_ir_page':
+                    if stage['id'] != 'deck_ir':
+                        return _preflight_ir(job, stage, artifact_path)
                     from .ir_pages import submit
                     result, _ = submit(job, upstream, confined(artifact_path, out/'work'), dry=True)
                     return {**envelope(job, stage), 'page_result': result}
@@ -840,8 +1009,8 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 if replan_from:
                     if replan_from not in NAMES or replan_from in ('intake', 'candidate_ready'):
                         raise ValueError('Invalid replan_from')
-                    if topic and replan_from not in ('page_design', 'page_scene', 'build'):
-                        raise ValueError('Topic jobs can replan from page_design, page_scene or build.')
+                    if topic and replan_from not in ('page_design', 'page_scene', 'deck_ir', 'visual_design', 'build'):
+                        raise ValueError('Topic jobs can replan from page_design, page_scene, deck_ir, visual_design or build.')
                     emit(out, 'replan_requested', job_id=job_id, stage=stage['id'],
                          target_stage=replan_from, status='success')
                     invalidate(job, replan_from)
@@ -895,6 +1064,11 @@ def advance(job_id, artifact_kind=None, artifact_path=None, inputs=None, replan_
                 try:
                     for _ in range(len(STAGES)):
                         stage, upstream = current(job)
+                        if stage['id'] == 'queries' and job.get('pending_queries') and (out/'work/queries.json').is_file():
+                            job.pop('pending_queries', None)
+                            checkpoint(job, 'queries', [out/'work/queries.json'], upstream)
+                            save(job)
+                            continue
                         if stage['kind'] != 'component':
                             prepare_next(job, stage)
                             result = envelope(job, stage, upstream=upstream)

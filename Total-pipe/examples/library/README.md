@@ -2,7 +2,7 @@
 
 从 `Total-pipe/` 目录执行。先按任务关键词查索引，再打开相关的一份示例。
 
-要从现有演示文稿提炼一批可重建的单页，可从[真实 PPTX 转示例页指南](FROM_PPTX.md)开始。
+要从现有演示文稿提炼一批可重建的单页，可从[真实 PPTX 转示例页指南](FROM_PPTX.md)开始；如果输入是**大量手机拍摄的 PPT 照片**，直接使用自动化批量入库 Skill：[total-pipe-photo-to-library](../../skills/total-pipe-photo-to-library/SKILL.md)。
 
 ```bash
 python examples/library/catalog.py search "独立正文块 圆角标题 编号" --limit 2
@@ -71,5 +71,5 @@ python examples/library/catalog.py build rc-discharge-composite --out /tmp/total
 ## 添加示例
 
 1. 在此目录添加一个 Python 文件，提供无参数的 `make_deck()`，返回完整 canonical Deck IR。需要的资源相对脚本定位。
-2. 在 [index.json](index.json) 添加唯一 `id`、`title`、中英关键词 `tags`、短 `summary` 和脚本文件名 `script`。
+2. 在 [index.json](index.json) 添加唯一 `id`、`title`、中英关键词 `tags`、短 `summary` 和脚本文件名 `script`（或直接运行 `Total-pipe/skills/total-pipe-photo-to-library/scripts/register_example.py register` 完成隐私检查、编译验收、防锁定查询劫持校验并原子入库）。
 3. 验证检索能命中。用 `show` 检查生成的 IR，用 `build` 检查候选。测试会检查所有新索引项的 Schema 和编译结果。

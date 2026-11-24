@@ -8,7 +8,7 @@
   "required": ["id", "kind", "basis", "x", "y", "series"],
   "properties": {
     "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
-    "kind": {"enum": ["line", "bar", "scatter"]},
+    "kind": {"enum": ["line", "bar", "hbar", "scatter"]},
     "basis": {"enum": ["evidence", "explain"],
               "description": "evidence: every plotted value must occur in the cited evidence. explain: a schematic the page adds; requires illustrative=true and renders a visible badge."},
     "illustrative": {"type": "boolean", "default": false},
@@ -20,7 +20,12 @@
         "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
         "scale": {"enum": ["linear", "log"], "default": "linear"},
         "values": {"type": "array", "minItems": 2, "maxItems": 24,
-                   "items": {"type": "number"}}
+                   "items": {"type": "number"}},
+        "categories": {"type": "array", "minItems": 2, "maxItems": 24,
+                       "items": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"},
+                       "description": "Named bar/hbar categories (e.g. method or material names) in place of numeric x.values."},
+        "min": {"type": "number", "description": "Optional explicit lower bound for numeric axis."},
+        "max": {"type": "number", "description": "Optional explicit upper bound for numeric axis."}
       }
     },
     "y": {
@@ -30,7 +35,9 @@
       "properties": {
         "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
         "scale": {"enum": ["linear", "log"], "default": "linear"},
-        "unit": {"type": "string", "maxLength": 24}
+        "unit": {"type": "string", "maxLength": 24},
+        "min": {"type": "number", "description": "Optional explicit lower bound for y/value axis."},
+        "max": {"type": "number", "description": "Optional explicit upper bound for y/value axis."}
       }
     },
     "series": {
@@ -48,7 +55,7 @@
                        "description": "Scatter only: one x per point; line/bar share chart.x.values."},
           "y_error": {"type": "array", "minItems": 2, "maxItems": 24,
                       "items": {"type": "number", "minimum": 0},
-                      "description": "Symmetric vertical error bar per point."},
+                      "description": "Symmetric error bar per point."},
           "evidence_refs": {"type": "array", "uniqueItems": true,
                             "items": {"type": "string", "minLength": 1, "pattern": "\\S"}}
         }
@@ -68,12 +75,40 @@
         }
       }
     },
+    "reference_lines": {
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["axis", "value"],
+        "properties": {
+          "axis": {"enum": ["x", "y"]},
+          "value": {"type": "number"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+          "style": {"enum": ["dashed", "solid"], "default": "dashed"}
+        }
+      }
+    },
+    "shaded_zones": {
+      "type": "array", "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["axis", "low", "high"],
+        "properties": {
+          "axis": {"enum": ["x", "y"]},
+          "low": {"type": "number"},
+          "high": {"type": "number"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"}
+        }
+      }
+    },
     "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
     "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
   },
   "allOf": [
-    {"if": {"properties": {"kind": {"enum": ["line", "bar"]}}},
+    {"if": {"properties": {"kind": {"const": "line"}}},
      "then": {"properties": {"x": {"required": ["values"]}}}},
+    {"if": {"properties": {"kind": {"enum": ["bar", "hbar"]}}},
+     "then": {"properties": {"x": {"anyOf": [{"required": ["values"]}, {"required": ["categories"]}]}}}},
     {"if": {"properties": {"basis": {"const": "explain"}}},
      "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
     {"if": {"properties": {"basis": {"const": "evidence"}}},

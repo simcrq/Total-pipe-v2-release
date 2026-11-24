@@ -302,7 +302,7 @@ def compile_input(ir_path, out, layout_options=None, enable_overflow_repair=True
 
 def build(ir_path, out, native_render=True, officecli_executable='officecli', layout_options=None,
           require_visual_design=True, explain_viz_request=None, explain_viz_mode=None,
-          require_visuals=None):
+          require_visuals=None, render_png=False):
     started = time.monotonic()
     with locked(out):
         # Last final remains a previous successful artifact, explicitly identified in state.
@@ -343,11 +343,16 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
             write_json(out/'officecli_issues.json', officecli_report)
             items += officecli.qa_findings(officecli_report['issues'])
             structural_complete = True
+            rendered_pngs = []
             if native_render and not any(i['severity']=='FAIL' for i in items):
                 native_evidence, native_items = native.render(out/'staging.pptx', out/'native.pdf')
                 items += native_items
                 if native_evidence:
                     items += native.inspect_pdf(out/'native.pdf', layout)
+                    if render_png:
+                        rendered_pngs = [str(p) for p in native.render_pdf_to_pngs(out/'native.pdf', out/'slides_png')]
+                        if rendered_pngs:
+                            native_evidence['rendered_pngs'] = rendered_pngs
                     write_json(out/'native.json', native_evidence)
             elif not native_render:
                 items.append(issue('NATIVE_RENDER_SKIPPED', 'REVIEW', 'Golden validation has not run',
@@ -364,6 +369,8 @@ def build(ir_path, out, native_render=True, officecli_executable='officecli', la
                     'officecli_commands_sha256': command_sha256})
         if explain_summary is not None:
             qa['explain_viz'] = explain_summary
+        if rendered_pngs:
+            qa['rendered_pngs'] = rendered_pngs
         write_qa(out, qa, ir, layout)
         write_json(out/'layout_feedback.json', make_feedback(ir, layout, items))
         write_json(out/'state.json', {'phase': 'failed' if qa['counts']['FAIL'] else 'awaiting_validation',

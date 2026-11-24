@@ -10,7 +10,7 @@
 | 浏览项目、看成品或开始使用 | [仓库首页](../README.md)、[快速开始](../QUICKSTART.md) |
 | 了解全流程与阶段产物 | [完整流程与使用说明](../Total-pipe/docs/USAGE.zh-CN.md)、[组件入口](#独立组件) |
 | Agent 端到端生成或修订 | [轻量接入 Skill](../Total-pipe/skills/total-pipe-agent/SKILL.md)、[四工具与恢复](../Total-pipe/docs/agent-adapter.md)；[完整规范](../Total-pipe/skills/total-pipe-deck/SKILL.md) |
-| 从题目或问题生成可编辑 PPTX | [题目入口](../Total-pipe/docs/agent-adapter.md#从题目开始)、[PageScene 实现](../Total-pipe/docs/page-scene.md#题目模式) |
+| 从题目或问题生成可编辑 PPTX | [题目入口](../Total-pipe/docs/agent-adapter.md#从题目开始)、[PageScene 实现](../Total-pipe/docs/page-scene.md#题目模式)、[Deck IR 语法手册](../Total-pipe/docs/deck-ir-syntax-reference.md)（支持 `page_mode=deck_ir`） |
 | Agent 接入层实施与评审 | [修订设计 v2](../Total-pipe/docs/agent-adapter-design.md) |
 | 原子科学记录、两次源审读与观众表达（Story2.0 / 设计1.3） | [内容契约](../Total-pipe/docs/content-projection.md)、[原设计动机](audience-content-contract-design.md) |
 | 旧内容契约1.2实现与回归（新协议见内容契约） | [验证记录](content-projection-validation.md) |
@@ -36,6 +36,7 @@
 
 | 能力 | 文档 |
 | --- | --- |
+| **Deck IR 全设计功能实现与代码语法速查（Agent 免翻源码手册）** | [Deck IR 语法与全功能手册](../Total-pipe/docs/deck-ir-syntax-reference.md)（仍须配合[示例库](../Total-pipe/examples/library/README.md)检索） |
 | 整套 Design、提案和完整术语 | [科研视觉规划](../Total-pipe/docs/scientific-visual-planner.md) |
 | PageScene：显式页面场景、job 接入、绑定门禁与页级原生预览 | [PageScene 集成](../Total-pipe/docs/page-scene.md) |
 | 页面 recipe 最小闭环：无卡片、原生列表、行内公式 | [Page recipes pilot](../Total-pipe/docs/page-recipes.md) |
@@ -81,6 +82,7 @@
 
 - [可检索的 Deck IR 脚本库](../Total-pipe/examples/library/README.md) 含按关键词选择、查看和构建单项示例的命令。
 - [从真实 PPTX 批量提炼示例页](../Total-pipe/examples/library/FROM_PPTX.md)涵盖选页、读图和对象提取、原生重建与入库检查。
+- [从手机拍摄 PPT 照片批量构建示例库 Skill](../Total-pipe/skills/total-pipe-photo-to-library/SKILL.md)提供 EXIF 纠偏、连拍去重联系表、脱敏原生重建及防索引冲突自动注册工具。
 - [复杂混排单页](../Total-pipe/examples/complex-mixed/README.zh-CN.md)：PPTX、Deck IR、参考素材及检查记录。
 - [空白检测与讲解标注三页](../Total-pipe/examples/explain-viz/whitespace-filled/README.md)：填充前后 IR、可编辑 PPTX、PowerPoint 原生预览与审计。
 - [行内公式样例](../Total-pipe/examples/inline-math.deck_ir.json)、[矩阵推导样例](../Total-pipe/examples/matrix-derivation.deck_ir.json)。

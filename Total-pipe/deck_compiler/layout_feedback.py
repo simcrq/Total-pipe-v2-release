@@ -17,7 +17,7 @@ def make_feedback(ir, layout, items):
                 'message': item['message'],
                 **{key: source[key] for key in ('required_size_px', 'available_size_px',
                     'measurement', 'cause', 'suggested_actions', 'underfill_px',
-                    'underfill_ratio', 'suggested_weights') if key in source}})
+                    'underfill_ratio', 'suggested_weights', 'subtree_breakdown') if key in source}})
         has_fail = any(e['severity'] == 'FAIL' for e in errors)
         slides.append({'slide_id': slide.get('id', f'invalid-slide-{number}') if isinstance(slide, dict) else f'invalid-slide-{number}',
             'status': 'layout_failed' if has_fail else 'needs_review' if errors else 'compiled',

@@ -158,7 +158,7 @@ jobs:
                   if raw.startswith(('http://', 'https://', 'mailto:', '#', 'file://')):
                       continue
                   target_part = raw.split('#', 1)[0]
-                  if not target_part or target_part.startswith(('../build/', 'build/')):
+                  if not target_part:
                       continue
                   if not (md.parent / target_part).resolve().exists():
                       broken.append(f'{md} -> {raw}')

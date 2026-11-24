@@ -29,7 +29,9 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | **Story 节点形态 `form`**（`sequence`/`compare`/`branch`/`relation`/`evidence`） | 在 Story 阶段就把“这一步要讲成什么形态”说出来，并写出结构 | 它决定 RPA 的布局类别；不写就退回按问句措辞猜，通常落到纯文字池 |
 | **讲解契约 `explain`**（`quantity`/`parallel_items`/`grouped_panels`/`comparison`/`ordered_steps`/`relation`/`curve`/`image_evidence`） | 把“读者必须看见什么”写成逐条义务，覆盖列表、嵌套、曲线、公式等 `form` 表达不了的结构 | 不选组件；required 缺原生载体是 REVIEW；覆盖账本写 `derived/explanation_coverage.json` |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
-| `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
+| `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×450 px；轻微超限（≤24 px 或 6%）自动触发弹性间距收紧 `ELASTIC_MICRO_FIT`，硬超限在 `layout_feedback.json` 输出逐节点 `subtree_breakdown` |
+| 原生数据图 `charts`（`line`/`bar`/`hbar`/`scatter`） | 实测趋势、横向消融排名、阈值对照 | 支持字符串类别 `x.categories`、参考线 `reference_lines`、区间色带 `shaded_zones`、双行图例与碰撞避障标注 |
+| 原图无损裁切与高亮框 `figure_crop` / `figure_refs.highlights` | 多子图拼版拆解与关键局部框选 | `advance.figure_crop` 生成经 `verified_source` 校验的无损裁图；`highlights` 叠加 `[0..1]` 归一化原生描边与标签 |
 | 原生列表 `native_bullet_list` / `native_numbered_list` | 单段可加图标，独立要点可并列，步骤可编号 | 1–6 条、宽 ≥240 px、与 `inline_math` 分块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
 | 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |
@@ -84,7 +86,9 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 使用当前可用的 Python/Node/OfficeCLI；默认布局提供方是 `packer`，也可用 `compiler` 或
 `module:factory`。旧 `v26` 扩散模型已移除，不再用 `--layout-provider v26`。
 
-## 1. 证据：PaperWorkflow
+## 1. 证据：MinerU CLI 直接 OCR + PaperWorkflow
+
+PDF 输入在进入 `queries` 前先执行独立 `ocr` 阶段，由 `Total-pipe/agent/mineru_cli.py` 直接调用官方 MinerU CLI（`mineru-open-api extract`，按 PDF SHA-256 缓存并自动解析 Windows `.CMD`，无需 `loguru`/`pyyaml` 依赖），将 `ocr_markdown_path` 与章节大纲 `outline` 直接交给 `queries` 阶段；随后 `evidence` 阶段把已 OCR 的 Markdown 传给 PaperWorkflow 构建证据包，不重复 OCR。
 
 先根据论文主题和汇报问题写检索 `queries`。有定制 queries 时省略
 `include_default_queries` 即仅使用定制问题；要混用通用问题才传 `true`。
@@ -105,7 +109,9 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 
 先调用 `pwf2rpa_story_prompt`，原样传 `model`、`reasoning_effort`、
 `selected_by_user=true`；子代理读取输出文件的完整 `instructions/evidence_store/output_shape`。
-未传 `out_path` 时输出在 workflow 旁。CLI 回退：
+未传 `out_path` 时输出在 workflow 旁。`story_prompt.json` 与四工具信封中的 `evidence_lookup` 自带统一证据检索入口：
+Story Planner / `scientific_review` / `page_design` 可随时用 `totalpipe_advance(job_id, evidence_query={mode:"search"|"outline"|"read_lines", ...})`
+或 CLI `evidence_lookup.command_prefix` 检索 `evidence_registry`（返回精确 `EV####`）、完整论文 Markdown（含公式、数值/图号引用、中英科研同义词扩展，并标记未入库段落）与配对补充材料，不改任务状态、不占修订预算。CLI 回退：
 
 ```bash
 python -m pwf2rpa <workflow.json> --make-story-prompt <story_prompt.json> \
@@ -227,11 +233,16 @@ node research-ppt-assistant/server/cli.mjs validate-deck \
 需要重规划，不能自动拆散。总结页保留 summary 类别；不要为通过容量改成错误类别。
 `max_chars` 只是粗筛，`SLOT_WRAP_RISK` 也不能代替实际渲染。
 
-### 3.1 页面设计阶段（page_design）
+### 3.1 页面设计阶段（page_design，支持边设计边单页 IR 实测）
 
 RPA 之后交给独立子代理，完整读取 `page_design_task.md`、`page_design_prompt.json` 和 schema_path。
 Story 是科学记录权威；页面设计负责忠实改写观众文案与视觉讲解，不重做科学论证或改变含义。
-页面设计提示中的 `example_lookup.command_prefix` 可执行 `search "<讲解关系>" --limit 2`。按需打开一份匹配示例，参考构图、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
+页面设计提示中的 `example_lookup` 自带 `recommended` 和完整 `catalog`，先用 `example_lookup.command_prefix` 执行 `search "<讲解关系>" --limit 3` 与 `show <id>` 打开至少 1–2 份匹配示例，参考其多区构图、空间占比（目标覆盖正文带约 45%–75%，避免保守单列大留白）、视觉关系与读图顺序，并用当前论文证据设计文案和图示。
+
+**设计门禁与边设计边调试**：
+- 硬门禁拒绝空泛说明（`DESIGN_TOO_VAGUE`）、标题与结论重复（`DESIGN_TITLE_TAKEAWAY_DUPLICATE`）、正文块超载（`DESIGN_BODY_OVERLOADED`：超过 6 块或非公式正文过长）以及带图页缺少图注/标签读数（`DESIGN_FIGURE_READOUT_MISSING`）；`page_review` 同时附带 `design_audit`（整套视觉多样性与纯文字页风险审计）。
+- **设计 + 单页 IR 实时联调（co-design）**：不必等整套设计写完才发现排不下。在 `page_design` / `page_review` 阶段即可直接把复杂页草稿写到 `work/pages/<id>.json`，调用 `totalpipe_advance(job_id, preview={artifact_path, slide_ids:[id], mode:"layout"|"render"})` 或 `preflight=true` 实测几何、骨架留白与预览 PNG（`design_draft_mode=true`，不改任务状态、不占修订预算）。草稿文件会保留到 `deck_ir` 阶段并在 `page_authoring.pages[].draft_exists` 标记复用。
+- 各阶段修订预算已提高（`queries/story`: 5，`scientific_review/page_review`: 4，`page_design/page_scene/deck_ir`: 6，`visual_design`: 5，单页 IR 失败预算 6，局部修复预算 5）。
 
 让正文块的视觉处理表达真实关系，并在 `design` 中写明对应文案、分组与阅读顺序。
 可用圆角小标题命名一组正文，用箭头符号引导并列要点，用编号或相连的带文字节点表达步骤。
@@ -245,9 +256,10 @@ IR 通过 copy_ref 实现批准文字，程序归档完整记录并绑定 conten
 数据与完整 Schema 见[内容契约](../../docs/content-projection.md)。
 
 若任务显式选择 `page_mode=page_scene`，审读后按 [PageScene](../../docs/page-scene.md) 提交场景。
+先参考 `page_scene_prompt.json` 中的 `page_catalog[].example_suggestions` 与 `example_lookup.catalog`（`show <id>`），避免仅用保守单列或过简 recipe 造成大片留白（正文带目标覆盖率 45%–75%，`PAGE_SCENE_SPARSE_LAYOUT` 会标注最大空白区）。
 包括 recipe 展开结果在内，所有可见文案须逐项匹配本页批准文本；新增标签、图注、公式或图表文字先回退
 设计重审。可直接提交 `work/page_scene.json`；相对图片路径以提交文件目录为基准，工具保存规范化绑定和
-绝对路径，并跟踪图片变化。预览 PNG 后再接受，候选与原生验收按该路径的协议执行。
+绝对路径，并跟踪图片变化。预览 PNG 并核对留白与空间占比后再接受，候选与原生验收按该路径的协议执行。
 
 恢复的 `schema_version=1.1` 每页只必填 `id`、`content_refs`（如 `S2.answer`）与 `design`。
 设计可用自由文本或自定对象，具体说明选哪张原图、画什么元素与关系、怎样排布、讲者如何指着图讲。
@@ -276,13 +288,15 @@ IR 完整接收自定设计说明，从能力中选择实现方式，保留页�
 
 ## 4. Canonical Deck IR：正文、图片、图形和公式
 
+编写单页或整套 Deck IR 前，直接查阅 [Deck IR 全功能实现与代码语法手册](../../docs/deck-ir-syntax-reference.md)（提示包 `syntax_reference_path` 自动指向该文档，**无需翻阅编译器源码**），同时**仍须通过 `example_lookup.command_prefix` 检索并查看示例库**借鉴成熟构图与空间占比。
+
 按 §0 的四问逐页选能力：命中才读下面小节对应的协议；都不命中就保持平面页，并写明为什么不用。
 写 IR 前先决定页面结构：**`composite-research` + `layout_tree` 从一开始就是一等选项**，不要等
 容量失败才想起它。页面有 3 个以上内容对象、原生图与文字同页、或需要 panels/columns 时，直接写树；
 树测量后仍溢出再拆页，不先删内容。
 通过四工具提交 IR 前先用 `advance(preflight=true, artifact_kind="deck_ir", artifact_path=...)` 检查全部
 验收问题和可测量几何；预检不改任务、不占修订次数。按全部 issues 修订，再正式提交；完整 Design 与最终 QA 仍必做。
-若有 page_authoring，逐页读取完整提示包与 Schema，提交 deck_ir_page，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
+若存在 `page_authoring`，按 `page_authoring.parallel_authoring` 分批执行：**IR 阶段最多只允许并发分出 2 个子代理**（`max_subagents = 2`，严格按 `batches` 中的 1–2 个分组切分，禁止一页一个代理）；若某页 `draft_exists=true`，优先复用并按审定文案校准 `work/pages/<id>.json` 中设计阶段已实测的草稿。逐页提交 `deck_ir_page`，只修失败页；程序绑定省略的引用、原文讲稿和素材，测量后缓存通过页，齐全再整套复验。设计阶段明确允许有来源边界的自绘图。
 逐页动作带 `preview_plan` 时，草稿写好后执行 `first_call`，复核骨架和单件报告后，再按
 `next_action.preview_follow_up.next_call` 生成 PNG 并实际查看。其他页可用 `advance(preview={artifact_path,slide_ids})` 按需渲染。
 未变页按内容/资源指纹复用；预览不接受产物、不占修订、不改 candidate/正式 QA。它使用 officecli-html，

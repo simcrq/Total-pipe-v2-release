@@ -126,6 +126,11 @@ def bind_sources(value, design, work, authored_path):
                     block['basis'], block['supplement'] = 'supplement', copy.deepcopy(supplement['supplement'])
         sem = slide.get('semantic')
         if page and isinstance(sem, dict):
+            if (design or {}).get('schema_version') == 'topic-1.0':
+                sem.setdefault('evidence_refs', [])
+                sem.setdefault('caveats', [])
+                if not str(sem.get('speaker_notes') or '').strip() and page.get('notes'):
+                    sem['speaker_notes'] = str(page['notes']).strip()
             items = [*(page.get('items') or []), *(page.get('context_items') or [])]
             if 'evidence_refs' not in sem:
                 sem['evidence_refs'] = list(dict.fromkeys(ref for item in items for ref in item.get('evidence', [])))
@@ -149,12 +154,26 @@ def bind_sources(value, design, work, authored_path):
             if not isinstance(asset, dict): continue
             if isinstance(asset.get('path'), str):
                 asset['path'] = resolve(asset['path'])
+            crop_source = None
+            if isinstance(asset.get('crop'), dict) and asset['crop'].get('source_path'):
+                crop_source = resolve(asset['crop']['source_path'])
+                asset['crop']['source_path'] = crop_source
+                if 'source_sha256' not in asset['crop'] and Path(crop_source).is_file():
+                    asset['crop']['source_sha256'] = sha(crop_source)
             if page and (design or {}).get('schema_version') == '1.3':
                 manifest = page.get('figure_sources', {})
                 meta = manifest.get(aid) or manifest.get(asset.get('path'))
+                if not meta and crop_source:
+                    from deck_compiler.crops import verified_source
+                    verified_src = verified_source(asset, base=Path(authored_path).parent)
+                    meta = manifest.get(verified_src) or manifest.get(crop_source)
                 if not meta:
                     raise ValueError(f'{aid}: no inspected figure identity in the approved design')
                 figure_id = meta['source_figure']
+                declared_sub = figure.get('source_figure') or asset.get('source_figure')
+                if crop_source and isinstance(declared_sub, str) and not figure_id[-1:].isalpha():
+                    if re.fullmatch(re.escape(figure_id) + r'[a-z]?', declared_sub):
+                        figure_id = declared_sub
                 for obj in (asset, figure):
                     if obj.get('source_figure', figure_id) != figure_id:
                         raise ValueError(f'{aid}: IR figure identity conflicts with inspected source')
@@ -170,11 +189,6 @@ def bind_sources(value, design, work, authored_path):
                     asset['source_figure'] = figure['source_figure']
                 if 'source_figure' not in figure and asset.get('source_figure'):
                     figure['source_figure'] = asset['source_figure']
-            if isinstance(asset.get('crop'), dict) and asset['crop'].get('source_path'):
-                source = resolve(asset['crop']['source_path'])
-                asset['crop']['source_path'] = source
-                if 'source_sha256' not in asset['crop'] and Path(source).is_file():
-                    asset['crop']['source_sha256'] = sha(source)
     return value
 
 
@@ -184,11 +198,13 @@ def _filename(sid):
 
 def prepare_prompts(work, design, prompt):
     """Complete page-specific science and shared contracts, rather than the whole deck every time."""
-    if design.get('schema_version') not in ('1.1', '1.2', '1.3'): return
-    from deck_compiler.design import bind_design
-    design = bind_design(design, prompt['story'])
+    if design.get('schema_version') not in ('1.1', '1.2', '1.3', 'topic-1.0'): return
+    if design.get('schema_version') != 'topic-1.0':
+        from deck_compiler.design import bind_design
+        design = bind_design(design, prompt['story'])
     shared = {k: prompt[k] for k in ('instructions', 'archetypes', 'components', 'capabilities', 'example_lookup',
-              'type_scale', 'visual_style', 'design_forms', 'design_devices', 'request', 'workflow_root') if k in prompt}
+              'syntax_reference_path', 'type_scale', 'visual_style', 'design_forms', 'design_devices', 'request',
+              'workflow_root', 'topic_mode_rules') if k in prompt}
     entries = []
     if 'example_lookup' in shared:
         from deck_compiler.example_index import inventory
@@ -222,6 +238,29 @@ def prepare_prompts(work, design, prompt):
         if not path.is_file() or read(path) != value: write(path, value)
 
 
+MAX_REJECTED_REVISIONS_PER_PAGE = 6
+MAX_IR_SUBAGENTS = 2
+
+
+def _partition_batches(pending_pages, max_subagents=MAX_IR_SUBAGENTS):
+    """Split pending pages into at most ``max_subagents`` balanced batches."""
+    if not pending_pages:
+        return []
+    count = min(max_subagents, len(pending_pages))
+    if len(pending_pages) <= 2:
+        count = 1
+    batches = []
+    size = (len(pending_pages) + count - 1) // count
+    for idx in range(0, len(pending_pages), size):
+        chunk = pending_pages[idx:idx + size]
+        batches.append({
+            'batch_id': f'ir-agent-{len(batches) + 1}',
+            'page_ids': [p['id'] for p in chunk],
+            'count': len(chunk),
+        })
+    return batches
+
+
 def descriptor(job, upstream):
     from .ir_preview import authoring_plan
     work = Path(job['request']['out_dir'])/'work'
@@ -237,16 +276,28 @@ def descriptor(job, upstream):
         output = str(work/'pages'/name)
         cached = sid in cache.get('records', {})
         entry = {'id': sid, 'expected_output': output,
-                 'input_path': str(work/'ir_page_prompts'/name), 'cached': cached}
-        if not cached and design.get('schema_version') in ('1.1', '1.2', '1.3'):
+                 'input_path': str(work/'ir_page_prompts'/name), 'cached': cached,
+                 'draft_exists': Path(output).is_file()}
+        if not cached and design.get('schema_version') in ('1.1', '1.2', '1.3', 'topic-1.0'):
             reasons = _preview_reasons(page, cache.get('errors', {}).get(sid))
             if reasons:
                 entry['preview_plan'] = authoring_plan(job['job_id'], output, sid, reasons)
         pages.append(entry)
+    pending = [p for p in pages if not p['cached']]
     return {'artifact_kind': 'deck_ir_page', 'schema_path': str(COMPONENT/'schemas/deck-ir.schema.json'),
-            'contract': 'Canonical Deck IR with exactly one slide; common header must match across pages. Story notes/omitted refs and selected asset paths are bound automatically.',
-            'checks_before_submission': 'For pages with preview_plan, write the draft and follow its preview calls before submission. Other pages can use the same preview interface as needed.',
-            'max_rejected_revisions_per_page': 3, 'pages': pages}
+            'syntax_reference_path': str(COMPONENT/'docs/deck-ir-syntax-reference.md'),
+            'contract': 'Canonical Deck IR with exactly one slide; common header must match across pages. Read syntax_reference_path for complete IR syntax (no need to read compiler source code), while still consulting example_lookup for layout patterns. Story notes/omitted refs and selected asset paths are bound automatically.',
+            'checks_before_submission': 'For pages with preview_plan, write the draft and follow its preview calls before submission. Other pages can use the same preview interface as needed. Pre-debugged drafts under work/pages/ can be submitted directly.',
+            'max_rejected_revisions_per_page': MAX_REJECTED_REVISIONS_PER_PAGE,
+            'parallel_authoring': {
+                'max_subagents': MAX_IR_SUBAGENTS,
+                'batches': _partition_batches(pending, MAX_IR_SUBAGENTS),
+                'rule': (
+                    f'Spawn at most {MAX_IR_SUBAGENTS} IR subagents in total (one per batch in batches). '
+                    'Keep the shared Deck IR header identical across batches; never spawn one subagent per slide.'
+                ),
+            },
+            'pages': pages}
 
 
 def _stamp(path):
@@ -259,8 +310,8 @@ def submit(job, upstream, path, dry=False):
     from deck_compiler.pipeline import compile_input
     work = Path(job['request']['out_dir'])/'work'
     design = a.load_design(work)
-    if not design or design.get('schema_version') not in ('1.1', '1.2', '1.3'):
-        raise ValueError('Per-page IR requires an approved page_design 1.1/1.2.')
+    if not design or design.get('schema_version') not in ('1.1', '1.2', '1.3', 'topic-1.0'):
+        raise ValueError('Per-page IR requires an approved page_design 1.1/1.2/1.3 or topic-1.0.')
     authored_sha = sha(path)
     value = bind_sources(read(path), design, work, path)
     if len(value.get('slides', [])) != 1:
@@ -288,7 +339,7 @@ def submit(job, upstream, path, dry=False):
     if record and Path(record['path']).is_file():
         try: reusable = record['content'] == digest(value) and record['stamp'] == _stamp(record['path'])
         except (OSError, ValueError): pass
-    if not dry and not reusable and len(attempts) >= 3:
+    if not dry and not reusable and len(attempts) >= MAX_REJECTED_REVISIONS_PER_PAGE:
         return {'status': 'revision_limit', 'page_id': sid, 'issues': cache['errors'].get(sid, []), 'candidate_unchanged': True}, False
     geometry = reusable
     if reusable:

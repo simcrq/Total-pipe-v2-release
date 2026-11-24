@@ -78,8 +78,6 @@ def resolve_page_mode(value, source_kind):
         return 'page_scene' if source_kind == 'topic' else 'deck_ir'
     if value not in PAGE_MODES:
         raise ValueError('page_mode must be deck_ir or page_scene')
-    if source_kind == 'topic' and value != 'page_scene':
-        raise ValueError('source_kind=topic uses page_mode=page_scene.')
     return value
 
 
