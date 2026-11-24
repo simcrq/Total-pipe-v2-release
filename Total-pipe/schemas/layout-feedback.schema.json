@@ -25,6 +25,7 @@
             "underfill_ratio": {"type": "number", "minimum": 0, "maximum": 1},
             "suggested_weights": {"type": "array", "minItems": 1, "maxItems": 12,
               "items": {"type": "number", "minimum": 0.1, "maximum": 10}},
+            "subtree_breakdown": {"type": "array", "items": {"type": "object"}},
             "suggested_actions": {"type": "array", "items": {"type": "string"}}
           }
         }}

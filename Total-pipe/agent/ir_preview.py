@@ -1,10 +1,64 @@
 """Isolated, page-cached rendering for IR authoring, never candidate/native evidence."""
 import copy
 from pathlib import Path
+import re
 import tempfile
 
 from . import COMPONENT
 from .state import confined, digest, read, sha, write
+
+_CJK_SINGLE_RE = re.compile(r'^[\u3400-\u9fff\uf900-\ufaff]$')
+
+
+def build_visual_checklist(slide_layout, issues, capacity_metrics, pixel_ws=None):
+    """Structured geometric + pixel visual checklist returned on every IR preview."""
+    elements = (slide_layout or {}).get('elements') or []
+    orphan_ids = []
+    max_bottom = 0.0
+    for elem in elements:
+        bbox = elem.get('bbox') or [0, 0, 0, 0]
+        if elem.get('role') not in ('background', 'footer', 'page_number') and not str(elem.get('id', '')).startswith('page:'):
+            max_bottom = max(max_bottom, float(bbox[1]) + float(bbox[3]))
+        if elem.get('kind') == 'text':
+            lines = [ln.strip() for ln in str(elem.get('text') or '').split('\n') if ln.strip()]
+            if len(lines) >= 2 and _CJK_SINGLE_RE.fullmatch(lines[-1]):
+                orphan_ids.append(elem.get('id'))
+        elif elem.get('kind') == 'list':
+            for item_lines in elem.get('items') or []:
+                clean = [ln.strip() for ln in item_lines if ln.strip()]
+                if len(clean) >= 2 and _CJK_SINGLE_RE.fullmatch(clean[-1]):
+                    orphan_ids.append(elem.get('id'))
+                    break
+    chart_conflicts = [
+        item.get('shape') or item.get('rule')
+        for item in (issues or [])
+        if item.get('severity') == 'FAIL'
+        and ('chart:' in str(item.get('shape', '')) or 'chart:' in str(item.get('message', '')))
+    ]
+    ws_info = (capacity_metrics or {}).get('whitespace') or {}
+    empty_quads = int(ws_info.get('empty_quadrants', 0)) if isinstance(ws_info, dict) else 0
+    pixel_skew = False
+    if isinstance(pixel_ws, dict):
+        q_ink = pixel_ws.get('quadrant_pixel_ink') or []
+        if len(q_ink) == 4 and sum(1 for v in q_ink if v < 0.008) >= 2 and pixel_ws.get('pixel_ink_ratio', 1.0) > 0.01:
+            pixel_skew = True
+    is_cover = len([e for e in elements if e.get('role') not in ('background', 'title', 'takeaway', 'footer', 'page_number')
+                    and not str(e.get('id', '')).startswith('page:')]) == 0
+    balance_ok = is_cover or (empty_quads <= 1 and not pixel_skew)
+    return {
+        'orphan_line_wraps': {'status': 'REVIEW' if orphan_ids else 'PASS', 'elements': orphan_ids},
+        'chart_annotation_clearance': {'status': 'FAIL' if chart_conflicts else 'PASS', 'conflicts': chart_conflicts},
+        'quadrant_balance': {
+            'status': 'PASS' if balance_ok else 'REVIEW',
+            'empty_quadrants': empty_quads,
+            **({'pixel_ink_ratio': pixel_ws['pixel_ink_ratio'],
+                'quadrant_pixel_ink': pixel_ws['quadrant_pixel_ink']} if isinstance(pixel_ws, dict) else {}),
+        },
+        'footer_clearance': {
+            'status': 'PASS' if max_bottom <= 692.0 else 'REVIEW',
+            'max_content_bottom_px': round(max_bottom, 1),
+        },
+    }
 
 
 SCHEMA = COMPONENT/'agent/schemas/ir-preview.schema.json'
@@ -43,10 +97,17 @@ def authoring_follow_up(job_id, request, result):
     if not all(page.get('png') for page in pages):
         return {'type': 'review_preview_failure',
                 'instruction': 'Read the preview feedback for any page without a rendered PNG.'}
+    flagged = [
+        f"{page['slide_id']}:{check_name}"
+        for page in pages
+        for check_name, detail in (page.get('visual_checklist') or {}).items()
+        if isinstance(detail, dict) and detail.get('status') in ('REVIEW', 'FAIL')
+    ]
     return {'type': 'inspect_render',
             'instruction': 'Open the rendered PNGs and follow the approved reading order. Verify the evidence anchor, '
-                           'chart marks, formulas, units and conditions. Check clipping and overlap. Revise and re-preview '
-                           'as needed, then submit the draft through the normal IR acceptance step.'}
+                           'chart marks, formulas, units and conditions. Check clipping, quadrant balance and overlap. '
+                           'Revise and re-preview as needed, then submit the draft through the normal IR acceptance step.',
+            **({'attention_items': flagged} if flagged else {})}
 
 
 def validate_request(request):
@@ -192,6 +253,7 @@ def execute(job, request):
                 diagnostics['units_report'] = str(folder/'units_report.md')
                 outputs += ['units.json', 'units_report.md']
                 outputs += [str(p.relative_to(folder)) for p in sorted((folder/'units').glob('*.png'))]
+            pixel_ws = None
             if render_pptx:
                 officecli.render(folder/'preview-layout.json', folder/'preview.pptx')
                 officecli._run('officecli', 'view', folder/'preview.pptx', 'screenshot',
@@ -199,8 +261,12 @@ def execute(job, request):
                 from PIL import Image
                 with Image.open(folder/'slide.png') as picture:
                     picture.verify()
+                from deck_compiler.whitespace import analyze_rendered_png_whitespace
+                pixel_ws = analyze_rendered_png_whitespace(folder/'slide.png')
+                diagnostics['pixel_whitespace'] = pixel_ws
                 png = str(folder/'slide.png')
                 outputs += ['preview.pptx', 'slide.png']
+            diagnostics['visual_checklist'] = build_visual_checklist(target[0], issues, metrics, pixel_ws)
         after = resource_snapshot(folder/'input.json')
         after.pop(str(folder/'input.json'), None)
         after = {key: hashed for key, hashed in after.items() if hashed is not None}

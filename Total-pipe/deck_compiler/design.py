@@ -255,12 +255,45 @@ def _validate_design_gates(page, version, pid):
     return problems
 
 
+def _classify_page_layout_family(page):
+    """Classify a content page's structural layout family to detect consecutive monotony."""
+    raw_design = page.get('design')
+    design_text = raw_design if isinstance(raw_design, str) else json.dumps(raw_design or {}, ensure_ascii=False)
+    carriers = {
+        c.get('kind')
+        for route in (page.get('content_map') or {}).values()
+        if isinstance(route, dict) and route.get('destination') == 'visible'
+        for c in (route.get('carriers') or [])
+        if isinstance(c, dict)
+    }
+    figs = page.get('figures') or []
+    if len(figs) >= 2 or re.search(r'2\s*[×xX]\s*2|image_grid|拼版|多子图|四宫格|\bgrid\b', design_text, re.I):
+        return 'multi-panel'
+    if figs or 'figure' in carriers or re.search(r'原图|读图|\bfigure\b', design_text, re.I):
+        return 'figure-readout'
+    if 'chart' in carriers or re.search(r'折线|柱状|条形|散点|误差棒|曲线图|\b(?:chart|hbar|bar|scatter|plot)\b', design_text, re.I):
+        if carriers.intersection({'table', 'formula', 'graphic'}) or re.search(r'公式|表|架构|流程', design_text):
+            return 'chart-composite'
+        return 'chart-analysis'
+    if 'table' in carriers or re.search(r'对照表|表格|矩阵|\b(?:table|matrix)\b', design_text, re.I):
+        return 'table-matrix'
+    if 'graphic' in carriers or re.search(r'流程|机制|架构|漏斗|泳道|路径|\b(?:diagram|mechanism|architecture|funnel|workflow|dag)\b', design_text, re.I):
+        return 'flow-mechanism'
+    if 'formula' in carriers or re.search(r'公式|方程|推导|\b(?:formula|equation)\b', design_text, re.I):
+        return 'equation-derivation'
+    bodies = [item for item in (page.get('display_copy') or []) if isinstance(item, dict) and item.get('role') == 'body']
+    if len(bodies) >= 2 or re.search(r'双栏|两栏|三栏|并列|对照|\bcolumns?\b', design_text, re.I):
+        return 'text-columns'
+    return 'prose-stack'
+
+
 def audit_design_quality(design, story=None):
     """Non-blocking structured design audit surfaced to page_review and diagnostics."""
     pages = (design or {}).get('pages') or []
     content_pages = [p for idx, p in enumerate(pages) if not (idx == 0 and not p.get('content_refs'))]
     visual_pages = 0
     sparse_risk_pages = []
+    layout_families = []
     for page in content_pages:
         pid = page.get('id', '?')
         raw_design = page.get('design')
@@ -281,6 +314,7 @@ def audit_design_quality(design, story=None):
             visual_pages += 1
         else:
             sparse_risk_pages.append(pid)
+        layout_families.append({'id': pid, 'family': _classify_page_layout_family(page)})
     total = len(content_pages) or 1
     visual_ratio = round(visual_pages / total, 3)
     warnings = []
@@ -294,11 +328,32 @@ def audit_design_quality(design, story=None):
             ),
             'pages': sparse_risk_pages,
         })
+    run_start = 0
+    while run_start < len(layout_families):
+        fam = layout_families[run_start]['family']
+        run_end = run_start + 1
+        while run_end < len(layout_families) and layout_families[run_end]['family'] == fam:
+            run_end += 1
+        if run_end - run_start >= 3:
+            run_ids = [item['id'] for item in layout_families[run_start:run_end]]
+            warnings.append({
+                'code': 'DECK_MONOTONOUS_LAYOUT',
+                'message': (
+                    f'Consecutive slides {run_ids} share the same "{fam}" layout family '
+                    f'({len(run_ids)} pages in a row). Alternate visual carriers or spatial '
+                    'organization (e.g. figure-readout, flow-mechanism, table-matrix, chart-composite) '
+                    'to avoid monotonous deck pacing.'
+                ),
+                'pages': run_ids,
+                'family': fam,
+            })
+        run_start = run_end
     return {
         'content_pages': len(content_pages),
         'visual_pages': visual_pages,
         'visual_ratio': visual_ratio,
         'text_only_risk_pages': sparse_risk_pages,
+        'layout_families': layout_families,
         'warnings': warnings,
     }
 

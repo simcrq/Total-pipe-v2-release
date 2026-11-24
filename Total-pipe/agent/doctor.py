@@ -43,10 +43,24 @@ def doctor(deep=False, source_kind=None, page_mode=None):
     scene_pptx = add('python.import.python_pptx', ok, detail or 'Not installed', 'Install python-pptx>=1.0 from Total-pipe/requirements.txt.',
                      optional=not scene)
     if topic:
-        for key in ('node.version', 'node.rpa_cli', 'officecli.present', 'officecli.version',
-                    'officecli.runtime', 'mineru.auth', 'paperworkflow.bridge', 'paperworkflow.runtime_imports'):
-            add(key, False, 'Topic jobs build with PageScene.', '', skipped=True)
-        node = rpa = present = version = runtime = False
+        for key in ('node.version', 'node.rpa_cli', 'mineru.auth', 'paperworkflow.bridge', 'paperworkflow.runtime_imports'):
+            add(key, False, 'Topic jobs do not require PaperWorkflow or RPA.', '', skipped=True)
+        if scene:
+            for key in ('officecli.present', 'officecli.version', 'officecli.runtime'):
+                add(key, False, 'Topic jobs build with PageScene.', '', skipped=True)
+            present = version = runtime = False
+        else:
+            office = shutil.which('officecli')
+            present = add('officecli.present', bool(office), office or 'Not found',
+                          'Install OfficeCLI >=1.0.152 and add it to PATH.')
+            ok, detail = probe([office or 'officecli', '--version'])
+            match = re.search(r'(\d+)\.(\d+)\.(\d+)', detail)
+            version = add('officecli.version', ok and bool(match) and tuple(map(int, match.groups())) >= (1, 0, 152), detail,
+                          'Install OfficeCLI >=1.0.152.')
+            runtime = True
+            add('officecli.runtime', False, 'Run doctor --deep to write and close a temporary PPTX.',
+                'Run deep diagnostics.', optional=True, skipped=True)
+        node = rpa = False
         auth = verified = bridge = evidence_ready = markdown_ready = pdf_ready = False
     else:
         ok, detail = probe(['node', '--version'])

@@ -355,17 +355,34 @@ def validate_ir(slide, assets, rendered=None):
         if not isinstance(manifest, dict):
             fail('Atomic projection requires the inspected figure source manifest')
         else:
+            def _crop_origin(asset_obj):
+                if isinstance(asset_obj, dict) and 'crop' in asset_obj:
+                    from .crops import verified_source
+                    try:
+                        return verified_source(asset_obj)
+                    except (OSError, ValueError, TypeError):
+                        return None
+                return None
+
             for source in manifest:
-                if not any(f.get('asset_id') == source or assets.get(f.get('asset_id'), {}).get('path') == source
+                if not any(f.get('asset_id') == source
+                           or assets.get(f.get('asset_id'), {}).get('path') == source
+                           or _crop_origin(assets.get(f.get('asset_id'), {})) == source
                            for f in comp.get('figure_refs', [])):
                     fail(f'{source}: inspected figure from the approved manifest is missing')
             for figure in comp.get('figure_refs', []):
                 aid = figure.get('asset_id')
-                meta = manifest.get(aid) or manifest.get(assets.get(aid, {}).get('path'))
+                asset_obj = assets.get(aid, {})
+                crop_src = _crop_origin(asset_obj)
+                meta = manifest.get(aid) or manifest.get(asset_obj.get('path')) or (manifest.get(crop_src) if crop_src else None)
                 expected_id = meta.get('source_figure') if isinstance(meta, dict) else None
+                actual_id = figure.get('source_figure')
+                if crop_src and isinstance(expected_id, str) and isinstance(actual_id, str) and not expected_id[-1:].isalpha():
+                    if re.fullmatch(re.escape(expected_id) + r'[a-z]?', actual_id):
+                        expected_id = actual_id
                 from .scientific_numbers import figure_source_label
                 label = figure_source_label(expected_id, figure.get('caption', '')) if expected_id else None
-                if not expected_id or figure.get('source_figure') != expected_id or figure.get('source_label') != label:
+                if not expected_id or actual_id != expected_id or figure.get('source_label') != label:
                     fail(f'{aid}: figure provenance must match the inspected source identity and visible source label')
     for ref, route in routes.items():
         if not isinstance(route, dict) or route.get('destination') != 'visible':

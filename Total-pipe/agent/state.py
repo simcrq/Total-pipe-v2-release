@@ -103,7 +103,7 @@ def validate_job(job):
         raise ValueError('Malformed ExplainViz mode')
     if job['request'].get('page_mode', 'deck_ir') not in ('deck_ir', 'page_scene'):
         raise ValueError('Malformed page mode')
-    if job['request']['source_kind'] == 'topic' and job['request'].get('page_mode') != 'page_scene':
+    if job['request']['source_kind'] == 'topic' and job['request'].get('page_mode') not in ('page_scene', 'deck_ir'):
         raise ValueError('Malformed topic page mode')
     if inputs and (set(inputs) != {'model', 'reasoning_effort', 'selected_by_user'} or
                    not isinstance(inputs.get('model'), str) or not inputs['model'].strip() or

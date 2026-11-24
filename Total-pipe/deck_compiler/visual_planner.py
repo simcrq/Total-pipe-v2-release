@@ -95,6 +95,62 @@ def pending_design(ir):
             'slide_ids': missing}
 
 
+def deck_rhythm_summary(ir):
+    """Whole-deck carrier and framing summary, including layout_tree pages."""
+    from .layout_tree import walk as walk_regions
+    slide_entries = []
+    for slide in ir.get('slides') or []:
+        comp = slide.get('composition') or {}
+        carriers = []
+        if comp.get('figure_refs'):
+            carriers.append('figure')
+        if comp.get('graphics'):
+            carriers.append('graphic')
+        if comp.get('charts'):
+            carriers.append('chart')
+        if comp.get('tables'):
+            carriers.append('table')
+        blocks = [b for b in (comp.get('blocks') or []) if isinstance(b, dict)]
+        if any(b.get('component') == 'formula' for b in blocks):
+            carriers.append('formula')
+        if any(b.get('component') not in ('formula', 'caption') for b in blocks):
+            carriers.append('prose')
+        tree = comp.get('layout_tree')
+        panel_count = sum(1 for _, node in walk_regions(tree) if node.get('type') == 'panel') if isinstance(tree, dict) else 0
+        slide_entries.append({
+            'slide_id': slide.get('id'),
+            'archetype': comp.get('archetype'),
+            'uses_layout_tree': bool(tree),
+            'carrier_signature': '+'.join(carriers) or 'header-only',
+            'panel_count': panel_count,
+            'block_count': len(blocks),
+        })
+    monotonous_runs = []
+    idx = 0
+    while idx < len(slide_entries):
+        sig = slide_entries[idx]['carrier_signature']
+        end = idx + 1
+        while end < len(slide_entries) and slide_entries[end]['carrier_signature'] == sig:
+            end += 1
+        if sig != 'header-only' and end - idx >= 3:
+            monotonous_runs.append({
+                'signature': sig,
+                'slide_ids': [item['slide_id'] for item in slide_entries[idx:end]],
+            })
+        idx = end
+    panel_heavy = [item['slide_id'] for item in slide_entries if item['panel_count'] >= 4]
+    visual_slides = sum(
+        1 for item in slide_entries
+        if any(tag in item['carrier_signature'] for tag in ('figure', 'graphic', 'chart', 'table', 'formula'))
+    )
+    return {
+        'slides': slide_entries,
+        'visual_slide_ratio': round(visual_slides / max(1, len(slide_entries)), 3),
+        'consecutive_same_signature': monotonous_runs,
+        'panel_heavy_slides': panel_heavy,
+    }
+
+
 def make_prompt(ir, base, requirements='', slide_ids=None):
     checked(ir)
     ids = [slide['id'] for slide in ir['slides']]
@@ -116,6 +172,7 @@ def make_prompt(ir, base, requirements='', slide_ids=None):
     return {'instructions': INSTRUCTIONS, 'requirements': requirements,
             'ir_sha256': digest(ir), 'deck_ir': copy.deepcopy(ir), 'available_assets': resources,
             'selected_slide_ids': selected,
+            'deck_rhythm_summary': deck_rhythm_summary(ir),
             'planning_targets': targets, 'required_plan_slide_ids': required_ids,
             'schemas': {key: schema['$defs'][key] for key in ('academic-design', 'visual-plan')},
             'output_shape': {'ir_sha256': digest(ir), 'academic_design': '<academic-design object>',

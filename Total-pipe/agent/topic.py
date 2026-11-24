@@ -48,6 +48,13 @@ def prepare_design(work, request):
 
     count = request.get('slide_count')
     target = f'交付 {count} 页。' if count is not None else '根据题目决定页数，最多 40 页。'
+    use_deck_ir = request.get('page_mode') == 'deck_ir'
+    downstream = (
+        '输出 `work/page_design.json`，使用 topic-1.0 协议。后续进入 Deck IR（自动测量排版、原生流程图/架构图/图表/表格/公式编译）；'
+        '也可在设计阶段直接将单页 Deck IR 草稿写入 `work/pages/<id>.json` 并用 `advance(preview=...)` 实时调试。'
+        if use_deck_ir else
+        '输出 `work/page_design.json`，使用 topic-1.0 协议。后续 PageScene 可细化文案和视觉实现。'
+    )
     task = f"""# 题目入口的内容策划与页面设计
 
 完整读取 `work/page_design_prompt.json` 和其中 schema_path 指向的 Schema。
@@ -58,7 +65,7 @@ language 为 auto 时，根据题目及用户要求决定语言。{target}
 - 非封面页优先规划 2–3 个互补视觉区（目标覆盖正文带约 45%–75%），避免单列几句文字或大面积空洞留白。
 - 是否查资料以及如何使用图表、公式、列表和图片，按题目及用户要求决定。页面设计只提交设计 JSON。
 - {TOPIC_EXAMPLES}
-- 输出 `work/page_design.json`，使用 topic-1.0 协议。后续 PageScene 可细化文案和视觉实现。
+- {downstream}
 """
     lookup = example_lookup(TOPIC_EXAMPLES)
     try:
@@ -70,16 +77,75 @@ language 为 auto 时，根据题目及用户要求决定语言。{target}
     except (OSError, ValueError, KeyError, TypeError):
         pass
     prompt_path, task_path = work/'page_design_prompt.json', work/'page_design_task.md'
-    write(prompt_path, {
+    payload = {
         'request': prompt_request(request),
         'schema_path': str(SCHEMA),
         'example_lookup': lookup,
         'shape': {'schema_version': DESIGN_VERSION, 'deck_id': '<string>',
                   'pages': [{'id': 'P1', 'title': '<optional title>', 'take': '<optional lead>',
                              'design': '<content, visual relationships and walkthrough>'}]},
-    })
+    }
+    if use_deck_ir:
+        from . import COMPONENT
+        payload['syntax_reference_path'] = str(COMPONENT/'docs/deck-ir-syntax-reference.md')
+    write(prompt_path, payload)
     task_path.write_text(task, encoding='utf-8')
     return [prompt_path, task_path]
+
+
+def prepare_ir(work, request, design=None):
+    """Prepare Deck IR handoff and per-page prompts for a topic-1.0 job."""
+    from . import COMPONENT, adapters as a
+    from .ir_pages import prepare_prompts
+    from .prompts import example_lookup
+    from deck_compiler.design import capabilities
+
+    if design is None:
+        design = read(work/'page_design.json')
+    base = a.ir_prompt({}, {}, {}, {}, 'off')
+    for key in ('workflow', 'rpa_input', 'content_model', 'deck_plan'):
+        base.pop(key, None)
+    lookup = example_lookup(TOPIC_EXAMPLES)
+    try:
+        from deck_compiler.example_index import catalog_brief, inventory
+        lookup['catalog'] = catalog_brief(inventory())
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    prompt = {
+        **base,
+        'request': prompt_request(request),
+        'page_design': design.get('pages', []),
+        'design_forms': capabilities()['forms'],
+        'design_devices': capabilities()['art_direction']['devices'],
+        'example_lookup': lookup,
+        'topic_mode_rules': {
+            'slide_evidence_refs': 'Set semantic.evidence_refs=[] and semantic.caveats=[] (or caveats list); no paper EV IDs are required.',
+            'tables': 'Use origin="generated" and omit evidence_refs.',
+            'charts': 'Use basis="explain" and illustrative=true (or explicit non-paper data) with no evidence_refs.',
+            'figures': 'Use origin="reference" (with reference_source) or origin="generated" (with 示意图/schematic in caption).',
+            'academic_design': 'Optionally set presentation.academic_design (e.g. {"style":"research-seminar","title_treatment":"thin-rule","density":"balanced","figure_treatment":"unframed","decoration_policy":"minimal","header_variant":"compact"}) directly to skip the visual_design step.',
+        },
+    }
+    raw_ir_prompt = work/'ir_prompt.json'
+    if not raw_ir_prompt.is_file() or read(raw_ir_prompt) != prompt:
+        write(raw_ir_prompt, prompt)
+    designed_path = work/'ir_prompt_designed.json'
+    if not designed_path.is_file() or read(designed_path) != prompt:
+        write(designed_path, prompt)
+    prepare_prompts(work, design, prompt)
+    task_path = work/'deck_ir_task.md'
+    task_text = """# 题目入口的 Deck IR 实现
+
+完整读取 `work/ir_prompt_designed.json` 与 `syntax_reference_path`（`docs/deck-ir-syntax-reference.md`）。
+按 `page_design.json` 的页面 ID 与顺序，输出完整 `work/deck_ir.json` 或按页提交 `deck_ir_page`（`work/pages/<id>.json`）。
+
+- **查阅案例库与语法手册**：阅读 `docs/deck-ir-syntax-reference.md` 掌握 `layout_tree`、`graphics`（`process`/`dag`/`architecture`/`funnel`/`mechanism`/`path`）、`charts`（`line`/`bar`/`hbar`/`scatter`）、`tables` 与原生公式语法；用 `example_lookup` 打开匹配示例，避免空洞单列文字。
+- **题目模式零论文门禁规则**：每页 `semantic.evidence_refs` 设为 `[]`；表格设 `"origin": "generated"`；图表设 `"basis": "explain", "illustrative": true`；可在顶层 `presentation.academic_design` 直接声明学术版式以自动完成视觉统合。
+- 用 `advance(preview={artifact_path, slide_ids, mode:"layout"|"render"})` 检查骨架与渲染 PNG，确认无截断、孤字与失衡留白后提交。
+"""
+    if not task_path.is_file() or task_path.read_text(encoding='utf-8') != task_text:
+        task_path.write_text(task_text, encoding='utf-8')
+    return designed_path
 
 
 def prepare_scene(work, request):

@@ -374,6 +374,35 @@ def _validate_figures(figures, assets, sem, n, check):
                   and '\n' not in label,
                   "figure_refs.source_label requires one line of at most 80 characters, "
                   "e.g. 'Xie et al., Fig. 1g'", n, "FIGURE_SOURCE_LABEL_INVALID")
+        if 'highlights' in f:
+            highlights = f['highlights']
+            check(isinstance(highlights, list) and len(highlights) <= 6,
+                  "figure_refs.highlights must be a list of at most 6 items", n, "FIGURE_HIGHLIGHT_INVALID")
+            if isinstance(highlights, list):
+                for h_idx, h_item in enumerate(highlights, 1):
+                    if not isinstance(h_item, dict) or set(h_item) - {'box', 'label', 'color'}:
+                        check(False, f"figure_refs.highlights[{h_idx}] supports only box, label, and color",
+                              n, "FIGURE_HIGHLIGHT_INVALID")
+                        continue
+                    box = h_item.get('box')
+                    valid_box = (isinstance(box, list) and len(box) == 4
+                                 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in box)
+                                 and 0.0 <= box[0] < 1.0 and 0.0 <= box[1] < 1.0
+                                 and 0.02 <= box[2] <= 1.0 and 0.02 <= box[3] <= 1.0
+                                 and box[0] + box[2] <= 1.001 and box[1] + box[3] <= 1.001)
+                    check(valid_box,
+                          f"figure_refs.highlights[{h_idx}].box requires normalized [rx, ry, rw, rh] within [0, 1]",
+                          n, "FIGURE_HIGHLIGHT_INVALID")
+                    if 'label' in h_item:
+                        hl_label = h_item['label']
+                        check(isinstance(hl_label, str) and bool(hl_label.strip()) and len(hl_label) <= 36
+                              and '\n' not in hl_label,
+                              f"figure_refs.highlights[{h_idx}].label must be 1-36 single-line characters",
+                              n, "FIGURE_HIGHLIGHT_INVALID")
+                    if 'color' in h_item:
+                        check(isinstance(h_item['color'], str) and bool(ACCENT.fullmatch(h_item['color'])),
+                              f"figure_refs.highlights[{h_idx}].color must be #RRGGBB",
+                              n, "FIGURE_HIGHLIGHT_INVALID")
         asset = assets[f["asset_id"]]
         asset = asset if isinstance(asset, dict) else {}
         origin = asset.get("origin", "paper")
@@ -453,6 +482,11 @@ def _validate_slide_capacity_and_audience(ir, sem, comp, pres, archetype, has_tr
                      for b in blocks if isinstance(b, dict)]
     visible_text += [(f"block {b.get('id')}.label", b.get("label", ""))
                      for b in blocks if isinstance(b, dict) and b.get("label")]
+    for f_idx, f_item in enumerate(figures, 1):
+        if isinstance(f_item, dict) and isinstance(f_item.get("highlights"), list):
+            for h_idx, h_item in enumerate(f_item["highlights"], 1):
+                if isinstance(h_item, dict) and isinstance(h_item.get("label"), str):
+                    visible_text.append((f"figure_refs[{f_idx}].highlights[{h_idx}].label", h_item["label"]))
     graphics = comp.get("graphics")
     if isinstance(graphics, list):
         for graphic in graphics:

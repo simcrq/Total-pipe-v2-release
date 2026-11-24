@@ -251,7 +251,7 @@
       "required": ["id", "kind", "basis", "x", "y", "series"],
       "properties": {
         "id": {"$ref": "#/$defs/identifier"},
-        "kind": {"enum": ["line", "bar", "scatter"]},
+        "kind": {"enum": ["line", "bar", "hbar", "scatter"]},
         "basis": {"enum": ["evidence", "explain"]},
         "illustrative": {"type": "boolean", "default": false},
         "x": {
@@ -259,7 +259,9 @@
           "properties": {
             "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
             "scale": {"enum": ["linear", "log"], "default": "linear"},
-            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}}
+            "values": {"type": "array", "minItems": 2, "maxItems": 24, "items": {"type": "number"}},
+            "categories": {"type": "array", "minItems": 2, "maxItems": 24,
+                           "items": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"}}
           }
         },
         "y": {
@@ -300,12 +302,40 @@
             }
           }
         },
+        "reference_lines": {
+          "type": "array", "maxItems": 4,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["axis", "value"],
+            "properties": {
+              "axis": {"enum": ["x", "y"]},
+              "value": {"type": "number"},
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"},
+              "style": {"enum": ["dashed", "solid"], "default": "dashed"}
+            }
+          }
+        },
+        "shaded_zones": {
+          "type": "array", "maxItems": 3,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["axis", "low", "high"],
+            "properties": {
+              "axis": {"enum": ["x", "y"]},
+              "low": {"type": "number"},
+              "high": {"type": "number"},
+              "label": {"type": "string", "minLength": 1, "maxLength": 60, "pattern": "\\S"}
+            }
+          }
+        },
         "source": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
         "note": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S"}
       },
       "allOf": [
-        {"if": {"properties": {"kind": {"enum": ["line", "bar"]}}},
+        {"if": {"properties": {"kind": {"const": "line"}}},
          "then": {"properties": {"x": {"required": ["values"]}}}},
+        {"if": {"properties": {"kind": {"enum": ["bar", "hbar"]}}},
+         "then": {"properties": {"x": {"anyOf": [{"required": ["values"]}, {"required": ["categories"]}]}}}},
         {"if": {"properties": {"basis": {"const": "explain"}}},
          "then": {"required": ["illustrative"], "properties": {"illustrative": {"const": true}}}},
         {"if": {"properties": {"basis": {"const": "evidence"}}},
@@ -786,7 +816,28 @@
                   "min_panel_extent": {"type": "number", "minimum": 140, "maximum": 500},
                   "caption_height": {"type": "number", "minimum": 24, "maximum": 96},
                   "caption_font_size": {"type": "number", "minimum": 12, "maximum": 28},
-                  "caption_font_floor": {"type": "number", "minimum": 10, "maximum": 28}
+                  "caption_font_floor": {"type": "number", "minimum": 10, "maximum": 28},
+                  "highlights": {
+                    "type": "array",
+                    "maxItems": 6,
+                    "description": "Normalized [0..1] image-relative callout rectangles drawn natively on top of the figure.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["box"],
+                      "properties": {
+                        "box": {
+                          "type": "array",
+                          "minItems": 4,
+                          "maxItems": 4,
+                          "items": {"type": "number", "minimum": 0, "maximum": 1},
+                          "description": "Normalized [rx, ry, rw, rh] relative to the rendered image dimensions."
+                        },
+                        "label": {"type": "string", "minLength": 1, "maxLength": 36},
+                        "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+                      }
+                    }
+                  }
                 }
               }
             }

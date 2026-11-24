@@ -415,14 +415,19 @@ def finalize_design(work, design=None):
     instruction must not be appended twice.
     """
     from deck_compiler.design import capabilities, summary, content_bindings
-    source = work/'ir_prompt.json'
-    if not source.is_file():
-        return None
     if design is None:
         design_path = work/'page_design.json'
         if not design_path.is_file():
             return None
         design = read(design_path)
+    if design.get('schema_version') == 'topic-1.0':
+        from .topic import prepare_ir
+        job_path = work.parent/'.totalpipe/job.json'
+        req = read(job_path).get('request', {}) if job_path.is_file() else {}
+        return prepare_ir(work, req, design=design)
+    source = work/'ir_prompt.json'
+    if not source.is_file():
+        return None
     path = work/'ir_prompt_designed.json'
     prompt = read(source)
     pages = summary(design)
@@ -536,6 +541,12 @@ def design_realization_issues(value, design):
     if len(slides) != len(pages):
         add(f'The approved design has {len(pages)} pages but the IR has {len(slides)} paper pages. '
             'Realize one IR page per designed page; split inside a page instead of adding or dropping pages.')
+        return issues
+    if design.get('schema_version') == 'topic-1.0':
+        expected_ids = [p.get('id') for p in pages]
+        actual_ids = [s.get('id') for s in slides]
+        if actual_ids != expected_ids:
+            add(f'Topic IR slide IDs/order {actual_ids} must match approved topic page_design {expected_ids}.')
         return issues
     modern = design.get('schema_version') in ('1.1', '1.2', '1.3')
     groups = {}

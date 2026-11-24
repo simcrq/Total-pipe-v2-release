@@ -316,10 +316,14 @@ TOKEN = re.compile(r"[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u0
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
 
 
+_CJK_ORPHAN_RE = re.compile(r'^[\u3400-\u9fff][，。、；：？！）】》」』”’,.!?;:)]*$')
+
+
 def break_lines(text, font, width):
-    """Preserve paragraphs, break at words/CJK glyphs; long tokens split safely."""
+    """Preserve paragraphs, break at words/CJK glyphs, and prevent 1-CJK-char orphan lines."""
     lines = []
     for paragraph in text.split("\n"):
+        para_start = len(lines)
         pieces = []
         current = ''
         for token in TOKEN.findall(paragraph):
@@ -348,6 +352,15 @@ def break_lines(text, font, width):
             pieces.append(token)
             current += token
         lines.append(current.rstrip())
+        # CJK orphan guard: avoid leaving a lone CJK character (+ optional punctuation) on the final line.
+        if (len(lines) - para_start >= 2
+                and _CJK_ORPHAN_RE.fullmatch(lines[-1].strip())
+                and len(lines[-2]) >= 3
+                and '\u3400' <= lines[-2][-1] <= '\u9fff'):
+            cand_prev = lines[-2][:-1].rstrip()
+            cand_last = lines[-2][-1] + lines[-1]
+            if cand_prev and font.getlength(cand_last) <= width:
+                lines[-2], lines[-1] = cand_prev, cand_last
     return lines
 
 
@@ -782,7 +795,9 @@ def _resolve_deck_context(ir, base, issues):
          for slide in ir['slides'] for field in ('title', 'purpose', 'takeaway', 'speaker_notes')]
         + [font_sample(block.get("text", ""), block.get('inline_math', False)) + block.get("label", "") for slide in ir["slides"]
            for block in slide["composition"]["blocks"]]
-        + [figure.get("caption", "") for slide in ir["slides"]
+        + [figure.get("caption", "") + "".join(
+               h.get("label", "") for h in figure.get("highlights", []) if isinstance(h, dict))
+           for slide in ir["slides"]
            for figure in slide["composition"]["figure_refs"]]
         + [value for slide in ir["slides"] for graphic in slide["composition"].get("graphics", [])
            for _, value in graphic_texts(graphic)]
@@ -1414,10 +1429,12 @@ class _SlideCompiler:
         eid = f"figure-{k}"
         min_extent = f.get("min_panel_extent", 220)
         actual_extent = min(w / f.get("panel_count", 1), h)
+        highlights = f.get("highlights") if isinstance(f.get("highlights"), list) else []
         element = {"id": eid, "kind": "image", "role": "reference" if reference else "evidence", "bbox": bbox,
                    "asset_id": f["asset_id"], "alt": f.get("alt", f["caption"]),
                    "min_panel_extent": min_extent,
-                   "actual_panel_extent": actual_extent}
+                   "actual_panel_extent": actual_extent,
+                   **({"overlap_group": eid} if highlights else {})}
         if schematic:
             element["schematic"] = {"generator": asset.get("generator")}
         elif reference:
@@ -1425,6 +1442,51 @@ class _SlideCompiler:
         else:
             element["source_figure"] = f["source_figure"]
         self.elements.append(element)
+        if highlights:
+            default_hl_color = self.theme.get("accent", DEFAULT_ACCENT)
+            badge_face = ImageFont.truetype(self.font_paths["bold_font_file"], 20)
+            for h_idx, hl in enumerate(highlights, 1):
+                rx, ry, rw, rh = hl["box"]
+                hx = bbox[0] + rx * bbox[2]
+                hy = bbox[1] + ry * bbox[3]
+                hw = max(8.0, min(bbox[0] + bbox[2] - hx, rw * bbox[2]))
+                hh = max(8.0, min(bbox[1] + bbox[3] - hy, rh * bbox[3]))
+                hl_color = hl.get("color") or default_hl_color
+                self.elements.append({
+                    "id": f"{eid}:highlight:{h_idx}",
+                    "kind": "shape",
+                    "role": "decoration",
+                    "bbox": [hx, hy, hw, hh],
+                    "geometry": "rect",
+                    "fill": "none",
+                    "line": hl_color,
+                    "line_width": 2.5,
+                    "visual_decoration": True,
+                    "overlap_group": eid,
+                })
+                hl_label = str(hl.get("label") or "").strip()
+                if hl_label:
+                    lbl_w = min(bbox[2] - 4.0, max(36.0, badge_face.getlength(hl_label) + 16.0))
+                    lbl_h = 26.0
+                    lbl_x = min(max(bbox[0] + 2.0, hx), bbox[0] + bbox[2] - lbl_w - 2.0)
+                    lbl_y = hy - lbl_h - 2.0 if hy - lbl_h - 2.0 >= bbox[1] + 2.0 else min(
+                        hy + 2.0, bbox[1] + bbox[3] - lbl_h - 2.0)
+                    badge_box = [lbl_x, lbl_y, lbl_w, lbl_h]
+                    self.elements.append({
+                        "id": f"{eid}:highlight-badge:{h_idx}",
+                        "kind": "shape",
+                        "role": "decoration",
+                        "bbox": badge_box,
+                        "geometry": "roundRect",
+                        "fill": hl_color,
+                        "line": "none",
+                        "visual_decoration": True,
+                        "overlap_group": eid,
+                    })
+                    self.emit_text(f"{eid}:highlight-label:{h_idx}", hl_label, badge_box,
+                                   "badge", 20, 20, 1, "middle", "#FFFFFF")
+                    if self.elements and self.elements[-1]["id"] == f"{eid}:highlight-label:{h_idx}":
+                        self.elements[-1]["overlap_group"] = eid
         if actual_extent < min_extent:
             if schematic:
                 self.issues.append(issue("SCHEMATIC_TOO_SMALL", "FAIL",
@@ -1627,6 +1689,13 @@ class _SlideCompiler:
             balance_shift = (plan.get('balanced') or {}).get('shift_px', 0.)
             if balance_shift > .5:
                 self.adaptations.append({'action': 'vertical_balance', **plan['balanced']})
+            if plan.get('elastic_micro_fit'):
+                emf = plan['elastic_micro_fit']
+                self.adaptations.append({'action': 'elastic_micro_fit', **emf})
+                self.issues.append(issue(
+                    'ELASTIC_MICRO_FIT', 'INFO',
+                    f"Tightened container spacing by {emf['saved_px']} px ({', '.join(emf['adjustments'][:3])}) without altering font sizes.",
+                    self.n, detector='geometric-preflight', slide_id=self.slide['id']))
             by_id = {b['id']: b for b in self.blocks}
             annotated_formulas = {link['ref'] for b in self.blocks if (link := attachment_link(b))
                                   and link['kind'] == 'formula' and 'position' in link}

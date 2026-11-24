@@ -311,6 +311,12 @@
     {"label": "300 K", "values": [1.0, 2.0, 4.0, 4.2], "y_error": [0.1, 0.12, 0.15, 0.14], "evidence_refs": ["EV0001"]},
     {"label": "Control", "values": [1.0, 1.05, 1.02, 1.04], "evidence_refs": ["EV0002"]}
   ],
+  "reference_lines": [
+    {"axis": "y", "value": 3.5, "label": "Target 3.5", "style": "dashed"}
+  ],
+  "shaded_zones": [
+    {"axis": "x", "low": 0.8, "high": 1.5, "label": "Saturation window"}
+  ],
   "annotations": [
     {"text": "2x gain", "series": 0, "point": 2, "dx": 14, "dy": -20}
   ],
@@ -318,8 +324,14 @@
   "note": "Error bars show ±1 SD (n=3)."
 }
 ```
-- `kind`: `"line" | "bar" | "scatter"`（`line`/`bar` 必填 `x.values`；`scatter` 可在每个 series 写 `x_values`）。
-- `basis`: `"evidence"` 时 `illustrative` 必须为 `false` 且数值来自证据；`"explain"` 时 `illustrative` 必须为 `true`（仅示意趋势）。
+- **`kind`（4 种）**：`"line" | "bar" | "hbar" | "scatter"`。
+  - `line`：必填数值 `x.values`；`scatter`：共享 `x.values` 或在每个 `series` 写 `x_values`。
+  - `bar`（纵向柱状图）与 `hbar`（横向排名/消融条形图）：支持数值 `x.values` **或** 字符串类别 `x.categories: ["Ours", "w/o Fusion", "Baseline"]`（不可同时填 `values` 与 `categories`）。
+- **阈值参考线与高亮区间**：
+  - `reference_lines`（最多 4 条）：`{"axis": "x"|"y", "value": 90.0, "label": "Threshold", "style": "dashed"|"solid", "color": "#RRGGBB"}`。
+  - `shaded_zones`（最多 3 个）：`{"axis": "x"|"y", "low": 0.2, "high": 0.8, "label": "Operating zone", "color": "#E6F4F1"}`。
+- **自动避障与双行图例**：图例超宽时自动换为右对齐双行并下移绘图区顶边；`annotations` 自动避让折线、柱体、误差棒及相邻标注框。
+- `basis`: `"evidence"` 时 `illustrative` 必须为 `false` 且数值来自证据；`"explain"` 时 `illustrative` 必须为 `true`（仅示意趋势或题目模式算例）。
 - 需由 `layout_tree` 的 `{"id": "...", "type": "chart", "ref": "ch1"}` 引用。
 
 ---
@@ -352,9 +364,25 @@
 
 ---
 
-## 7. 论文图（`composition.figure_refs`）、视觉风格与讲解义务
+## 7. 论文图（`composition.figure_refs`）、无损裁图、高亮框与视觉风格
 
-- **`figure_refs` 字段**：`asset_id`、`caption`（≤320 字）、`source_label`（≤80 字，弱化出处前缀，如 `"Author et al., Fig. 1g"`）、`source_figure`（论文图必填，如 `"1g"` / `"S2"`）、可选 `alt`/`panel_count`/`min_panel_extent`/`caption_height`/`caption_font_size`/`caption_font_floor`。
+- **`figure_refs` 字段**：`asset_id`、`caption`（≤320 字）、`source_label`（≤80 字，弱化出处前缀，如 `"Author et al., Fig. 1g"`）、`source_figure`（论文图必填，如 `"1g"` / `"S2"`）、可选 `alt`/`panel_count`/`min_panel_extent`/`caption_height`/`caption_font_size`/`caption_font_floor`、**`highlights`**（最多 6 个原图归一化高亮标注框）：
+  ```json
+  {
+    "asset_id": "fig_01",
+    "source_figure": "1g",
+    "caption": "Fig. 1g 局部实测响应对比",
+    "highlights": [
+      {"box": [0.52, 0.14, 0.40, 0.65], "label": "① 峰值区", "color": "#C2410C"}
+    ]
+  }
+  ```
+  其中 `box: [rx, ry, rw, rh]` 为相对渲染图片左上角与宽高的 `[0..1]` 归一化比例，编译器自动叠加原生描边矩形与圆角标签且不触发碰撞误报。
+- **拼版大图无损检视与裁切（`figure_crop`）**：遇到论文多子图（a–f）拼版大图时，不要手猜像素坐标，直接调用：
+  - 检视标尺与候选子图框：`totalpipe_advance(job_id, figure_crop={"operation": "inspect", "source": "fig_03"})`（输出 100 px 坐标网格图 `grid_preview_path` 与自动分割候选框 `candidate_panels`）。
+  - 无损裁切并生成 `assets` 条目：`totalpipe_advance(job_id, figure_crop={"operation": "crop", "source": "fig_03", "box": [left, top, right, bottom], "source_figure": "3a"})`，返回的 `asset_entry` 已通过 `crops.verified_source()` 逐像素校验，可直接填入 `deck_ir.assets`。
+- **布局树弹性微调与逐节点高度分解**：`layout_tree` 高度轻微溢出（≤ `max(24 px, 6% 正文高)`）时编译器自动收紧容器间距（`ELASTIC_MICRO_FIT`，不缩字号、不删内容）；若仍超限，`layout_feedback.json` 的 `subtree_breakdown` 精确列出每个子节点的 `width_px` 与 `required_height_px`。
+- **题目模式（`source_kind="topic", page_mode="deck_ir"`）**：每页 `semantic.evidence_refs` 写 `[]`；表格用 `origin: "generated"`；图表用 `basis: "explain", illustrative: true`；图片用 `origin: "reference"` 或 `"generated"`。
 - **`presentation.visual_style.pack`**：
   - `"academic"`（科研汇报默认：直角节点、细线无填充）
   - `"commercial"`（浅色圆角卡片）
@@ -368,10 +396,10 @@
 
 ## 8. 边设计边调试工作流（与示例库配合）
 
-1. **先查示例库**：运行 `example_lookup.command_prefix search "<结构/关系关键词>" --limit 3` 与 `show <id>`，查看真实构图范本。
+1. **先查示例库**：运行 `example_lookup.command_prefix search "<结构/关系关键词>" --limit 3` 与 `show <id>`，查看真实构图范本（含开篇立题漏斗、分层系统架构+水平消融图、多子图网格高亮导读、三支柱结论与边界矩阵等）。
 2. **查阅本手册写单页草稿**：将复杂页写入 `work/pages/<id>.json`（`slides` 仅含该页）。
 3. **实时测几何与看图**（在 `page_design`、`page_review`、`deck_ir` 均可用，不改任务状态、不占修订预算）：
    - 骨架/留白快检：`totalpipe_advance(job_id, preview={"artifact_path": ".../work/pages/P1.json", "slide_ids": ["P1"], "mode": "layout"})`
-   - 渲染看图：`totalpipe_advance(job_id, preview={"artifact_path": ".../work/pages/P1.json", "slide_ids": ["P1"], "mode": "render"})`
+   - 渲染看图与像素自检：`totalpipe_advance(job_id, preview={"artifact_path": ".../work/pages/P1.json", "slide_ids": ["P1"], "mode": "render"})`（返回 `pixel_whitespace` 四象限墨迹率与 `visual_checklist` 孤字/图注避障/页脚净空检查）
    - 语义 + 几何全检：`totalpipe_advance(job_id, artifact_kind="deck_ir", artifact_path=".../work/pages/P1.json", preflight=True)`
 4. **分批正式提交**：进入 `deck_ir` 后严格按 `page_authoring.parallel_authoring.batches` 分批（**最多 2 个 IR 子代理**），复用 `draft_exists: true` 的草稿并逐页提交 `deck_ir_page`。

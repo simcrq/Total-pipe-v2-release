@@ -299,7 +299,7 @@ def render_funnel(data, theme, bounds, font_paths=None):
                     ['L', (outer_w+bottom_w)/2, height], ['L', (outer_w-bottom_w)/2, height], ['Z']]
         label_w = bottom_w*.5 if apex else inner_w
         label_y, label_h = (cursor+height/2, height/2) if apex else (cursor, height)
-        parts = node_elements(data['id'], level, [x+(w-label_w)/2, label_y, label_w, label_h], theme, (th, bh))
+        parts = node_elements(data['id'], level, [x+(w-label_w)/2, label_y, label_w, label_h], theme, (th, bh), font_paths=font_paths)
         parts[0]['bbox'] = [left, cursor, outer_w, height]
         parts[0].pop('geometry')
         parts[0]['custom_geometry'] = custom_geometry(commands, [0, 0, outer_w, height])

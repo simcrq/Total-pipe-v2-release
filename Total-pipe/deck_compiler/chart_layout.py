@@ -11,12 +11,14 @@ the evidence binding of every plotted value.
 import math
 import re
 
-KINDS = ('line', 'bar', 'scatter')
+KINDS = ('line', 'bar', 'hbar', 'scatter')
 SCALES = ('linear', 'log')
 BASES = ('evidence', 'explain')
 MAX_CHARTS = 4
 MAX_SERIES = 4
 MAX_ANNOTATIONS = 6
+MAX_REF_LINES = 4
+MAX_SHADED_ZONES = 3
 MIN_POINTS = 2
 MAX_POINTS = 24
 IDENTIFIER = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
@@ -64,16 +66,25 @@ def validate_charts(charts, slide_evidence_refs=None):
         if not isinstance(x, dict):
             errors.append(f'{path}.x: an axis object is required')
             x_values = []
+            x_categories = []
         else:
             x_values = x.get('values')
+            x_categories = x.get('categories')
             if not isinstance(x.get('label'), str) or not x['label'].strip():
                 errors.append(f'{path}.x.label: a readable axis label is required')
             if x.get('scale', 'linear') not in SCALES:
                 errors.append(f'{path}.x.scale: must be linear or log')
+            if x_categories is not None:
+                if kind not in ('bar', 'hbar'):
+                    errors.append(f'{path}.x.categories: named categories are supported on bar and hbar charts only')
+                elif (not isinstance(x_categories, list) or not MIN_POINTS <= len(x_categories) <= MAX_POINTS
+                      or any(not isinstance(cat, str) or not cat.strip() or len(cat) > 40 for cat in x_categories)):
+                    errors.append(f'{path}.x.categories: {MIN_POINTS}-{MAX_POINTS} non-empty category strings (<=40 chars) required')
+                    x_categories = []
             if x_values is None:
                 x_values = []
-                if kind in ('line', 'bar'):
-                    errors.append(f'{path}.x.values: line and bar charts need a shared x domain')
+                if kind == 'line' or (kind in ('bar', 'hbar') and not x_categories):
+                    errors.append(f'{path}.x.values: line and bar/hbar charts need a shared x domain or categories')
             elif (not isinstance(x_values, list) or not MIN_POINTS <= len(x_values) <= MAX_POINTS
                   or not all(_number(value) for value in x_values)):
                 errors.append(f'{path}.x.values: {MIN_POINTS}-{MAX_POINTS} finite numbers required')
@@ -82,6 +93,9 @@ def validate_charts(charts, slide_evidence_refs=None):
                 errors.append(f'{path}.x.values: a log axis cannot contain zero or negative values')
             elif kind == 'line' and any(a >= b for a, b in zip(x_values, x_values[1:])):
                 errors.append(f'{path}.x.values: a line chart needs strictly increasing x')
+            if x_values and x_categories and len(x_values) != len(x_categories):
+                errors.append(f'{path}.x.categories: length must match x.values when both are provided')
+        domain_len = len(x_categories) if x_categories else len(x_values)
         y = chart.get('y')
         if not isinstance(y, dict):
             errors.append(f'{path}.y: an axis object is required')
@@ -114,8 +128,8 @@ def validate_charts(charts, slide_evidence_refs=None):
                     errors.append(f'{series_path}.x_values: a log axis cannot contain zero or negative values')
             elif series_x is not None:
                 errors.append(f'{series_path}.x_values: only scatter charts have per-series x')
-            if x_values and values and len(values) != len(x_values):
-                errors.append(f'{series_path}.values: length must match x.values ({len(x_values)})')
+            if domain_len and values and len(values) != domain_len:
+                errors.append(f'{series_path}.values: length must match shared domain ({domain_len})')
             if isinstance(y, dict) and y.get('scale') == 'log' and any(value <= 0 for value in values):
                 errors.append(f'{series_path}.values: a log axis cannot contain zero or negative values')
             error = entry.get('y_error')
@@ -159,6 +173,39 @@ def validate_charts(charts, slide_evidence_refs=None):
             for key, limit in (('dx', 160), ('dy', 120)):
                 if key in note and (not _number(note[key]) or abs(note[key]) > limit):
                     errors.append(f'{note_path}.{key}: must be a finite offset within ±{limit} px')
+        ref_lines = chart.get('reference_lines', [])
+        if not isinstance(ref_lines, list) or len(ref_lines) > MAX_REF_LINES:
+            errors.append(f'{path}.reference_lines: at most {MAX_REF_LINES} reference lines')
+            ref_lines = []
+        for index, rline in enumerate(ref_lines):
+            rpath = f'{path}.reference_lines[{index}]'
+            if not isinstance(rline, dict):
+                errors.append(f'{rpath}: reference line must be an object')
+                continue
+            if rline.get('axis') not in ('x', 'y'):
+                errors.append(f'{rpath}.axis: must be x or y')
+            if not _number(rline.get('value')):
+                errors.append(f'{rpath}.value: finite number required')
+            if 'label' in rline and (not isinstance(rline['label'], str) or not rline['label'].strip() or len(rline['label']) > 60):
+                errors.append(f'{rpath}.label: non-empty string <=60 chars required')
+            if rline.get('style', 'dashed') not in ('dashed', 'solid'):
+                errors.append(f'{rpath}.style: must be dashed or solid')
+        zones = chart.get('shaded_zones', [])
+        if not isinstance(zones, list) or len(zones) > MAX_SHADED_ZONES:
+            errors.append(f'{path}.shaded_zones: at most {MAX_SHADED_ZONES} shaded zones')
+            zones = []
+        for index, zone in enumerate(zones):
+            zpath = f'{path}.shaded_zones[{index}]'
+            if not isinstance(zone, dict):
+                errors.append(f'{zpath}: shaded zone must be an object')
+                continue
+            if zone.get('axis') not in ('x', 'y'):
+                errors.append(f'{zpath}.axis: must be x or y')
+            low_v, high_v = zone.get('low'), zone.get('high')
+            if not (_number(low_v) and _number(high_v) and low_v < high_v):
+                errors.append(f'{zpath}: low and high must be finite numbers with low < high')
+            if 'label' in zone and (not isinstance(zone['label'], str) or not zone['label'].strip() or len(zone['label']) > 60):
+                errors.append(f'{zpath}.label: non-empty string <=60 chars required')
         if basis == 'evidence' and (not isinstance(chart.get('source'), str)
                                     or not chart['source'].strip()):
             errors.append(f'{path}.source: an evidence chart needs its provenance line')

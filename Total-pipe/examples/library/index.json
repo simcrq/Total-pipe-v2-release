@@ -140,6 +140,34 @@
       "tags": ["定义", "类比", "多因素", "概念解释", "跨领域类比", "双中心", "因素环绕", "因素映射", "双向对照", "构造示例", "analogy", "paired radial diagrams"],
       "summary": "适合用熟悉事物解释陌生概念。先读上方定义与反馈机制，再沿类比标记从左侧中心读到右侧中心，比较各自环绕的多类因素。",
       "script": "definition_factor_analogy.py"
+    },
+    {
+      "id": "problem-gap-approach",
+      "title": "开篇立题漏斗：瓶颈收缩、现有缺口与本文切入",
+      "tags": ["开篇立题", "研究动机", "问题瓶颈", "现有缺口", "漏斗图", "切入路径", "funnel", "research motivation", "problem gap approach"],
+      "summary": "左侧漏斗逐层收敛问题焦点，右侧上下分栏对比现有方案局限与本文核心切入路径。",
+      "script": "problem_gap_approach.py"
+    },
+    {
+      "id": "system-architecture-ablation",
+      "title": "分层系统架构与水平消融条形图同页核算",
+      "tags": ["系统架构", "分层架构", "消融实验", "水平条形图", "阈值参考线", "architecture", "ablation study", "hbar", "reference_lines"],
+      "summary": "上方展示三层流水系统架构，下方并列水平消融条形图（含阈值参考线）与模块延迟增益表。",
+      "script": "system_architecture_ablation.py"
+    },
+    {
+      "id": "multi-panel-grid-readout",
+      "title": "多子图网格拼版、原图高亮框与编号导读",
+      "tags": ["多子图网格", "拼版读图", "原图高亮框", "局部框选", "image_grid", "highlights", "multi-panel figure"],
+      "summary": "左侧 image_grid 对齐多张子图并在关键区间叠加原生高亮标注框，右侧按编号逐条对应读图结论。",
+      "script": "multi_panel_grid_readout.py"
+    },
+    {
+      "id": "conclusions-boundary-matrix",
+      "title": "收束总结页：三支柱核心贡献卡片与运行边界矩阵",
+      "tags": ["结论总结", "核心贡献", "三支柱", "适用边界", "失效条件", "总结与展望", "conclusions", "operating boundary", "limitations matrix"],
+      "summary": "上方三列圆角标签面板总结核心贡献，下方全宽矩阵明确适用工况、失效边界与部署建议。",
+      "script": "conclusions_boundary_matrix.py"
     }
   ]
 }

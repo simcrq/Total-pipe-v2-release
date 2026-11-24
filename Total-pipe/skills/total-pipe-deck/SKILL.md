@@ -29,7 +29,9 @@ Canonical Deck IR；`derived/` 中的计划、资源清单和 QA expectation 都
 | **Story 节点形态 `form`**（`sequence`/`compare`/`branch`/`relation`/`evidence`） | 在 Story 阶段就把“这一步要讲成什么形态”说出来，并写出结构 | 它决定 RPA 的布局类别；不写就退回按问句措辞猜，通常落到纯文字池 |
 | **讲解契约 `explain`**（`quantity`/`parallel_items`/`grouped_panels`/`comparison`/`ordered_steps`/`relation`/`curve`/`image_evidence`） | 把“读者必须看见什么”写成逐条义务，覆盖列表、嵌套、曲线、公式等 `form` 表达不了的结构 | 不选组件；required 缺原生载体是 REVIEW；覆盖账本写 `derived/explanation_coverage.json` |
 | 12 种平面 archetype（`cover-hero`/`figure-parameters`/`hero-dual-evidence`/`dual-demonstration`/`metric-comparison`/`three-conclusions`/`three-limitations`/`equation-derivation`/`evidence-hypothesis`/`process-flow`/`native-graphic`/`composite-research`） | 一图一文、双图对比、三结论、纯推导 | 容量固定，长正文触发 REVIEW |
-| `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×398 px；panel 标题带约 76–122 px，表格页加 panel 常超 |
+| `layout_tree`：columns(≤4) / stack / panel / image_grid(≤12 图) | 图文分层、多块并排、表格配注 | 正文区约 1168×450 px；轻微超限（≤24 px 或 6%）自动触发弹性间距收紧 `ELASTIC_MICRO_FIT`，硬超限在 `layout_feedback.json` 输出逐节点 `subtree_breakdown` |
+| 原生数据图 `charts`（`line`/`bar`/`hbar`/`scatter`） | 实测趋势、横向消融排名、阈值对照 | 支持字符串类别 `x.categories`、参考线 `reference_lines`、区间色带 `shaded_zones`、双行图例与碰撞避障标注 |
+| 原图无损裁切与高亮框 `figure_crop` / `figure_refs.highlights` | 多子图拼版拆解与关键局部框选 | `advance.figure_crop` 生成经 `verified_source` 校验的无损裁图；`highlights` 叠加 `[0..1]` 归一化原生描边与标签 |
 | 原生列表 `native_bullet_list` / `native_numbered_list` | 单段可加图标，独立要点可并列，步骤可编号 | 1–6 条、宽 ≥240 px、与 `inline_math` 分块 |
 | 行内公式 `inline_math` | 标题/正文/表格格里的量（`$10^{6}$`、`$\Phi_{\mathrm{bn}}$`、`$\tau_{\mathrm{RC}}$`） | 走 Cambria Math；部分宏不支持（如 `\parallel`）；须 PowerPoint 核对基线 |
 | 句内强调 `**…**` / `==…==` | 把承载结论的词、必须在投影上认出的符号抬出来 | 每句至多一处；不跨 `$…$`；原生列表里会被去掉并报 `EMPHASIS_IN_LIST`；加粗按真实粗体测宽，会占版面 |

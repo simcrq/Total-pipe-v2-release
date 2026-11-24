@@ -311,7 +311,7 @@ def compile_dag(graphic, region, theme, font_paths=None, *, layers_override=None
     for node in graphic['nodes']:
         elements.extend(node_elements(graphic['id'], node, boxes[node['id']], theme,
                                       text_heights[node['id']], title_size=title_size,
-                                      body_size=body_size))
+                                      body_size=body_size, font_paths=font_paths))
     nodes = [e for e in elements if e['kind'] == 'shape']
     native_nodes = {n['node_id']: n for n in nodes}
     routes = []
