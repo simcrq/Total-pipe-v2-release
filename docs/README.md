@@ -82,6 +82,7 @@
 
 - [可检索的 Deck IR 脚本库](../Total-pipe/examples/library/README.md) 含按关键词选择、查看和构建单项示例的命令。
 - [从真实 PPTX 批量提炼示例页](../Total-pipe/examples/library/FROM_PPTX.md)涵盖选页、读图和对象提取、原生重建与入库检查。
+- [从手机拍摄 PPT 照片批量构建示例库 Skill](../Total-pipe/skills/total-pipe-photo-to-library/SKILL.md)提供 EXIF 纠偏、连拍去重联系表、脱敏原生重建及防索引冲突自动注册工具。
 - [复杂混排单页](../Total-pipe/examples/complex-mixed/README.zh-CN.md)：PPTX、Deck IR、参考素材及检查记录。
 - [空白检测与讲解标注三页](../Total-pipe/examples/explain-viz/whitespace-filled/README.md)：填充前后 IR、可编辑 PPTX、PowerPoint 原生预览与审计。
 - [行内公式样例](../Total-pipe/examples/inline-math.deck_ir.json)、[矩阵推导样例](../Total-pipe/examples/matrix-derivation.deck_ir.json)。

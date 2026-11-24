@@ -148,3 +148,48 @@ def inspect_pdf(pdf, layout):
                     add('FONT_SUBSTITUTION_REVIEW', f"Native font: {span['fontname']}", n, 'REVIEW', 'MEDIUM')
     # Deduplicate repeated font findings.
     return list({i['id']: i for i in items}.values())
+
+
+def render_pdf_to_pngs(pdf_path, out_dir, scale=2.5):
+    """Render each page of a native PowerPoint PDF to high-res PNG previews.
+
+    Uses pypdfium2 or PyMuPDF (fitz) when available; returns a list of saved PNG paths.
+    """
+    pdf = Path(pdf_path)
+    target = Path(out_dir)
+    if not pdf.is_file():
+        return []
+    target.mkdir(parents=True, exist_ok=True)
+    saved = []
+    try:
+        import pypdfium2 as pdfium  # type: ignore
+
+        doc = pdfium.PdfDocument(str(pdf))
+        try:
+            for idx in range(len(doc)):
+                page = doc[idx]
+                img = page.render(scale=scale).to_pil()
+                out_file = target / f'slide_{idx + 1:03d}.png'
+                img.save(out_file)
+                saved.append(out_file)
+        finally:
+            doc.close()
+        return saved
+    except ImportError:
+        pass
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open(str(pdf))
+        try:
+            dpi = int(round(72 * scale))
+            for idx, page in enumerate(doc):
+                pix = page.get_pixmap(dpi=dpi)
+                out_file = target / f'slide_{idx + 1:03d}.png'
+                pix.save(str(out_file))
+                saved.append(out_file)
+        finally:
+            doc.close()
+        return saved
+    except ImportError:
+        return []

@@ -38,12 +38,29 @@ def _preflight_cache_key(executable, connectors, tables):
     return (str(resolved.resolve()), stat.st_mtime_ns, stat.st_size, bool(connectors), bool(tables))
 
 
+def _resolve_executable(executable):
+    candidate = Path(str(executable))
+    if candidate.is_file():
+        return str(candidate.resolve())
+    found = shutil.which(str(executable))
+    if found:
+        return str(Path(found).resolve())
+    path_preview = os.environ.get('PATH', '')
+    if len(path_preview) > 220:
+        path_preview = path_preview[:220] + '...'
+    raise FileNotFoundError(
+        f"OfficeCLI executable {executable!r} not found (requires OfficeCLI 1.0.152+). "
+        f"Install officecli on PATH or pass --officecli <path>. PATH={path_preview}"
+    )
+
+
 def preflight(executable='officecli', connectors=False, tables=False):
     """Pin the minimum tested CLI and verify its schema before writing a deck."""
     cache_key = _preflight_cache_key(executable, connectors, tables)
     if cache_key is not None and cache_key in _PREFLIGHT_CACHE:
         return dict(_PREFLIGHT_CACHE[cache_key])
-    version = subprocess.run([executable, '--version'], capture_output=True, text=True,
+    resolved_exec = _resolve_executable(executable)
+    version = subprocess.run([resolved_exec, '--version'], capture_output=True, text=True,
                              encoding='utf-8', errors='replace', timeout=15)
     match = re.search(r'\b(\d+)\.(\d+)\.(\d+)\b', version.stdout)
     if version.returncode or not match or tuple(map(int, match.groups())) < (1, 0, 152):
@@ -66,7 +83,7 @@ def preflight(executable='officecli', connectors=False, tables=False):
         required['table'] = {key: 'add' for key in ('x', 'y', 'width', 'height', 'rows', 'cols', 'name')}
     schemas = {}
     for element, props in required.items():
-        response = subprocess.run([executable, 'help', 'pptx', element, '--json'],
+        response = subprocess.run([resolved_exec, 'help', 'pptx', element, '--json'],
                                   capture_output=True, text=True, encoding='utf-8',
                                   errors='replace', timeout=15)
         if response.returncode:

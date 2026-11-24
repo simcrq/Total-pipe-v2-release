@@ -9,7 +9,7 @@ import math
 from PIL import ImageFont
 
 MARGIN = {'left': 96., 'right': 24., 'top': 46., 'bottom': 104.}
-MIN_SIZE = (420., 260.)
+MIN_SIZE = (380., 220.)
 PALETTE = ('#0F4C81', '#C2410C', '#2F7D6D', '#7A4E9E')
 TICK_SIZE = 20
 LABEL_SIZE = 24
@@ -364,18 +364,18 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
                         x_cands.append((rx + 6, 'left'))
                     if not x_cands:
                         x_cands.append((min(max(rx - rw / 2, px + 2), px + pw - rw - 2), 'center'))
-                    y_slots = [py + ph - 30] + [py + (i + 1) * band - 13 for i in range(len(cats) - 1)] + [py + 4]
+                    y_slots = [py + ph - 32] + [py + (i + 1) * band - 14 for i in range(len(cats) - 1)] + [py + 4]
                     chosen = None
                     for sy in y_slots:
                         for sx, align in x_cands:
-                            cand = [sx, sy, rw, 26]
+                            cand = [sx, sy, rw, 28]
                             if (not any(_boxes_overlap(cand, ob, pad=2.0) for ob in obstacle_boxes)
                                     and not any(_segment_hits_box(s[0], s[1], s[2], s[3], cand, pad=1.5) for s in segments)):
                                 chosen = (cand, align)
                                 break
                         if chosen:
                             break
-                    rbox, ralign = chosen or ([x_cands[0][0], py + ph - 30, rw, 26], x_cands[0][1])
+                    rbox, ralign = chosen or ([x_cands[0][0], py + ph - 32, rw, 28], x_cands[0][1])
                     elements.append(_text(f'chart:{chart["id"]}:ref-label:{r_idx}', rline['label'], rbox, '#475569', SOURCE_SIZE, ralign))
                     obstacle_boxes.append(rbox)
 
@@ -421,9 +421,9 @@ def compile_chart(chart, bbox, theme, font_paths):
     else:
         left, right = MARGIN['left'], MARGIN['right']
         top = MARGIN['top'] + (26. if len(legend_rows) == 2 else 0.)
-        bottom = MARGIN['bottom']
+        bottom = MARGIN['bottom'] if chart.get('note') else 90.
         plot = (x+left, y+top, w-left-right, h-top-bottom)
-        if plot[2] < 120 or plot[3] < 80:
+        if plot[2] < 120 or plot[3] < 72:
             raise ChartLayoutError('chart body is too small for axes and a series')
         px, py, pw, ph = plot
 
@@ -548,8 +548,8 @@ def compile_chart(chart, bbox, theme, font_paths):
                     elements.append(el)
                     segments.append((px, ry, px + pw, ry))
                     if rline.get('label'):
-                        rw = face.getlength(rline['label']) + 10
-                        rbox = [px + pw - rw - 4, max(py + 2, ry - 26), rw, 24]
+                        rw = face.getlength(rline['label']) + 12
+                        rbox = [px + pw - rw - 4, max(py + 2, ry - 30), rw, 28]
                         elements.append(_text(f'chart:{chart["id"]}:ref-label:{r_idx}', rline['label'], rbox, '#475569', SOURCE_SIZE, 'right'))
                         obstacle_boxes.append(rbox)
             else:
@@ -560,8 +560,8 @@ def compile_chart(chart, bbox, theme, font_paths):
                     elements.append(el)
                     segments.append((rx, py, rx, py + ph))
                     if rline.get('label'):
-                        rw = face.getlength(rline['label']) + 10
-                        rbox = [min(rx + 4, px + pw - rw - 2), py + 4, rw, 24]
+                        rw = face.getlength(rline['label']) + 12
+                        rbox = [min(rx + 4, px + pw - rw - 2), py + 4, rw, 28]
                         elements.append(_text(f'chart:{chart["id"]}:ref-label:{r_idx}', rline['label'], rbox, '#475569', SOURCE_SIZE))
                         obstacle_boxes.append(rbox)
 

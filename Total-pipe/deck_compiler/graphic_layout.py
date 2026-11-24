@@ -470,9 +470,12 @@ def compile_graphic(graphic, region, theme, font_paths=None):
 
     if layout == 'compact':
         gap = 16.0
-        node_size = min(180.0, (width-gap*(count-1))/count, height-32)
-        if node_size < 96:
-            raise ValueError('Compact process needs at least 96 px per square node')
+        has_body = any(str(node.get('body') or '').strip() for node in graphic['nodes'])
+        pad_v = 32.0 if has_body else 16.0
+        min_square = 96.0 if has_body else 64.0
+        node_size = min(180.0, (width-gap*(count-1))/count, height-pad_v)
+        if node_size < min_square:
+            raise ValueError(f'Compact process needs at least {int(min_square)} px per square node')
         total = node_size*count+gap*(count-1)
         start_x = x+(width-total)/2
         node_y = y+(height-node_size)/2

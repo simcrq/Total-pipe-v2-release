@@ -144,6 +144,26 @@ def _validate_deck_presentation(deck_presentation, check):
                                     isinstance(value['title'], str) and 0 < len(value['title']) <= 20))),
               'presentation.agenda requires true or {"title": "..."} (at most 20 characters)',
               rule='AGENDA_INVALID')
+    if 'hide_takeaway' in deck_presentation:
+        check(isinstance(deck_presentation['hide_takeaway'], bool),
+              'presentation.hide_takeaway must be true or false', rule='HIDE_TAKEAWAY_INVALID')
+    if 'section_nav' in deck_presentation:
+        nav = deck_presentation['section_nav']
+        if nav is not True and nav is not False:
+            allowed_nav = {'items', 'active_fill', 'active_color', 'fill', 'color', 'divider_color'}
+            valid_obj = isinstance(nav, dict) and set(nav) <= allowed_nav
+            check(valid_obj, 'presentation.section_nav must be boolean or an object with items and optional colors',
+                  rule='SECTION_NAV_INVALID')
+            if valid_obj:
+                if 'items' in nav:
+                    items = nav['items']
+                    check(isinstance(items, list) and 2 <= len(items) <= 8
+                          and all(isinstance(it, str) and bool(it.strip()) and len(it) <= 24 and '\n' not in it for it in items),
+                          'section_nav.items requires 2-8 single-line labels (<=24 chars)', rule='SECTION_NAV_INVALID')
+                for color_key in ('active_fill', 'active_color', 'fill', 'color', 'divider_color'):
+                    if color_key in nav:
+                        check(isinstance(nav[color_key], str) and ACCENT.fullmatch(nav[color_key]),
+                              f'section_nav.{color_key} must be #RRGGBB', rule='SECTION_NAV_INVALID')
 
 
 def _validate_theme(theme, check):
@@ -191,6 +211,13 @@ def _validate_slide_presentation(pres, deck_presentation, slide, comp, n, check)
               and '\n' not in label,
               'presentation.section requires one line of at most 24 characters', n,
               'SECTION_INVALID')
+    if 'hide_takeaway' in pres:
+        check(isinstance(pres['hide_takeaway'], bool),
+              'slide presentation.hide_takeaway must be true or false', n, 'HIDE_TAKEAWAY_INVALID')
+    if 'section_nav_index' in pres:
+        idx = pres['section_nav_index']
+        check(type(idx) is int and 0 <= idx < 8,
+              'slide presentation.section_nav_index must be an integer in [0, 7]', n, 'SECTION_NAV_INVALID')
     if 'takeaway_marker' in pres:
         from .fonts import BULLET_STYLES
         marker = pres['takeaway_marker']

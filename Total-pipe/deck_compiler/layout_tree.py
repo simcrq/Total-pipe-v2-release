@@ -52,7 +52,7 @@ def capabilities():
                        'native_table', 'native_bullets', 'native_numbered_lists'],
             'graphic_types': ['process', 'dag', 'mechanism', 'architecture', 'funnel', 'path', 'composite'],
             'chart': {'types': ['line', 'bar', 'hbar', 'scatter'], 'bases': ['evidence', 'explain'],
-                      'min_size_px': [420, 260], 'max_series': 4, 'error_bars': True,
+                      'min_size_px': [380, 220], 'max_series': 4, 'error_bars': True,
                       'annotations': 6, 'reference_lines': 4, 'shaded_zones': 3},
             'legacy_flat_ir': True}
 
@@ -375,7 +375,9 @@ class RegionCompiler:
             weights = graphic.get('weights', [1]*len(sizes))
             return (max(size/weight for size, weight in zip(sizes, weights))*sum(weights)
                     +24*(len(sizes)-1)) if graphic.get('arrangement', 'columns') == 'columns' else max(sizes)
-        return 96. if kind == 'path' else 176.
+        if kind == 'path':
+            return 56. if not graphic.get('labels') else 96.
+        return 176.
 
     def graphic_height(self, graphic, width, path, available):
         from .graphic_layout import compile_graphic
@@ -385,7 +387,7 @@ class RegionCompiler:
                 'Native graphic cannot reach its readable minimum width in this region.',
                 [minimum, 272 if graphic['type'] == 'process' else 120], available)
         last_error = None
-        for height in (96, 128, 160, 176, 184, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
+        for height in (56, 72, 80, 96, 128, 160, 176, 184, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
             try:
                 elements = compile_graphic(graphic, [0, 0, width, height], self.theme, self.fonts)
                 # Path labels also have fixed font floors; a vector's ability to scale is not a
@@ -719,11 +721,24 @@ class RegionCompiler:
         if weights:
             heights = [usable*w/sum(weights) for w in weights]
         else:
-            # Hug measured content. Extra space is only consumed towards a child's preferred
-            # height, so derivation rows never spread to fill an arbitrarily tall panel.
-            extra, demand = max(0, usable-sum(minimums)), sum(max(0, p-m) for p, m in zip(preferred, minimums))
-            heights = [m+(min(1., extra/demand)*(p-m) if demand else 0)
-                       for m, p in zip(minimums, preferred)]
+            # Hug measured content. Satisfy measured wrapped text-block heights first so CJK/bold
+            # prose never gets starved below its natural line count and overflows onto sibling charts.
+            extra = max(0., usable - sum(minimums))
+            heights = list(minimums)
+            if kind == 'stack':
+                is_text_row = [c['type'] == 'block' for c in children]
+                text_demand = sum(max(0., p - m) for m, p, is_txt in zip(minimums, preferred, is_text_row) if is_txt)
+                if extra > 0 and text_demand > 0:
+                    ratio = min(1., extra / text_demand)
+                    for idx, (m, p, is_txt) in enumerate(zip(minimums, preferred, is_text_row)):
+                        if is_txt and p > m:
+                            add = ratio * (p - m)
+                            heights[idx] += add
+                            extra -= add
+            rem_demand = sum(max(0., p - h) for h, p in zip(heights, preferred))
+            if extra > 0 and rem_demand > 0:
+                ratio = min(1., extra / rem_demand)
+                heights = [h + ratio * max(0., p - h) for h, p in zip(heights, preferred)]
             if (len(rows) == 1 and (kind == 'image_grid' or children[0]['type'] != 'block')
                     and node.get('align', 'start') == 'start'):
                 heights = [usable]

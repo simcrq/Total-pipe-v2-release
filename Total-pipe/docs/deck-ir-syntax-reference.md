@@ -85,7 +85,11 @@
 ### 顶层关键约束
 - **多页共享头一致**：使用 `deck_ir_page` 分批写页时，每页顶层 `deck_id`、`presentation`、`theme` 必须完全一致。
 - **`academic_design` 与 `takeaway_frame` 精确枚举**：
-  - `academic_design`：`title_treatment` 仅允许 `"plain" | "thin-rule"`；`figure_treatment` 仅允许 `"unframed" | "ruled-caption"`；`header_variant` 仅允许 `"compact" | "standard"`；`density` 仅允许 `"balanced" | "airy" | "dense"`。
+  - `academic_design`：`title_treatment` 允许 `"plain" | "thin-rule" | "accent-bar"`（`accent-bar` 在标题左侧绘制竖向强调色块）；`figure_treatment` 仅允许 `"unframed" | "ruled-caption"`；`header_variant` 仅允许 `"compact" | "standard"`；`density` 仅允许 `"balanced" | "compact"`。
+  - **顶部通栏章节导航与精简页眉 / 页脚**：
+    - `presentation.section_nav`：设为 `true`（自动汇总各页 `presentation.section`）或 `{"items": ["现象", "机理", "案例", "应对"], "active_fill": "#B85D3B", "active_color": "#FFFFFF", "fill": "#F3F4F6", "color": "#52606D"}`（2–8 项），渲染在整页最顶边（标题上方），按当前页 `presentation.section` 或 `presentation.section_nav_index` 高亮当前章。
+    - `presentation.hide_takeaway`（可写于顶层或单页 `slide.presentation`）：设为 `true` 时隐藏标题下方副行，将空间释放给 `body`（适合已有底部结语横幅的页面）。
+    - `presentation.page_numbers: false` 且未设 `footer`、无可见 `caveats` 时，不绘底边横线与页码，正文底边下延至 `y = 672 px`。
   - `slide.presentation.takeaway_frame` 必须是对象（**非字符串**）：`{"fill": "#EFF6FF", "border": {"color": "#1E3A8A", "width": 1.5}, "padding": "compact"}`（无 `border_color`/`border_width` 顶层键）。
 - **`assets` 来源规则**：
   - `origin: "paper"`（默认）：须配 `source_figure`（正则 `^S?[1-9][0-9]*[a-z]?$`，如 `"1a"`、`"S2"`）；可选 `crop: {"source_path": "...", "source_sha256": "<64hex>", "box": [x1,y1,x2,y2]}`。

@@ -4,170 +4,458 @@
     {
       "id": "independent-blocks",
       "title": "独立正文块、圆角分组标题与原生标记",
-      "tags": ["独立正文块", "独立 block", "独立要点", "圆角标题", "圆角标签", "圆角框", "分组标题", "原生列表", "项目符号", "图标", "箭头", "编号", "顺序", "native_bullet_list", "native_numbered_list", "bullet_icon", "list_start", "title chip"],
+      "tags": [
+        "独立正文块",
+        "独立 block",
+        "独立要点",
+        "圆角标题",
+        "圆角标签",
+        "圆角框",
+        "分组标题",
+        "原生列表",
+        "项目符号",
+        "图标",
+        "箭头",
+        "编号",
+        "顺序",
+        "native_bullet_list",
+        "native_numbered_list",
+        "bullet_icon",
+        "list_start",
+        "title chip"
+      ],
       "summary": "每条文案保留自己的 block ID。短圆角标题分组，并列块各有符号，有序块各有起始编号。",
       "script": "independent_blocks.py"
     },
     {
       "id": "comparison-lanes",
       "title": "共同标题下的 A/B 对照路线",
-      "tags": ["A/B", "对照路线", "对照流程", "对照", "比较", "并列流程", "流程图", "圆角节点", "圆角文字框", "带文字形状", "动作标签", "连接箭头", "分隔线", "comparison lanes", "comparison flow", "rounded nodes"],
+      "tags": [
+        "A/B",
+        "对照路线",
+        "对照流程",
+        "对照",
+        "比较",
+        "并列流程",
+        "流程图",
+        "圆角节点",
+        "圆角文字框",
+        "带文字形状",
+        "动作标签",
+        "连接箭头",
+        "分隔线",
+        "comparison lanes",
+        "comparison flow",
+        "rounded nodes"
+      ],
       "summary": "两个命名流程共享一个比较主题。可编辑状态节点、动作文字和箭头分别表达路线内部变化。",
       "script": "comparison_lanes.py"
     },
     {
       "id": "directional-notes",
       "title": "图片、原生流程图和独立公式的四向说明",
-      "tags": ["四向说明", "图注", "上方", "下方", "左侧", "右侧", "独立公式", "流程图", "图片", "caption_for", "text_for", "directional annotations"],
+      "tags": [
+        "四向说明",
+        "图注",
+        "上方",
+        "下方",
+        "左侧",
+        "右侧",
+        "独立公式",
+        "流程图",
+        "图片",
+        "caption_for",
+        "text_for",
+        "directional annotations"
+      ],
       "summary": "图、流程和公式各有一页，演示如何把顶部、底部和两侧文字绑定在目标对象旁。",
       "script": "directional_notes.py"
     },
     {
       "id": "figure-readout",
       "title": "保留原图比例与来源，右侧逐步导读",
-      "tags": ["原图导读", "论文原图", "读图", "图文并排", "图号", "来源", "figure reading", "figure readout", "figure_refs", "source_label"],
+      "tags": [
+        "原图导读",
+        "论文原图",
+        "读图",
+        "图文并排",
+        "图号",
+        "来源",
+        "figure reading",
+        "figure readout",
+        "figure_refs",
+        "source_label"
+      ],
       "summary": "用仓库现有图演示原图等比放置、图注署名和分块编号，按顺序读基准线、平均值与最差值。",
       "script": "figure_readout.py"
     },
     {
       "id": "chart-uncertainty",
       "title": "样品与空白的折线图，含误差棒和图内标注",
-      "tags": ["数据图", "原生数据图", "折线图", "误差棒", "标准差", "不确定性", "图内标注", "error bars", "sample SD", "line chart", "y_error", "annotations"],
+      "tags": [
+        "数据图",
+        "原生数据图",
+        "折线图",
+        "误差棒",
+        "标准差",
+        "不确定性",
+        "图内标注",
+        "error bars",
+        "sample SD",
+        "line chart",
+        "y_error",
+        "annotations"
+      ],
       "summary": "由明确的构造读数计算均值与样本标准差，注明单位、误差定义和构造来源，图上标出最后一个样品点。",
       "script": "chart_uncertainty.py"
     },
     {
       "id": "grouped-table",
       "title": "对照表的合并表头、单位和构造示例",
-      "tags": ["科研表格", "对照表", "合并表头", "多级表头", "单位", "构造示例", "merged headers", "native table", "row_span", "column_span", "constructed"],
+      "tags": [
+        "科研表格",
+        "对照表",
+        "合并表头",
+        "多级表头",
+        "单位",
+        "构造示例",
+        "merged headers",
+        "native table",
+        "row_span",
+        "column_span",
+        "constructed"
+      ],
       "summary": "在原生表格中合并行列标题，比较均值与中位数；表下独立标注构造输入及来源。",
       "script": "grouped_table.py"
     },
     {
       "id": "equation-explainer",
       "title": "行内定义符号，独立展示主公式",
-      "tags": ["原生公式", "行内公式", "独立公式", "符号定义", "物理意义", "模型假设", "分式", "inline math", "display equation", "OMML", "inline_math", "anchor"],
+      "tags": [
+        "原生公式",
+        "行内公式",
+        "独立公式",
+        "符号定义",
+        "物理意义",
+        "模型假设",
+        "分式",
+        "inline math",
+        "display equation",
+        "OMML",
+        "inline_math",
+        "anchor"
+      ],
       "summary": "同页展示 RC 放电的行内数学、锚定到正文的独立分式、变量定义和时间常数的解释。",
       "script": "equation_explainer.py"
     },
     {
       "id": "mechanism-hypothesis",
       "title": "机制假设图与可以检验它的对照",
-      "tags": ["机制图", "机制假设", "假设边", "假设虚线", "抑制关系", "T形端帽", "对照实验", "mechanism diagram", "hypothesis edge", "inhibit", "activate"],
+      "tags": [
+        "机制图",
+        "机制假设",
+        "假设边",
+        "假设虚线",
+        "抑制关系",
+        "T形端帽",
+        "对照实验",
+        "mechanism diagram",
+        "hypothesis edge",
+        "inhibit",
+        "activate"
+      ],
       "summary": "用原生抑制线和箭头表示可检验的两段假设，图下写明需要比较的观测量与匹配条件。",
       "script": "mechanism_hypothesis.py"
     },
     {
       "id": "rc-discharge-composite",
       "title": "RC 放电综合科研页：同页比较曲线、回路、公式与参数",
-      "tags": ["综合科研页", "复杂混排", "多功能同页", "曲线与公式", "图表公式混排", "电路示意", "RC 放电", "RC discharge", "composite worked example", "native circuit"],
+      "tags": [
+        "综合科研页",
+        "复杂混排",
+        "多功能同页",
+        "曲线与公式",
+        "图表公式混排",
+        "电路示意",
+        "RC 放电",
+        "RC discharge",
+        "composite worked example",
+        "native circuit"
+      ],
       "summary": "中文单页构造算例。用可编辑比较曲线、回路、原生独立与行内公式、参数表、图注及逐块编号解释同一次受控比较。",
       "script": "rc_discharge_composite.py"
     },
     {
       "id": "dose-recovery-composite",
       "title": "双系列对数散点、误差棒与端点对照表",
-      "tags": ["对数散点", "浓度响应", "回收率", "端点对照", "log scatter", "dose recovery"],
+      "tags": [
+        "对数散点",
+        "浓度响应",
+        "回收率",
+        "端点对照",
+        "log scatter",
+        "dose recovery"
+      ],
       "summary": "用构造读数计算样本标准差，搭配原生端点表和独立编号解释低、高浓度的差异。",
       "script": "dose_recovery_composite.py"
     },
     {
       "id": "matched-blank-workflow",
       "title": "同批空白扣除：双泳道、动作标注与公式",
-      "tags": ["同批空白", "双泳道", "空白扣除", "双路线与公式", "matched blank", "workflow with equation"],
+      "tags": [
+        "同批空白",
+        "双泳道",
+        "空白扣除",
+        "双路线与公式",
+        "matched blank",
+        "workflow with equation"
+      ],
       "summary": "对齐两条可编辑测量路线，用独立公式和条件块解释同批扣空白为何能消掉共同偏移。",
       "script": "matched_blank_workflow.py"
     },
     {
       "id": "figure-quality-composite",
       "title": "基准原图、上方导读与并排质检表",
-      "tags": ["原图与表格", "原图质检", "图上导读", "版面基准", "benchmark figure and table"],
+      "tags": [
+        "原图与表格",
+        "原图质检",
+        "图上导读",
+        "版面基准",
+        "benchmark figure and table"
+      ],
       "summary": "保留软件基准原图和来源，搭配定向读图提示与从同一测量夹具提取的原生质检表。",
       "script": "figure_quality_composite.py"
     },
     {
       "id": "sampling-alias-pair",
       "title": "采样混叠：两张同尺度信号图与采样恒等式",
-      "tags": ["采样混叠", "同尺度双图", "双图同尺度", "采样点标注", "圆角标题", "独立编号", "采样恒等式", "sampling aliasing", "small multiples", "paired line charts"],
+      "tags": [
+        "采样混叠",
+        "同尺度双图",
+        "双图同尺度",
+        "采样点标注",
+        "圆角标题",
+        "独立编号",
+        "采样恒等式",
+        "sampling aliasing",
+        "small multiples",
+        "paired line charts"
+      ],
       "summary": "用两个可编辑折线图标出同一采样时刻，在下方用独立编号和原生公式解释不同余弦信号为何给出相同样值。",
       "script": "sampling_alias_pair.py"
     },
     {
       "id": "thermal-resistance-section",
       "title": "串联热阻：材料剖面四向说明与温降核算",
-      "tags": ["串联热阻", "材料剖面", "温降剖面", "四向说明", "热流方向", "独立公式", "参数表", "thermal resistance", "cross section", "temperature drop"],
+      "tags": [
+        "串联热阻",
+        "材料剖面",
+        "温降剖面",
+        "四向说明",
+        "热流方向",
+        "独立公式",
+        "参数表",
+        "thermal resistance",
+        "cross section",
+        "temperature drop"
+      ],
       "summary": "横跨页宽的可编辑剖面带四向注释，下方用同一模型计算的数值表、独立公式和符号正文核对温降。",
       "script": "thermal_resistance_section.py"
     },
     {
       "id": "spectral-preprocessing-matrix",
       "title": "频谱预处理：二维对照矩阵、交互量与分支",
-      "tags": ["二维对照", "二维对照矩阵", "交互量", "合并表头", "分支汇合", "频谱预处理", "factorial contrast", "interaction term", "merged matrix", "branching DAG"],
+      "tags": [
+        "二维对照",
+        "二维对照矩阵",
+        "交互量",
+        "合并表头",
+        "分支汇合",
+        "频谱预处理",
+        "factorial contrast",
+        "interaction term",
+        "merged matrix",
+        "branching DAG"
+      ],
       "summary": "四种构造读数放在合并表头的 2×2 矩阵中。原生公式和上下说明核算交互量，分支流程显示如何保持对照条件一致。",
       "script": "spectral_preprocessing_matrix.py"
     },
     {
       "id": "pulse-echo-thickness",
       "title": "双回波测厚：剖面、波形时间尺与往返公式",
-      "tags": ["双回波测厚", "波形时间尺", "跨图同色", "回波时间差", "测量剖面", "脉冲回波", "pulse echo", "time of flight", "cross section and timing"],
+      "tags": [
+        "双回波测厚",
+        "波形时间尺",
+        "跨图同色",
+        "回波时间差",
+        "测量剖面",
+        "脉冲回波",
+        "pulse echo",
+        "time of flight",
+        "cross section and timing"
+      ],
       "summary": "用同色声路和波形把前后界面逐一对应，标出两次到达的时间差，再以原生分式换算层厚。",
       "script": "pulse_echo_thickness.py"
     },
     {
       "id": "paired-noise-dumbbell",
       "title": "配对哑铃图：保留样品级变化并标出反例",
-      "tags": ["配对哑铃图", "样品级反例", "配对读数", "差值中位数", "前后对照", "paired dumbbell plot", "paired change", "exception row"],
+      "tags": [
+        "配对哑铃图",
+        "样品级反例",
+        "配对读数",
+        "差值中位数",
+        "前后对照",
+        "paired dumbbell plot",
+        "paired change",
+        "exception row"
+      ],
       "summary": "同一坐标轴显示每个样品的处理前后读数，用空心、实心点和暖色例外行引导读图，右栏汇总配对差。",
       "script": "paired_noise_dumbbell.py"
     },
     {
       "id": "trapezoid-convergence-check",
       "title": "梯形法收敛：双对数误差图与两点核算",
-      "tags": ["收敛阶核算", "双对数误差图", "两点核算", "步长减半", "复合梯形法", "convergence rate", "log-log plot", "step halving"],
+      "tags": [
+        "收敛阶核算",
+        "双对数误差图",
+        "两点核算",
+        "步长减半",
+        "复合梯形法",
+        "convergence rate",
+        "log-log plot",
+        "step halving"
+      ],
       "summary": "对同一积分实算两条误差线，用图内引线指向两点，右栏对照表和原生分式展示步长减半前后的误差比。",
       "script": "trapezoid_convergence_check.py"
     },
     {
       "id": "local-learning-comparison",
       "title": "双路线架构对比：高亮机制替换并对照更新规则",
-      "tags": ["架构对比", "机制替换", "阶段对齐", "双路线", "上下两条流程", "流程中高亮", "关键步骤", "机制对照表", "更新规则", "局部学习", "反向传播", "平衡传播", "aligned workflows", "mechanism substitution"],
+      "tags": [
+        "架构对比",
+        "机制替换",
+        "阶段对齐",
+        "双路线",
+        "上下两条流程",
+        "流程中高亮",
+        "关键步骤",
+        "机制对照表",
+        "更新规则",
+        "局部学习",
+        "反向传播",
+        "平衡传播",
+        "aligned workflows",
+        "mechanism substitution"
+      ],
       "summary": "适合并列讲解两套实现怎样完成同一任务。上下路线逐列对照，暖色指出梯度来源发生替换的步骤，下方读机制对照表和两条原生更新式。",
       "script": "local_learning_comparison.py"
     },
     {
       "id": "definition-factor-analogy",
       "title": "先定义再类比：两个中心对象与环绕因素",
-      "tags": ["定义", "类比", "多因素", "概念解释", "跨领域类比", "双中心", "因素环绕", "因素映射", "双向对照", "构造示例", "analogy", "paired radial diagrams"],
+      "tags": [
+        "定义",
+        "类比",
+        "多因素",
+        "概念解释",
+        "跨领域类比",
+        "双中心",
+        "因素环绕",
+        "因素映射",
+        "双向对照",
+        "构造示例",
+        "analogy",
+        "paired radial diagrams"
+      ],
       "summary": "适合用熟悉事物解释陌生概念。先读上方定义与反馈机制，再沿类比标记从左侧中心读到右侧中心，比较各自环绕的多类因素。",
       "script": "definition_factor_analogy.py"
     },
     {
       "id": "problem-gap-approach",
       "title": "开篇立题漏斗：瓶颈收缩、现有缺口与本文切入",
-      "tags": ["开篇立题", "研究动机", "问题瓶颈", "现有缺口", "漏斗图", "切入路径", "funnel", "research motivation", "problem gap approach"],
+      "tags": [
+        "开篇立题",
+        "研究动机",
+        "问题瓶颈",
+        "现有缺口",
+        "漏斗图",
+        "切入路径",
+        "funnel",
+        "research motivation",
+        "problem gap approach"
+      ],
       "summary": "左侧漏斗逐层收敛问题焦点，右侧上下分栏对比现有方案局限与本文核心切入路径。",
       "script": "problem_gap_approach.py"
     },
     {
       "id": "system-architecture-ablation",
       "title": "分层系统架构与水平消融条形图同页核算",
-      "tags": ["系统架构", "分层架构", "消融实验", "水平条形图", "阈值参考线", "architecture", "ablation study", "hbar", "reference_lines"],
+      "tags": [
+        "系统架构",
+        "分层架构",
+        "消融实验",
+        "水平条形图",
+        "阈值参考线",
+        "architecture",
+        "ablation study",
+        "hbar",
+        "reference_lines"
+      ],
       "summary": "上方展示三层流水系统架构，下方并列水平消融条形图（含阈值参考线）与模块延迟增益表。",
       "script": "system_architecture_ablation.py"
     },
     {
       "id": "multi-panel-grid-readout",
       "title": "多子图网格拼版、原图高亮框与编号导读",
-      "tags": ["多子图网格", "拼版读图", "原图高亮框", "局部框选", "image_grid", "highlights", "multi-panel figure"],
+      "tags": [
+        "多子图网格",
+        "拼版读图",
+        "原图高亮框",
+        "局部框选",
+        "image_grid",
+        "highlights",
+        "multi-panel figure"
+      ],
       "summary": "左侧 image_grid 对齐多张子图并在关键区间叠加原生高亮标注框，右侧按编号逐条对应读图结论。",
       "script": "multi_panel_grid_readout.py"
     },
     {
       "id": "conclusions-boundary-matrix",
       "title": "收束总结页：三支柱核心贡献卡片与运行边界矩阵",
-      "tags": ["结论总结", "核心贡献", "三支柱", "适用边界", "失效条件", "总结与展望", "conclusions", "operating boundary", "limitations matrix"],
+      "tags": [
+        "结论总结",
+        "核心贡献",
+        "三支柱",
+        "适用边界",
+        "失效条件",
+        "总结与展望",
+        "conclusions",
+        "operating boundary",
+        "limitations matrix"
+      ],
       "summary": "上方三列圆角标签面板总结核心贡献，下方全宽矩阵明确适用工况、失效边界与部署建议。",
       "script": "conclusions_boundary_matrix.py"
+    },
+    {
+      "id": "case-evolution-transition",
+      "title": "顶部章节导航与左右双卡箭头演进案例页",
+      "tags": [
+        "案例演进",
+        "双卡箭头过渡",
+        "章节进度导航",
+        "前后对比",
+        "良性与异化",
+        "上文下图",
+        "底部结语",
+        "accent-bar",
+        "section_nav",
+        "case evolution",
+        "before after transition",
+        "dual card arrow"
+      ],
+      "summary": "顶部通栏五阶段章节导航高亮当前章，左侧竖色块标题配隐藏副行，中部左右对称带边框圆角标签卡片配居中过渡箭头与双折线图，底部单行警示结语。",
+      "script": "case_evolution_transition.py"
     }
   ]
 }

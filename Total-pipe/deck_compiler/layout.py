@@ -115,20 +115,23 @@ def caption_measure(ref, width, font_file, design=None):
     return max(34.0, len(lines)*size*1.25+8), len(lines)
 
 
-def body_bottom(slide, family, spacious):
+def body_bottom(slide, family, spacious, deck_presentation=None):
     """Where the body region ends on this page.
 
     The dual-figure template has always used the strip between the body bottom and the compact caveat
     row at y=622; the packer's requests said 588, so the two disagreed by 30 px and no two-up figure
     could ever satisfy the panel floor. One function now answers for both.
     """
-    bottom = 588 if audience.visible_caveats(slide) else 640
-    if family == "dual" and audience.visible_caveats(slide):
-        bottom = 618
-    return bottom
+    if audience.visible_caveats(slide):
+        return 618 if family == "dual" else 588
+    pres = deck_presentation or {}
+    numbering = slide.get('presentation', {}).get('page_number', pres.get('page_numbers', True))
+    if numbering is False and not pres.get('footer'):
+        return 672
+    return 640
 
 
-def body_region(slide, family, frame, design=None, font_paths=None, preserve_terms=False):
+def body_region(slide, family, frame, design=None, font_paths=None, preserve_terms=False, deck_presentation=None):
     """The body rectangle's vertical bounds for a frame variant, in the compiler's own units.
 
     The lab-template frame is tighter above (a 40 pt title and a one-line takeaway instead of the
@@ -136,12 +139,13 @@ def body_region(slide, family, frame, design=None, font_paths=None, preserve_ter
     y=686), so a content page gains about 150 px of body height.
     """
     if design:
-        return header_layout(design, slide, font_paths, preserve_terms)['body_top'], body_bottom(slide, family, False)
+        return (header_layout(design, slide, font_paths, preserve_terms, deck_presentation)['body_top'],
+                body_bottom(slide, family, False, deck_presentation))
     if frame == "template":
         top, bottom = 132, (632 if audience.visible_caveats(slide) else 672)
     else:
         spacious = frame == "spacious"
-        top, bottom = (236 if spacious else 260), body_bottom(slide, family, spacious)
+        top, bottom = (236 if spacious else 260), body_bottom(slide, family, spacious, deck_presentation)
     if slide.get('presentation', {}).get('takeaway_frame') and font_paths:
         from .container_frames import measure_takeaway, legacy_takeaway_box
         box = measure_takeaway(slide, font_paths, legacy_takeaway_box(slide, frame))['bbox']
@@ -612,6 +616,95 @@ FOOTER_NUMBER_BOX = [1160, FOOTER_TEXT_Y, 64, FOOTER_TEXT_H]
 FOOTER_TEXT_BOX = [56, FOOTER_TEXT_Y, 880, FOOTER_TEXT_H]
 
 
+def section_nav_items(ir):
+    """Resolve the ordered top navigation labels declared via presentation.section_nav."""
+    nav = (ir.get('presentation') or {}).get('section_nav')
+    if not nav:
+        return []
+    if isinstance(nav, dict) and nav.get('items'):
+        return list(nav['items'])
+    return [label for label, _ in agenda_sections(ir)]
+
+
+def section_nav_elements(elements, emit_text, slide, ir, design):
+    """Full-bleed top section progress bar above the slide title."""
+    nav = (ir.get('presentation') or {}).get('section_nav')
+    if not nav:
+        return
+    if (slide.get('composition') or {}).get('archetype') == 'cover':
+        return
+    items = section_nav_items(ir)
+    if len(items) < 2:
+        return
+    cfg = nav if isinstance(nav, dict) else {}
+    accent = (design or {}).get('accent_color') or (ir.get('theme') or {}).get('accent', '#B85D3B')
+    bar_fill = cfg.get('fill', '#F3F4F6')
+    text_color = cfg.get('color', '#475569')
+    active_fill = cfg.get('active_fill', accent)
+    active_color = cfg.get('active_color', '#FFFFFF')
+    divider_color = cfg.get('divider_color', '#CBD5E1')
+    bar_h = 48.0
+
+    # Determine active section index: explicit section_nav_index -> slide/preceding section match -> None
+    active_idx = None
+    slide_pres = slide.get('presentation') or {}
+    if isinstance(slide_pres.get('section_nav_index'), int) and 0 <= slide_pres['section_nav_index'] < len(items):
+        active_idx = slide_pres['section_nav_index']
+    else:
+        current_sec = str(slide_pres.get('section') or '').strip()
+        if not current_sec:
+            for s in ir.get('slides') or []:
+                sec = str((s.get('presentation') or {}).get('section') or '').strip()
+                if sec:
+                    current_sec = sec
+                if s is slide or s.get('id') == slide.get('id'):
+                    break
+        if current_sec and current_sec in items:
+            active_idx = items.index(current_sec)
+
+    elements.append({
+        'id': 'header:nav-rule', 'kind': 'shape', 'role': 'decoration',
+        'bbox': [0.0, bar_h, float(WIDTH), 1.5], 'geometry': 'rect',
+        'fill': active_fill, 'line': 'none', 'line_width': 0,
+        'visual_decoration': True,
+    })
+    cell_w = float(WIDTH) / len(items)
+    for idx, label in enumerate(items):
+        cx = round(idx * cell_w, 2)
+        cw = round(float(WIDTH) - cx if idx == len(items) - 1 else cell_w, 2)
+        is_active = idx == active_idx
+        has_div = not is_active and idx > 0 and idx - 1 != active_idx
+        members = [f'header:nav-label:{idx}']
+        if has_div:
+            members.append(f'header:nav-div:{idx}')
+        elements.append({
+            'id': f'header:nav-cell:{idx}', 'kind': 'shape', 'role': 'decoration',
+            'bbox': [cx, 0.0, cw, bar_h], 'geometry': 'rect',
+            'fill': active_fill if is_active else bar_fill, 'line': 'none', 'line_width': 0,
+            'frame_members': members, 'visual_decoration': True,
+        })
+        if has_div:
+            elements.append({
+                'id': f'header:nav-div:{idx}', 'kind': 'shape', 'role': 'decoration',
+                'bbox': [round(cx + 0.5, 2), 13.0, 1.2, 22.0], 'geometry': 'rect',
+                'fill': divider_color, 'line': 'none', 'line_width': 0,
+                'visual_decoration': True,
+            })
+        emit_text(
+            f'header:nav-label:{idx}',
+            label,
+            [round(cx + 8.0, 2), 6.0, round(max(24.0, cw - 16.0), 2), 36.0],
+            'badge',
+            22,
+            20,
+            1,
+            'middle',
+            active_color if is_active else text_color,
+            align='center',
+            bold=is_active,
+        )
+
+
 def page_furniture_elements(elements, text, number, slide, presentation, design, furniture):
     """Bottom rule, page number and the deck's own footer line on a designed page.
 
@@ -813,7 +906,8 @@ def _resolve_deck_context(ir, base, issues):
            for _, node in walk_regions(
                slide['composition'].get('layout_tree', {'regions': {}})) if node['type'] == 'panel']
         + [font_sample(cell['text'], cell.get('inline_math', False)) for slide in ir['slides'] for table in slide['composition'].get('tables', [])
-           for cell in table['cells'] if cell.get('kind', 'text') == 'text'])
+           for cell in table['cells'] if cell.get('kind', 'text') == 'text']
+        + section_nav_items(ir))
     try:
         regular_font, bold_font, font_notes = resolve_theme_fonts(theme, base, text_sample)
     except (FileNotFoundError, OSError) as error:
@@ -938,14 +1032,15 @@ class _SlideCompiler:
         self.bh = 0
 
     def emit_text(self, eid, content, bbox, role="body", size=28, floor=24, lines=10,
-                  anchor="top", color=None, flow=None, align=None, inline_math=False, marker=None):
+                  anchor="top", color=None, flow=None, align=None, inline_math=False, marker=None, bold=False):
         if not content:
             return
         if self.design and role in type_sizes(self.design) and not eid.startswith('graphic:'):
             size = min(size, type_sizes(self.design)[role])
+        use_bold = bold or role in ("title", "heading")
         contract = TextBoxContract(self.theme["font_family"], size,
-            self.font_paths["bold_font_file" if role in ("title", "heading") else "font_file"],
-            font_weight=700 if role in ("title", "heading") else 400,
+            self.font_paths["bold_font_file" if use_bold else "font_file"],
+            font_weight=700 if use_bold else 400,
             font_floor=floor, max_lines=lines, vertical_anchor=anchor)
         if marker:
             contract = replace(contract, line_height=max(contract.line_height, marker['line_height_px'] / size))
@@ -1098,17 +1193,20 @@ class _SlideCompiler:
             self.visible_caveats = []
             caveat_y, caveat_h = 604, 46
         elif self.design:
-            header = header_layout(self.design, self.slide, self.font_paths, self.preserve_terms)
+            deck_pres = self.ir.get('presentation') or {}
+            section_nav_elements(self.elements, self.emit_text, self.slide, self.ir, self.design)
+            header = header_layout(self.design, self.slide, self.font_paths, self.preserve_terms, deck_pres)
             # One title size for the whole deck; the header grew instead of the title shrinking.
             title_pt = header.get('title_size', type_sizes(self.design)['title'])
             self.emit_text('title', self.sem['title'], header['title'], 'title', title_pt, title_pt,
                            header.get('title_lines', 2), inline_math='title' in self.sem.get('inline_math', []))
             if header.get('title_lines', 2) >= TITLE_BOX_LINES and len(
-                    break_lines(self.sem['title'], ImageFont.truetype(self.font_paths['bold_font_file'], int(title_pt)), 1168)) > TITLE_BOX_LINES:
+                    break_lines(self.sem['title'], ImageFont.truetype(self.font_paths['bold_font_file'], int(title_pt)), header['title'][2])) > TITLE_BOX_LINES:
                 self.issues.append(issue('TITLE_TOO_LONG', 'FAIL',
                     'The title needs more than three lines at the deck title size; shorten it or split the page.',
                     self.n, 'title', detector='geometric-preflight', suggested_actions=['shorten_title', 'split_slide']))
-            self.emit_takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
+            if not header.get('hide_takeaway') and header.get('takeaway'):
+                self.emit_takeaway(header['takeaway'], lines=header.get('takeaway_lines', 2), frame_plan=header.get('takeaway_frame'))
             self.elements.extend(header_decoration(self.design, header))
             caveat_y, caveat_h = (622, 36) if self.family == 'dual' else (604, 46)
         elif self.templated:
@@ -1139,7 +1237,8 @@ class _SlideCompiler:
                 caveat_y, caveat_h = 622, 36
         if self.visible_caveats:
             self.emit_text("caveats", audience.join_caveats(self.visible_caveats), [56, caveat_y, 1168, caveat_h], "caveat", 24, 24, 2)
-        self.top, self.bottom = body_region(self.slide, self.family, self.deck_frame, self.design, self.font_paths, self.preserve_terms)
+        self.top, self.bottom = body_region(self.slide, self.family, self.deck_frame, self.design, self.font_paths,
+                                            self.preserve_terms, self.ir.get('presentation'))
         if self.takeaway_outer:
             self.top = max(self.top, self.takeaway_outer[1] + self.takeaway_outer[3] + 20)
         self.bh = self.bottom - self.top

@@ -7,7 +7,7 @@ from totalpipe_layout.inline_math import strip_markup
 
 DESIGN_TOKENS = {
     'style': ('research-seminar',),
-    'title_treatment': ('plain', 'thin-rule'),
+    'title_treatment': ('plain', 'thin-rule', 'accent-bar'),
     'density': ('balanced', 'compact'),
     'figure_treatment': ('unframed', 'ruled-caption'),
     'decoration_policy': ('minimal', 'none'),
@@ -40,7 +40,8 @@ def validate_design(design):
             or not re.fullmatch(r'#[0-9A-Fa-f]{6}', design['accent_color'])):
         errors.append('academic_design.accent_color requires #RRGGBB')
     if design.get('decoration_policy') == 'none' and (
-            design.get('title_treatment') == 'thin-rule' or design.get('figure_treatment') == 'ruled-caption'):
+            design.get('title_treatment') in ('thin-rule', 'accent-bar')
+            or design.get('figure_treatment') == 'ruled-caption'):
         errors.append('decoration_policy=none requires plain titles and unframed figures')
     return errors
 
@@ -180,12 +181,25 @@ def type_sizes(design):
             {'title': 44, 'display': 36, 'takeaway': 28, 'body': 28, 'heading': 28, 'caption': 22})
 
 
-def header_layout(design, slide=None, fonts=None, preserve_terms=False):
+SECTION_NAV_HEIGHT = 48
+
+
+def header_layout(design, slide=None, fonts=None, preserve_terms=False, deck_presentation=None):
     compact = design['header_variant'] == 'compact'
-    header = {'title': [56, 24, 1168, 64 if compact else 112],
-            'takeaway': [56, 100 if compact else 148, 1168, 70],
-            'body_top': 190 if compact else 240,
-            'rule': [56, 92 if compact else 140, 1168, 2]}
+    has_nav = bool((deck_presentation or {}).get('section_nav'))
+    nav_offset = 38 if has_nav else 0
+    accent_bar = design.get('title_treatment') == 'accent-bar'
+    title_x = 76 if accent_bar else 56
+    title_w = 1148 if accent_bar else 1168
+    hide_takeaway = bool((slide or {}).get('presentation', {}).get(
+        'hide_takeaway', (deck_presentation or {}).get('hide_takeaway', False)))
+    header = {'title': [title_x, 24 + nav_offset, title_w, 64 if compact else 112],
+            'takeaway': [56, (100 if compact else 148) + nav_offset, 1168, 70],
+            'body_top': (190 if compact else 240) + nav_offset,
+            'rule': [56, (92 if compact else 140) + nav_offset, 1168, 2],
+            'hide_takeaway': hide_takeaway}
+    if has_nav:
+        header['section_nav'] = [0, 0, 1280, SECTION_NAV_HEIGHT]
     if slide and fonts:
         from .fonts import load_font_file
         from .layout import break_lines
@@ -200,7 +214,7 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
         title_line = title_size*1.25
         max_title_lines = TITLE_BOX_LINES if preserve_terms else 2
         title_lines = len(break_lines(strip_markup(slide['semantic']['title']),
-                                      load_font_file(fonts['bold_font_file'], title_size), 1168))
+                                      load_font_file(fonts['bold_font_file'], title_size), title_w))
         takeaway_lines = len(break_lines(strip_markup(slide['semantic']['takeaway']),
                                          load_font_file(fonts['font_file'], 24), takeaway_width))
         title_height = min(title_lines, max_title_lines)*title_line
@@ -210,7 +224,7 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
             for field, size, font in (('title', title_size, 'bold_font_file'), ('takeaway', 24, 'font_file')):
                 if field not in slide['semantic']['inline_math']: continue
                 try:
-                    plan = measure_inline(slide['semantic'][field], takeaway_width if field == 'takeaway' else 1168,
+                    plan = measure_inline(slide['semantic'][field], takeaway_width if field == 'takeaway' else title_w,
                                           load_font_file(fonts[font], size), size,
                                           leading_marker=marker if field == 'takeaway' else None)
                 except InlineWidthError:
@@ -229,8 +243,17 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
         header['takeaway'][1] += title_extra
         header['takeaway'][3] += takeaway_extra
         header['body_top'] += title_extra+takeaway_extra
+        if hide_takeaway:
+            actual_title_h = max(title_line, min(header['title'][3], title_height))
+            header['title'][3] = round(actual_title_h, 1)
+            header['rule'][1] = round(header['title'][1] + header['title'][3] + 6, 1)
+            header['takeaway'] = None
+            header['body_top'] = round(
+                header['title'][1] + header['title'][3] + (18 if design.get('title_treatment') == 'thin-rule' else 14),
+                1,
+            )
         # Reclaim unused second takeaway line in compact headers so body starts cleanly below 1-line takeaways.
-        if (compact and takeaway_extra == 0 and takeaway_at_size <= 1
+        elif (compact and takeaway_extra == 0 and takeaway_at_size <= 1
                 and not slide.get('presentation', {}).get('takeaway_frame')):
             single_h = round(takeaway_size * 1.25 + 4)
             saved = max(0, header['takeaway'][3] - single_h)
@@ -238,9 +261,17 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
             header['body_top'] -= saved
         header['title_lines'] = max(2, min(title_lines, max_title_lines))
         header['title_size'] = title_size
-        if preserve_terms:
+        if preserve_terms and not hide_takeaway:
             header['takeaway_lines'] = max(2, takeaway_lines)
-    if slide and fonts and slide.get('presentation', {}).get('takeaway_frame'):
+    elif hide_takeaway:
+        header['takeaway'] = None
+        header['body_top'] = round(header['title'][1] + header['title'][3] + 16, 1)
+    if accent_bar:
+        tx, ty, _, th = header['title']
+        bar_h = max(32.0, min(th - 10.0, 44.0 if th <= 64 else th - 14.0))
+        bar_y = ty + max(2.0, (min(th, 56.0) - bar_h) / 2.0)
+        header['accent_bar'] = [56.0, round(bar_y, 1), 10.0, round(bar_h, 1)]
+    if slide and fonts and not hide_takeaway and slide.get('presentation', {}).get('takeaway_frame'):
         from .container_frames import measure_takeaway
         plan = measure_takeaway(slide, fonts, header['takeaway'])
         header['takeaway_frame'] = plan
@@ -258,6 +289,11 @@ def rule(element_id, box, design):
 
 
 def header_decoration(design, header=None):
-    if design and design['title_treatment'] == 'thin-rule':
-        return [rule('visual:title-rule', (header or header_layout(design))['rule'], design)]
+    if not design:
+        return []
+    resolved = header or header_layout(design)
+    if design['title_treatment'] == 'thin-rule':
+        return [rule('visual:title-rule', resolved['rule'], design)]
+    if design['title_treatment'] == 'accent-bar' and resolved.get('accent_bar'):
+        return [rule('visual:title-bar', resolved['accent_bar'], design)]
     return []

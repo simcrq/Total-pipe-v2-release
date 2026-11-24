@@ -13,6 +13,7 @@ def qa_summary(qa, out):
             'layout_feedback': str(out/'layout_feedback.json'),
             **({'next_action': qa['next_action']} if qa.get('next_action') else {}),
             **({'explain_viz': qa['explain_viz']} if 'explain_viz' in qa else {}),
+            **({'rendered_pngs': qa['rendered_pngs']} if qa.get('rendered_pngs') else {}),
             'design_notices': [
                 {'rule': item['rule'], 'slide': item['slide'], 'message': item['message']}
                 for item in qa['items']
@@ -91,6 +92,8 @@ def main():
         if name == 'build':
             p.add_argument('--officecli', default='officecli', help='OfficeCLI executable')
             p.add_argument('--skip-native', action='store_true', help='Development only; prevents final promotion')
+            p.add_argument('--render-png', action='store_true',
+                           help='Export each page of native.pdf to high-res PNG previews under <out>/slides_png/')
             p.add_argument('--require-visuals', action='store_const', const=True, default=None,
                            help='Strictly require a visual or standalone equation on each page')
     p = commands.add_parser('review-officecli')
@@ -356,7 +359,8 @@ def main():
             qa = build(args.ir.resolve(), out, not args.skip_native, args.officecli, options,
                        require_visual_design=not args.skip_visual_design,
                        explain_viz_request=args.explain_viz_request,
-                       explain_viz_mode=args.explain_viz_mode, require_visuals=args.require_visuals)
+                       explain_viz_mode=args.explain_viz_mode, require_visuals=args.require_visuals,
+                       render_png=args.render_png)
         print(json.dumps(qa_summary(qa, out)))
         return 1 if qa['counts']['FAIL'] else 0
     except (ValueError, OSError, KeyError) as e:
