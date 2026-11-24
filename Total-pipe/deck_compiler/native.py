@@ -136,6 +136,9 @@ def inspect_pdf(pdf, layout):
                           for e in slide['elements'] if e['kind'] == 'list' and e.get('bullet', {}).get('face')}
             if any(e['kind'] == 'table' for e in slide['elements']) and layout.get('resolved_font_family'):
                 requested.add(layout['resolved_font_family'].replace(' ', '').lower())
+            if any(e['kind'] == 'math' or (e.get('inline_layout') or {}).get('formula_count')
+                   for e in slide['elements']):
+                requested.add('cambriamath')
             for span in spans:
                 box = (span['x0'], span['top'], span['x1'], span['bottom'])
                 if box[0] < -1 or box[1] < -1 or box[2] > page.width+1 or box[3] > page.height+1:

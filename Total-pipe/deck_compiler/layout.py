@@ -61,7 +61,7 @@ def caption_height(caption, width, font_file, size=CAPTION_FONT_SIZE):
 
 
 CAPTION_FIGURE_PREFIX = re.compile(
-    r'^(?:原文\s*)?[Ff]ig(?:ure)?\.?\s*([0-9]+[a-z]?)\s*[|｜·•:：\-–]\s*')
+    r'^(?:原文\s*)?(?:[Ff]ig(?:ure)?\.?|图)\s*(S?[0-9]+[a-z]?)(?:\s*[|｜·•:：\-–]\s*|\s+)')
 
 
 def caption_with_source(ref):
@@ -314,13 +314,14 @@ TOKEN = re.compile(r"[A-Za-z0-9_\u00c0-\u02af\u0370-\u03ff][A-Za-z0-9_.:/\\\-\u0
 # land there, the previous character travels down with it instead. Two real review findings drove
 # this: a wrapped "1." / "19×" (the DECIMAL_SPLIT rule) and a line that consisted of "。" alone.
 NO_LINE_START = set('，。、；：？！）】》」』”’,.;:?!)]}%×')
+NO_LINE_END = set('（([【《「『“‘')
 
 
 _CJK_ORPHAN_RE = re.compile(r'^[\u3400-\u9fff][，。、；：？！）】》」』”’,.!?;:)]*$')
 
 
 def break_lines(text, font, width):
-    """Preserve paragraphs, break at words/CJK glyphs, and prevent 1-CJK-char orphan lines."""
+    """Preserve paragraphs, break at words/CJK glyphs, and prevent orphan lines/brackets."""
     lines = []
     for paragraph in text.split("\n"):
         para_start = len(lines)
@@ -331,6 +332,13 @@ def break_lines(text, font, width):
                 # Kinsoku: a closing mark or unit never starts a line. The token before it travels
                 # down instead, so "2.84×，" does not become "2.84" / "×，".
                 if token[:1] in NO_LINE_START and len(current.strip()) > 2:
+                    carried = pieces.pop()
+                    lines.append(''.join(pieces).rstrip())
+                    current = carried + token.lstrip()
+                    pieces = [current]
+                    continue
+                # Opening bracket/quote never stays stranded at the end of a line.
+                if pieces and pieces[-1].strip() in NO_LINE_END and len(pieces) > 1:
                     carried = pieces.pop()
                     lines.append(''.join(pieces).rstrip())
                     current = carried + token.lstrip()
@@ -1468,9 +1476,13 @@ class _SlideCompiler:
                 if hl_label:
                     lbl_w = min(bbox[2] - 4.0, max(36.0, badge_face.getlength(hl_label) + 16.0))
                     lbl_h = 26.0
-                    lbl_x = min(max(bbox[0] + 2.0, hx), bbox[0] + bbox[2] - lbl_w - 2.0)
-                    lbl_y = hy - lbl_h - 2.0 if hy - lbl_h - 2.0 >= bbox[1] + 2.0 else min(
-                        hy + 2.0, bbox[1] + bbox[3] - lbl_h - 2.0)
+                    lbl_x = min(max(bbox[0] + 2.0, hx + (hw - lbl_w) * 0.5), bbox[0] + bbox[2] - lbl_w - 2.0)
+                    if hy - lbl_h - 4.0 >= bbox[1] + 2.0:
+                        lbl_y = hy - lbl_h - 4.0
+                    elif hy + hh + 4.0 + lbl_h <= bbox[1] + bbox[3] - 2.0:
+                        lbl_y = hy + hh + 4.0
+                    else:
+                        lbl_y = min(hy + 2.0, bbox[1] + bbox[3] - lbl_h - 2.0)
                     badge_box = [lbl_x, lbl_y, lbl_w, lbl_h]
                     self.elements.append({
                         "id": f"{eid}:highlight-badge:{h_idx}",

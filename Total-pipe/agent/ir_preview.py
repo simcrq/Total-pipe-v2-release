@@ -7,7 +7,12 @@ import tempfile
 from . import COMPONENT
 from .state import confined, digest, read, sha, write
 
-_CJK_SINGLE_RE = re.compile(r'^[\u3400-\u9fff\uf900-\ufaff]$')
+_CJK_SINGLE_RE = re.compile(r'^[\u3400-\u9fff\uf900-\ufaff][，。、；：？！）】》」』”’,.!?;:)]*$')
+
+
+def _box_overlap(a, b, pad=1.0):
+    return not (a[0] + a[2] + pad <= b[0] or b[0] + b[2] + pad <= a[0]
+                or a[1] + a[3] + pad <= b[1] or b[1] + b[3] + pad <= a[1])
 
 
 def build_visual_checklist(slide_layout, issues, capacity_metrics, pixel_ws=None):
@@ -35,6 +40,18 @@ def build_visual_checklist(slide_layout, issues, capacity_metrics, pixel_ws=None
         if item.get('severity') == 'FAIL'
         and ('chart:' in str(item.get('shape', '')) or 'chart:' in str(item.get('message', '')))
     ]
+    # Perform real geometric overlap audit between chart annotations/ref-labels and bars/reference lines.
+    chart_labels = [e for e in elements if e.get('kind') == 'text'
+                    and (':annotation:' in str(e.get('id', '')) or ':ref-label:' in str(e.get('id', '')))]
+    chart_marks = [e for e in elements if e.get('kind') == 'shape'
+                   and any(tag in str(e.get('id', '')) for tag in (':bar:', ':ref:'))]
+    for lbl in chart_labels:
+        cid = lbl.get('graphic_id')
+        for mark in chart_marks:
+            if mark.get('graphic_id') != cid:
+                continue
+            if _box_overlap(lbl['bbox'], mark['bbox'], pad=0.5):
+                chart_conflicts.append(f"{lbl['id']} overlaps {mark['id']}")
     ws_info = (capacity_metrics or {}).get('whitespace') or {}
     empty_quads = int(ws_info.get('empty_quadrants', 0)) if isinstance(ws_info, dict) else 0
     pixel_skew = False

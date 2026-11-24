@@ -385,7 +385,7 @@ class RegionCompiler:
                 'Native graphic cannot reach its readable minimum width in this region.',
                 [minimum, 272 if graphic['type'] == 'process' else 120], available)
         last_error = None
-        for height in (96, 128, 160, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
+        for height in (96, 128, 160, 176, 184, 200, 240, 272, 320, 384, 448, 512, 640, 768, 1024, 1536):
             try:
                 elements = compile_graphic(graphic, [0, 0, width, height], self.theme, self.fonts)
                 # Path labels also have fixed font floors; a vector's ability to scale is not a

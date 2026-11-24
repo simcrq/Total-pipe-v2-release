@@ -68,6 +68,16 @@ def validate_charts(charts, slide_evidence_refs=None):
             x_values = []
             x_categories = []
         else:
+            unknown_x = set(x) - {'label', 'scale', 'values', 'categories', 'min', 'max'}
+            if unknown_x:
+                errors.append(f'{path}.x: unknown axis fields {sorted(unknown_x)}')
+            for bound_key in ('min', 'max'):
+                if bound_key in x and not _number(x[bound_key]):
+                    errors.append(f'{path}.x.{bound_key}: finite number required')
+            if _number(x.get('min')) and _number(x.get('max')) and x['min'] >= x['max']:
+                errors.append(f'{path}.x: min must be strictly less than max')
+            if x.get('scale') == 'log' and _number(x.get('min')) and x['min'] <= 0:
+                errors.append(f'{path}.x.min: log axis min must be strictly positive')
             x_values = x.get('values')
             x_categories = x.get('categories')
             if not isinstance(x.get('label'), str) or not x['label'].strip():
@@ -100,10 +110,20 @@ def validate_charts(charts, slide_evidence_refs=None):
         if not isinstance(y, dict):
             errors.append(f'{path}.y: an axis object is required')
         else:
+            unknown_y = set(y) - {'label', 'scale', 'unit', 'min', 'max'}
+            if unknown_y:
+                errors.append(f'{path}.y: unknown axis fields {sorted(unknown_y)}')
             if not isinstance(y.get('label'), str) or not y['label'].strip():
                 errors.append(f'{path}.y.label: a readable axis label is required')
             if y.get('scale', 'linear') not in SCALES:
                 errors.append(f'{path}.y.scale: must be linear or log')
+            for bound_key in ('min', 'max'):
+                if bound_key in y and not _number(y[bound_key]):
+                    errors.append(f'{path}.y.{bound_key}: finite number required')
+            if _number(y.get('min')) and _number(y.get('max')) and y['min'] >= y['max']:
+                errors.append(f'{path}.y: min must be strictly less than max')
+            if y.get('scale') == 'log' and _number(y.get('min')) and y['min'] <= 0:
+                errors.append(f'{path}.y.min: log axis min must be strictly positive')
         series = chart.get('series')
         if not isinstance(series, list) or not 1 <= len(series) <= MAX_SERIES:
             errors.append(f'{path}.series: 1-{MAX_SERIES} series required')

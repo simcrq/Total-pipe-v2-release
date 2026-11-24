@@ -23,7 +23,9 @@
                    "items": {"type": "number"}},
         "categories": {"type": "array", "minItems": 2, "maxItems": 24,
                        "items": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "\\S"},
-                       "description": "Named bar/hbar categories (e.g. method or material names) in place of numeric x.values."}
+                       "description": "Named bar/hbar categories (e.g. method or material names) in place of numeric x.values."},
+        "min": {"type": "number", "description": "Optional explicit lower bound for numeric axis."},
+        "max": {"type": "number", "description": "Optional explicit upper bound for numeric axis."}
       }
     },
     "y": {
@@ -33,7 +35,9 @@
       "properties": {
         "label": {"type": "string", "minLength": 1, "maxLength": 80, "pattern": "\\S"},
         "scale": {"enum": ["linear", "log"], "default": "linear"},
-        "unit": {"type": "string", "maxLength": 24}
+        "unit": {"type": "string", "maxLength": 24},
+        "min": {"type": "number", "description": "Optional explicit lower bound for y/value axis."},
+        "max": {"type": "number", "description": "Optional explicit upper bound for y/value axis."}
       }
     },
     "series": {

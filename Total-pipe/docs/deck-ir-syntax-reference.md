@@ -84,6 +84,9 @@
 
 ### 顶层关键约束
 - **多页共享头一致**：使用 `deck_ir_page` 分批写页时，每页顶层 `deck_id`、`presentation`、`theme` 必须完全一致。
+- **`academic_design` 与 `takeaway_frame` 精确枚举**：
+  - `academic_design`：`title_treatment` 仅允许 `"plain" | "thin-rule"`；`figure_treatment` 仅允许 `"unframed" | "ruled-caption"`；`header_variant` 仅允许 `"compact" | "standard"`；`density` 仅允许 `"balanced" | "airy" | "dense"`。
+  - `slide.presentation.takeaway_frame` 必须是对象（**非字符串**）：`{"fill": "#EFF6FF", "border": {"color": "#1E3A8A", "width": 1.5}, "padding": "compact"}`（无 `border_color`/`border_width` 顶层键）。
 - **`assets` 来源规则**：
   - `origin: "paper"`（默认）：须配 `source_figure`（正则 `^S?[1-9][0-9]*[a-z]?$`，如 `"1a"`、`"S2"`）；可选 `crop: {"source_path": "...", "source_sha256": "<64hex>", "box": [x1,y1,x2,y2]}`。
   - `origin: "generated"`：须配 `generator`（如 `"make_schematic.py/v1"`），**禁止**写 `source_figure`。
@@ -306,7 +309,7 @@
   "basis": "evidence",
   "illustrative": false,
   "x": {"label": "Bias (V)", "scale": "linear", "values": [0, 0.5, 1.0, 1.5]},
-  "y": {"label": "Response", "scale": "linear", "unit": "a.u."},
+  "y": {"label": "Response", "scale": "linear", "unit": "a.u.", "min": 0, "max": 5},
   "series": [
     {"label": "300 K", "values": [1.0, 2.0, 4.0, 4.2], "y_error": [0.1, 0.12, 0.15, 0.14], "evidence_refs": ["EV0001"]},
     {"label": "Control", "values": [1.0, 1.05, 1.02, 1.04], "evidence_refs": ["EV0002"]}
@@ -327,10 +330,11 @@
 - **`kind`（4 种）**：`"line" | "bar" | "hbar" | "scatter"`。
   - `line`：必填数值 `x.values`；`scatter`：共享 `x.values` 或在每个 `series` 写 `x_values`。
   - `bar`（纵向柱状图）与 `hbar`（横向排名/消融条形图）：支持数值 `x.values` **或** 字符串类别 `x.categories: ["Ours", "w/o Fusion", "Baseline"]`（不可同时填 `values` 与 `categories`）。
+  - **坐标轴范围（`min` / `max`）**：`x` / `y` 均支持可选数值 `"min"` 与 `"max"`（须满足 `min < max`，对数轴须 `min > 0`；未填时 `bar`/`hbar` 默认从 `0` 起）。若数值集中在高区间（如 `60%–100%`），可显式写 `y: {"min": 60, "max": 100}` 放大关键对比区间；未知坐标轴键会被校验器直接拒绝。
 - **阈值参考线与高亮区间**：
-  - `reference_lines`（最多 4 条）：`{"axis": "x"|"y", "value": 90.0, "label": "Threshold", "style": "dashed"|"solid", "color": "#RRGGBB"}`。
-  - `shaded_zones`（最多 3 个）：`{"axis": "x"|"y", "low": 0.2, "high": 0.8, "label": "Operating zone", "color": "#E6F4F1"}`。
-- **自动避障与双行图例**：图例超宽时自动换为右对齐双行并下移绘图区顶边；`annotations` 自动避让折线、柱体、误差棒及相邻标注框。
+  - `reference_lines`（最多 4 条）：`{"axis": "x"|"y", "value": 90.0, "label": "Threshold", "style": "dashed"|"solid"}`。
+  - `shaded_zones`（最多 3 个）：`{"axis": "x"|"y", "low": 0.2, "high": 0.8, "label": "Operating zone"}`。
+- **自动避障与双行图例**：图例超宽时自动换为右对齐双行并下移绘图区顶边；`annotations`、`reference_lines` 标签与 `shaded_zones` 标签均在绘图区内部自动避让柱体、折线、误差棒与虚线。
 - `basis`: `"evidence"` 时 `illustrative` 必须为 `false` 且数值来自证据；`"explain"` 时 `illustrative` 必须为 `true`（仅示意趋势或题目模式算例）。
 - 需由 `layout_tree` 的 `{"id": "...", "type": "chart", "ref": "ch1"}` 引用。
 
@@ -396,7 +400,7 @@
 
 ## 8. 边设计边调试工作流（与示例库配合）
 
-1. **先查示例库**：运行 `example_lookup.command_prefix search "<结构/关系关键词>" --limit 3` 与 `show <id>`，查看真实构图范本（含开篇立题漏斗、分层系统架构+水平消融图、多子图网格高亮导读、三支柱结论与边界矩阵等）。
+1. **先查示例库并控制视觉主角数**：运行 `example_lookup.command_prefix search "<结构/关系关键词>" --limit 3` 与 `show <id>`，查看真实构图范本。单页尽量不超过 **2 个并排主视觉**（如需“架构 + 原图 + 数据图”，优先采用**上层横向架构 + 下层左右双栏**，避免 3 列窄栏把论文原图挤成缩略图）。
 2. **查阅本手册写单页草稿**：将复杂页写入 `work/pages/<id>.json`（`slides` 仅含该页）。
 3. **实时测几何与看图**（在 `page_design`、`page_review`、`deck_ir` 均可用，不改任务状态、不占修订预算）：
    - 骨架/留白快检：`totalpipe_advance(job_id, preview={"artifact_path": ".../work/pages/P1.json", "slide_ids": ["P1"], "mode": "layout"})`

@@ -220,12 +220,22 @@ def header_layout(design, slide=None, fonts=None, preserve_terms=False):
                     title_height = min(plan['height'], max_title_lines*title_line)
                 else: takeaway_height, takeaway_lines = plan['height'], len(plan['lines'])
         title_extra = max(0, title_height-header['title'][3])
+        takeaway_size = type_sizes(design)['takeaway']
+        takeaway_at_size = len(break_lines(strip_markup(slide['semantic']['takeaway']),
+                                           load_font_file(fonts['font_file'], takeaway_size), takeaway_width))
         takeaway_extra = max(0, takeaway_height-header['takeaway'][3]) if preserve_terms else 0
         header['title'][3] += title_extra
         header['rule'][1] += title_extra
         header['takeaway'][1] += title_extra
         header['takeaway'][3] += takeaway_extra
         header['body_top'] += title_extra+takeaway_extra
+        # Reclaim unused second takeaway line in compact headers so body starts cleanly below 1-line takeaways.
+        if (compact and takeaway_extra == 0 and takeaway_at_size <= 1
+                and not slide.get('presentation', {}).get('takeaway_frame')):
+            single_h = round(takeaway_size * 1.25 + 4)
+            saved = max(0, header['takeaway'][3] - single_h)
+            header['takeaway'][3] = single_h
+            header['body_top'] -= saved
         header['title_lines'] = max(2, min(title_lines, max_title_lines))
         header['title_size'] = title_size
         if preserve_terms:

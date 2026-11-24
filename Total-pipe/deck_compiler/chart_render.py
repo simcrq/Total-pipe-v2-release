@@ -178,7 +178,7 @@ def _place_annotation(cx, cy, width, height, note, plot, bounds, segments, obsta
     raw_dy = note.get('dy', -28)
 
     def clamp_box(dx, dy):
-        tx = min(max(cx + dx, px + 4), bx + bw - width - 6)
+        tx = min(max(cx + dx, px + 4), px + pw - width - 2)
         ty = min(max(cy + dy, py + 2), py + ph - height - 2)
         return [tx, ty, width, height]
 
@@ -186,10 +186,10 @@ def _place_annotation(cx, cy, width, height, note, plot, bounds, segments, obsta
         score = 0.0
         for seg in segments:
             if _segment_hits_box(seg[0], seg[1], seg[2], seg[3], box, pad=2.5):
-                score += 100.0
+                score += 120.0
         for obs in obstacle_boxes:
-            if _boxes_overlap(box, obs, pad=2.0):
-                score += 80.0
+            if _boxes_overlap(box, obs, pad=2.5):
+                score += 100.0
         # Slight preference for staying close to the target point without touching it.
         mx, my = box[0] + box[2] / 2, box[1] + box[3] / 2
         dist = math.hypot(mx - cx, my - cy)
@@ -210,6 +210,11 @@ def _place_annotation(cx, cy, width, height, note, plot, bounds, segments, obsta
         (14, 16),
         (-width - 14, -32),
         (-width - 14, 16),
+        (-width - 14, 34),
+        (-width - 36, 36),
+        (-width - 64, 36),
+        (-width - 14, 52),
+        (-width - 48, 52),
         (-width / 2, -36),
         (-width / 2, 18),
         (20, -14),
@@ -217,6 +222,12 @@ def _place_annotation(cx, cy, width, height, note, plot, bounds, segments, obsta
         (16, 28),
         (-width - 16, 28),
     ]
+    # Also probe clear bands directly inside the plot area (e.g. open space left of a vertical ref line).
+    for frac_y in (0.18, 0.42, 0.68, 0.86):
+        for frac_x in (0.04, 0.28, 0.52):
+            gx = px + frac_x * max(1.0, pw - width - 6)
+            gy = py + frac_y * max(1.0, ph - height - 4)
+            candidates.append((gx - cx, gy - cy))
     for dx, dy in candidates:
         cand = clamp_box(dx, dy)
         sc = penalty(cand)
@@ -247,8 +258,8 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
     max_cat_w = max((face.getlength(str(c)) + 10 for c in cats), default=72.)
     left = max(MARGIN['left'], min(200., max_cat_w + 18.))
     right = MARGIN['right']
-    top = 46. + (26. if len(legend_rows) == 2 else 0.)
-    bottom = MARGIN['bottom']
+    top = 42. + (24. if len(legend_rows) == 2 else 0.)
+    bottom = 90. if chart.get('source') else 68.
     px, py, pw, ph = x + left, y + top, w - left - right, h - top - bottom
     if pw < 120 or ph < 80:
         raise ChartLayoutError('hbar chart body is too small for categories and bars')
@@ -268,6 +279,10 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
     else:
         v_low = min(0., v_low)
         v_high = max(0., v_high * 1.08 if v_high > 0 else 1.)
+    if 'min' in chart['y']:
+        v_low = float(chart['y']['min'])
+    if 'max' in chart['y']:
+        v_high = float(chart['y']['max'])
     if v_high <= v_low:
         v_high = v_low + 1.
 
@@ -282,11 +297,11 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
             if zr > zl + 1:
                 elements.append(_shape(f'chart:{chart["id"]}:zone:{z_idx}', [zl, py, zr - zl, ph], '#EEF4FA'))
                 if zone.get('label'):
-                    zw = min(face.getlength(zone['label']) + 10, zr - zl)
-                    if zw >= 32:
-                        zbox = [zl + 4, py + 4, zw, 26]
-                        elements.append(_text(f'chart:{chart["id"]}:zone-label:{z_idx}', zone['label'], zbox, muted, SOURCE_SIZE))
-                        obstacle_boxes.append(zbox)
+                    zw = min(pw - 8, face.getlength(zone['label']) + 14)
+                    zlx = min(max(zl + 4, px + 2), px + pw - zw - 2)
+                    zbox = [zlx, py + ph - 28, zw, 26]
+                    elements.append(_text(f'chart:{chart["id"]}:zone-label:{z_idx}', zone['label'], zbox, muted, SOURCE_SIZE, 'right'))
+                    obstacle_boxes.append(zbox)
 
     v_ticks = _log_ticks(v_low, v_high) if val_scale == 'log' else _linear_ticks(v_low, v_high, 4)
     v_pos = _positions(v_ticks, v_low, v_high, val_scale, px, pw)
@@ -310,7 +325,8 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
     elements.append(_shape(f'chart:{chart["id"]}:axis-x', [px, py + ph, pw, 1], ink))
 
     bar_h = band * 0.62 / max(1, len(series))
-    zero_x = _positions([v_low if val_scale == 'log' else 0.], v_low, v_high, val_scale, px, pw)[0]
+    zero_val = v_low if (val_scale == 'log' or v_low > 0.) else 0.
+    zero_x = _positions([zero_val], v_low, v_high, val_scale, px, pw)[0]
     point_coords = {}
     for s_idx, entry in enumerate(series):
         color = PALETTE[s_idx % len(PALETTE)]
@@ -340,15 +356,32 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
                 elements.append(el)
                 segments.append((rx, py, rx, py + ph))
                 if rline.get('label'):
-                    rw = face.getlength(rline['label']) + 10
-                    rlx = min(max(rx + 4, px + 2), px + pw - rw - 2)
-                    rbox = [rlx, py + 4, rw, 26]
-                    elements.append(_text(f'chart:{chart["id"]}:ref-label:{r_idx}', rline['label'], rbox, '#475569', SOURCE_SIZE))
+                    rw = face.getlength(rline['label']) + 14
+                    x_cands = []
+                    if rx - rw - 6 >= px + 2:
+                        x_cands.append((rx - rw - 6, 'right'))
+                    if rx + 6 + rw <= px + pw - 2:
+                        x_cands.append((rx + 6, 'left'))
+                    if not x_cands:
+                        x_cands.append((min(max(rx - rw / 2, px + 2), px + pw - rw - 2), 'center'))
+                    y_slots = [py + ph - 30] + [py + (i + 1) * band - 13 for i in range(len(cats) - 1)] + [py + 4]
+                    chosen = None
+                    for sy in y_slots:
+                        for sx, align in x_cands:
+                            cand = [sx, sy, rw, 26]
+                            if (not any(_boxes_overlap(cand, ob, pad=2.0) for ob in obstacle_boxes)
+                                    and not any(_segment_hits_box(s[0], s[1], s[2], s[3], cand, pad=1.5) for s in segments)):
+                                chosen = (cand, align)
+                                break
+                        if chosen:
+                            break
+                    rbox, ralign = chosen or ([x_cands[0][0], py + ph - 30, rw, 26], x_cands[0][1])
+                    elements.append(_text(f'chart:{chart["id"]}:ref-label:{r_idx}', rline['label'], rbox, '#475569', SOURCE_SIZE, ralign))
                     obstacle_boxes.append(rbox)
 
     for index, note in enumerate(chart.get('annotations') or []):
         cx, cy = point_coords[(note['series'], note['point'])]
-        aw = min(max(face.getlength(note['text']) + 12, 60), pw * .55)
+        aw = min(max(face.getlength(note['text']) + 16, 60), pw * .58)
         abox = _place_annotation(cx, cy, aw, 28, note, (px, py, pw, ph), (x, y, w, h), segments, obstacle_boxes)
         obstacle_boxes.append(abox)
         elements.append({**_text(f'chart:{chart["id"]}:annotation:{index}', note['text'], abox, ink, TICK_SIZE, 'left'),
@@ -359,8 +392,8 @@ def _compile_hbar(chart, bbox, theme, face, legend_rows, widths):
                          'node_id': f'annotation:{index}'})
 
     val_label = chart['y']['label'] + (f' ({chart["y"]["unit"]})' if chart.get('y', {}).get('unit') else '')
-    elements.append(_text(f'chart:{chart["id"]}:x-title', val_label, [px, y + h - 70, pw, 32], ink, LABEL_SIZE, 'center', role='body'))
-    elements.append(_text(f'chart:{chart["id"]}:y-title', chart['x']['label'], [px, y + 2, pw * 0.48, 32], ink, LABEL_SIZE, 'left', role='body'))
+    elements.append(_text(f'chart:{chart["id"]}:x-title', val_label, [px, py + ph + 32, pw, 30], ink, LABEL_SIZE, 'center', role='caption'))
+    elements.append(_text(f'chart:{chart["id"]}:y-title', chart['x']['label'], [px, y + 2, pw * 0.48, 30], ink, LABEL_SIZE, 'left', role='caption'))
     return elements, (px, py, pw, ph), (left, right, top, bottom)
 
 
@@ -377,7 +410,7 @@ def compile_chart(chart, bbox, theme, font_paths):
     face = ImageFont.truetype(str(font_paths['font_file']), TICK_SIZE)
 
     series = chart['series']
-    widths = [face.getlength(entry['label'])+8 for entry in series]
+    widths = [face.getlength(entry['label']) + 14 for entry in series]
     prelim_pw = max(120., w - MARGIN['left'] - MARGIN['right'])
     legend_rows = _pack_legend_rows(series, widths, prelim_pw * 0.65)
 
@@ -418,6 +451,10 @@ def compile_chart(chart, bbox, theme, font_paths):
                 y_low, y_high = y_low-pad, y_high+pad
             elif chart['kind'] == 'bar' and y_high > 0:
                 y_high = y_high + pad
+        if 'min' in chart['y']:
+            y_low = float(chart['y']['min'])
+        if 'max' in chart['y']:
+            y_high = float(chart['y']['max'])
         if y_high <= y_low:
             y_high = y_low+1.
         if chart['kind'] == 'scatter':
@@ -427,6 +464,11 @@ def compile_chart(chart, bbox, theme, font_paths):
         else:
             x_values = shared_x
             x_low, x_high = (0., float(len(x_values)-1)) if chart['kind'] == 'bar' else (min(x_values), max(x_values))
+        if chart['kind'] != 'bar':
+            if 'min' in chart['x']:
+                x_low = float(chart['x']['min'])
+            if 'max' in chart['x']:
+                x_high = float(chart['x']['max'])
         if x_high <= x_low:
             x_high = x_low+1.
 
@@ -584,10 +626,10 @@ def compile_chart(chart, bbox, theme, font_paths):
 
         # Axis titles.
         elements.append(_text(f'chart:{chart["id"]}:x-title', chart['x']['label'],
-                              [px, y+h-70, pw, 32], ink, LABEL_SIZE, 'center', role='body'))
+                              [px, y+h-70, pw, 32], ink, LABEL_SIZE, 'center', role='caption'))
         y_label = chart['y']['label'] + (f' ({chart["y"]["unit"]})' if chart.get('y', {}).get('unit') else '')
         elements.append(_text(f'chart:{chart["id"]}:y-title', y_label,
-                              [px, y+2, pw, 32], ink, LABEL_SIZE, 'left', role='body'))
+                              [px, y+2, pw, 32], ink, LABEL_SIZE, 'left', role='caption'))
 
     # Legend: 1 or 2 right-aligned rows above the plot.
     legend = []
@@ -598,9 +640,9 @@ def compile_chart(chart, bbox, theme, font_paths):
         for series_index in row_items:
             entry = series[series_index]
             color = PALETTE[series_index % len(PALETTE)]
-            legend.append(_shape(f'chart:{chart["id"]}:swatch:{series_index}', [cursor, ry + 8, 10, 10], color))
+            legend.append(_shape(f'chart:{chart["id"]}:swatch:{series_index}', [cursor, ry + 9, 10, 10], color))
             legend.append(_text(f'chart:{chart["id"]}:legend:{series_index}', entry['label'],
-                                [cursor+16, ry, widths[series_index], 28], ink, TICK_SIZE, 'left'))
+                                [cursor+16, ry, widths[series_index], 30], ink, TICK_SIZE, 'left'))
             cursor += widths[series_index]+22
     elements.extend(legend)
 
